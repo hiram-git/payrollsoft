@@ -1,0 +1,19 @@
+{
+  "name": "@payroll/utils",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./dates": "./src/dates.ts",
+    "./pdf": "./src/pdf.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}
