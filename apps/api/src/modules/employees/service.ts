@@ -1,8 +1,11 @@
 import {
   createEmployee,
   deactivateEmployee,
+  getCargoById,
+  getDepartamentoById,
   getEmployee,
   getEmployeeByCode,
+  getFuncionById,
   listEmployees,
   updateEmployee,
 } from '@payroll/db'
@@ -19,8 +22,9 @@ export type EmployeeCreateInput = {
   socialSecurityNumber?: string | null
   email?: string | null
   phone?: string | null
-  position?: string | null
-  department?: string | null
+  cargoId?: string | null
+  funcionId?: string | null
+  departamentoId?: string | null
   hireDate: string
   baseSalary: string
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
@@ -28,6 +32,30 @@ export type EmployeeCreateInput = {
 }
 
 export type EmployeeUpdateInput = Partial<EmployeeCreateInput>
+
+// ─── Catalog resolution ───────────────────────────────────────────────────────
+
+/**
+ * Resolves cargoId → position text, departamentoId → department text.
+ * Returns only the fields that changed so callers can merge into patch.
+ */
+async function resolveCatalogNames(
+  db: AnyDb,
+  input: {
+    cargoId?: string | null
+    funcionId?: string | null
+    departamentoId?: string | null
+  }
+): Promise<{ position: string | null; department: string | null }> {
+  const [cargo, dept] = await Promise.all([
+    input.cargoId ? getCargoById(db, input.cargoId) : null,
+    input.departamentoId ? getDepartamentoById(db, input.departamentoId) : null,
+  ])
+  return {
+    position: cargo?.name ?? null,
+    department: dept?.name ?? null,
+  }
+}
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
@@ -57,6 +85,8 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
     }
   }
 
+  const { position, department } = await resolveCatalogNames(db, input)
+
   const employee = await createEmployee(db, {
     code: input.code.trim().toUpperCase(),
     firstName: input.firstName.trim(),
@@ -65,8 +95,11 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
     socialSecurityNumber: input.socialSecurityNumber?.trim() || null,
     email: input.email?.trim().toLowerCase() || null,
     phone: input.phone?.trim() || null,
-    position: input.position?.trim() || null,
-    department: input.department?.trim() || null,
+    cargoId: input.cargoId || null,
+    funcionId: input.funcionId || null,
+    departamentoId: input.departamentoId || null,
+    position,
+    department,
     hireDate: input.hireDate,
     baseSalary: input.baseSalary,
     payFrequency: input.payFrequency ?? 'biweekly',
@@ -104,12 +137,32 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
     patch.socialSecurityNumber = input.socialSecurityNumber?.trim() || null
   if (input.email !== undefined) patch.email = input.email?.trim().toLowerCase() || null
   if (input.phone !== undefined) patch.phone = input.phone?.trim() || null
-  if (input.position !== undefined) patch.position = input.position?.trim() || null
-  if (input.department !== undefined) patch.department = input.department?.trim() || null
   if (input.hireDate !== undefined) patch.hireDate = input.hireDate
   if (input.baseSalary !== undefined) patch.baseSalary = input.baseSalary
   if (input.payFrequency !== undefined) patch.payFrequency = input.payFrequency
   if (input.customFields !== undefined) patch.customFields = input.customFields
+
+  // Catalog IDs — resolve names when any ID changes
+  const catalogChanged =
+    input.cargoId !== undefined ||
+    input.funcionId !== undefined ||
+    input.departamentoId !== undefined
+
+  if (catalogChanged) {
+    // Use incoming values if provided, otherwise fall back to existing
+    const resolveInput = {
+      cargoId: 'cargoId' in input ? input.cargoId : existing.cargoId,
+      funcionId: 'funcionId' in input ? input.funcionId : existing.funcionId,
+      departamentoId: 'departamentoId' in input ? input.departamentoId : existing.departamentoId,
+    }
+    const { position, department } = await resolveCatalogNames(db, resolveInput)
+
+    if ('cargoId' in input) patch.cargoId = input.cargoId || null
+    if ('funcionId' in input) patch.funcionId = input.funcionId || null
+    if ('departamentoId' in input) patch.departamentoId = input.departamentoId || null
+    patch.position = position
+    patch.department = department
+  }
 
   const updated = await updateEmployee(db, id, patch)
   return { success: true as const, data: updated }

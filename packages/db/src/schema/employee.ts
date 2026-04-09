@@ -9,6 +9,11 @@ export const employees = pgTable('employees', {
   socialSecurityNumber: varchar('social_security_number', { length: 20 }),
   email: varchar('email', { length: 255 }),
   phone: varchar('phone', { length: 20 }),
+  // Catalog links (no .references() — multi-tenant search_path incompatibility)
+  cargoId: uuid('cargo_id'),
+  funcionId: uuid('funcion_id'),
+  departamentoId: uuid('departamento_id'),
+  // Denormalized text copies for display (auto-set from catalog on save)
   position: varchar('position', { length: 100 }),
   department: varchar('department', { length: 100 }),
   hireDate: date('hire_date').notNull(),

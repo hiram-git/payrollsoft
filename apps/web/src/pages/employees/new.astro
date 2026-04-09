@@ -1,8 +1,34 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+
+type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
+type Departamento = CatalogItem & { parentId: string | null }
+
+let cargos: CatalogItem[] = []
+let funciones: CatalogItem[] = []
+let departamentos: Departamento[] = []
+
+try {
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [cRes, fRes, dRes] = await Promise.all([
+    fetch(`${API_URL}/cargos`, { headers }),
+    fetch(`${API_URL}/funciones`, { headers }),
+    fetch(`${API_URL}/departamentos`, { headers }),
+  ])
+  if (cRes.ok) cargos = ((await cRes.json()) as { data: CatalogItem[] }).data ?? []
+  if (fRes.ok) funciones = ((await fRes.json()) as { data: CatalogItem[] }).data ?? []
+  if (dRes.ok) departamentos = ((await dRes.json()) as { data: Departamento[] }).data ?? []
+} catch {
+  /* ignore — dropdowns show empty on error */
+}
+
+const activeCargos = cargos.filter((c) => c.isActive)
+const activeFunciones = funciones.filter((f) => f.isActive)
+const activeDepts = departamentos.filter((d) => d.isActive)
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
@@ -88,11 +114,30 @@ const errorMessages: Record<string, string> = {
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-              <input type="text" name="department" class="input" placeholder="Administración" />
+              <select name="departamentoId" class="input">
+                <option value="">— Sin departamento —</option>
+                {activeDepts.map((d) => (
+                  <option value={d.id}>{d.name} ({d.code})</option>
+                ))}
+              </select>
             </div>
-            <div class="col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Puesto</label>
-              <input type="text" name="position" class="input" placeholder="Analista de RRHH" />
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+              <select name="cargoId" class="input">
+                <option value="">— Sin cargo —</option>
+                {activeCargos.map((c) => (
+                  <option value={c.id}>{c.name} ({c.code})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+              <select name="funcionId" class="input">
+                <option value="">— Sin función —</option>
+                {activeFunciones.map((f) => (
+                  <option value={f.id}>{f.name} ({f.code})</option>
+                ))}
+              </select>
             </div>
           </div>
         </div>
@@ -174,7 +219,6 @@ const errorMessages: Record<string, string> = {
     }
     if (firstInvalid) {
       e.preventDefault()
-      // Find which tab contains the invalid field and switch to it
       const tabDiv = firstInvalid.closest('[id^="tab-"]')
       if (tabDiv) {
         const tabName = tabDiv.id.replace('tab-', '')
