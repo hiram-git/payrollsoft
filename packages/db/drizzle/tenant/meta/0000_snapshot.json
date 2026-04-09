@@ -1,5 +1,5 @@
 {
-  "id": "3494c2f1-598e-49d5-b878-cf5f875a4491",
+  "id": "2cf93a25-9ee2-4109-ad2f-b4fdf3374d35",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -128,21 +128,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "employee_documents_employee_id_employees_id_fk": {
-          "name": "employee_documents_employee_id_employees_id_fk",
-          "tableFrom": "employee_documents",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "employee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -420,21 +406,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "loans_employee_id_employees_id_fk": {
-          "name": "loans_employee_id_employees_id_fk",
-          "tableFrom": "loans",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "employee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -501,34 +473,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "payroll_lines_payroll_id_payrolls_id_fk": {
-          "name": "payroll_lines_payroll_id_payrolls_id_fk",
-          "tableFrom": "payroll_lines",
-          "tableTo": "payrolls",
-          "columnsFrom": [
-            "payroll_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "payroll_lines_employee_id_employees_id_fk": {
-          "name": "payroll_lines_employee_id_employees_id_fk",
-          "tableFrom": "payroll_lines",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "employee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -680,21 +625,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "vacation_balances_employee_id_employees_id_fk": {
-          "name": "vacation_balances_employee_id_employees_id_fk",
-          "tableFrom": "vacation_balances",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "employee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "vacation_balances_employee_id_unique": {
@@ -778,21 +709,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "vacation_requests_employee_id_employees_id_fk": {
-          "name": "vacation_requests_employee_id_employees_id_fk",
-          "tableFrom": "vacation_requests",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "employee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -890,21 +807,7 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "attendance_records_employee_id_employees_id_fk": {
-          "name": "attendance_records_employee_id_employees_id_fk",
-          "tableFrom": "attendance_records",
-          "tableTo": "employees",
-          "columnsFrom": [
-            "employee_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

@@ -9,8 +9,6 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
-import { employees } from './employee'
-
 export const shifts = pgTable('shifts', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
@@ -31,9 +29,7 @@ export const tolerances = pgTable('tolerances', {
 
 export const attendanceRecords = pgTable('attendance_records', {
   id: uuid('id').defaultRandom().primaryKey(),
-  employeeId: uuid('employee_id')
-    .notNull()
-    .references(() => employees.id),
+  employeeId: uuid('employee_id').notNull(),
   date: date('date').notNull(),
   checkIn: timestamp('check_in'),
   checkOut: timestamp('check_out'),

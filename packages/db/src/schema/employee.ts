@@ -24,9 +24,7 @@ export const employees = pgTable('employees', {
 
 export const employeeDocuments = pgTable('employee_documents', {
   id: uuid('id').defaultRandom().primaryKey(),
-  employeeId: uuid('employee_id')
-    .notNull()
-    .references(() => employees.id),
+  employeeId: uuid('employee_id').notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   type: varchar('type', { length: 50 }).notNull(), // contract, id, other
   url: varchar('url', { length: 1000 }).notNull(),
