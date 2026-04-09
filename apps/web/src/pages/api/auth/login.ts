@@ -22,11 +22,14 @@ export const POST: APIRoute = async ({ request, redirect }) => {
       },
       body: JSON.stringify({ email, password }),
     })
-  } catch {
+  } catch (err) {
+    console.error('[login] fetch failed:', err)
     return redirect('/login?error=server-error')
   }
 
   if (!res.ok) {
+    const body = await res.text().catch(() => '')
+    console.error(`[login] API returned ${res.status}:`, body)
     const errorParam = res.status === 401 ? 'invalid-credentials' : 'server-error'
     return redirect(`/login?error=${errorParam}`)
   }
