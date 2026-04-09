@@ -1,5 +1,4 @@
 import { boolean, date, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
-import { employees } from './employee'
 
 export const concepts = pgTable('concepts', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -29,12 +28,8 @@ export const payrolls = pgTable('payrolls', {
 
 export const payrollLines = pgTable('payroll_lines', {
   id: uuid('id').defaultRandom().primaryKey(),
-  payrollId: uuid('payroll_id')
-    .notNull()
-    .references(() => payrolls.id),
-  employeeId: uuid('employee_id')
-    .notNull()
-    .references(() => employees.id),
+  payrollId: uuid('payroll_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
   grossAmount: varchar('gross_amount', { length: 20 }).notNull().default('0'),
   deductions: varchar('deductions', { length: 20 }).notNull().default('0'),
   netAmount: varchar('net_amount', { length: 20 }).notNull().default('0'),
@@ -45,9 +40,7 @@ export const payrollLines = pgTable('payroll_lines', {
 
 export const loans = pgTable('loans', {
   id: uuid('id').defaultRandom().primaryKey(),
-  employeeId: uuid('employee_id')
-    .notNull()
-    .references(() => employees.id),
+  employeeId: uuid('employee_id').notNull(),
   amount: varchar('amount', { length: 20 }).notNull(),
   balance: varchar('balance', { length: 20 }).notNull(),
   installment: varchar('installment', { length: 20 }).notNull(),

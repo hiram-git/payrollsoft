@@ -1,12 +1,8 @@
 import { date, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
-import { employees } from './employee'
 
 export const vacationBalances = pgTable('vacation_balances', {
   id: uuid('id').defaultRandom().primaryKey(),
-  employeeId: uuid('employee_id')
-    .notNull()
-    .references(() => employees.id)
-    .unique(),
+  employeeId: uuid('employee_id').notNull().unique(),
   // Days stored as strings for precision consistency
   daysEarned: varchar('days_earned', { length: 10 }).notNull().default('0'),
   daysUsed: varchar('days_used', { length: 10 }).notNull().default('0'),
@@ -16,9 +12,7 @@ export const vacationBalances = pgTable('vacation_balances', {
 
 export const vacationRequests = pgTable('vacation_requests', {
   id: uuid('id').defaultRandom().primaryKey(),
-  employeeId: uuid('employee_id')
-    .notNull()
-    .references(() => employees.id),
+  employeeId: uuid('employee_id').notNull(),
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
   daysRequested: integer('days_requested').notNull(),
