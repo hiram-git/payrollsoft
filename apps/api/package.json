@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "bun run --watch src/index.ts",
-    "build": "bun build src/index.ts --outdir dist --target bun",
-    "start": "bun run dist/index.js",
+    "dev": "bun --env-file ../../.env run --watch src/index.ts",
+    "build": "bun --env-file ../../.env build src/index.ts --outdir dist --target bun",
+    "start": "bun --env-file ../../.env run dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
