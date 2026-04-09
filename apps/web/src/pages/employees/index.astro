@@ -1,39 +1,10 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro'
+import AppLayout from '../../layouts/AppLayout.astro'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
-// Read auth cookie from the request
 const authCookie = Astro.cookies.get('auth')?.value
-if (!authCookie) {
-  return Astro.redirect('/login')
-}
-
-const tenantSlug = Astro.request.headers.get('x-tenant') ?? 'demo'
-
-let employees: unknown[] = []
-let total = 0
-let error = ''
-
-try {
-  const res = await fetch(`${API_URL}/employees`, {
-    headers: {
-      Cookie: `auth=${authCookie}`,
-      'X-Tenant': tenantSlug,
-    },
-  })
-  if (res.ok) {
-    const json = (await res.json()) as { data: unknown[]; total: number }
-    employees = json.data ?? []
-    total = json.total ?? 0
-  } else if (res.status === 401) {
-    return Astro.redirect('/login')
-  } else {
-    error = 'Error al cargar empleados'
-  }
-} catch {
-  error = 'No se pudo conectar con el servidor'
-}
+if (!authCookie) return Astro.redirect('/login')
 
 type Employee = {
   id: string
@@ -44,117 +15,98 @@ type Employee = {
   position: string | null
   department: string | null
   baseSalary: string
-  payFrequency: string
   isActive: boolean
-  hireDate: string
+}
+
+let employees: Employee[] = []
+let total = 0
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/employees`, {
+    headers: {
+      Cookie: `auth=${authCookie}`,
+      'X-Tenant': 'demo',
+    },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data: Employee[]; total: number }
+    employees = json.data ?? []
+    total = json.total ?? 0
+  } else if (res.status === 401) {
+    return Astro.redirect('/login')
+  } else {
+    error = 'Error al cargar empleados'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor'
 }
 ---
 
-<BaseLayout title="Empleados">
-  <div class="flex h-screen">
-    <!-- Sidebar -->
-    <aside class="w-64 bg-white border-r border-gray-200 flex flex-col">
-      <div class="p-6 border-b border-gray-100">
-        <h2 class="font-bold text-gray-900">Payroll Panamá</h2>
-        <p class="text-xs text-gray-400 mt-0.5">v2.0</p>
+<AppLayout title="Empleados">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Empleados</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{total} registros</p>
       </div>
-      <nav class="flex-1 p-4 space-y-1">
-        <a href="/dashboard" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">
-          Dashboard
-        </a>
-        <a href="/employees" class="flex items-center gap-3 px-3 py-2 rounded-lg bg-blue-50 text-blue-700 font-medium text-sm">
-          Empleados
-        </a>
-        <a href="/payroll" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">
-          Planillas
-        </a>
-        <a href="/attendance" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">
-          Asistencia
-        </a>
-        <a href="/vacations" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">
-          Vacaciones
-        </a>
-        <a href="/reports" class="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-600 hover:bg-gray-50 text-sm">
-          Reportes
-        </a>
-      </nav>
-      <div class="p-4 border-t border-gray-100">
-        <form method="POST" action="/api/auth/logout">
-          <button type="submit" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-700 text-sm transition-colors">
-            Cerrar sesión
-          </button>
-        </form>
-      </div>
-    </aside>
+      <a href="/employees/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+        + Nuevo empleado
+      </a>
+    </div>
 
-    <!-- Main content -->
-    <main class="flex-1 overflow-auto p-8">
-      <div class="flex items-center justify-between mb-6">
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900">Empleados</h1>
-          <p class="text-sm text-gray-500 mt-0.5">{total} registros</p>
+    {error && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {error}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {employees.length === 0 ? (
+        <div class="p-12 text-center text-gray-400 text-sm">
+          No hay empleados registrados.{' '}
+          <a href="/employees/new" class="text-blue-600 hover:underline">Agregar el primero</a>.
         </div>
-        <a
-          href="/employees/new"
-          class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          + Nuevo empleado
-        </a>
-      </div>
-
-      {error && (
-        <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        {employees.length === 0 ? (
-          <div class="p-12 text-center text-gray-400 text-sm">
-            No hay empleados registrados.{' '}
-            <a href="/employees/new" class="text-blue-600 hover:underline">Agregar el primero</a>.
-          </div>
-        ) : (
-          <table class="w-full text-sm">
-            <thead class="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
-                <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
-                <th class="text-left px-4 py-3 font-medium text-gray-600">Cédula</th>
-                <th class="text-left px-4 py-3 font-medium text-gray-600">Puesto</th>
-                <th class="text-left px-4 py-3 font-medium text-gray-600">Salario base</th>
-                <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-                <th class="px-4 py-3"></th>
+      ) : (
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Cédula</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Puesto</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Salario base</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {employees.map((emp) => (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 font-mono text-xs text-gray-500">{emp.code}</td>
+                <td class="px-4 py-3 font-medium text-gray-900">
+                  {emp.firstName} {emp.lastName}
+                </td>
+                <td class="px-4 py-3 text-gray-600">{emp.idNumber}</td>
+                <td class="px-4 py-3 text-gray-600">{emp.position ?? '—'}</td>
+                <td class="px-4 py-3 text-gray-900">
+                  ${Number(emp.baseSalary).toLocaleString('es-PA', { minimumFractionDigits: 2 })}
+                </td>
+                <td class="px-4 py-3">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${emp.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {emp.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <a href={`/employees/${emp.id}`} class="text-blue-600 hover:underline text-xs">
+                    Ver
+                  </a>
+                </td>
               </tr>
-            </thead>
-            <tbody class="divide-y divide-gray-100">
-              {(employees as Employee[]).map((emp) => (
-                <tr class="hover:bg-gray-50 transition-colors">
-                  <td class="px-4 py-3 font-mono text-xs text-gray-500">{emp.code}</td>
-                  <td class="px-4 py-3 font-medium text-gray-900">
-                    {emp.firstName} {emp.lastName}
-                  </td>
-                  <td class="px-4 py-3 text-gray-600">{emp.idNumber}</td>
-                  <td class="px-4 py-3 text-gray-600">{emp.position ?? '—'}</td>
-                  <td class="px-4 py-3 text-gray-900">
-                    ${Number(emp.baseSalary).toLocaleString('es-PA', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td class="px-4 py-3">
-                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${emp.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                      {emp.isActive ? 'Activo' : 'Inactivo'}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 text-right">
-                    <a href={`/employees/${emp.id}`} class="text-blue-600 hover:underline text-xs">
-                      Ver
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-    </main>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
   </div>
-</BaseLayout>
+</AppLayout>

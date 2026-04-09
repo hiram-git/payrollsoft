@@ -1,0 +1,73 @@
+---
+interface Props {
+  title: string
+}
+
+const { title } = Astro.props
+const path = Astro.url.pathname
+
+function isActive(href: string) {
+  return path === href || (href !== '/dashboard' && path.startsWith(href))
+}
+
+const navItems = [
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/employees', label: 'Empleados' },
+  { href: '/payroll', label: 'Planillas' },
+  { href: '/attendance', label: 'Asistencia' },
+  { href: '/vacations', label: 'Vacaciones' },
+  { href: '/reports', label: 'Reportes' },
+]
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{title} — Payroll Panamá</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <div class="flex h-screen">
+      <!-- Sidebar -->
+      <aside class="w-64 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+        <div class="p-6 border-b border-gray-100">
+          <h2 class="font-bold text-gray-900">Payroll Panamá</h2>
+          <p class="text-xs text-gray-400 mt-0.5">v2.0</p>
+        </div>
+        <nav class="flex-1 p-4 space-y-1">
+          {navItems.map(({ href, label }) => (
+            <a
+              href={href}
+              class={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                isActive(href)
+                  ? 'bg-blue-50 text-blue-700 font-medium'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              {label}
+            </a>
+          ))}
+        </nav>
+        <div class="p-4 border-t border-gray-100">
+          <form method="POST" action="/api/auth/logout">
+            <button
+              type="submit"
+              class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-gray-500 hover:bg-gray-50 hover:text-gray-700 text-sm transition-colors"
+            >
+              Cerrar sesión
+            </button>
+          </form>
+        </div>
+      </aside>
+
+      <!-- Main -->
+      <main class="flex-1 overflow-auto">
+        <slot />
+      </main>
+    </div>
+  </body>
+</html>
