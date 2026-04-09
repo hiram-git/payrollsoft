@@ -129,6 +129,45 @@ export async function getEmployeeByCode(db: Db, code: string) {
   return row ?? null
 }
 
+// ─── Employee Mutations ───────────────────────────────────────────────────────
+
+export type CreateEmployeeData = typeof employees.$inferInsert
+
+/**
+ * Insert a new employee and return the created row.
+ */
+export async function createEmployee(db: Db, data: CreateEmployeeData) {
+  const [row] = await db.insert(employees).values(data).returning()
+  return row
+}
+
+export type UpdateEmployeeData = Partial<Omit<CreateEmployeeData, 'id' | 'createdAt'>>
+
+/**
+ * Update an employee by ID. Always bumps updatedAt.
+ */
+export async function updateEmployee(db: Db, id: string, data: UpdateEmployeeData) {
+  const [row] = await db
+    .update(employees)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(employees.id, id))
+    .returning()
+  return row ?? null
+}
+
+/**
+ * Soft-delete: marks the employee as inactive with today's termination date.
+ */
+export async function deactivateEmployee(db: Db, id: string) {
+  const today = new Date().toISOString().split('T')[0]
+  const [row] = await db
+    .update(employees)
+    .set({ isActive: false, terminationDate: today, updatedAt: new Date() })
+    .where(eq(employees.id, id))
+    .returning()
+  return row ?? null
+}
+
 // ─── Payroll Queries ──────────────────────────────────────────────────────────
 
 export type PayrollFilter = {

@@ -5,6 +5,7 @@ import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { authRoutes } from './modules/auth/routes'
+import { employeeRoutes } from './modules/employees/routes'
 
 const app = new Elysia()
   // ── Global middleware (order matters) ──────────────────────────────────────
@@ -27,6 +28,7 @@ const app = new Elysia()
     timestamp: new Date().toISOString(),
   }))
   .use(authRoutes)
+  .use(employeeRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen(env.PORT)
