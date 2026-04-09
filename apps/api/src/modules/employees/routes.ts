@@ -22,7 +22,7 @@ const EmployeeBody = t.Object({
   position: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
   department: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
   hireDate: t.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' }),
-  baseSalary: t.String({ pattern: '^\\d+(\\.\\d{1,2})?$' }),
+  baseSalary: t.String({ minLength: 1 }),
   payFrequency: t.Optional(
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
@@ -40,7 +40,7 @@ const EmployeeUpdateBody = t.Object({
   position: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
   department: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
   hireDate: t.Optional(t.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' })),
-  baseSalary: t.Optional(t.String({ pattern: '^\\d+(\\.\\d{1,2})?$' })),
+  baseSalary: t.Optional(t.String({ minLength: 1 })),
   payFrequency: t.Optional(
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
