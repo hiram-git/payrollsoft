@@ -1,0 +1,21 @@
+{
+  "name": "payroll-panama",
+  "version": "0.0.1",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "husky": "^9.1.7",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

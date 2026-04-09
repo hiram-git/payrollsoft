@@ -1,0 +1,28 @@
+node_modules
+dist
+.astro
+.env
+.env.pgsql
+*.local
+
+# Turbo
+.turbo
+
+# Drizzle generated files (keep drizzle dir but ignore generated migrations snapshots if needed)
+# Uncomment if desired:
+# apps/api/drizzle/*.sql
+
+# Bun
+bun.lockb
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea
