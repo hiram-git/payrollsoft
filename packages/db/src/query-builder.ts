@@ -1,6 +1,6 @@
-import { and, asc, count, desc, eq, ilike, isNull, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
-import { employees, payrollLines, payrolls } from './schema'
+import { employees, payrollLines, payrolls, superAdmins, users } from './schema'
 
 type Db = ReturnType<typeof createTenantDb> | ReturnType<typeof createPublicDb>
 
@@ -248,4 +248,21 @@ export async function loadAccumulated(
     )
 
   return Number(result[0]?.total ?? 0)
+}
+
+// ─── User Queries ─────────────────────────────────────────────────────────────
+
+/** Find a tenant user by email (case-insensitive). */
+export async function findUserByEmail(db: Db, email: string) {
+  const [row] = await db.select().from(users).where(eq(users.email, email.toLowerCase()))
+  return row ?? null
+}
+
+/** Find a super admin by email in the public schema. */
+export async function findSuperAdminByEmail(db: Db, email: string) {
+  const [row] = await db
+    .select()
+    .from(superAdmins)
+    .where(eq(superAdmins.email, email.toLowerCase()))
+  return row ?? null
 }
