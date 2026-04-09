@@ -1,0 +1,235 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const { id } = Astro.params
+
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  idNumber: string
+  socialSecurityNumber: string | null
+  email: string | null
+  phone: string | null
+  position: string | null
+  department: string | null
+  hireDate: string
+  baseSalary: string
+  payFrequency: string
+  isActive: boolean
+}
+
+let emp: Employee | null = null
+
+try {
+  const res = await fetch(`${API_URL}/employees/${id}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.status === 404) return Astro.redirect('/employees')
+  if (res.ok) {
+    const json = (await res.json()) as { data: Employee }
+    emp = json.data
+  }
+} catch {
+  return Astro.redirect('/employees')
+}
+
+if (!emp) return Astro.redirect('/employees')
+
+const error = Astro.url.searchParams.get('error') ?? ''
+const success = Astro.url.searchParams.get('success') === '1'
+const errorMessages: Record<string, string> = {
+  code_taken: 'El código de empleado ya está en uso.',
+  id_taken: 'La cédula ya está registrada.',
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+  'missing-fields': 'Completa todos los campos requeridos.',
+}
+
+const freqLabel: Record<string, string> = {
+  biweekly: 'Quincenal',
+  monthly: 'Mensual',
+  weekly: 'Semanal',
+}
+---
+
+<AppLayout title={`${emp.firstName} ${emp.lastName}`}>
+  <div class="p-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">{emp.firstName} {emp.lastName}</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Código: {emp.code}</p>
+      </div>
+      <div class="flex items-center gap-3">
+        {!emp.isActive && (
+          <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+            Inactivo
+          </span>
+        )}
+        <a href="/employees" class="text-sm text-gray-500 hover:text-gray-700">← Volver</a>
+      </div>
+    </div>
+
+    {success && (
+      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Empleado actualizado correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <form method="POST" action={`/api/employees/${id}`} id="empForm">
+      <input type="hidden" name="_method" value="PUT" />
+
+      <!-- Tabs -->
+      <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
+        <button type="button" class="tab-btn active" data-tab="personal" onclick="switchTab('personal', this)">
+          Datos Personales
+        </button>
+        <button type="button" class="tab-btn" data-tab="laboral" onclick="switchTab('laboral', this)">
+          Datos Laborales
+        </button>
+      </div>
+
+      <!-- TAB: Datos Personales -->
+      <div id="tab-personal">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Identificación</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <input type="text" name="firstName" class="input" required value={emp.firstName} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Apellido *</label>
+              <input type="text" name="lastName" class="input" required value={emp.lastName} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
+              <input type="text" name="idNumber" class="input" required value={emp.idNumber} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Seguro Social</label>
+              <input type="text" name="socialSecurityNumber" class="input" value={emp.socialSecurityNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+              <input type="email" name="email" class="input" value={emp.email ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+              <input type="text" name="phone" class="input" value={emp.phone ?? ''} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Datos Laborales -->
+      <div id="tab-laboral" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Puesto y Departamento</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Código de empleado *</label>
+              <input type="text" name="code" class="input" required value={emp.code} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
+              <input type="text" name="department" class="input" value={emp.department ?? ''} />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Puesto</label>
+              <input type="text" name="position" class="input" value={emp.position ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Salario y Contrato</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de ingreso *</label>
+              <input type="date" name="hireDate" class="input" required value={emp.hireDate} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Frecuencia de pago *</label>
+              <select name="payFrequency" class="input" required>
+                {(['biweekly', 'monthly', 'weekly'] as const).map((f) => (
+                  <option value={f} selected={emp!.payFrequency === f}>{freqLabel[f]}</option>
+                ))}
+              </select>
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Salario base (USD) *</label>
+              <input type="text" name="baseSalary" class="input" required value={emp.baseSalary} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex justify-between mt-2">
+        <!-- Deactivate -->
+        {emp.isActive && (
+          <form method="POST" action={`/api/employees/${id}`}
+            onsubmit="return confirm('¿Dar de baja a este empleado? Esta acción no se puede deshacer.')"
+          >
+            <input type="hidden" name="_method" value="DELETE" />
+            <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
+              Dar de baja
+            </button>
+          </form>
+        )}
+        <div class="flex gap-3 ml-auto">
+          <a href="/employees" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancelar
+          </a>
+          <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+  .tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #6b7280;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    font-weight: 500;
+  }
+  .tab-btn.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    font-weight: 600;
+  }
+</style>
+
+<script is:inline>
+  function switchTab(tab, btn) {
+    document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none')
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+    document.getElementById('tab-' + tab).style.display = ''
+    btn.classList.add('active')
+  }
+</script>
