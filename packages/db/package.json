@@ -6,8 +6,11 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "bun run src/migrate.ts",
+    "db:generate:public": "drizzle-kit generate --config drizzle.public.config.ts",
+    "db:generate:tenant": "drizzle-kit generate --config drizzle.tenant.config.ts",
+    "db:migrate:public": "bun --env-file ../../.env run src/migrate.ts --public",
+    "db:migrate:tenant": "bun --env-file ../../.env run src/migrate.ts --tenant=demo",
+    "db:seed": "bun --env-file ../../.env run src/seed.ts",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"
   },
