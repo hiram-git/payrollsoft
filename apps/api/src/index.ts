@@ -5,6 +5,9 @@ import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { authRoutes } from './modules/auth/routes'
+import { cargosRoutes } from './modules/catalogs/cargos/routes'
+import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
+import { funcionesRoutes } from './modules/catalogs/funciones/routes'
 import { employeeRoutes } from './modules/employees/routes'
 
 const app = new Elysia()
@@ -29,6 +32,9 @@ const app = new Elysia()
   }))
   .use(authRoutes)
   .use(employeeRoutes)
+  .use(cargosRoutes)
+  .use(funcionesRoutes)
+  .use(departamentosRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen(env.PORT)
