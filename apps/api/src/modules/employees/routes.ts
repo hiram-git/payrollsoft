@@ -19,8 +19,9 @@ const EmployeeBody = t.Object({
   socialSecurityNumber: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   email: t.Optional(t.Nullable(t.String({ format: 'email' }))),
   phone: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
-  position: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
-  department: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+  cargoId: t.Optional(t.Nullable(t.String())),
+  funcionId: t.Optional(t.Nullable(t.String())),
+  departamentoId: t.Optional(t.Nullable(t.String())),
   hireDate: t.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' }),
   baseSalary: t.String({ minLength: 1 }),
   payFrequency: t.Optional(
@@ -37,8 +38,9 @@ const EmployeeUpdateBody = t.Object({
   socialSecurityNumber: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   email: t.Optional(t.Nullable(t.String({ format: 'email' }))),
   phone: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
-  position: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
-  department: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+  cargoId: t.Optional(t.Nullable(t.String())),
+  funcionId: t.Optional(t.Nullable(t.String())),
+  departamentoId: t.Optional(t.Nullable(t.String())),
   hireDate: t.Optional(t.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' })),
   baseSalary: t.Optional(t.String({ minLength: 1 })),
   payFrequency: t.Optional(

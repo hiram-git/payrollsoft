@@ -17,6 +17,9 @@ type Employee = {
   socialSecurityNumber: string | null
   email: string | null
   phone: string | null
+  cargoId: string | null
+  funcionId: string | null
+  departamentoId: string | null
   position: string | null
   department: string | null
   hireDate: string
@@ -25,23 +28,49 @@ type Employee = {
   isActive: boolean
 }
 
+type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
+type Departamento = CatalogItem & { parentId: string | null }
+
 let emp: Employee | null = null
+let cargos: CatalogItem[] = []
+let funciones: CatalogItem[] = []
+let departamentos: Departamento[] = []
 
 try {
-  const res = await fetch(`${API_URL}/employees/${id}`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
-  })
-  if (res.status === 401) return Astro.redirect('/login')
-  if (res.status === 404) return Astro.redirect('/employees')
-  if (res.ok) {
-    const json = (await res.json()) as { data: Employee }
-    emp = json.data
-  }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [empRes, cRes, fRes, dRes] = await Promise.all([
+    fetch(`${API_URL}/employees/${id}`, { headers }),
+    fetch(`${API_URL}/cargos`, { headers }),
+    fetch(`${API_URL}/funciones`, { headers }),
+    fetch(`${API_URL}/departamentos`, { headers }),
+  ])
+
+  if (empRes.status === 401) return Astro.redirect('/login')
+  if (empRes.status === 404) return Astro.redirect('/employees')
+  if (empRes.ok) emp = ((await empRes.json()) as { data: Employee }).data
+
+  if (cRes.ok) cargos = ((await cRes.json()) as { data: CatalogItem[] }).data ?? []
+  if (fRes.ok) funciones = ((await fRes.json()) as { data: CatalogItem[] }).data ?? []
+  if (dRes.ok) departamentos = ((await dRes.json()) as { data: Departamento[] }).data ?? []
 } catch {
   return Astro.redirect('/employees')
 }
 
 if (!emp) return Astro.redirect('/employees')
+
+// For each dropdown: show active items + currently selected one (even if inactive)
+function buildOptions<T extends CatalogItem>(items: T[], currentId: string | null) {
+  const active = items.filter((i) => i.isActive)
+  if (currentId && !active.find((i) => i.id === currentId)) {
+    const current = items.find((i) => i.id === currentId)
+    if (current) active.unshift(current)
+  }
+  return active
+}
+
+const cargoOptions = buildOptions(cargos, emp.cargoId)
+const funcionOptions = buildOptions(funciones, emp.funcionId)
+const deptOptions = buildOptions(departamentos, emp.departamentoId)
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const success = Astro.url.searchParams.get('success') === '1'
@@ -145,11 +174,36 @@ const freqLabel: Record<string, string> = {
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-              <input type="text" name="department" class="input" value={emp.department ?? ''} />
+              <select name="departamentoId" class="input">
+                <option value="">— Sin departamento —</option>
+                {deptOptions.map((d) => (
+                  <option value={d.id} selected={emp!.departamentoId === d.id}>
+                    {d.name} ({d.code})
+                  </option>
+                ))}
+              </select>
             </div>
-            <div class="col-span-2">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Puesto</label>
-              <input type="text" name="position" class="input" value={emp.position ?? ''} />
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
+              <select name="cargoId" class="input">
+                <option value="">— Sin cargo —</option>
+                {cargoOptions.map((c) => (
+                  <option value={c.id} selected={emp!.cargoId === c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+              <select name="funcionId" class="input">
+                <option value="">— Sin función —</option>
+                {funcionOptions.map((f) => (
+                  <option value={f.id} selected={emp!.funcionId === f.id}>
+                    {f.name} ({f.code})
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
         </div>

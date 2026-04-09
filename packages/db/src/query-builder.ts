@@ -1,6 +1,15 @@
 import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
-import { employees, payrollLines, payrolls, superAdmins, users } from './schema'
+import {
+  cargos,
+  departamentos,
+  employees,
+  funciones,
+  payrollLines,
+  payrolls,
+  superAdmins,
+  users,
+} from './schema'
 
 type Db = ReturnType<typeof createTenantDb> | ReturnType<typeof createPublicDb>
 
@@ -287,6 +296,173 @@ export async function loadAccumulated(
     )
 
   return Number(result[0]?.total ?? 0)
+}
+
+// ─── Catalog Helpers ──────────────────────────────────────────────────────────
+
+type CatalogTable = typeof cargos | typeof funciones
+
+async function listCatalog(db: Db, table: CatalogTable, search?: string) {
+  const conditions = search
+    ? [or(ilike(table.code, `%${search}%`), ilike(table.name, `%${search}%`))]
+    : []
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+  return db
+    .select()
+    .from(table as never)
+    .where(where)
+    .orderBy(asc(table.name))
+}
+
+async function getCatalogById(db: Db, table: CatalogTable, id: string) {
+  const [row] = await db
+    .select()
+    .from(table as never)
+    .where(eq(table.id, id))
+  return row ?? null
+}
+
+async function getCatalogByCode(db: Db, table: CatalogTable, code: string) {
+  const [row] = await db
+    .select()
+    .from(table as never)
+    .where(eq(table.code, code))
+  return row ?? null
+}
+
+// ─── Cargos ───────────────────────────────────────────────────────────────────
+
+export function listCargos(db: Db, search?: string) {
+  return listCatalog(db, cargos, search)
+}
+
+export function getCargoById(db: Db, id: string) {
+  return getCatalogById(db, cargos, id)
+}
+
+export function getCargoByCode(db: Db, code: string) {
+  return getCatalogByCode(db, cargos, code)
+}
+
+export type CreateCargoData = typeof cargos.$inferInsert
+
+export async function createCargo(db: Db, data: CreateCargoData) {
+  const [row] = await db.insert(cargos).values(data).returning()
+  return row
+}
+
+export async function updateCargo(db: Db, id: string, data: Partial<CreateCargoData>) {
+  const [row] = await db
+    .update(cargos)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(cargos.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function deactivateCargo(db: Db, id: string) {
+  const [row] = await db
+    .update(cargos)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(cargos.id, id))
+    .returning()
+  return row ?? null
+}
+
+// ─── Funciones ────────────────────────────────────────────────────────────────
+
+export function listFunciones(db: Db, search?: string) {
+  return listCatalog(db, funciones, search)
+}
+
+export function getFuncionById(db: Db, id: string) {
+  return getCatalogById(db, funciones, id)
+}
+
+export function getFuncionByCode(db: Db, code: string) {
+  return getCatalogByCode(db, funciones, code)
+}
+
+export type CreateFuncionData = typeof funciones.$inferInsert
+
+export async function createFuncion(db: Db, data: CreateFuncionData) {
+  const [row] = await db.insert(funciones).values(data).returning()
+  return row
+}
+
+export async function updateFuncion(db: Db, id: string, data: Partial<CreateFuncionData>) {
+  const [row] = await db
+    .update(funciones)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(funciones.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function deactivateFuncion(db: Db, id: string) {
+  const [row] = await db
+    .update(funciones)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(funciones.id, id))
+    .returning()
+  return row ?? null
+}
+
+// ─── Departamentos ────────────────────────────────────────────────────────────
+
+export async function listDepartamentos(db: Db, search?: string) {
+  const conditions = search
+    ? [or(ilike(departamentos.code, `%${search}%`), ilike(departamentos.name, `%${search}%`))]
+    : []
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+  return db.select().from(departamentos).where(where).orderBy(asc(departamentos.name))
+}
+
+export async function getDepartamentoById(db: Db, id: string) {
+  const [row] = await db.select().from(departamentos).where(eq(departamentos.id, id))
+  return row ?? null
+}
+
+export async function getDepartamentoByCode(db: Db, code: string) {
+  const [row] = await db.select().from(departamentos).where(eq(departamentos.code, code))
+  return row ?? null
+}
+
+export type CreateDepartamentoData = typeof departamentos.$inferInsert
+
+export async function createDepartamento(db: Db, data: CreateDepartamentoData) {
+  const [row] = await db.insert(departamentos).values(data).returning()
+  return row
+}
+
+export async function updateDepartamento(
+  db: Db,
+  id: string,
+  data: Partial<CreateDepartamentoData>
+) {
+  const [row] = await db
+    .update(departamentos)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(departamentos.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function deactivateDepartamento(db: Db, id: string) {
+  const [row] = await db
+    .update(departamentos)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(departamentos.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function getActiveChildCount(db: Db, parentId: string): Promise<number> {
+  const [result] = await db
+    .select({ total: count() })
+    .from(departamentos)
+    .where(and(eq(departamentos.parentId, parentId), eq(departamentos.isActive, true)))
+  return Number(result?.total ?? 0)
 }
 
 // ─── User Queries ─────────────────────────────────────────────────────────────

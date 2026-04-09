@@ -10,6 +10,7 @@
     "db:generate:tenant": "drizzle-kit generate --config drizzle.tenant.config.ts",
     "db:migrate:public": "bun --env-file ../../.env src/migrate.ts --public",
     "db:migrate:tenant": "bun --env-file ../../.env src/migrate.ts --tenant=demo",
+    "db:migrate:all-tenants": "bun --env-file ../../.env src/migrate.ts --all-tenants",
     "db:seed": "bun --env-file ../../.env src/seed.ts",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"

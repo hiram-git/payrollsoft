@@ -18,6 +18,14 @@ const navItems = [
   { href: '/vacations', label: 'Vacaciones' },
   { href: '/reports', label: 'Reportes' },
 ]
+
+const configItems = [
+  { href: '/config/cargos', label: 'Cargos' },
+  { href: '/config/funciones', label: 'Funciones' },
+  { href: '/config/departamentos', label: 'Departamentos' },
+]
+
+const isConfigActive = configItems.some(({ href }) => path.startsWith(href))
 ---
 
 <!doctype html>
@@ -38,7 +46,7 @@ const navItems = [
           <h2 class="font-bold text-gray-900">Payroll Panamá</h2>
           <p class="text-xs text-gray-400 mt-0.5">v2.0</p>
         </div>
-        <nav class="flex-1 p-4 space-y-1">
+        <nav class="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map(({ href, label }) => (
             <a
               href={href}
@@ -51,6 +59,30 @@ const navItems = [
               {label}
             </a>
           ))}
+
+          <!-- Configuración collapsible section -->
+          <details class="group" open={isConfigActive || undefined}>
+            <summary class="flex items-center justify-between px-3 py-2 rounded-lg text-sm cursor-pointer select-none text-gray-600 hover:bg-gray-50 list-none">
+              <span class={isConfigActive ? 'text-blue-700 font-medium' : ''}>Configuración</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </summary>
+            <div class="mt-1 ml-3 space-y-0.5 border-l border-gray-100 pl-3">
+              {configItems.map(({ href, label }) => (
+                <a
+                  href={href}
+                  class={`flex items-center px-2 py-1.5 rounded-lg text-sm transition-colors ${
+                    isActive(href)
+                      ? 'bg-blue-50 text-blue-700 font-medium'
+                      : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                  }`}
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+          </details>
         </nav>
         <div class="p-4 border-t border-gray-100">
           <form method="POST" action="/api/auth/logout">
