@@ -33,13 +33,14 @@ payroll-panama/
 
 ## Fase 0 — Setup Inicial
 **Duración:** 1–2 días  
-**Prioridad:** CRÍTICA — todo lo demás depende de esto
+**Prioridad:** CRÍTICA — todo lo demás depende de esto  
+**Estado: ✅ COMPLETO**
 
 ### Objetivos
-- [ ] Monorepo funcional con Bun workspaces
-- [ ] API y Web corriendo en paralelo con `bun run dev`
-- [ ] Base de datos conectada
-- [ ] Linting y hooks configurados
+- [x] Monorepo funcional con Bun workspaces
+- [x] API y Web corriendo en paralelo con `bun run dev`
+- [x] Base de datos conectada
+- [x] Linting y hooks configurados
 
 ### Tareas
 
@@ -89,13 +90,14 @@ bun add @astrojs/react tailwindcss
 
 ## Fase 1 — Base de Datos + Core Engine
 **Duración:** 5–7 días  
-**Depende de:** Fase 0
+**Depende de:** Fase 0  
+**Estado: ✅ COMPLETO (motor de fórmulas pendiente para Fase 3c)**
 
 ### Objetivos
-- [ ] Todos los schemas de Drizzle creados y migrados
-- [ ] Motor de Fórmulas V3.5.3 portado y funcionando
-- [ ] Custom Query Builder v2 implementado
-- [ ] Sistema de migración por tenant
+- [x] Todos los schemas de Drizzle creados y migrados
+- [ ] Motor de Fórmulas V3.5.3 portado y funcionando ← se implementará en Fase 3c
+- [x] Custom Query Builder v2 implementado
+- [x] Sistema de migración por tenant (`--public`, `--tenant`, `--all-tenants`)
 
 ### Tareas
 
@@ -148,13 +150,14 @@ packages/core/formulas/
 
 ## Fase 2 — Autenticación y Seguridad
 **Duración:** 3–4 días  
-**Depende de:** Fase 0, Fase 1 (parcial)
+**Depende de:** Fase 0, Fase 1 (parcial)  
+**Estado: ✅ COMPLETO**
 
 ### Objetivos
-- [ ] Login multi-tenant funcional
-- [ ] JWT + cookies httpOnly
-- [ ] Sistema de roles y permisos
-- [ ] CSRF y rate limiting activos
+- [x] Login multi-tenant funcional
+- [x] JWT + cookies httpOnly
+- [x] Sistema de roles y permisos (SUPER_ADMIN, ADMIN, HR, VIEWER)
+- [x] CSRF y rate limiting activos
 
 ### Tareas
 
@@ -189,12 +192,16 @@ Roles base del sistema:
 
 ## Fase 3 — API Core + Business Logic
 **Duración:** 10–14 días  
-**Depende de:** Fases 0, 1, 2
+**Depende de:** Fases 0, 1, 2  
+**Estado: 🔄 EN PROGRESO (3a ✅ 3b ✅ — 3c/3d/3e/3f pendientes)**
 
 Esta es la fase más crítica. Contiene toda la lógica de negocio.
 
 ### Objetivos
-- [ ] CRUD completo de empleados con campos personalizados
+- [x] CRUD completo de empleados con catálogos enlazados
+- [x] Catálogos: Cargos, Funciones, Departamentos (árbol padre-hijo)
+- [x] Conceptos de nómina (income/deduction + fórmula)
+- [x] Préstamos por empleado
 - [ ] Motor de nómina generando planillas correctas
 - [ ] XIII Mes calculado correctamente
 - [ ] Sistema de vacaciones Panamá
@@ -202,20 +209,28 @@ Esta es la fase más crítica. Contiene toda la lógica de negocio.
 
 ### Tareas
 
-#### 3.1 Módulo Empleados
+#### 3.1 Módulo Empleados ✅
 ```
 apps/api/src/modules/employees/
-├── controller.ts
 ├── service.ts
-├── repository.ts
 └── routes.ts
 ```
-- CRUD básico + búsqueda y filtros
-- Campos personalizados (key-value tipado por empresa)
-- Expediente digital (documentos adjuntos)
-- Préstamos (loans) con tabla de amortización
+- [x] CRUD básico + búsqueda y filtros
+- [x] Catálogos enlazados: cargoId, funcionId, departamentoId
+- [x] Desnormalización de position/department en guardar
+- [x] Préstamos (loans) — `modules/employees/loans/`
 
-#### 3.2 Motor de Planillas
+#### 3a Catálogos ✅
+- [x] Cargos: CRUD completo con código único
+- [x] Funciones: CRUD completo con código único
+- [x] Departamentos: árbol padre-hijo, `GET /departamentos/tree`, prevención de ciclos, bloqueo de baja si hay hijos
+
+#### 3b Conceptos + Préstamos ✅
+- [x] `GET/POST/PUT/DELETE /concepts` — tipo income|deduction + fórmula
+- [x] `GET /loans?employeeId` + `POST/PUT/DELETE /loans/:id`
+- [x] Cierre de préstamo (soft-delete `isActive=false`)
+
+#### 3c Motor de Planillas 🔲 PENDIENTE
 ```
 packages/core/payroll/
 ├── engine.ts           # PayrollEngine class
@@ -235,7 +250,13 @@ Lógica XIII Mes Panamá:
 - Integración con conceptos de nómina regulares
 - Histórico de pagos parciales
 
-#### 3.3 Sistema de Asistencia
+#### 3d XIII Mes Panameño 🔲 PENDIENTE
+
+- Cálculo semestral acumulado (Ene–Jun, Jul–Dic)
+- Regla: 1/12 del salario por mes trabajado en el período
+- Endpoint dedicado + UI de vista previa y cierre
+
+#### 3e Sistema de Asistencia 🔲 PENDIENTE
 ```
 packages/core/attendance/
 ├── processor.ts        # Calcula horas, horas extra, atrasos
@@ -247,7 +268,7 @@ packages/core/attendance/
 - Procesamiento de marcaciones: entrada, salida, almuerzo
 - Tolerancias configurables por empresa (minutos de gracia)
 
-#### 3.4 Vacaciones Panamá
+#### 3f Vacaciones Panamá 🔲 PENDIENTE
 Reglas del Código de Trabajo de Panamá:
 - 1 día por cada 11 trabajados (hasta 30 días)
 - Balance acumulado por empleado
@@ -260,13 +281,18 @@ Reglas del Código de Trabajo de Panamá:
 
 ## Fase 4 — Frontend Astro
 **Duración:** 8–12 días  
-**Depende de:** Fases 0, 2, 3 (parcial)
+**Depende de:** Fases 0, 2, 3 (parcial)  
+**Estado: 🔄 EN PROGRESO (UI base + módulos 3a/3b listos — planillas/asistencia/vacaciones pendientes)**
 
 ### Objetivos
-- [ ] UI moderna y responsiva
+- [x] UI moderna y responsiva (Tailwind CSS, sidebar, layout base)
+- [x] Empleados: lista, nuevo, editar con tabs
+- [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos
+- [x] Préstamos: tab en empleado + páginas new/edit
 - [ ] Flujo completo Empleado → Planilla → PDF
 - [ ] DataTables con filtros y exportación
 - [ ] Calendario de asistencia
+- [ ] Módulo de vacaciones
 
 ### Tareas
 
