@@ -1,0 +1,142 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+type Concept = {
+  id: string
+  code: string
+  name: string
+  type: string
+  formula: string | null
+  isActive: boolean
+}
+
+let conceptos: Concept[] = []
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/concepts`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data: Concept[] }
+    conceptos = json.data ?? []
+  } else if (res.status === 401) {
+    return Astro.redirect('/login')
+  } else {
+    error = 'Error al cargar los conceptos'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor'
+}
+
+const success = Astro.url.searchParams.get('success') === '1'
+
+const typeLabel: Record<string, string> = {
+  income: 'Ingreso',
+  deduction: 'Deducción',
+}
+---
+
+<AppLayout title="Conceptos">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Conceptos de Nómina</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{conceptos.length} registros</p>
+      </div>
+      <a href="/config/conceptos/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+        + Nuevo concepto
+      </a>
+    </div>
+
+    {success && (
+      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Concepto guardado correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {error}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {conceptos.length === 0 ? (
+        <div class="p-12 text-center text-gray-400 text-sm">
+          No hay conceptos registrados.{' '}
+          <a href="/config/conceptos/new" class="text-blue-600 hover:underline">Agregar el primero</a>.
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Fórmula</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {conceptos.map((c) => (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 font-mono text-xs text-gray-500">{c.code}</td>
+                <td class="px-4 py-3 font-medium text-gray-900">{c.name}</td>
+                <td class="px-4 py-3">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.type === 'income' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
+                    {typeLabel[c.type] ?? c.type}
+                  </span>
+                </td>
+                <td class="px-4 py-3 font-mono text-xs text-gray-500 max-w-xs truncate">
+                  {c.formula ?? '—'}
+                </td>
+                <td class="px-4 py-3">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {c.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1">
+                    <a
+                      href={`/config/conceptos/${c.id}`}
+                      title="Editar"
+                      class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </a>
+                    {c.isActive && (
+                      <form
+                        method="POST"
+                        action={`/api/config/conceptos/${c.id}`}
+                        onsubmit="return confirm('¿Dar de baja este concepto?')"
+                      >
+                        <input type="hidden" name="_method" value="DELETE" />
+                        <button
+                          type="submit"
+                          title="Dar de baja"
+                          class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          </svg>
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</AppLayout>

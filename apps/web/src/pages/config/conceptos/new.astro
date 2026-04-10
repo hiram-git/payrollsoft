@@ -1,0 +1,74 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const error = Astro.url.searchParams.get('error') ?? ''
+const errorMessages: Record<string, string> = {
+  code_taken: 'El código ya está en uso.',
+  invalid_type: 'El tipo debe ser Ingreso o Deducción.',
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+  'missing-fields': 'Completa todos los campos requeridos.',
+}
+---
+
+<AppLayout title="Nuevo Concepto">
+  <div class="p-8 max-w-2xl">
+    <div class="flex items-center gap-3 mb-6">
+      <a href="/config/conceptos" class="text-sm text-gray-500 hover:text-gray-700">← Conceptos</a>
+      <span class="text-gray-300">/</span>
+      <h1 class="text-2xl font-bold text-gray-900">Nuevo Concepto</h1>
+    </div>
+
+    {error && (
+      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <form method="POST" action="/api/config/conceptos">
+      <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
+            <input type="text" name="code" class="input" required maxlength="20" placeholder="BASICO" />
+            <p class="mt-1 text-xs text-gray-400">Identificador único. Se guardará en mayúsculas.</p>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+            <select name="type" class="input" required>
+              <option value="">— Seleccionar —</option>
+              <option value="income">Ingreso</option>
+              <option value="deduction">Deducción</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+          <input type="text" name="name" class="input" required maxlength="255" placeholder="Salario Básico" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Fórmula</label>
+          <textarea name="formula" class="input font-mono text-xs" rows="4" placeholder="baseSalary * 0.5"></textarea>
+          <p class="mt-1 text-xs text-gray-400">Expresión JavaScript. Variables disponibles: <code>baseSalary</code>, <code>workedDays</code>, <code>totalDays</code>.</p>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <a href="/config/conceptos" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Cancelar
+        </a>
+        <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+          Guardar concepto
+        </button>
+      </div>
+    </form>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+</style>

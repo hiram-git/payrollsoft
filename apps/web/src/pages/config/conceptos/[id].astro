@@ -1,0 +1,121 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const { id } = Astro.params
+
+type Concept = {
+  id: string
+  code: string
+  name: string
+  type: string
+  formula: string | null
+  isActive: boolean
+}
+
+let concept: Concept | null = null
+
+try {
+  const res = await fetch(`${API_URL}/concepts/${id}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.status === 404) return Astro.redirect('/config/conceptos')
+  if (res.ok) concept = ((await res.json()) as { data: Concept }).data
+} catch {
+  return Astro.redirect('/config/conceptos')
+}
+
+if (!concept) return Astro.redirect('/config/conceptos')
+
+const error = Astro.url.searchParams.get('error') ?? ''
+const success = Astro.url.searchParams.get('success') === '1'
+const errorMessages: Record<string, string> = {
+  code_taken: 'El código ya está en uso.',
+  invalid_type: 'El tipo debe ser Ingreso o Deducción.',
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+}
+---
+
+<AppLayout title={concept.name}>
+  <div class="p-8 max-w-2xl">
+    <div class="flex items-center gap-3 mb-6">
+      <a href="/config/conceptos" class="text-sm text-gray-500 hover:text-gray-700">← Conceptos</a>
+      <span class="text-gray-300">/</span>
+      <h1 class="text-2xl font-bold text-gray-900">{concept.name}</h1>
+      {!concept.isActive && (
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactivo</span>
+      )}
+    </div>
+
+    {success && (
+      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Concepto actualizado correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <form method="POST" action={`/api/config/conceptos/${id}`}>
+      <input type="hidden" name="_method" value="PUT" />
+
+      <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
+            <input type="text" name="code" class="input" required maxlength="20" value={concept.code} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+            <select name="type" class="input" required>
+              <option value="income" selected={concept.type === 'income'}>Ingreso</option>
+              <option value="deduction" selected={concept.type === 'deduction'}>Deducción</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+          <input type="text" name="name" class="input" required maxlength="255" value={concept.name} />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Fórmula</label>
+          <textarea name="formula" class="input font-mono text-xs" rows="4">{concept.formula ?? ''}</textarea>
+          <p class="mt-1 text-xs text-gray-400">Expresión JavaScript. Variables disponibles: <code>baseSalary</code>, <code>workedDays</code>, <code>totalDays</code>.</p>
+        </div>
+      </div>
+
+      <div class="flex justify-between mt-6">
+        {concept.isActive && (
+          <form method="POST" action={`/api/config/conceptos/${id}`}
+            onsubmit="return confirm('¿Dar de baja este concepto?')"
+          >
+            <input type="hidden" name="_method" value="DELETE" />
+            <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
+              Dar de baja
+            </button>
+          </form>
+        )}
+        <div class="flex gap-3 ml-auto">
+          <a href="/config/conceptos" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancelar
+          </a>
+          <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+</style>
