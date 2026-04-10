@@ -6,8 +6,10 @@ import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { authRoutes } from './modules/auth/routes'
 import { cargosRoutes } from './modules/catalogs/cargos/routes'
+import { conceptsRoutes } from './modules/catalogs/concepts/routes'
 import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
 import { funcionesRoutes } from './modules/catalogs/funciones/routes'
+import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 
 const app = new Elysia()
@@ -35,6 +37,8 @@ const app = new Elysia()
   .use(cargosRoutes)
   .use(funcionesRoutes)
   .use(departamentosRoutes)
+  .use(conceptsRoutes)
+  .use(loansRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen(env.PORT)

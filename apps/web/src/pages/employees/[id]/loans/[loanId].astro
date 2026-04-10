@@ -1,0 +1,128 @@
+---
+import AppLayout from '../../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const { id, loanId } = Astro.params
+
+type Employee = { id: string; firstName: string; lastName: string }
+type Loan = {
+  id: string
+  amount: string
+  balance: string
+  installment: string
+  startDate: string
+  endDate: string | null
+  isActive: boolean
+}
+
+let emp: Employee | null = null
+let loan: Loan | null = null
+
+try {
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [empRes, loanRes] = await Promise.all([
+    fetch(`${API_URL}/employees/${id}`, { headers }),
+    fetch(`${API_URL}/loans/${loanId}`, { headers }),
+  ])
+  if (empRes.status === 401) return Astro.redirect('/login')
+  if (empRes.status === 404) return Astro.redirect('/employees')
+  if (empRes.ok) emp = ((await empRes.json()) as { data: Employee }).data
+  if (loanRes.ok) loan = ((await loanRes.json()) as { data: Loan }).data
+} catch {
+  return Astro.redirect('/employees')
+}
+
+if (!emp || !loan) return Astro.redirect(`/employees/${id}`)
+
+const error = Astro.url.searchParams.get('error') ?? ''
+const success = Astro.url.searchParams.get('success') === '1'
+const errorMessages: Record<string, string> = {
+  'missing-fields': 'Completa todos los campos requeridos.',
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+}
+---
+
+<AppLayout title="Editar Préstamo">
+  <div class="p-8 max-w-2xl">
+    <div class="flex items-center gap-3 mb-6">
+      <a href={`/employees/${id}`} class="text-sm text-gray-500 hover:text-gray-700">
+        ← {emp.firstName} {emp.lastName}
+      </a>
+      <span class="text-gray-300">/</span>
+      <h1 class="text-2xl font-bold text-gray-900">Préstamo</h1>
+      {!loan.isActive && (
+        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Cerrado</span>
+      )}
+    </div>
+
+    {success && (
+      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Préstamo actualizado correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <form method="POST" action={`/api/employees/${id}/loans/${loanId}`}>
+      <input type="hidden" name="_method" value="PUT" />
+
+      <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Monto total (USD) *</label>
+            <input type="text" name="amount" class="input" required value={loan.amount} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Saldo actual (USD) *</label>
+            <input type="text" name="balance" class="input" required value={loan.balance} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Cuota por período (USD) *</label>
+            <input type="text" name="installment" class="input" required value={loan.installment} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de inicio *</label>
+            <input type="date" name="startDate" class="input" required value={loan.startDate} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha estimada de fin</label>
+            <input type="date" name="endDate" class="input" value={loan.endDate ?? ''} />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between mt-6">
+        {loan.isActive && (
+          <form method="POST" action={`/api/employees/${id}/loans/${loanId}`}
+            onsubmit="return confirm('¿Cerrar este préstamo? Ya no se descontará de la nómina.')"
+          >
+            <input type="hidden" name="_method" value="DELETE" />
+            <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
+              Cerrar préstamo
+            </button>
+          </form>
+        )}
+        <div class="flex gap-3 ml-auto">
+          <a href={`/employees/${id}`} class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancelar
+          </a>
+          <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+            Guardar cambios
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+</style>

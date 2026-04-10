@@ -2,9 +2,11 @@ import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
 import {
   cargos,
+  concepts,
   departamentos,
   employees,
   funciones,
+  loans,
   payrollLines,
   payrolls,
   superAdmins,
@@ -463,6 +465,79 @@ export async function getActiveChildCount(db: Db, parentId: string): Promise<num
     .from(departamentos)
     .where(and(eq(departamentos.parentId, parentId), eq(departamentos.isActive, true)))
   return Number(result?.total ?? 0)
+}
+
+// ─── Concepts ─────────────────────────────────────────────────────────────────
+
+export async function listConcepts(db: Db, search?: string) {
+  const conditions = search
+    ? [or(ilike(concepts.code, `%${search}%`), ilike(concepts.name, `%${search}%`))]
+    : []
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+  return db.select().from(concepts).where(where).orderBy(asc(concepts.name))
+}
+
+export async function getConceptById(db: Db, id: string) {
+  const [row] = await db.select().from(concepts).where(eq(concepts.id, id))
+  return row ?? null
+}
+
+export async function getConceptByCode(db: Db, code: string) {
+  const [row] = await db.select().from(concepts).where(eq(concepts.code, code))
+  return row ?? null
+}
+
+export type CreateConceptData = typeof concepts.$inferInsert
+
+export async function createConcept(db: Db, data: CreateConceptData) {
+  const [row] = await db.insert(concepts).values(data).returning()
+  return row
+}
+
+export async function updateConcept(db: Db, id: string, data: Partial<CreateConceptData>) {
+  const [row] = await db.update(concepts).set(data).where(eq(concepts.id, id)).returning()
+  return row ?? null
+}
+
+export async function deactivateConcept(db: Db, id: string) {
+  const [row] = await db
+    .update(concepts)
+    .set({ isActive: false })
+    .where(eq(concepts.id, id))
+    .returning()
+  return row ?? null
+}
+
+// ─── Loans ────────────────────────────────────────────────────────────────────
+
+export async function listLoansByEmployee(db: Db, employeeId: string) {
+  return db
+    .select()
+    .from(loans)
+    .where(eq(loans.employeeId, employeeId))
+    .orderBy(desc(loans.createdAt))
+}
+
+export async function getLoanById(db: Db, id: string) {
+  const [row] = await db.select().from(loans).where(eq(loans.id, id))
+  return row ?? null
+}
+
+export type CreateLoanData = typeof loans.$inferInsert
+
+export async function createLoan(db: Db, data: CreateLoanData) {
+  const [row] = await db.insert(loans).values(data).returning()
+  return row
+}
+
+export async function updateLoan(db: Db, id: string, data: Partial<CreateLoanData>) {
+  const [row] = await db.update(loans).set(data).where(eq(loans.id, id)).returning()
+  return row ?? null
+}
+
+export async function closeLoan(db: Db, id: string) {
+  const [row] = await db.update(loans).set({ isActive: false }).where(eq(loans.id, id)).returning()
+  return row ?? null
 }
 
 // ─── User Queries ─────────────────────────────────────────────────────────────

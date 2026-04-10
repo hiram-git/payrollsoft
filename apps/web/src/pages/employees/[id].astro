@@ -30,11 +30,23 @@ type Employee = {
 
 type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
 type Departamento = CatalogItem & { parentId: string | null }
+type Loan = {
+  id: string
+  employeeId: string
+  amount: string
+  balance: string
+  installment: string
+  startDate: string
+  endDate: string | null
+  isActive: boolean
+  createdAt: string
+}
 
 let emp: Employee | null = null
 let cargos: CatalogItem[] = []
 let funciones: CatalogItem[] = []
 let departamentos: Departamento[] = []
+let loans: Loan[] = []
 
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
@@ -52,6 +64,12 @@ try {
   if (cRes.ok) cargos = ((await cRes.json()) as { data: CatalogItem[] }).data ?? []
   if (fRes.ok) funciones = ((await fRes.json()) as { data: CatalogItem[] }).data ?? []
   if (dRes.ok) departamentos = ((await dRes.json()) as { data: Departamento[] }).data ?? []
+
+  // Load loans after we have the employee id confirmed
+  if (emp) {
+    const lRes = await fetch(`${API_URL}/loans?employeeId=${emp.id}`, { headers })
+    if (lRes.ok) loans = ((await lRes.json()) as { data: Loan[] }).data ?? []
+  }
 } catch {
   return Astro.redirect('/employees')
 }
@@ -127,6 +145,9 @@ const freqLabel: Record<string, string> = {
         </button>
         <button type="button" class="tab-btn" data-tab="laboral" onclick="switchTab('laboral', this)">
           Datos Laborales
+        </button>
+        <button type="button" class="tab-btn" data-tab="prestamos" onclick="switchTab('prestamos', this)">
+          Préstamos
         </button>
       </div>
 
@@ -228,6 +249,75 @@ const freqLabel: Record<string, string> = {
               <input type="text" name="baseSalary" class="input" required value={emp.baseSalary} />
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- TAB: Préstamos -->
+      <div id="tab-prestamos" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
+          <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+            <h3 class="font-semibold text-gray-800">Préstamos</h3>
+            <a href={`/employees/${id}/loans/new`} class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
+              + Nuevo préstamo
+            </a>
+          </div>
+          {loans.length === 0 ? (
+            <div class="p-10 text-center text-gray-400 text-sm">
+              Sin préstamos registrados.
+            </div>
+          ) : (
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">Monto</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">Saldo</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">Cuota</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">Inicio</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">Fin</th>
+                  <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+                  <th class="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                {loans.map((loan) => (
+                  <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 text-gray-900">${loan.amount}</td>
+                    <td class="px-4 py-3 text-gray-700">${loan.balance}</td>
+                    <td class="px-4 py-3 text-gray-700">${loan.installment}</td>
+                    <td class="px-4 py-3 text-gray-600">{loan.startDate}</td>
+                    <td class="px-4 py-3 text-gray-600">{loan.endDate ?? '—'}</td>
+                    <td class="px-4 py-3">
+                      <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${loan.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                        {loan.isActive ? 'Activo' : 'Cerrado'}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3">
+                      <div class="flex items-center justify-end gap-1">
+                        <a href={`/employees/${id}/loans/${loan.id}`} title="Editar" class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </a>
+                        {loan.isActive && (
+                          <form method="POST" action={`/api/employees/${id}/loans/${loan.id}`}
+                            onsubmit="return confirm('¿Cerrar este préstamo?')"
+                          >
+                            <input type="hidden" name="_method" value="DELETE" />
+                            <button type="submit" title="Cerrar préstamo" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                              </svg>
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
 
