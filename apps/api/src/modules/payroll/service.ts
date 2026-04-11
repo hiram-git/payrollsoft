@@ -1,4 +1,4 @@
-import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core/payroll'
+import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core'
 import {
   createPayroll,
   deleteDraftPayroll,
