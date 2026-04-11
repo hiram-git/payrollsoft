@@ -29,13 +29,15 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     let res: Response
     try {
       res = await fetch(`${API_URL}/payroll/${id}/generate`, { method: 'POST', headers })
-    } catch {
-      return redirect(`/payroll/${id}?error=server-error`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No se pudo conectar con el servidor API'
+      return redirect(`/payroll/${id}?error=${encodeURIComponent(msg)}`)
     }
     if (res.status === 401) return redirect('/login')
     if (res.ok) return redirect(`/payroll/${id}?success=1`)
-    const data = (await res.json().catch(() => ({}))) as { error?: string }
-    return redirect(`/payroll/${id}?error=${encodeURIComponent(data.error ?? 'server-error')}`)
+    const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    const msg = data.error ?? data.message ?? `HTTP ${res.status}`
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(msg)}`)
   }
 
   // ── REGENERATE (generated → generated) ───────────────────────────────────────
@@ -43,13 +45,15 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     let res: Response
     try {
       res = await fetch(`${API_URL}/payroll/${id}/regenerate`, { method: 'POST', headers })
-    } catch {
-      return redirect(`/payroll/${id}?error=server-error`)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'No se pudo conectar con el servidor API'
+      return redirect(`/payroll/${id}?error=${encodeURIComponent(msg)}`)
     }
     if (res.status === 401) return redirect('/login')
     if (res.ok) return redirect(`/payroll/${id}?success=1`)
-    const data = (await res.json().catch(() => ({}))) as { error?: string }
-    return redirect(`/payroll/${id}?error=${encodeURIComponent(data.error ?? 'server-error')}`)
+    const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    const msg = data.error ?? data.message ?? `HTTP ${res.status}`
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(msg)}`)
   }
 
   // ── CLOSE (generated → closed) ────────────────────────────────────────────────

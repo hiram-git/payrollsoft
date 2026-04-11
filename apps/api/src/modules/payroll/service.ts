@@ -132,15 +132,15 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     }
   }
 
-  // Remember original status so we can revert on failure
   const originalStatus = payroll.status
 
-  // Clear previous lines and acumulados (safe for both generate and regenerate)
-  await deletePayrollAcumulados(db, id)
-
-  await updatePayroll(db, id, { status: 'processing' })
-
   try {
+    // Mark as processing (inside try so we can revert on any failure)
+    await updatePayroll(db, id, { status: 'processing' })
+
+    // Wipe previous results before (re)computing
+    await deletePayrollAcumulados(db, id)
+
     const [employeeResult, allConcepts] = await Promise.all([
       listEmployees(db, { isActive: true }, { limit: 1000 }),
       listConcepts(db),
@@ -277,8 +277,12 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       },
     }
   } catch (err) {
-    // Revert to previous status on failure
-    await updatePayroll(db, id, { status: originalStatus })
+    // Revert to original status on any failure
+    try {
+      await updatePayroll(db, id, { status: originalStatus })
+    } catch {
+      // ignore revert failure
+    }
     return {
       success: false as const,
       error: 'processing_error',
