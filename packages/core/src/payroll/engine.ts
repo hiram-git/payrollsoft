@@ -22,6 +22,7 @@ export type AttendanceInput = {
 export type ProcessLineInput = {
   employee: {
     id: string
+    code: string
     baseSalary: number
     hireDate: Date
     customFields?: Record<string, unknown>
@@ -31,6 +32,9 @@ export type ProcessLineInput = {
     end: Date
     totalDays: number
     type: 'biweekly' | 'monthly' | 'weekly'
+  }
+  payroll?: {
+    paymentDate: string | null
   }
   attendance: AttendanceInput
   /** Active concepts, income first then deductions — order matters for CONCEPTO() references */
@@ -77,11 +81,14 @@ export async function processLine(input: ProcessLineInput): Promise<ProcessLineR
 
   const ctx: FormulaContext = {
     employee: {
+      id: input.employee.id,
+      code: input.employee.code,
       baseSalary: input.employee.baseSalary,
       hireDate: input.employee.hireDate,
       customFields: input.employee.customFields,
     },
     period: input.period,
+    payroll: input.payroll,
     attendance: input.attendance,
     concepts: resolvedConcepts,
     loadAccumulated: input.loadAccumulated,

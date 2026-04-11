@@ -48,14 +48,35 @@ export async function evaluate(node: ASTNode, ctx: FormulaContext): Promise<Eval
   }
 }
 
+/** Format a Date as a comparable YYYYMMDD integer (e.g. 20240115). */
+function toYMD(d: Date): number {
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate()
+}
+
+/** Days between two dates (absolute). */
+function daysBetween(a: Date, b: Date): number {
+  return Math.abs(Math.round((b.getTime() - a.getTime()) / 86_400_000))
+}
+
 /**
  * Resolve a variable name against the context.
- * Order: built-in aliases → concepts → employee custom fields.
+ * Order: numeric built-ins → string built-ins → concepts → employee custom fields.
+ * Dates are expressed as YYYYMMDD integers so arithmetic comparisons work naturally.
  */
-function resolveVariable(name: string, ctx: FormulaContext): number | undefined {
-  const aliases: Record<string, number> = {
+function resolveVariable(name: string, ctx: FormulaContext): number | string | undefined {
+  const refDate = ctx.period.start
+  const antiguedadDias = daysBetween(ctx.employee.hireDate, refDate)
+
+  const paymentDateYMD = ctx.payroll?.paymentDate ? toYMD(new Date(ctx.payroll.paymentDate)) : 0
+
+  // ── Numeric variables ──────────────────────────────────────────────────────
+  const numeric: Record<string, number> = {
+    // Salary
     SALARIO: ctx.employee.baseSalary,
+    SUELDO: ctx.employee.baseSalary,
+    BASESALARY: ctx.employee.baseSalary,
     SALARIO_DIARIO: ctx.employee.baseSalary / 30,
+    // Period / attendance
     DIAS_PERIODO: ctx.period.totalDays,
     DIAS_TRABAJADOS: ctx.attendance.workedDays,
     DIAS_HABILES: ctx.attendance.businessDays,
@@ -63,14 +84,29 @@ function resolveVariable(name: string, ctx: FormulaContext): number | undefined 
     MINUTOS_TARDANZA: ctx.attendance.lateMinutes,
     MINUTOS_EXTRA: ctx.attendance.overtimeMinutes,
     HORAS_EXTRA: ctx.attendance.overtimeMinutes / 60,
+    HORAS: ctx.attendance.workedDays * 8,
+    // Seniority
+    ANTIGUEDAD: antiguedadDias / 365,
+    ANTIGUEDAD_DIAS: antiguedadDias,
+    // Dates as YYYYMMDD
+    FECHAINICIO: toYMD(ctx.period.start),
+    FECHAFIN: toYMD(ctx.period.end),
+    FECHAPAGO: paymentDateYMD,
+    // Representation expenses (from custom fields, default 0)
+    GASTOS_REP: Number(ctx.employee.customFields?.gastos_rep ?? 0),
+    GASTOS_REPRESENTACION: Number(ctx.employee.customFields?.gastos_rep ?? 0),
   }
 
-  if (name in aliases) return aliases[name]
+  if (name in numeric) return numeric[name]
 
-  // Concept lookup (e.g. variable named after a concept code)
+  // ── String variables ───────────────────────────────────────────────────────
+  if (name === 'FICHA') return ctx.employee.code
+  if (name === 'EMPLOYEE_ID') return ctx.employee.id
+
+  // ── Concept lookup (code → computed amount) ────────────────────────────────
   if (name in ctx.concepts) return ctx.concepts[name]
 
-  // Employee custom fields
+  // ── Employee custom fields (fallback, case-insensitive key) ───────────────
   const cf = ctx.employee.customFields?.[name.toLowerCase()]
   if (typeof cf === 'number') return cf
 
