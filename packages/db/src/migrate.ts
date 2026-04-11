@@ -83,10 +83,9 @@ async function runMigrations(
   const applied = await sql<{ tag: string }[]>`SELECT tag FROM __migrations ORDER BY applied_at`
   const appliedSet = new Set(applied.map((r) => r.tag))
 
-  const isFirstBoot = appliedSet.size === 0
-  if (isFirstBoot) {
+  if (appliedSet.size === 0) {
     console.log(
-      `  [${schemaLabel}] First run with new tracker — will skip "already exists" errors from prior migrations`
+      `  [${schemaLabel}] No migrations recorded yet — "already exists" errors will be skipped (idempotent run)`
     )
   } else {
     console.log(`  [${schemaLabel}] ${appliedSet.size} migration(s) already applied:`)
@@ -121,7 +120,8 @@ async function runMigrations(
         console.log('✔ OK')
       } catch (err) {
         const pgCode = (err as { code?: string })?.code
-        if (isFirstBoot && pgCode && IGNORABLE_CODES.has(pgCode)) {
+        // Always skip "already exists" codes — migrations are forward-only and idempotent
+        if (pgCode && IGNORABLE_CODES.has(pgCode)) {
           console.log('⚠  already exists (skipped)')
           skipped++
         } else {
