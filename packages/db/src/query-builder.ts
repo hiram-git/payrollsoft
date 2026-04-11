@@ -612,6 +612,15 @@ export async function deactivateConcept(db: Db, id: string) {
   return row ?? null
 }
 
+export async function activateConcept(db: Db, id: string) {
+  const [row] = await db
+    .update(concepts)
+    .set({ isActive: true })
+    .where(eq(concepts.id, id))
+    .returning()
+  return row ?? null
+}
+
 // ─── Loans ────────────────────────────────────────────────────────────────────
 
 export async function listLoansByEmployee(db: Db, employeeId: string) {

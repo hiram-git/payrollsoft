@@ -1,4 +1,5 @@
 import {
+  activateConcept,
   createConcept,
   deactivateConcept,
   getConceptByCode,
@@ -89,5 +90,14 @@ export async function deactivateConceptService(db: AnyDb, id: string) {
     return { success: false as const, error: 'not_found', message: 'Concept not found' }
   }
   const row = await deactivateConcept(db, id)
+  return { success: true as const, data: row }
+}
+
+export async function activateConceptService(db: AnyDb, id: string) {
+  const existing = await getConceptById(db, id)
+  if (!existing) {
+    return { success: false as const, error: 'not_found', message: 'Concept not found' }
+  }
+  const row = await activateConcept(db, id)
   return { success: true as const, data: row }
 }

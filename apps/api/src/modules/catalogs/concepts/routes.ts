@@ -2,6 +2,7 @@ import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardRole } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
+  activateConceptService,
   createConceptService,
   deactivateConceptService,
   getConceptService,
@@ -108,6 +109,23 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
         return { success: false, error: 'Tenant required' }
       }
       const result = await deactivateConceptService(db, params.id)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+  )
+
+  .post(
+    '/:id/activate',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await activateConceptService(db, params.id)
       if (!result.success) {
         set.status = result.error === 'not_found' ? 404 : 400
         return { success: false, error: result.message }

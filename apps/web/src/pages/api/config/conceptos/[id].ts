@@ -26,14 +26,9 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   if (method === 'ACTIVATE') {
     try {
-      const res = await fetch(`${API_URL}/concepts/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Cookie: `auth=${authCookie}`,
-          'X-Tenant': TENANT,
-        },
-        body: JSON.stringify({ isActive: true }),
+      const res = await fetch(`${API_URL}/concepts/${id}/activate`, {
+        method: 'POST',
+        headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
       })
       if (res.status === 401) return redirect('/login')
     } catch {
