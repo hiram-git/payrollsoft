@@ -1,6 +1,7 @@
-import { and, asc, count, desc, eq, ilike, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
 import {
+  attendanceRecords,
   cargos,
   concepts,
   departamentos,
@@ -251,6 +252,80 @@ export async function getPayrollLines(db: Db, payrollId: string) {
     .innerJoin(employees, eq(payrollLines.employeeId, employees.id))
     .where(eq(payrollLines.payrollId, payrollId))
     .orderBy(asc(employees.lastName))
+}
+
+export async function getPayroll(db: Db, id: string) {
+  const [row] = await db.select().from(payrolls).where(eq(payrolls.id, id))
+  return row ?? null
+}
+
+export type CreatePayrollData = typeof payrolls.$inferInsert
+
+export async function createPayroll(db: Db, data: CreatePayrollData) {
+  const [row] = await db.insert(payrolls).values(data).returning()
+  return row
+}
+
+export async function updatePayroll(db: Db, id: string, data: Partial<CreatePayrollData>) {
+  const [row] = await db
+    .update(payrolls)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(payrolls.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function deleteDraftPayroll(db: Db, id: string) {
+  await db.delete(payrolls).where(and(eq(payrolls.id, id), eq(payrolls.status, 'draft')))
+}
+
+export async function upsertPayrollLine(
+  db: Db,
+  data: {
+    payrollId: string
+    employeeId: string
+    grossAmount: string
+    deductions: string
+    netAmount: string
+    concepts: unknown
+  }
+) {
+  await db
+    .delete(payrollLines)
+    .where(
+      and(eq(payrollLines.payrollId, data.payrollId), eq(payrollLines.employeeId, data.employeeId))
+    )
+  const [row] = await db.insert(payrollLines).values(data).returning()
+  return row
+}
+
+/**
+ * Aggregate attendance records for an employee within a date range.
+ * Returns summed workedMinutes, lateMinutes, overtimeMinutes and record count.
+ */
+export async function getAttendanceSummaryForPeriod(
+  db: Db,
+  employeeId: string,
+  startDate: string,
+  endDate: string
+) {
+  const rows = await db
+    .select()
+    .from(attendanceRecords)
+    .where(
+      and(
+        eq(attendanceRecords.employeeId, employeeId),
+        gte(attendanceRecords.date, startDate),
+        lte(attendanceRecords.date, endDate)
+      )
+    )
+
+  const workedMinutes = rows.reduce((s, r) => s + (r.workedMinutes ?? 0), 0)
+  const lateMinutes = rows.reduce((s, r) => s + (r.lateMinutes ?? 0), 0)
+  const overtimeMinutes = rows.reduce((s, r) => s + (r.overtimeMinutes ?? 0), 0)
+  const daysWithRecords = rows.filter((r) => (r.workedMinutes ?? 0) > 0).length
+
+  return { workedMinutes, lateMinutes, overtimeMinutes, daysWithRecords, recordCount: rows.length }
 }
 
 // ─── Accumulator Query ────────────────────────────────────────────────────────

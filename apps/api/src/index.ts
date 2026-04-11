@@ -11,6 +11,7 @@ import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
 import { funcionesRoutes } from './modules/catalogs/funciones/routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
+import { payrollRoutes } from './modules/payroll/routes'
 
 const app = new Elysia()
   // ── Global middleware (order matters) ──────────────────────────────────────
@@ -39,6 +40,7 @@ const app = new Elysia()
   .use(departamentosRoutes)
   .use(conceptsRoutes)
   .use(loansRoutes)
+  .use(payrollRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen(env.PORT)
