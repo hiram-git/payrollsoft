@@ -197,8 +197,10 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       const result = await processLine({
         employee: {
           id: emp.id,
+          code: emp.code,
           baseSalary: Number(emp.baseSalary),
           hireDate: new Date(emp.hireDate),
+          customFields: (emp.customFields as Record<string, unknown>) ?? {},
         },
         period: {
           start: periodStart,
@@ -206,6 +208,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
           totalDays,
           type: payroll.frequency as 'biweekly' | 'monthly' | 'weekly',
         },
+        payroll: { paymentDate: payroll.paymentDate ?? null },
         attendance: {
           workedDays,
           businessDays: totalBusinessDays,

@@ -40,6 +40,8 @@ export type ASTNode = NumberNode | StringNode | VariableNode | CallNode | Binary
 
 export type FormulaContext = {
   employee: {
+    id: string
+    code: string
     baseSalary: number
     hireDate: Date
     customFields?: Record<string, unknown>
@@ -49,6 +51,9 @@ export type FormulaContext = {
     end: Date
     totalDays: number
     type: 'biweekly' | 'monthly' | 'weekly'
+  }
+  payroll?: {
+    paymentDate: string | null
   }
   attendance: {
     workedDays: number
