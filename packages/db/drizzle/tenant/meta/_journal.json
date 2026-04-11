@@ -29,6 +29,13 @@
       "when": 1744358400000,
       "tag": "0003_payroll_acumulados",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1744362000000,
+      "tag": "0004_normalise_payroll_status",
+      "breakpoints": true
     }
   ]
 }

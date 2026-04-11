@@ -114,16 +114,26 @@ export async function deletePayrollService(db: AnyDb, id: string) {
 
 // ─── Payroll Generation (shared logic) ───────────────────────────────────────
 
-async function runGeneration(db: AnyDb, id: string, allowedStatus: string) {
+// Accept both new and legacy status names for backward compatibility
+const ALLOWED_FOR_GENERATE = new Set(['created', 'draft'])
+const ALLOWED_FOR_REGENERATE = new Set(['generated', 'processed'])
+
+async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regenerate') {
   const payroll = await getPayroll(db, id)
   if (!payroll) return { success: false as const, error: 'not_found', message: 'Payroll not found' }
-  if (payroll.status !== allowedStatus) {
+
+  const allowed = phase === 'generate' ? ALLOWED_FOR_GENERATE : ALLOWED_FOR_REGENERATE
+  if (!allowed.has(payroll.status)) {
+    const expected = phase === 'generate' ? 'created' : 'generated'
     return {
       success: false as const,
       error: 'invalid_status',
-      message: `Payroll must be in '${allowedStatus}' status`,
+      message: `La planilla debe estar en estado '${expected}' para ${phase === 'generate' ? 'generar' : 'regenerar'}`,
     }
   }
+
+  // Remember original status so we can revert on failure
+  const originalStatus = payroll.status
 
   // Clear previous lines and acumulados (safe for both generate and regenerate)
   await deletePayrollAcumulados(db, id)
@@ -268,7 +278,7 @@ async function runGeneration(db: AnyDb, id: string, allowedStatus: string) {
     }
   } catch (err) {
     // Revert to previous status on failure
-    await updatePayroll(db, id, { status: allowedStatus })
+    await updatePayroll(db, id, { status: originalStatus })
     return {
       success: false as const,
       error: 'processing_error',
@@ -281,12 +291,12 @@ async function runGeneration(db: AnyDb, id: string, allowedStatus: string) {
 
 /** created → generated */
 export function generatePayrollService(db: AnyDb, id: string) {
-  return runGeneration(db, id, 'created')
+  return runGeneration(db, id, 'generate')
 }
 
 /** generated → generated (reprocess) */
 export function regeneratePayrollService(db: AnyDb, id: string) {
-  return runGeneration(db, id, 'generated')
+  return runGeneration(db, id, 'regenerate')
 }
 
 /** generated → closed */
@@ -294,7 +304,7 @@ export async function closePayrollService(db: AnyDb, id: string) {
   const existing = await getPayroll(db, id)
   if (!existing)
     return { success: false as const, error: 'not_found', message: 'Payroll not found' }
-  if (existing.status !== 'generated') {
+  if (!ALLOWED_FOR_REGENERATE.has(existing.status)) {
     return {
       success: false as const,
       error: 'not_generated',
