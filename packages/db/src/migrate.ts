@@ -54,8 +54,15 @@ function splitStatements(sql: string): string[] {
 
 // ─── Core runner ──────────────────────────────────────────────────────────────
 
-// PostgreSQL error codes we can safely ignore ("already exists")
-const IGNORABLE_CODES = new Set(['42P07', '42710', '42P06', '23505'])
+// PostgreSQL error codes we can safely ignore on first boot ("already exists" variants)
+const IGNORABLE_CODES = new Set([
+  '42P07', // relation already exists
+  '42710', // object already exists
+  '42P06', // schema already exists
+  '42701', // column already exists
+  '42P16', // constraint already exists (index)
+  '23505', // unique violation (idempotent inserts)
+])
 
 async function runMigrations(
   sql: postgres.Sql,
