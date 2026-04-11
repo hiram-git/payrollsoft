@@ -21,6 +21,7 @@ const ConceptUpdateBody = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   type: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
   formula: t.Optional(t.Nullable(t.String())),
+  isActive: t.Optional(t.Boolean()),
 })
 
 export const conceptsRoutes = new Elysia({ prefix: '/concepts' })

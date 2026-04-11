@@ -91,13 +91,20 @@ const errorMessages: Record<string, string> = {
       </div>
 
       <div class="flex justify-between mt-6">
-        {concept.isActive && (
+        {concept.isActive ? (
           <form method="POST" action={`/api/config/conceptos/${id}`}
             onsubmit="return confirm('¿Dar de baja este concepto?')"
           >
             <input type="hidden" name="_method" value="DELETE" />
             <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
               Dar de baja
+            </button>
+          </form>
+        ) : (
+          <form method="POST" action={`/api/config/conceptos/${id}`}>
+            <input type="hidden" name="_method" value="ACTIVATE" />
+            <button type="submit" class="px-4 py-2 text-sm text-emerald-700 bg-white border border-emerald-300 rounded-lg hover:bg-emerald-50 transition-colors">
+              Reactivar concepto
             </button>
           </form>
         )}

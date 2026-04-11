@@ -24,6 +24,24 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect('/config/conceptos')
   }
 
+  if (method === 'ACTIVATE') {
+    try {
+      const res = await fetch(`${API_URL}/concepts/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `auth=${authCookie}`,
+          'X-Tenant': TENANT,
+        },
+        body: JSON.stringify({ isActive: true }),
+      })
+      if (res.status === 401) return redirect('/login')
+    } catch {
+      return redirect(`/config/conceptos/${id}?error=server-error`)
+    }
+    return redirect(`/config/conceptos/${id}?success=1`)
+  }
+
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
   const body = {
     code: g('code'),

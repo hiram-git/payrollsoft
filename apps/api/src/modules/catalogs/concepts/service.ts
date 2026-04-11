@@ -15,6 +15,7 @@ export type ConceptInput = {
   name: string
   type: string
   formula?: string | null
+  isActive?: boolean
 }
 
 export function listConceptsService(db: AnyDb, search?: string) {
@@ -77,6 +78,7 @@ export async function updateConceptService(db: AnyDb, id: string, input: Partial
   if (input.name !== undefined) patch.name = input.name.trim()
   if (input.type !== undefined) patch.type = input.type
   if (input.formula !== undefined) patch.formula = input.formula?.trim() || null
+  if (input.isActive !== undefined) patch.isActive = input.isActive
   const row = await updateConcept(db, id, patch)
   return { success: true as const, data: row }
 }
