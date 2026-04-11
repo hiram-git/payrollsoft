@@ -1,0 +1,97 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const error = Astro.url.searchParams.get('error') ?? ''
+const errorMessages: Record<string, string> = {
+  'missing-fields': 'Completa todos los campos requeridos.',
+  invalid_type: 'Tipo de planilla inválido.',
+  invalid_freq: 'Frecuencia inválida.',
+  invalid_period: 'La fecha de inicio debe ser anterior a la fecha de fin.',
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+}
+
+// Default period: current biweekly (1st–15th or 16th–end of month)
+const today = new Date()
+const day = today.getDate()
+const y = today.getFullYear()
+const m = String(today.getMonth() + 1).padStart(2, '0')
+const defaultStart = day <= 15 ? `${y}-${m}-01` : `${y}-${m}-16`
+const lastDay = new Date(y, today.getMonth() + 1, 0).getDate()
+const defaultEnd = day <= 15 ? `${y}-${m}-15` : `${y}-${m}-${lastDay}`
+const defaultName = `Planilla Quincenal ${defaultStart}`
+---
+
+<AppLayout title="Nueva Planilla">
+  <div class="p-8 max-w-2xl">
+    <div class="flex items-center gap-3 mb-6">
+      <a href="/payroll" class="text-sm text-gray-500 hover:text-gray-700">← Planillas</a>
+      <span class="text-gray-300">/</span>
+      <h1 class="text-2xl font-bold text-gray-900">Nueva Planilla</h1>
+    </div>
+
+    {error && (
+      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <form method="POST" action="/api/payroll">
+      <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+          <input type="text" name="name" class="input" required value={defaultName} />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
+            <select name="type" class="input" required>
+              <option value="regular" selected>Regular</option>
+              <option value="thirteenth">XIII Mes</option>
+              <option value="special">Especial</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Frecuencia *</label>
+            <select name="frequency" class="input" required>
+              <option value="biweekly" selected>Quincenal</option>
+              <option value="monthly">Mensual</option>
+              <option value="weekly">Semanal</option>
+            </select>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Inicio del período *</label>
+            <input type="date" name="periodStart" class="input" required value={defaultStart} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Fin del período *</label>
+            <input type="date" name="periodEnd" class="input" required value={defaultEnd} />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de pago</label>
+          <input type="date" name="paymentDate" class="input" />
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-3 mt-6">
+        <a href="/payroll" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Cancelar
+        </a>
+        <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+          Crear planilla
+        </button>
+      </div>
+    </form>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+</style>

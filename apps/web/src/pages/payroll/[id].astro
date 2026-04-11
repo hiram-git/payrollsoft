@@ -1,0 +1,256 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const { id } = Astro.params
+
+type LineConceptEntry = {
+  code: string
+  name: string
+  type: string
+  amount: number
+  formulaError?: string
+}
+type PayrollLine = {
+  line: {
+    id: string
+    grossAmount: string
+    deductions: string
+    netAmount: string
+    concepts: LineConceptEntry[]
+  }
+  employee: {
+    id: string
+    code: string
+    firstName: string
+    lastName: string
+    department: string | null
+    position: string | null
+  }
+}
+type Payroll = {
+  id: string
+  name: string
+  type: string
+  frequency: string
+  periodStart: string
+  periodEnd: string
+  paymentDate: string | null
+  status: string
+  totalGross: string
+  totalDeductions: string
+  totalNet: string
+}
+
+let payroll: Payroll | null = null
+let lines: PayrollLine[] = []
+
+try {
+  const res = await fetch(`${API_URL}/payroll/${id}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.status === 404) return Astro.redirect('/payroll')
+  if (res.ok) {
+    const json = (await res.json()) as { data: { payroll: Payroll; lines: PayrollLine[] } }
+    payroll = json.data.payroll
+    lines = json.data.lines
+  }
+} catch {
+  return Astro.redirect('/payroll')
+}
+
+if (!payroll) return Astro.redirect('/payroll')
+
+const success = Astro.url.searchParams.get('success') === '1'
+const processError = Astro.url.searchParams.get('error') ?? ''
+
+const statusLabel: Record<string, string> = {
+  draft: 'Borrador',
+  processing: 'Procesando...',
+  processed: 'Procesada',
+  paid: 'Pagada',
+}
+const statusClass: Record<string, string> = {
+  draft: 'bg-gray-100 text-gray-600',
+  processing: 'bg-yellow-100 text-yellow-700',
+  processed: 'bg-blue-100 text-blue-700',
+  paid: 'bg-green-100 text-green-700',
+}
+const typeLabel: Record<string, string> = {
+  regular: 'Regular',
+  thirteenth: 'XIII Mes',
+  special: 'Especial',
+}
+const freqLabel: Record<string, string> = {
+  biweekly: 'Quincenal',
+  monthly: 'Mensual',
+  weekly: 'Semanal',
+}
+
+const isDraft = payroll.status === 'draft'
+const isProcessed = payroll.status === 'processed'
+---
+
+<AppLayout title={payroll.name}>
+  <div class="p-8">
+    <!-- Header -->
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <div class="flex items-center gap-3 mb-1">
+          <a href="/payroll" class="text-sm text-gray-500 hover:text-gray-700">← Planillas</a>
+          <span class="text-gray-300">/</span>
+          <h1 class="text-2xl font-bold text-gray-900">{payroll.name}</h1>
+          <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${statusClass[payroll.status] ?? 'bg-gray-100 text-gray-500'}`}>
+            {statusLabel[payroll.status] ?? payroll.status}
+          </span>
+        </div>
+        <p class="text-sm text-gray-500">
+          {typeLabel[payroll.type] ?? payroll.type} · {freqLabel[payroll.frequency] ?? payroll.frequency} ·
+          <span class="font-mono">{payroll.periodStart} → {payroll.periodEnd}</span>
+          {payroll.paymentDate && <span> · Pago: <span class="font-mono">{payroll.paymentDate}</span></span>}
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        {isDraft && (
+          <form method="POST" action={`/api/payroll/${id}`}>
+            <input type="hidden" name="_method" value="PROCESS" />
+            <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+              Procesar planilla
+            </button>
+          </form>
+        )}
+        {isProcessed && (
+          <form method="POST" action={`/api/payroll/${id}`}
+            onsubmit="return confirm('¿Marcar esta planilla como pagada? Esta acción es irreversible.')"
+          >
+            <input type="hidden" name="_method" value="CLOSE" />
+            <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
+              Marcar como pagada
+            </button>
+          </form>
+        )}
+        {isDraft && (
+          <form method="POST" action={`/api/payroll/${id}`}
+            onsubmit="return confirm('¿Eliminar esta planilla?')"
+          >
+            <input type="hidden" name="_method" value="DELETE" />
+            <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
+              Eliminar
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+
+    {success && (
+      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Planilla procesada correctamente.
+      </div>
+    )}
+    {processError && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        Error al procesar: {processError}
+      </div>
+    )}
+
+    <!-- Totals summary -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <p class="text-xs text-gray-500 mb-1">Total Bruto</p>
+        <p class="text-2xl font-bold text-gray-900">${Number(payroll.totalGross).toFixed(2)}</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <p class="text-xs text-gray-500 mb-1">Deducciones</p>
+        <p class="text-2xl font-bold text-red-600">${Number(payroll.totalDeductions).toFixed(2)}</p>
+      </div>
+      <div class="bg-white rounded-xl border border-gray-200 p-5">
+        <p class="text-xs text-gray-500 mb-1">Neto a Pagar</p>
+        <p class="text-2xl font-bold text-green-700">${Number(payroll.totalNet).toFixed(2)}</p>
+      </div>
+    </div>
+
+    <!-- Lines table -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="px-6 py-4 border-b border-gray-100">
+        <h2 class="font-semibold text-gray-800">Detalle por empleado ({lines.length})</h2>
+      </div>
+
+      {lines.length === 0 ? (
+        <div class="p-10 text-center text-gray-400 text-sm">
+          {isDraft
+            ? 'Haz clic en "Procesar planilla" para calcular los pagos.'
+            : 'Sin líneas de planilla.'}
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Empleado</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Dpto / Puesto</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Bruto</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Deduc.</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Neto</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {lines.map((l) => (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3">
+                  <p class="font-medium text-gray-900">{l.employee.firstName} {l.employee.lastName}</p>
+                  <p class="text-xs text-gray-400 font-mono">{l.employee.code}</p>
+                </td>
+                <td class="px-4 py-3 text-gray-600 text-xs">
+                  {l.employee.department ?? '—'}
+                  {l.employee.position && <span class="text-gray-400"> / {l.employee.position}</span>}
+                </td>
+                <td class="px-4 py-3 text-right text-gray-700">${Number(l.line.grossAmount).toFixed(2)}</td>
+                <td class="px-4 py-3 text-right text-red-600">${Number(l.line.deductions).toFixed(2)}</td>
+                <td class="px-4 py-3 text-right font-semibold text-gray-900">${Number(l.line.netAmount).toFixed(2)}</td>
+                <td class="px-4 py-3">
+                  <button
+                    type="button"
+                    title="Ver conceptos"
+                    class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    onclick={`toggleRow('${l.line.id}')`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                </td>
+              </tr>
+              <tr id={`detail-${l.line.id}`} class="hidden bg-blue-50">
+                <td colspan="6" class="px-6 py-3">
+                  <div class="flex flex-wrap gap-3">
+                    {(l.line.concepts as LineConceptEntry[]).map((c) => (
+                      <div class={`rounded-lg px-3 py-1.5 text-xs ${c.type === 'income' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                        <span class="font-mono font-semibold">{c.code}</span>
+                        <span class="mx-1 text-gray-400">·</span>
+                        <span>{c.name}</span>
+                        <span class="ml-2 font-semibold">${c.amount.toFixed(2)}</span>
+                        {c.formulaError && <span class="ml-1 text-red-500">⚠</span>}
+                      </div>
+                    ))}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</AppLayout>
+
+<script is:inline>
+  function toggleRow(id) {
+    const el = document.getElementById('detail-' + id)
+    if (el) el.classList.toggle('hidden')
+  }
+</script>
