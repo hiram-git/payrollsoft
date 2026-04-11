@@ -65,20 +65,23 @@ try {
 
 if (!payroll) return Astro.redirect('/payroll')
 
-const success = Astro.url.searchParams.get('success') === '1'
-const processError = Astro.url.searchParams.get('error') ?? ''
+const msgSuccess = Astro.url.searchParams.get('success') ?? ''
+const msgError = Astro.url.searchParams.get('error') ?? ''
 
 const statusLabel: Record<string, string> = {
+  created: 'Creada',
+  processing: 'Procesando…',
+  generated: 'Generada',
+  closed: 'Cerrada',
   draft: 'Borrador',
-  processing: 'Procesando...',
   processed: 'Procesada',
   paid: 'Pagada',
 }
-const statusClass: Record<string, string> = {
-  draft: 'bg-gray-100 text-gray-600',
-  processing: 'bg-yellow-100 text-yellow-700',
-  processed: 'bg-blue-100 text-blue-700',
-  paid: 'bg-green-100 text-green-700',
+const statusStyle: Record<string, string> = {
+  created: 'bg-zinc-100 text-zinc-600',
+  processing: 'bg-amber-50 text-amber-700',
+  generated: 'bg-blue-50 text-blue-700',
+  closed: 'bg-emerald-50 text-emerald-700',
 }
 const typeLabel: Record<string, string> = {
   regular: 'Regular',
@@ -91,155 +94,255 @@ const freqLabel: Record<string, string> = {
   weekly: 'Semanal',
 }
 
-const isDraft = payroll.status === 'draft'
-const isProcessed = payroll.status === 'processed'
+function fmt(v: string | number) {
+  return Number(v).toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+const s = payroll.status
+const isCreated = s === 'created' || s === 'draft'
+const isGenerated = s === 'generated' || s === 'processed'
+const isClosed = s === 'closed' || s === 'paid'
+const isProcessing = s === 'processing'
+
+// Stepper steps
+const steps = [
+  { key: 'created', label: 'Creada' },
+  { key: 'generated', label: 'Generada' },
+  { key: 'closed', label: 'Cerrada' },
+]
+const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 ---
 
 <AppLayout title={payroll.name}>
-  <div class="p-8">
-    <!-- Header -->
-    <div class="flex items-start justify-between mb-6">
-      <div>
-        <div class="flex items-center gap-3 mb-1">
-          <a href="/payroll" class="text-sm text-gray-500 hover:text-gray-700">← Planillas</a>
-          <span class="text-gray-300">/</span>
-          <h1 class="text-2xl font-bold text-gray-900">{payroll.name}</h1>
-          <span class={`px-2 py-0.5 rounded-full text-xs font-medium ${statusClass[payroll.status] ?? 'bg-gray-100 text-gray-500'}`}>
-            {statusLabel[payroll.status] ?? payroll.status}
-          </span>
-        </div>
-        <p class="text-sm text-gray-500">
-          {typeLabel[payroll.type] ?? payroll.type} · {freqLabel[payroll.frequency] ?? payroll.frequency} ·
-          <span class="font-mono">{payroll.periodStart} → {payroll.periodEnd}</span>
-          {payroll.paymentDate && <span> · Pago: <span class="font-mono">{payroll.paymentDate}</span></span>}
-        </p>
-      </div>
+  <div class="px-6 py-8 max-w-6xl mx-auto">
 
-      <div class="flex items-center gap-2">
-        {isDraft && (
-          <form method="POST" action={`/api/payroll/${id}`}>
-            <input type="hidden" name="_method" value="PROCESS" />
-            <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-              Procesar planilla
-            </button>
-          </form>
-        )}
-        {isProcessed && (
-          <form method="POST" action={`/api/payroll/${id}`}
-            onsubmit="return confirm('¿Marcar esta planilla como pagada? Esta acción es irreversible.')"
-          >
-            <input type="hidden" name="_method" value="CLOSE" />
-            <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
-              Marcar como pagada
-            </button>
-          </form>
-        )}
-        {isDraft && (
-          <form method="POST" action={`/api/payroll/${id}`}
-            onsubmit="return confirm('¿Eliminar esta planilla?')"
-          >
-            <input type="hidden" name="_method" value="DELETE" />
-            <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
-              Eliminar
-            </button>
-          </form>
-        )}
+    <!-- Back + Title -->
+    <div class="mb-6">
+      <a href="/payroll" class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Planillas
+      </a>
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2.5">
+            <h1 class="text-xl font-semibold text-gray-900 tracking-tight">{payroll.name}</h1>
+            <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[payroll.status] ?? 'bg-gray-100 text-gray-500'}`}>
+              {statusLabel[payroll.status] ?? payroll.status}
+            </span>
+          </div>
+          <p class="text-sm text-gray-500 mt-1">
+            {typeLabel[payroll.type] ?? payroll.type} ·
+            {freqLabel[payroll.frequency] ?? payroll.frequency} ·
+            <span class="font-mono">{payroll.periodStart} → {payroll.periodEnd}</span>
+            {payroll.paymentDate && <span> · Pago: <span class="font-mono">{payroll.paymentDate}</span></span>}
+          </p>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          {isCreated && !isProcessing && (
+            <form method="POST" action={`/api/payroll/${id}`}>
+              <input type="hidden" name="_method" value="GENERATE" />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                Generar planilla
+              </button>
+            </form>
+          )}
+          {isGenerated && (
+            <form method="POST" action={`/api/payroll/${id}`}>
+              <input type="hidden" name="_method" value="REGENERATE" />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                Regenerar
+              </button>
+            </form>
+          )}
+          {isGenerated && (
+            <form
+              method="POST"
+              action={`/api/payroll/${id}`}
+              onsubmit="return confirm('¿Cerrar esta planilla? Quedará registrada como definitiva.')"
+            >
+              <input type="hidden" name="_method" value="CLOSE" />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Cerrar planilla
+              </button>
+            </form>
+          )}
+          {isClosed && (
+            <form
+              method="POST"
+              action={`/api/payroll/${id}`}
+              onsubmit="return confirm('¿Reabrir esta planilla? Volverá al estado Generada.')"
+            >
+              <input type="hidden" name="_method" value="REOPEN" />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/></svg>
+                Reabrir
+              </button>
+            </form>
+          )}
+          {isCreated && (
+            <form
+              method="POST"
+              action={`/api/payroll/${id}`}
+              onsubmit="return confirm('¿Eliminar esta planilla? Esta acción es irreversible.')"
+            >
+              <input type="hidden" name="_method" value="DELETE" />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                Eliminar
+              </button>
+            </form>
+          )}
+        </div>
       </div>
     </div>
 
-    {success && (
-      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+    <!-- Status stepper -->
+    <div class="mb-6 flex items-center gap-0">
+      {steps.map((step, i) => (
+        <div class="flex items-center">
+          <div class={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+            i === stepIndex
+              ? 'bg-gray-900 text-white'
+              : i < stepIndex
+                ? 'bg-gray-200 text-gray-700'
+                : 'bg-transparent text-gray-400'
+          }`}>
+            <span class={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
+              i === stepIndex ? 'bg-white text-gray-900' : i < stepIndex ? 'bg-gray-500 text-white' : 'border border-gray-300 text-gray-400'
+            }`}>{i + 1}</span>
+            {step.label}
+          </div>
+          {i < steps.length - 1 && (
+            <div class={`w-8 h-px mx-1 ${i < stepIndex ? 'bg-gray-400' : 'bg-gray-200'}`} />
+          )}
+        </div>
+      ))}
+    </div>
+
+    <!-- Alerts -->
+    {msgSuccess === '1' && (
+      <div class="mb-5 flex items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
         Planilla procesada correctamente.
       </div>
     )}
-    {processError && (
-      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        Error al procesar: {processError}
+    {msgError && (
+      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        Error: {decodeURIComponent(msgError)}
       </div>
     )}
 
-    <!-- Totals summary -->
+    <!-- Totals row -->
     <div class="grid grid-cols-3 gap-4 mb-6">
-      <div class="bg-white rounded-xl border border-gray-200 p-5">
-        <p class="text-xs text-gray-500 mb-1">Total Bruto</p>
-        <p class="text-2xl font-bold text-gray-900">${Number(payroll.totalGross).toFixed(2)}</p>
+      <div class="border border-gray-200 rounded-lg bg-white p-5">
+        <p class="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Total Bruto</p>
+        <p class="text-2xl font-semibold text-gray-900 tabular-nums">{fmt(payroll.totalGross)}</p>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 p-5">
-        <p class="text-xs text-gray-500 mb-1">Deducciones</p>
-        <p class="text-2xl font-bold text-red-600">${Number(payroll.totalDeductions).toFixed(2)}</p>
+      <div class="border border-gray-200 rounded-lg bg-white p-5">
+        <p class="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Deducciones</p>
+        <p class="text-2xl font-semibold text-red-600 tabular-nums">{fmt(payroll.totalDeductions)}</p>
       </div>
-      <div class="bg-white rounded-xl border border-gray-200 p-5">
-        <p class="text-xs text-gray-500 mb-1">Neto a Pagar</p>
-        <p class="text-2xl font-bold text-green-700">${Number(payroll.totalNet).toFixed(2)}</p>
+      <div class="border border-gray-200 rounded-lg bg-white p-5">
+        <p class="text-xs text-gray-500 mb-1 font-medium uppercase tracking-wide">Neto a Pagar</p>
+        <p class="text-2xl font-semibold text-emerald-700 tabular-nums">{fmt(payroll.totalNet)}</p>
       </div>
     </div>
 
     <!-- Lines table -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-100">
-        <h2 class="font-semibold text-gray-800">Detalle por empleado ({lines.length})</h2>
+    <div class="border border-gray-200 rounded-lg bg-white overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-800">Detalle por empleado</h2>
+        <span class="text-xs text-gray-400">{lines.length} {lines.length === 1 ? 'empleado' : 'empleados'}</span>
       </div>
 
       {lines.length === 0 ? (
-        <div class="p-10 text-center text-gray-400 text-sm">
-          {isDraft
-            ? 'Haz clic en "Procesar planilla" para calcular los pagos.'
-            : 'Sin líneas de planilla.'}
+        <div class="py-14 text-center">
+          <p class="text-sm text-gray-400">
+            {isCreated
+              ? 'Haz clic en "Generar planilla" para calcular los pagos.'
+              : 'Sin líneas de planilla.'}
+          </p>
         </div>
       ) : (
         <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Empleado</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Dpto / Puesto</th>
-              <th class="text-right px-4 py-3 font-medium text-gray-600">Bruto</th>
-              <th class="text-right px-4 py-3 font-medium text-gray-600">Deduc.</th>
-              <th class="text-right px-4 py-3 font-medium text-gray-600">Neto</th>
-              <th class="px-4 py-3"></th>
+          <thead>
+            <tr class="border-b border-gray-100 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Dpto / Puesto</th>
+              <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Bruto</th>
+              <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Deduc.</th>
+              <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Neto</th>
+              <th class="w-10 px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody>
             {lines.map((l) => (
-              <tr class="hover:bg-gray-50 transition-colors">
-                <td class="px-4 py-3">
-                  <p class="font-medium text-gray-900">{l.employee.firstName} {l.employee.lastName}</p>
-                  <p class="text-xs text-gray-400 font-mono">{l.employee.code}</p>
-                </td>
-                <td class="px-4 py-3 text-gray-600 text-xs">
-                  {l.employee.department ?? '—'}
-                  {l.employee.position && <span class="text-gray-400"> / {l.employee.position}</span>}
-                </td>
-                <td class="px-4 py-3 text-right text-gray-700">${Number(l.line.grossAmount).toFixed(2)}</td>
-                <td class="px-4 py-3 text-right text-red-600">${Number(l.line.deductions).toFixed(2)}</td>
-                <td class="px-4 py-3 text-right font-semibold text-gray-900">${Number(l.line.netAmount).toFixed(2)}</td>
-                <td class="px-4 py-3">
-                  <button
-                    type="button"
-                    title="Ver conceptos"
-                    class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                    onclick={`toggleRow('${l.line.id}')`}
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-              <tr id={`detail-${l.line.id}`} class="hidden bg-blue-50">
-                <td colspan="6" class="px-6 py-3">
-                  <div class="flex flex-wrap gap-3">
-                    {(l.line.concepts as LineConceptEntry[]).map((c) => (
-                      <div class={`rounded-lg px-3 py-1.5 text-xs ${c.type === 'income' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-                        <span class="font-mono font-semibold">{c.code}</span>
-                        <span class="mx-1 text-gray-400">·</span>
-                        <span>{c.name}</span>
-                        <span class="ml-2 font-semibold">${c.amount.toFixed(2)}</span>
-                        {c.formulaError && <span class="ml-1 text-red-500">⚠</span>}
-                      </div>
-                    ))}
-                  </div>
-                </td>
-              </tr>
+              <>
+                <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3.5">
+                    <p class="font-medium text-gray-900">{l.employee.firstName} {l.employee.lastName}</p>
+                    <p class="text-xs text-gray-400 font-mono mt-0.5">{l.employee.code}</p>
+                  </td>
+                  <td class="px-4 py-3.5 text-gray-500 text-xs">
+                    {l.employee.department ?? '—'}
+                    {l.employee.position && <span class="text-gray-400"> / {l.employee.position}</span>}
+                  </td>
+                  <td class="px-4 py-3.5 text-right text-gray-700 tabular-nums">{fmt(l.line.grossAmount)}</td>
+                  <td class="px-4 py-3.5 text-right text-red-600 tabular-nums">{fmt(l.line.deductions)}</td>
+                  <td class="px-4 py-3.5 text-right font-semibold text-gray-900 tabular-nums">{fmt(l.line.netAmount)}</td>
+                  <td class="px-4 py-3.5">
+                    <button
+                      type="button"
+                      class="text-gray-400 hover:text-gray-700 transition-colors p-1"
+                      title="Ver conceptos"
+                      onclick={`toggleDetail('${l.line.id}')`}
+                    >
+                      <svg id={`icon-${l.line.id}`} xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
+                  </td>
+                </tr>
+                <tr id={`detail-${l.line.id}`} class="hidden">
+                  <td colspan="6" class="px-4 pb-3 pt-1 bg-gray-50 border-b border-gray-100">
+                    <div class="flex flex-wrap gap-2">
+                      {(l.line.concepts as LineConceptEntry[]).map((c) => (
+                        <div class={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs border ${
+                          c.type === 'income'
+                            ? 'bg-blue-50 border-blue-100 text-blue-800'
+                            : 'bg-orange-50 border-orange-100 text-orange-800'
+                        }`}>
+                          <span class="font-mono font-semibold">{c.code}</span>
+                          <span class="text-gray-400">·</span>
+                          <span>{c.name}</span>
+                          <span class="font-semibold ml-0.5">{fmt(c.amount)}</span>
+                          {c.formulaError && (
+                            <span class="ml-1 text-red-500" title={c.formulaError}>⚠</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              </>
             ))}
           </tbody>
         </table>
@@ -249,8 +352,12 @@ const isProcessed = payroll.status === 'processed'
 </AppLayout>
 
 <script is:inline>
-  function toggleRow(id) {
-    const el = document.getElementById('detail-' + id)
-    if (el) el.classList.toggle('hidden')
+  function toggleDetail(id) {
+    const row = document.getElementById('detail-' + id)
+    const icon = document.getElementById('icon-' + id)
+    if (row) {
+      const isHidden = row.classList.toggle('hidden')
+      if (icon) icon.style.transform = isHidden ? '' : 'rotate(180deg)'
+    }
   }
 </script>

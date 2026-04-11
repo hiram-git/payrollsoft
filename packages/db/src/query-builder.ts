@@ -8,6 +8,7 @@ import {
   employees,
   funciones,
   loans,
+  payrollAcumulados,
   payrollLines,
   payrolls,
   superAdmins,
@@ -275,8 +276,43 @@ export async function updatePayroll(db: Db, id: string, data: Partial<CreatePayr
   return row ?? null
 }
 
+export async function deleteCreatedPayroll(db: Db, id: string) {
+  await db.delete(payrolls).where(and(eq(payrolls.id, id), eq(payrolls.status, 'created')))
+}
+
+/** @deprecated use deleteCreatedPayroll */
 export async function deleteDraftPayroll(db: Db, id: string) {
-  await db.delete(payrolls).where(and(eq(payrolls.id, id), eq(payrolls.status, 'draft')))
+  await deleteCreatedPayroll(db, id)
+}
+
+// ─── Payroll Acumulados ───────────────────────────────────────────────────────
+
+export type PayrollAcumuladoInsert = {
+  payrollId: string
+  employeeId: string
+  conceptCode: string
+  conceptName: string
+  conceptType: string
+  amount: string
+}
+
+export async function insertPayrollAcumulados(db: Db, items: PayrollAcumuladoInsert[]) {
+  if (items.length === 0) return
+  await db.insert(payrollAcumulados).values(items)
+}
+
+export async function deletePayrollAcumulados(db: Db, payrollId: string) {
+  await db.delete(payrollAcumulados).where(eq(payrollAcumulados.payrollId, payrollId))
+}
+
+export async function getPayrollAcumulados(db: Db, payrollId: string, employeeId?: string) {
+  const conditions = [eq(payrollAcumulados.payrollId, payrollId)]
+  if (employeeId) conditions.push(eq(payrollAcumulados.employeeId, employeeId))
+  return db
+    .select()
+    .from(payrollAcumulados)
+    .where(and(...conditions))
+    .orderBy(asc(payrollAcumulados.conceptCode))
 }
 
 export async function upsertPayrollLine(
@@ -331,8 +367,8 @@ export async function getAttendanceSummaryForPeriod(
 // ─── Accumulator Query ────────────────────────────────────────────────────────
 
 /**
- * Sum a specific concept across the last N completed payrolls for an employee.
- * Used as the `loadAccumulated` implementation for the FormulaEngine in Phase 3.
+ * Sum a specific concept across the last N closed payrolls for an employee.
+ * Queries the denormalized payroll_acumulados table for efficiency.
  */
 export async function loadAccumulated(
   db: Db,
@@ -340,35 +376,28 @@ export async function loadAccumulated(
   conceptCode: string,
   periods: number
 ): Promise<number> {
-  // Get last N completed payrolls
-  const completedPayrolls = await db
+  // Get last N closed payrolls ordered by period start
+  const closedPayrolls = await db
     .select({ id: payrolls.id })
     .from(payrolls)
-    .where(eq(payrolls.status, 'paid'))
+    .where(eq(payrolls.status, 'closed'))
     .orderBy(desc(payrolls.periodStart))
     .limit(periods)
 
-  if (completedPayrolls.length === 0) return 0
+  if (closedPayrolls.length === 0) return 0
 
-  const payrollIds = completedPayrolls.map((p) => p.id)
+  const payrollIds = closedPayrolls.map((p) => p.id)
 
-  // Sum the concept from each payroll line's concepts JSON array
   const result = await db
     .select({
-      total: sql<string>`
-        COALESCE(SUM(
-          (SELECT SUM((elem->>'amount')::numeric)
-           FROM jsonb_array_elements(${payrollLines.concepts}) AS elem
-           WHERE elem->>'code' = ${conceptCode}
-          )
-        ), 0)
-      `,
+      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
     })
-    .from(payrollLines)
+    .from(payrollAcumulados)
     .where(
       and(
-        eq(payrollLines.employeeId, employeeId),
-        sql`${payrollLines.payrollId} = ANY(${sql.raw(`ARRAY['${payrollIds.join("','")}'::uuid]`)})`
+        eq(payrollAcumulados.employeeId, employeeId),
+        eq(payrollAcumulados.conceptCode, conceptCode),
+        sql`${payrollAcumulados.payrollId} = ANY(${sql.raw(`ARRAY['${payrollIds.join("','")}'::uuid]`)})`
       )
     )
 
