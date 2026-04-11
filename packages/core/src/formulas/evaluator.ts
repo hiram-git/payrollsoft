@@ -55,6 +55,7 @@ export async function evaluate(node: ASTNode, ctx: FormulaContext): Promise<Eval
 function resolveVariable(name: string, ctx: FormulaContext): number | undefined {
   const aliases: Record<string, number> = {
     SALARIO: ctx.employee.baseSalary,
+    BASESALARY: ctx.employee.baseSalary,
     SALARIO_DIARIO: ctx.employee.baseSalary / 30,
     DIAS_PERIODO: ctx.period.totalDays,
     DIAS_TRABAJADOS: ctx.attendance.workedDays,
