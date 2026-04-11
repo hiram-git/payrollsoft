@@ -1,10 +1,12 @@
 import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core'
 import {
   createPayroll,
-  deleteDraftPayroll,
+  deleteCreatedPayroll,
+  deletePayrollAcumulados,
   getAttendanceSummaryForPeriod,
   getPayroll,
   getPayrollLines,
+  insertPayrollAcumulados,
   listConcepts,
   listEmployees,
   listLoansByEmployee,
@@ -68,7 +70,7 @@ export async function createPayrollService(db: AnyDb, input: CreatePayrollInput)
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     paymentDate: input.paymentDate ?? null,
-    status: 'draft',
+    status: 'created',
   })
   return { success: true as const, data: row }
 }
@@ -81,11 +83,11 @@ export async function updatePayrollService(
   const existing = await getPayroll(db, id)
   if (!existing)
     return { success: false as const, error: 'not_found', message: 'Payroll not found' }
-  if (existing.status !== 'draft') {
+  if (existing.status !== 'created') {
     return {
       success: false as const,
       error: 'not_editable',
-      message: 'Only draft payrolls can be edited',
+      message: 'Only created payrolls can be edited',
     }
   }
   const patch: Record<string, unknown> = {}
@@ -99,29 +101,32 @@ export async function deletePayrollService(db: AnyDb, id: string) {
   const existing = await getPayroll(db, id)
   if (!existing)
     return { success: false as const, error: 'not_found', message: 'Payroll not found' }
-  if (existing.status !== 'draft') {
+  if (existing.status !== 'created') {
     return {
       success: false as const,
       error: 'not_deletable',
-      message: 'Only draft payrolls can be deleted',
+      message: 'Only created payrolls can be deleted',
     }
   }
-  await deleteDraftPayroll(db, id)
+  await deleteCreatedPayroll(db, id)
   return { success: true as const }
 }
 
-// ─── Payroll Processing ───────────────────────────────────────────────────────
+// ─── Payroll Generation (shared logic) ───────────────────────────────────────
 
-export async function processPayrollService(db: AnyDb, id: string) {
+async function runGeneration(db: AnyDb, id: string, allowedStatus: string) {
   const payroll = await getPayroll(db, id)
   if (!payroll) return { success: false as const, error: 'not_found', message: 'Payroll not found' }
-  if (payroll.status !== 'draft') {
+  if (payroll.status !== allowedStatus) {
     return {
       success: false as const,
-      error: 'not_draft',
-      message: 'Only draft payrolls can be processed',
+      error: 'invalid_status',
+      message: `Payroll must be in '${allowedStatus}' status`,
     }
   }
+
+  // Clear previous lines and acumulados (safe for both generate and regenerate)
+  await deletePayrollAcumulados(db, id)
 
   await updatePayroll(db, id, { status: 'processing' })
 
@@ -147,6 +152,14 @@ export async function processPayrollService(db: AnyDb, id: string) {
     let totalGross = 0
     let totalDeductions = 0
     const allWarnings: string[] = []
+    const acumuladoItems: {
+      payrollId: string
+      employeeId: string
+      conceptCode: string
+      conceptName: string
+      conceptType: string
+      amount: string
+    }[] = []
 
     for (const emp of employeeResult.data) {
       // Attendance for the period
@@ -157,8 +170,7 @@ export async function processPayrollService(db: AnyDb, id: string) {
         payroll.periodEnd
       )
 
-      const workedDays = att.recordCount > 0 ? att.daysWithRecords : totalBusinessDays // no records → full period assumed
-
+      const workedDays = att.recordCount > 0 ? att.daysWithRecords : totalBusinessDays
       const absenceDays = Math.max(0, totalBusinessDays - workedDays)
 
       // Active loans applicable to this period
@@ -199,7 +211,7 @@ export async function processPayrollService(db: AnyDb, id: string) {
         })),
         loanInstallments,
         loadAccumulated: (code, periods) => loadAccumulated(db, emp.id, code, periods),
-        loadBalance: async () => 0, // vacation balance — Phase 3f
+        loadBalance: async () => 0,
       })
 
       if (result.warnings.length > 0) {
@@ -215,13 +227,30 @@ export async function processPayrollService(db: AnyDb, id: string) {
         concepts: result.concepts,
       })
 
+      // Collect acumulado rows (one per concept entry per employee)
+      for (const entry of result.concepts) {
+        if (entry.amount !== 0) {
+          acumuladoItems.push({
+            payrollId: id,
+            employeeId: emp.id,
+            conceptCode: entry.code,
+            conceptName: entry.name,
+            conceptType: entry.type,
+            amount: String(entry.amount),
+          })
+        }
+      }
+
       totalGross += result.grossAmount
       totalDeductions += result.deductions
     }
 
+    // Persist acumulados
+    await insertPayrollAcumulados(db, acumuladoItems)
+
     const totalNet = round2(totalGross - totalDeductions)
     await updatePayroll(db, id, {
-      status: 'processed',
+      status: 'generated',
       totalGross: String(round2(totalGross)),
       totalDeductions: String(round2(totalDeductions)),
       totalNet: String(totalNet),
@@ -238,7 +267,8 @@ export async function processPayrollService(db: AnyDb, id: string) {
       },
     }
   } catch (err) {
-    await updatePayroll(db, id, { status: 'draft' })
+    // Revert to previous status on failure
+    await updatePayroll(db, id, { status: allowedStatus })
     return {
       success: false as const,
       error: 'processing_error',
@@ -247,17 +277,51 @@ export async function processPayrollService(db: AnyDb, id: string) {
   }
 }
 
+// ─── State Transitions ────────────────────────────────────────────────────────
+
+/** created → generated */
+export function generatePayrollService(db: AnyDb, id: string) {
+  return runGeneration(db, id, 'created')
+}
+
+/** generated → generated (reprocess) */
+export function regeneratePayrollService(db: AnyDb, id: string) {
+  return runGeneration(db, id, 'generated')
+}
+
+/** generated → closed */
 export async function closePayrollService(db: AnyDb, id: string) {
   const existing = await getPayroll(db, id)
   if (!existing)
     return { success: false as const, error: 'not_found', message: 'Payroll not found' }
-  if (existing.status !== 'processed') {
+  if (existing.status !== 'generated') {
     return {
       success: false as const,
-      error: 'not_processed',
-      message: 'Only processed payrolls can be closed',
+      error: 'not_generated',
+      message: 'Only generated payrolls can be closed',
     }
   }
-  const row = await updatePayroll(db, id, { status: 'paid' })
+  const row = await updatePayroll(db, id, { status: 'closed' })
   return { success: true as const, data: row }
 }
+
+/** closed → generated */
+export async function reopenPayrollService(db: AnyDb, id: string) {
+  const existing = await getPayroll(db, id)
+  if (!existing)
+    return { success: false as const, error: 'not_found', message: 'Payroll not found' }
+  if (existing.status !== 'closed') {
+    return {
+      success: false as const,
+      error: 'not_closed',
+      message: 'Only closed payrolls can be reopened',
+    }
+  }
+  const row = await updatePayroll(db, id, { status: 'generated' })
+  return { success: true as const, data: row }
+}
+
+// ─── Legacy aliases ───────────────────────────────────────────────────────────
+
+/** @deprecated use generatePayrollService */
+export const processPayrollService = generatePayrollService

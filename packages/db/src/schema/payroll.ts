@@ -1,5 +1,16 @@
 import { boolean, date, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
+export const payrollAcumulados = pgTable('payroll_acumulados', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  payrollId: uuid('payroll_id').notNull(),
+  employeeId: uuid('employee_id').notNull(),
+  conceptCode: varchar('concept_code', { length: 20 }).notNull(),
+  conceptName: varchar('concept_name', { length: 255 }).notNull(),
+  conceptType: varchar('concept_type', { length: 20 }).notNull(), // income | deduction
+  amount: varchar('amount', { length: 20 }).notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
 export const concepts = pgTable('concepts', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
@@ -18,7 +29,7 @@ export const payrolls = pgTable('payrolls', {
   periodStart: date('period_start').notNull(),
   periodEnd: date('period_end').notNull(),
   paymentDate: date('payment_date'),
-  status: varchar('status', { length: 20 }).notNull().default('draft'),
+  status: varchar('status', { length: 20 }).notNull().default('created'),
   totalGross: varchar('total_gross', { length: 20 }).notNull().default('0'),
   totalDeductions: varchar('total_deductions', { length: 20 }).notNull().default('0'),
   totalNet: varchar('total_net', { length: 20 }).notNull().default('0'),
@@ -57,3 +68,5 @@ export type NewPayroll = typeof payrolls.$inferInsert
 export type PayrollLine = typeof payrollLines.$inferSelect
 export type Loan = typeof loans.$inferSelect
 export type NewLoan = typeof loans.$inferInsert
+export type PayrollAcumulado = typeof payrollAcumulados.$inferSelect
+export type NewPayrollAcumulado = typeof payrollAcumulados.$inferInsert

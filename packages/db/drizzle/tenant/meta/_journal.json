@@ -22,6 +22,13 @@
       "when": 1775775877124,
       "tag": "0002_broad_invaders",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1744358400000,
+      "tag": "0003_payroll_acumulados",
+      "breakpoints": true
     }
   ]
 }

@@ -5,9 +5,11 @@ import {
   closePayrollService,
   createPayrollService,
   deletePayrollService,
+  generatePayrollService,
   getPayrollService,
   listPayrollsService,
-  processPayrollService,
+  regeneratePayrollService,
+  reopenPayrollService,
   updatePayrollService,
 } from './service'
 
@@ -126,15 +128,15 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
   )
 
-  // POST /payroll/:id/process — trigger payroll computation
+  // POST /payroll/:id/generate — created → generated
   .post(
-    '/:id/process',
+    '/:id/generate',
     async ({ db, params, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const result = await processPayrollService(db, params.id)
+      const result = await generatePayrollService(db, params.id)
       if (!result.success) {
         set.status = result.error === 'not_found' ? 404 : 400
         return { success: false, error: result.message }
@@ -144,7 +146,25 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
   )
 
-  // POST /payroll/:id/close — mark as paid
+  // POST /payroll/:id/regenerate — generated → generated (reprocess)
+  .post(
+    '/:id/regenerate',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await regeneratePayrollService(db, params.id)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
+  )
+
+  // POST /payroll/:id/close — generated → closed
   .post(
     '/:id/close',
     async ({ db, params, set }) => {
@@ -160,4 +180,40 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+  )
+
+  // POST /payroll/:id/reopen — closed → generated
+  .post(
+    '/:id/reopen',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await reopenPayrollService(db, params.id)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+  )
+
+  // Legacy alias: POST /payroll/:id/process → generate
+  .post(
+    '/:id/process',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await generatePayrollService(db, params.id)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
   )

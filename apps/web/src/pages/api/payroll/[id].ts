@@ -11,13 +11,12 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const form = await request.formData()
   const method = form.get('_method')?.toString() ?? 'PUT'
 
-  // ── DELETE (borrar borrador) ───────────────────────────────────────────────
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+
+  // ── DELETE ────────────────────────────────────────────────────────────────────
   if (method === 'DELETE') {
     try {
-      const res = await fetch(`${API_URL}/payroll/${id}`, {
-        method: 'DELETE',
-        headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
-      })
+      const res = await fetch(`${API_URL}/payroll/${id}`, { method: 'DELETE', headers })
       if (res.status === 401) return redirect('/login')
     } catch {
       return redirect(`/payroll/${id}?error=server-error`)
@@ -25,32 +24,39 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect('/payroll')
   }
 
-  // ── PROCESS (calcular planilla) ───────────────────────────────────────────
-  if (method === 'PROCESS') {
+  // ── GENERATE (created → generated) ───────────────────────────────────────────
+  if (method === 'GENERATE' || method === 'PROCESS') {
     let res: Response
     try {
-      res = await fetch(`${API_URL}/payroll/${id}/process`, {
-        method: 'POST',
-        headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
-      })
+      res = await fetch(`${API_URL}/payroll/${id}/generate`, { method: 'POST', headers })
     } catch {
       return redirect(`/payroll/${id}?error=server-error`)
     }
     if (res.status === 401) return redirect('/login')
     if (res.ok) return redirect(`/payroll/${id}?success=1`)
     const data = (await res.json().catch(() => ({}))) as { error?: string }
-    const msg = encodeURIComponent(data.error ?? 'server-error')
-    return redirect(`/payroll/${id}?error=${msg}`)
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(data.error ?? 'server-error')}`)
   }
 
-  // ── CLOSE (marcar como pagada) ────────────────────────────────────────────
+  // ── REGENERATE (generated → generated) ───────────────────────────────────────
+  if (method === 'REGENERATE') {
+    let res: Response
+    try {
+      res = await fetch(`${API_URL}/payroll/${id}/regenerate`, { method: 'POST', headers })
+    } catch {
+      return redirect(`/payroll/${id}?error=server-error`)
+    }
+    if (res.status === 401) return redirect('/login')
+    if (res.ok) return redirect(`/payroll/${id}?success=1`)
+    const data = (await res.json().catch(() => ({}))) as { error?: string }
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(data.error ?? 'server-error')}`)
+  }
+
+  // ── CLOSE (generated → closed) ────────────────────────────────────────────────
   if (method === 'CLOSE') {
     let res: Response
     try {
-      res = await fetch(`${API_URL}/payroll/${id}/close`, {
-        method: 'POST',
-        headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
-      })
+      res = await fetch(`${API_URL}/payroll/${id}/close`, { method: 'POST', headers })
     } catch {
       return redirect(`/payroll/${id}?error=server-error`)
     }
@@ -58,7 +64,19 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(`/payroll/${id}`)
   }
 
-  // ── PUT (editar nombre/fecha de pago) ─────────────────────────────────────
+  // ── REOPEN (closed → generated) ──────────────────────────────────────────────
+  if (method === 'REOPEN') {
+    let res: Response
+    try {
+      res = await fetch(`${API_URL}/payroll/${id}/reopen`, { method: 'POST', headers })
+    } catch {
+      return redirect(`/payroll/${id}?error=server-error`)
+    }
+    if (res.status === 401) return redirect('/login')
+    return redirect(`/payroll/${id}`)
+  }
+
+  // ── PUT (edit name / payment date — only for created payrolls) ────────────────
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
   const body = {
     name: g('name') || undefined,
@@ -69,11 +87,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   try {
     res = await fetch(`${API_URL}/payroll/${id}`, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Cookie: `auth=${authCookie}`,
-        'X-Tenant': TENANT,
-      },
+      headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify(body),
     })
   } catch {
