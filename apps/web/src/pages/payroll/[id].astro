@@ -311,57 +311,39 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
               <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Bruto</th>
               <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Deduc.</th>
               <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Neto</th>
-              <th class="w-10 px-4 py-3"></th>
+              <th class="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {lines.map((l) => (
-              <>
-                <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                  <td class="px-4 py-3.5">
-                    <p class="font-medium text-gray-900">{l.employee.firstName} {l.employee.lastName}</p>
-                    <p class="text-xs text-gray-400 font-mono mt-0.5">{l.employee.code}</p>
-                  </td>
-                  <td class="px-4 py-3.5 text-gray-500 text-xs">
-                    {l.employee.department ?? '—'}
-                    {l.employee.position && <span class="text-gray-400"> / {l.employee.position}</span>}
-                  </td>
-                  <td class="px-4 py-3.5 text-right text-gray-700 tabular-nums">{fmt(l.line.grossAmount)}</td>
-                  <td class="px-4 py-3.5 text-right text-red-600 tabular-nums">{fmt(l.line.deductions)}</td>
-                  <td class="px-4 py-3.5 text-right font-semibold text-gray-900 tabular-nums">{fmt(l.line.netAmount)}</td>
-                  <td class="px-4 py-3.5">
-                    <button
-                      type="button"
-                      class="text-gray-400 hover:text-gray-700 transition-colors p-1"
-                      title="Ver conceptos"
-                      onclick={`toggleDetail('${l.line.id}')`}
-                    >
-                      <svg id={`icon-${l.line.id}`} xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                    </button>
-                  </td>
-                </tr>
-                <tr id={`detail-${l.line.id}`} class="hidden">
-                  <td colspan="6" class="px-4 pb-3 pt-1 bg-gray-50 border-b border-gray-100">
-                    <div class="flex flex-wrap gap-2">
-                      {(l.line.concepts as LineConceptEntry[]).map((c) => (
-                        <div class={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs border ${
-                          c.type === 'income'
-                            ? 'bg-blue-50 border-blue-100 text-blue-800'
-                            : 'bg-orange-50 border-orange-100 text-orange-800'
-                        }`}>
-                          <span class="font-mono font-semibold">{c.code}</span>
-                          <span class="text-gray-400">·</span>
-                          <span>{c.name}</span>
-                          <span class="font-semibold ml-0.5">{fmt(c.amount)}</span>
-                          {c.formulaError && (
-                            <span class="ml-1 text-red-500" title={c.formulaError}>⚠</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              </>
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3.5">
+                  <p class="font-medium text-gray-900">{l.employee.firstName} {l.employee.lastName}</p>
+                  <p class="text-xs text-gray-400 font-mono mt-0.5">{l.employee.code}</p>
+                </td>
+                <td class="px-4 py-3.5 text-gray-500 text-xs">
+                  {l.employee.department ?? '—'}
+                  {l.employee.position && <span class="text-gray-400"> / {l.employee.position}</span>}
+                </td>
+                <td class="px-4 py-3.5 text-right text-gray-700 tabular-nums">{fmt(l.line.grossAmount)}</td>
+                <td class="px-4 py-3.5 text-right text-red-600 tabular-nums">{fmt(l.line.deductions)}</td>
+                <td class="px-4 py-3.5 text-right font-semibold text-gray-900 tabular-nums">{fmt(l.line.netAmount)}</td>
+                <td class="px-4 py-3.5">
+                  <div class="flex items-center gap-1 justify-end">
+                    {isGenerated && (
+                      <form method="POST" action={`/api/payroll/${id}/line/${l.line.id}`}>
+                        <input type="hidden" name="_method" value="REGENERATE" />
+                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Regenerar empleado">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        </button>
+                      </form>
+                    )}
+                    <a href={`/payroll/${id}/${l.line.id}`} class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ver detalle del empleado">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </a>
+                  </div>
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>
@@ -370,13 +352,3 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
   </div>
 </AppLayout>
 
-<script is:inline>
-  function toggleDetail(id) {
-    const row = document.getElementById('detail-' + id)
-    const icon = document.getElementById('icon-' + id)
-    if (row) {
-      const isHidden = row.classList.toggle('hidden')
-      if (icon) icon.style.transform = isHidden ? '' : 'rotate(180deg)'
-    }
-  }
-</script>

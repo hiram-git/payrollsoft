@@ -3,8 +3,11 @@ import {
   createPayroll,
   deleteCreatedPayroll,
   deletePayrollAcumulados,
+  deletePayrollAcumuladosByEmployee,
   getAttendanceSummaryForPeriod,
+  getEmployee,
   getPayroll,
+  getPayrollLineById,
   getPayrollLines,
   insertPayrollAcumulados,
   listConcepts,
@@ -339,6 +342,144 @@ export async function reopenPayrollService(db: AnyDb, id: string) {
   }
   const row = await updatePayroll(db, id, { status: 'generated' })
   return { success: true as const, data: row }
+}
+
+/** generated — reprocess a single employee's line */
+export async function regenerateEmployeeService(db: AnyDb, payrollId: string, lineId: string) {
+  const payroll = await getPayroll(db, payrollId)
+  if (!payroll) return { success: false as const, error: 'not_found', message: 'Payroll not found' }
+
+  if (!ALLOWED_FOR_REGENERATE.has(payroll.status)) {
+    return {
+      success: false as const,
+      error: 'invalid_status',
+      message: "La planilla debe estar en estado 'generated' para regenerar",
+    }
+  }
+
+  const lineData = await getPayrollLineById(db, lineId)
+  if (!lineData || lineData.line.payrollId !== payrollId) {
+    return { success: false as const, error: 'not_found', message: 'Payroll line not found' }
+  }
+
+  const emp = await getEmployee(db, lineData.employee.id)
+  if (!emp) return { success: false as const, error: 'not_found', message: 'Employee not found' }
+
+  const allConcepts = await listConcepts(db)
+  const activeConcepts = allConcepts
+    .filter((c) => c.isActive)
+    .sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'income' ? -1 : 1
+      return a.code.localeCompare(b.code)
+    })
+
+  const periodStart = new Date(payroll.periodStart)
+  const periodEnd = new Date(payroll.periodEnd)
+  const totalDays = countCalendarDays(periodStart, periodEnd)
+  const totalBusinessDays = countBusinessDays(periodStart, periodEnd)
+
+  try {
+    const att = await getAttendanceSummaryForPeriod(
+      db,
+      emp.id,
+      payroll.periodStart,
+      payroll.periodEnd
+    )
+    const workedDays = att.recordCount > 0 ? att.daysWithRecords : totalBusinessDays
+    const absenceDays = Math.max(0, totalBusinessDays - workedDays)
+
+    const empLoans = await listLoansByEmployee(db, emp.id)
+    const loanInstallments = empLoans
+      .filter(
+        (l) =>
+          l.isActive &&
+          l.startDate <= payroll.periodEnd &&
+          (l.endDate === null || l.endDate >= payroll.periodStart)
+      )
+      .reduce((sum, l) => sum + Number(l.installment), 0)
+
+    const result = await processLine({
+      employee: {
+        id: emp.id,
+        code: emp.code,
+        baseSalary: Number(emp.baseSalary),
+        hireDate: new Date(emp.hireDate),
+        customFields: (emp.customFields as Record<string, unknown>) ?? {},
+      },
+      period: {
+        start: periodStart,
+        end: periodEnd,
+        totalDays,
+        type: payroll.frequency as 'biweekly' | 'monthly' | 'weekly',
+      },
+      payroll: { paymentDate: payroll.paymentDate ?? null },
+      attendance: {
+        workedDays,
+        businessDays: totalBusinessDays,
+        lateMinutes: att.lateMinutes,
+        overtimeMinutes: att.overtimeMinutes,
+        absenceDays,
+      },
+      concepts: activeConcepts.map((c) => ({
+        code: c.code,
+        name: c.name,
+        type: c.type as 'income' | 'deduction',
+        formula: c.formula,
+      })),
+      loanInstallments,
+      loadAccumulated: (code, periods) => loadAccumulated(db, emp.id, code, periods),
+      loadAccumulatedByDateRange: (code, from, to) =>
+        loadAccumulatedByDateRange(db, emp.id, code, from, to),
+      loadBalance: async () => 0,
+    })
+
+    await upsertPayrollLine(db, {
+      payrollId,
+      employeeId: emp.id,
+      grossAmount: String(result.grossAmount),
+      deductions: String(result.deductions),
+      netAmount: String(result.netAmount),
+      concepts: result.concepts,
+    })
+
+    await deletePayrollAcumuladosByEmployee(db, payrollId, emp.id)
+    const acumuladoItems = result.concepts
+      .filter((entry) => entry.amount !== 0)
+      .map((entry) => ({
+        payrollId,
+        employeeId: emp.id,
+        conceptCode: entry.code,
+        conceptName: entry.name,
+        conceptType: entry.type,
+        amount: String(entry.amount),
+      }))
+    if (acumuladoItems.length > 0) {
+      await insertPayrollAcumulados(db, acumuladoItems)
+    }
+
+    // Recalculate payroll totals from all remaining lines
+    const allLines = await getPayrollLines(db, payrollId)
+    let totalGross = 0
+    let totalDeductions = 0
+    for (const l of allLines) {
+      totalGross += Number(l.line.grossAmount)
+      totalDeductions += Number(l.line.deductions)
+    }
+    const totalNet = round2(totalGross - totalDeductions)
+    await updatePayroll(db, payrollId, {
+      totalGross: String(round2(totalGross)),
+      totalDeductions: String(round2(totalDeductions)),
+      totalNet: String(totalNet),
+    })
+
+    return { success: true as const, data: result }
+  } catch (err) {
+    return {
+      success: false as const,
+      error: 'processing_error',
+      message: err instanceof Error ? err.message : 'Unknown error during regeneration',
+    }
+  }
 }
 
 // ─── Legacy aliases ───────────────────────────────────────────────────────────

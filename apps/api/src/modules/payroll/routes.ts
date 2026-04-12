@@ -9,6 +9,7 @@ import {
   generatePayrollService,
   getPayrollService,
   listPayrollsService,
+  regenerateEmployeeService,
   regeneratePayrollService,
   reopenPayrollService,
   updatePayrollService,
@@ -226,6 +227,27 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     {
       beforeHandle: [guardAuth, guardRole('VIEWER')],
       query: t.Object({ year: t.Optional(t.String()) }),
+    }
+  )
+
+  // POST /payroll/:id/lines/:lineId/regenerate — reprocess a single employee
+  .post(
+    '/:id/lines/:lineId/regenerate',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await regenerateEmployeeService(db, params.id, params.lineId)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('HR')],
+      params: t.Object({ id: t.String(), lineId: t.String() }),
     }
   )
 
