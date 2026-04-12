@@ -50,6 +50,13 @@
       "when": 1744400000000,
       "tag": "0006_concept_config",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1744450000000,
+      "tag": "0007_loans_extra_fields",
+      "breakpoints": true
     }
   ]
 }

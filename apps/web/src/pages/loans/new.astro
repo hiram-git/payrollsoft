@@ -1,31 +1,39 @@
 ---
-import AppLayout from '../../../../layouts/AppLayout.astro'
+import AppLayout from '../../layouts/AppLayout.astro'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
-const { id } = Astro.params
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
 
-type Employee = { id: string; firstName: string; lastName: string }
-let emp: Employee | null = null
-
-try {
-  const res = await fetch(`${API_URL}/employees/${id}`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
-  })
-  if (res.status === 401) return Astro.redirect('/login')
-  if (res.status === 404) return Astro.redirect('/employees')
-  if (res.ok) emp = ((await res.json()) as { data: Employee }).data
-} catch {
-  return Astro.redirect('/employees')
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  isActive: boolean
 }
 
-if (!emp) return Astro.redirect('/employees')
+let employees: Employee[] = []
+
+try {
+  const res = await fetch(`${API_URL}/employees?limit=100`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { data: Employee[] }
+    employees = (json.data ?? []).filter((e) => e.isActive)
+  }
+} catch {
+  // proceed with empty list
+}
+
+const preselectedEmployeeId = Astro.url.searchParams.get('employeeId') ?? ''
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   'missing-fields': 'Completa todos los campos requeridos y genera la tabla de cuotas.',
+  'employee-not-found': 'El empleado seleccionado no existe.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
 }
 
@@ -45,9 +53,7 @@ const loanTypes = [
 <AppLayout title="Nuevo Préstamo">
   <div class="p-8 max-w-5xl">
     <div class="flex items-center gap-3 mb-6">
-      <a href={`/employees/${id}?tab=prestamos`} class="text-sm text-gray-500 hover:text-gray-700">
-        ← {emp.firstName} {emp.lastName}
-      </a>
+      <a href="/loans" class="text-sm text-gray-500 hover:text-gray-700">← Préstamos</a>
       <span class="text-gray-300">/</span>
       <h1 class="text-2xl font-bold text-gray-900">Nuevo Préstamo</h1>
     </div>
@@ -58,8 +64,8 @@ const loanTypes = [
       </div>
     )}
 
-    <form method="POST" action={`/api/employees/${id}/loans`} id="loanForm">
-      <!-- Hidden computed fields (filled by calculator before submit) -->
+    <form method="POST" action="/api/loans" id="loanForm">
+      <!-- Hidden computed fields (filled by the calculator before submit) -->
       <input type="hidden" name="installment" id="hiddenInstallment" />
       <input type="hidden" name="endDate" id="hiddenEndDate" />
 
@@ -68,6 +74,19 @@ const loanTypes = [
         <h2 class="font-semibold text-gray-800">Información del Préstamo</h2>
 
         <div class="grid grid-cols-2 gap-4">
+          <!-- Employee -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Empleado *</label>
+            <select name="employeeId" id="employeeId" class="input" required>
+              <option value="">Seleccione empleado...</option>
+              {employees.map((emp) => (
+                <option value={emp.id} selected={emp.id === preselectedEmployeeId}>
+                  {emp.code} — {emp.firstName} {emp.lastName}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <!-- Creditor -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Acreedor</label>
@@ -86,7 +105,7 @@ const loanTypes = [
           </div>
 
           <!-- Frequency -->
-          <div class="col-span-2">
+          <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Frecuencia de Descuento *</label>
             <select name="frequency" id="frequency" class="input" required>
               <option value="semanal">Semanal (cada 7 días)</option>
@@ -194,7 +213,7 @@ const loanTypes = [
 
       <!-- Actions -->
       <div class="flex justify-between mt-2">
-        <a href={`/employees/${id}?tab=prestamos`} class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        <a href="/loans" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
           Cancelar
         </a>
         <button type="submit" id="btnSubmit" disabled
@@ -260,6 +279,7 @@ const loanTypes = [
     const next = new Date(date.getTime())
     if (frequency === 'semanal') { next.setDate(next.getDate() + 7); return next }
     if (frequency === 'quincenal') { next.setDate(next.getDate() + 15); return next }
+    // mensual — preserve day-of-month, clamp to month end
     const day = next.getDate()
     next.setMonth(next.getMonth() + 1)
     if (next.getDate() !== day) next.setDate(0)
@@ -301,6 +321,7 @@ const loanTypes = [
     for (let i = 1; i <= count; i++) {
       const dueDate = new Date(current.getTime())
 
+      // Skip December if not allowed — move to Jan 1 of next year
       if (!allowDecember && dueDate.getMonth() === 11) {
         dueDate.setFullYear(dueDate.getFullYear() + 1)
         dueDate.setMonth(0)
@@ -327,9 +348,11 @@ const loanTypes = [
       current = addFrequency(current, frequency)
     }
 
+    // Fill hidden fields for form submission
     hiddenInstallment.value = (baseCents / 100).toFixed(2)
     hiddenEndDate.value = lastDueDate ? toInputDate(lastDueDate) : ''
 
+    // Update summary
     summaryInstallment.textContent = formatMoney(baseCents)
     summaryTotal.textContent = formatMoney(totalCents)
     summaryLastDate.textContent = lastDueDate ? formatDateDisplay(lastDueDate) : ''
@@ -340,6 +363,7 @@ const loanTypes = [
     tableSection.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
   })
 
+  // Re-lock submit if any key input changes after table was generated
   ;[totalAmountInput, installmentsInput, frequencySelect, startDateInput, allowDecemberInput].forEach(function (el) {
     el.addEventListener('change', function () {
       btnSubmit.disabled = true
