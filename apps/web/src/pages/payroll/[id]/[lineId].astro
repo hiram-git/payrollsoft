@@ -321,31 +321,6 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
       </div>
     )}
 
-    <!-- ── Comprobante header (print only) ──────────────────────────────────── -->
-    <div class="print-only mb-6 pb-5 border-b-2 border-gray-900">
-      <div class="flex items-start justify-between">
-        <div>
-          <h2 class="text-lg font-bold text-gray-900">Comprobante de Pago</h2>
-          <p class="text-sm text-gray-600 mt-0.5">{payroll.name}</p>
-        </div>
-        <div class="text-right text-sm text-gray-600">
-          <p>{typeLabel[payroll.type] ?? payroll.type} · {freqLabel[payroll.frequency] ?? payroll.frequency}</p>
-          <p class="font-mono">{payroll.periodStart} → {payroll.periodEnd}</p>
-          {payroll.paymentDate && <p>Fecha de pago: <span class="font-mono">{payroll.paymentDate}</span></p>}
-        </div>
-      </div>
-      <div class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 gap-2 text-sm">
-        <div><span class="text-gray-500">Empleado:</span> <span class="font-medium">{employeeName}</span></div>
-        <div><span class="text-gray-500">Código:</span> <span class="font-mono">{currentLine.employee.code}</span></div>
-        {currentLine.employee.department && (
-          <div><span class="text-gray-500">Departamento:</span> {currentLine.employee.department}</div>
-        )}
-        {currentLine.employee.position && (
-          <div><span class="text-gray-500">Puesto:</span> {currentLine.employee.position}</div>
-        )}
-      </div>
-    </div>
-
     <!-- Totals summary -->
     <div class="grid grid-cols-3 gap-4 mb-6">
       <div class="border border-gray-200 rounded-lg bg-white p-4">
@@ -470,27 +445,6 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
       </div>
     )}
 
-    <!-- ── Firma (print only) ───────────────────────────────────────────────── -->
-    <div class="print-only mt-10 pt-6 border-t border-gray-300 grid grid-cols-2 gap-8">
-      <div class="text-center">
-        <div class="border-t border-gray-400 pt-2 mt-8 text-xs text-gray-500">Firma del Empleado</div>
-      </div>
-      <div class="text-center">
-        <div class="border-t border-gray-400 pt-2 mt-8 text-xs text-gray-500">Firma del Empleador</div>
-      </div>
-    </div>
 
   </div>
 </AppLayout>
-
-<style>
-  @media print {
-    .no-print { display: none !important; }
-    .print-only { display: block !important; }
-    /* Hide AppLayout chrome */
-    nav, header, aside, footer { display: none !important; }
-    body { background: white !important; }
-    .px-6 { padding-left: 0 !important; padding-right: 0 !important; }
-  }
-  .print-only { display: none; }
-</style>
