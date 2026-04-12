@@ -241,29 +241,33 @@ apps/api/src/modules/payroll/
 - [x] `payroll_acumulados` — registro por empleado+concepto para consultas históricas
 - [x] Variables de fórmula: SALARIO, SUELDO, FICHA, FECHAINICIO/FIN/PAGO, ANTIGUEDAD, GASTOS_REP, etc.
 
-#### 3d XIII Mes Panameño 🔲 PARCIAL
+#### 3d XIII Mes Panameño ⏸ DIFERIDO — depende de Fase 5
 - [x] Tipo `thirteenth` en catálogo de planillas
 - [x] `getThirteenthMonthPeriods()` — semestres Ene–Jun (pago abril) y Jul–Dic (pago diciembre)
 - [x] `payroll_acumulados` permite calcular el XIII acumulando `ACUMULADOS("SUELDO", 6)`
-- [ ] Endpoint dedicado con lógica automática de cálculo
-- [ ] UI de vista previa y cierre semestral
+- [ ] Endpoint dedicado con lógica automática de cálculo ← Fase 5
+- [ ] UI de vista previa y cierre semestral ← Fase 5
 
-#### 3e Sistema de Asistencia 🔲 PARCIAL
+#### 3e Sistema de Asistencia ⏸ DIFERIDO — depende de Fase 5
 - [x] Tablas: `attendance_records`, `shifts`, `tolerances`
 - [x] Campos: `workedMinutes`, `lateMinutes`, `overtimeMinutes`, `lunchStart/End`
 - [x] Tolerancias configurables (`entryToleranceMinutes`, `exitToleranceMinutes`, `strict|flexible`)
 - [x] `getAttendanceSummaryForPeriod()` — usado en generación de planilla
-- [ ] Procesamiento de marcaciones brutas (entrada/salida → minutos trabajados)
-- [ ] Webhook `POST /webhooks/attendance` para integración Base44
-- [ ] Cálculo de descuento almuerzo
+- [ ] Procesamiento de marcaciones brutas (entrada/salida → minutos trabajados) ← Fase 5
+- [ ] Webhook `POST /webhooks/attendance` para integración Base44 ← Fase 5
+- [ ] Cálculo de descuento almuerzo ← Fase 5
 
-#### 3f Vacaciones Panamá 🔲 PARCIAL
+#### 3f Vacaciones Panamá ⏸ DIFERIDO — depende de Fase 5
 - [x] Tablas: `vacation_balances`, `vacation_requests`
 - [x] `calcVacationDaysEarned()` — Regla Panamá: 1 día por 11 días trabajados (máx 30/año)
 - [x] Función `SALDO()` en motor de fórmulas para consultar balance
-- [ ] Endpoints CRUD de solicitudes de vacaciones
-- [ ] Integración con planilla (pago de vacaciones)
-- [ ] UI de solicitud y aprobación
+- [ ] Endpoints CRUD de solicitudes de vacaciones ← Fase 5
+- [ ] Integración con planilla (pago de vacaciones) ← Fase 5
+- [ ] UI de solicitud y aprobación ← Fase 5
+
+#### 3g Liquidaciones ⏸ DIFERIDO — depende de Fase 5
+- [ ] Cálculo de liquidación al desvincularse (prima de antigüedad, vacaciones pendientes, etc.)
+- [ ] Endpoint + UI de liquidación ← Fase 5
 
 **Milestone:** ✅ Generar planilla completa con conceptos por fórmula para empleados activos.
 
@@ -271,60 +275,49 @@ apps/api/src/modules/payroll/
 
 ## Fase 4 — Frontend Astro
 **Duración:** 8–12 días  
-**Depende de:** Fases 0, 2, 3 (parcial)  
-**Estado: 🔄 EN PROGRESO — UI funcional para empleados, catálogos y planillas; faltan PDFs, DataTables, asistencia y vacaciones**
+**Depende de:** Fases 0, 2, 3  
+**Estado: 🔄 EN PROGRESO**
 
-### Objetivos
+### Completado
 - [x] UI moderna y responsiva (Tailwind CSS, sidebar, layout base)
-- [x] Empleados: lista, nuevo, editar con tabs
-- [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos (con switch activo/inactivo)
+- [x] Empleados: lista, nuevo, editar con tabs (datos, préstamos, documentos)
+- [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos (toggle activo/inactivo)
 - [x] Préstamos: tab en empleado + páginas new/edit
-- [x] Planillas: lista estilo Vercel, detalle con stepper, acciones por estado
-- [x] Planilla detail: tabla por empleado, desglose de conceptos colapsable
-- [ ] Generación de PDFs (stub retorna error "Phase 4")
-- [ ] DataTables con filtros y paginación (TanStack Table)
+- [x] Planillas: lista estilo Vercel, detalle con stepper, acciones contextuales por estado
+- [x] Detalle planilla: tabla por empleado, desglose de conceptos colapsable, totales bruto/deducciones/neto
+
+### Pendiente (prioridad Fase 4)
+- [ ] **Dashboard** — métricas reales (empleados activos, última planilla, acumulados del mes)
+- [ ] **PDF planilla** — descarga de planilla generada (recibo individual + reporte general)
+- [ ] **Editor de fórmulas** — textarea con referencia de variables inline
+- [ ] **Exportación Excel** — planilla generada a `.xlsx`
+
+### Diferido a Fase 5
+- [ ] DataTables con TanStack Table (filtros, sort, paginación cliente)
 - [ ] Calendario de asistencia (FullCalendar)
 - [ ] Módulo de vacaciones (UI)
-- [ ] Editor de fórmulas con syntax highlight
 
 ### Páginas implementadas (23 rutas Astro)
 ```
 apps/web/src/pages/
-├── index.astro                         ✅ → /
-├── login.astro                         ✅ → /login
-├── dashboard/index.astro               ✅ → /dashboard
-├── employees/
-│   ├── index.astro                     ✅ Listado con búsqueda
-│   ├── new.astro                       ✅ Crear empleado
-│   ├── [id].astro                      ✅ Editar + tabs (datos, préstamos, documentos)
-│   └── [id]/loans/
-│       ├── new.astro                   ✅ Nuevo préstamo
-│       └── [loanId].astro              ✅ Editar préstamo
-├── payroll/
-│   ├── index.astro                     ✅ Lista estilo Vercel (status pills, totales)
-│   ├── new.astro                       ✅ Crear planilla
-│   └── [id].astro                      ✅ Detalle: stepper, acciones, tabla empleados
-├── config/
-│   ├── conceptos/[index|new|id].astro  ✅ CRUD + switch activo/inactivo
-│   ├── cargos/[index|new|id].astro     ✅ CRUD
-│   ├── departamentos/[index|new|id].astro ✅ CRUD árbol
-│   └── funciones/[index|new|id].astro  ✅ CRUD
-└── api/ (proxy handlers)               ✅ 6 rutas POST server-side
+├── index.astro                              ✅
+├── login.astro                              ✅
+├── dashboard/index.astro                    ✅ (métricas pendientes)
+├── employees/index.astro                    ✅ listado con búsqueda
+├── employees/new.astro                      ✅
+├── employees/[id].astro                     ✅ tabs datos/préstamos/documentos
+├── employees/[id]/loans/new.astro           ✅
+├── employees/[id]/loans/[loanId].astro      ✅
+├── payroll/index.astro                      ✅ lista + status pills
+├── payroll/new.astro                        ✅
+├── payroll/[id].astro                       ✅ stepper + tabla + acciones
+├── config/conceptos/[index|new|id].astro    ✅ switch activo/inactivo
+├── config/cargos/[index|new|id].astro       ✅
+├── config/departamentos/[index|new|id].astro ✅ árbol
+└── config/funciones/[index|new|id].astro    ✅
 ```
 
-### Pendiente
-
-#### 4.3 Islands Interactivos (React) 🔲
-- `DataTable.tsx` — TanStack Table v8 (carpeta `/components/` existe pero vacía)
-- `AttendanceCalendar.tsx` — FullCalendar con localización Panamá
-- `FormulaEditor.tsx` — Editor con syntax highlight
-
-#### 4.5 Generación de PDFs 🔲
-- `packages/utils/src/pdf.ts` es stub — lanza error "coming in Phase 4"
-- Implementar `@react-pdf/renderer` o `puppeteer`
-- Templates: Planilla estándar, Recibo individual, Reporte XIII Mes
-
-**Milestone:** Flujo completo Empleado → Planilla → PDF desde la UI sin errores.
+**Milestone:** Flujo completo Empleado → Planilla generada → PDF descargable desde la UI.
 
 ---
 
