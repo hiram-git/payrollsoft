@@ -67,6 +67,10 @@ export const loans = pgTable('loans', {
   startDate: date('start_date').notNull(),
   endDate: date('end_date'),
   isActive: boolean('is_active').notNull().default(true),
+  loanType: varchar('loan_type', { length: 50 }),
+  frequency: varchar('frequency', { length: 20 }),
+  creditor: varchar('creditor', { length: 255 }),
+  allowDecember: boolean('allow_december').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 

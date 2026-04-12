@@ -919,6 +919,37 @@ export async function listLoansByEmployee(db: Db, employeeId: string) {
     .orderBy(desc(loans.createdAt))
 }
 
+export async function listAllLoans(db: Db, filter: { isActive?: boolean } = {}) {
+  const conditions = []
+  if (filter.isActive !== undefined) {
+    conditions.push(eq(loans.isActive, filter.isActive))
+  }
+  return db
+    .select({
+      id: loans.id,
+      employeeId: loans.employeeId,
+      amount: loans.amount,
+      balance: loans.balance,
+      installment: loans.installment,
+      startDate: loans.startDate,
+      endDate: loans.endDate,
+      isActive: loans.isActive,
+      loanType: loans.loanType,
+      frequency: loans.frequency,
+      creditor: loans.creditor,
+      allowDecember: loans.allowDecember,
+      createdAt: loans.createdAt,
+      employeeCode: employees.code,
+      employeeFirstName: employees.firstName,
+      employeeLastName: employees.lastName,
+    })
+    .from(loans)
+    .innerJoin(employees, eq(loans.employeeId, employees.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(loans.createdAt))
+    .limit(200)
+}
+
 export async function getLoanById(db: Db, id: string) {
   const [row] = await db.select().from(loans).where(eq(loans.id, id))
   return row ?? null
