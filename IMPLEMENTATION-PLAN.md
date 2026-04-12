@@ -91,13 +91,13 @@ bun add @astrojs/react tailwindcss
 ## Fase 1 — Base de Datos + Core Engine
 **Duración:** 5–7 días  
 **Depende de:** Fase 0  
-**Estado: ✅ COMPLETO (motor de fórmulas pendiente para Fase 3c)**
+**Estado: ✅ COMPLETO**
 
 ### Objetivos
-- [x] Todos los schemas de Drizzle creados y migrados
-- [ ] Motor de Fórmulas V3.5.3 portado y funcionando ← se implementará en Fase 3c
+- [x] Todos los schemas de Drizzle creados y migrados (28 tablas en 10 archivos)
+- [x] Motor de Fórmulas V3.5.3 portado y funcionando — lexer, parser, evaluator, engine, 6 funciones
 - [x] Custom Query Builder v2 implementado
-- [x] Sistema de migración por tenant (`--public`, `--tenant`, `--all-tenants`)
+- [x] Sistema de migración custom con salida verbose (`--public`, `--tenant`, `--all-tenants`)
 
 ### Tareas
 
@@ -171,50 +171,43 @@ import { cookie } from '@elysiajs/cookie'
 - JWT payload: `{ userId, tenantId, role, permissions }`
 - Refresh token con rotación
 
-#### 2.2 Roles y Permisos
-Roles base del sistema:
-- `SUPER_ADMIN` — acceso total multi-tenant
-- `ADMIN` — administrador de empresa
-- `HR` — recursos humanos (lectura/escritura empleados)
-- `ACCOUNTANT` — acceso a planillas y reportes
-- `VIEWER` — solo lectura
+#### 2.2 Roles y Permisos ✅
+- [x] Roles: `SUPER_ADMIN`, `ADMIN`, `HR`, `ACCOUNTANT`, `VIEWER` (jerarquía numérica)
+- [x] `guardRole(minRole)` middleware por ruta
+- [ ] Tabla `roles` / `role_permissions` en DB — se implementó como jerarquía fija en código (no configurable por UI)
+- [ ] Refresh tokens — JWT expira en 7 días fijos, sin endpoint de renovación
 
-- Tabla `roles` + `role_permissions` + `user_roles` por tenant
-- Middleware `requirePermission(permission: string)`
+#### 2.3 CSRF + Rate Limiting ✅
+- [x] CSRF: validación de `Origin` header en requests mutantes
+- [x] Rate limiting por IP: 100 req/min general (sliding window in-memory)
+- [x] Rate limiting login: 10 req/min en `/auth/login`
 
-#### 2.3 CSRF + Rate Limiting
-- `@elysiajs/csrf` para endpoints mutantes
-- Rate limiting por IP: 100 req/min general, 10 req/min en `/auth/login`
-
-**Milestone:** Login multi-tenant funcional con tokens, roles asignados.
+**Milestone:** ✅ Login multi-tenant funcional con tokens, roles asignados.
 
 ---
 
 ## Fase 3 — API Core + Business Logic
 **Duración:** 10–14 días  
 **Depende de:** Fases 0, 1, 2  
-**Estado: 🔄 EN PROGRESO (3a ✅ 3b ✅ — 3c/3d/3e/3f pendientes)**
+**Estado: ✅ COMPLETO (3a ✅ 3b ✅ 3c ✅ — 3d/3e/3f parciales: tablas y lógica base sí, API+UI no)**
 
 Esta es la fase más crítica. Contiene toda la lógica de negocio.
 
 ### Objetivos
 - [x] CRUD completo de empleados con catálogos enlazados
 - [x] Catálogos: Cargos, Funciones, Departamentos (árbol padre-hijo)
-- [x] Conceptos de nómina (income/deduction + fórmula)
+- [x] Conceptos de nómina (income/deduction + fórmula + toggle activo/inactivo)
 - [x] Préstamos por empleado
-- [ ] Motor de nómina generando planillas correctas
-- [ ] XIII Mes calculado correctamente
-- [ ] Sistema de vacaciones Panamá
-- [ ] Asistencia con webhooks
+- [x] Motor de nómina generando planillas correctas (`processLine()`)
+- [x] Máquina de estados: `created → generated → closed` (+ regenerate, reopen)
+- [x] Tabla `payroll_acumulados` — historial desnormalizado por empleado+concepto
+- [ ] XIII Mes — endpoint y UI dedicados (tablas y períodos existen, falta API+UI)
+- [ ] Asistencia — webhook y procesamiento de marcaciones (tablas sí, lógica no)
+- [ ] Vacaciones — API y UI (tablas y cálculo sí, endpoints no)
 
 ### Tareas
 
 #### 3.1 Módulo Empleados ✅
-```
-apps/api/src/modules/employees/
-├── service.ts
-└── routes.ts
-```
 - [x] CRUD básico + búsqueda y filtros
 - [x] Catálogos enlazados: cargoId, funcionId, departamentoId
 - [x] Desnormalización de position/department en guardar
@@ -227,117 +220,109 @@ apps/api/src/modules/employees/
 
 #### 3b Conceptos + Préstamos ✅
 - [x] `GET/POST/PUT/DELETE /concepts` — tipo income|deduction + fórmula
+- [x] `POST /concepts/:id/activate` + `DELETE /concepts/:id` — toggle activo/inactivo
 - [x] `GET /loans?employeeId` + `POST/PUT/DELETE /loans/:id`
 - [x] Cierre de préstamo (soft-delete `isActive=false`)
 
-#### 3c Motor de Planillas 🔲 PENDIENTE
+#### 3c Motor de Planillas ✅
 ```
 packages/core/payroll/
-├── engine.ts           # PayrollEngine class
-├── processor.ts        # Procesa líneas de planilla
-├── thirteenth.ts       # Cálculo XIII Mes
-├── accumulators.ts     # Acumulados por período
-└── types.ts
+├── engine.ts     — processLine(): evalúa conceptos en orden (income → deduction)
+└── utils.ts      — countBusinessDays(), countCalendarDays(), round2()
+
+apps/api/src/modules/payroll/
+├── service.ts    — runGeneration(), closePayrollService(), reopenPayrollService()
+└── routes.ts     — /generate, /regenerate, /close, /reopen, legacy /process
 ```
 
-Tipos de planilla soportados:
-- Quincenal / Mensual / Semanal
-- Planilla especial (bonos, ajustes)
-- XIII Mes (automático + manual)
+- [x] Tipos de planilla: `regular`, `thirteenth`, `special`
+- [x] Frecuencias: `biweekly`, `monthly`, `weekly`
+- [x] Máquina de estados con rollback en caso de error
+- [x] `payroll_acumulados` — registro por empleado+concepto para consultas históricas
+- [x] Variables de fórmula: SALARIO, SUELDO, FICHA, FECHAINICIO/FIN/PAGO, ANTIGUEDAD, GASTOS_REP, etc.
 
-Lógica XIII Mes Panamá:
-- Cálculo acumulado semestral (Enero–Junio, Julio–Diciembre)
-- Integración con conceptos de nómina regulares
-- Histórico de pagos parciales
+#### 3d XIII Mes Panameño 🔲 PARCIAL
+- [x] Tipo `thirteenth` en catálogo de planillas
+- [x] `getThirteenthMonthPeriods()` — semestres Ene–Jun (pago abril) y Jul–Dic (pago diciembre)
+- [x] `payroll_acumulados` permite calcular el XIII acumulando `ACUMULADOS("SUELDO", 6)`
+- [ ] Endpoint dedicado con lógica automática de cálculo
+- [ ] UI de vista previa y cierre semestral
 
-#### 3d XIII Mes Panameño 🔲 PENDIENTE
+#### 3e Sistema de Asistencia 🔲 PARCIAL
+- [x] Tablas: `attendance_records`, `shifts`, `tolerances`
+- [x] Campos: `workedMinutes`, `lateMinutes`, `overtimeMinutes`, `lunchStart/End`
+- [x] Tolerancias configurables (`entryToleranceMinutes`, `exitToleranceMinutes`, `strict|flexible`)
+- [x] `getAttendanceSummaryForPeriod()` — usado en generación de planilla
+- [ ] Procesamiento de marcaciones brutas (entrada/salida → minutos trabajados)
+- [ ] Webhook `POST /webhooks/attendance` para integración Base44
+- [ ] Cálculo de descuento almuerzo
 
-- Cálculo semestral acumulado (Ene–Jun, Jul–Dic)
-- Regla: 1/12 del salario por mes trabajado en el período
-- Endpoint dedicado + UI de vista previa y cierre
+#### 3f Vacaciones Panamá 🔲 PARCIAL
+- [x] Tablas: `vacation_balances`, `vacation_requests`
+- [x] `calcVacationDaysEarned()` — Regla Panamá: 1 día por 11 días trabajados (máx 30/año)
+- [x] Función `SALDO()` en motor de fórmulas para consultar balance
+- [ ] Endpoints CRUD de solicitudes de vacaciones
+- [ ] Integración con planilla (pago de vacaciones)
+- [ ] UI de solicitud y aprobación
 
-#### 3e Sistema de Asistencia 🔲 PENDIENTE
-```
-packages/core/attendance/
-├── processor.ts        # Calcula horas, horas extra, atrasos
-├── tolerances.ts       # Sistema de tolerancias configurable
-├── lunch.ts            # Cálculo de descuento almuerzo
-└── webhook.ts          # Handler para Base44
-```
-- Webhook `POST /webhooks/attendance` para integración Base44
-- Procesamiento de marcaciones: entrada, salida, almuerzo
-- Tolerancias configurables por empresa (minutos de gracia)
-
-#### 3f Vacaciones Panamá 🔲 PENDIENTE
-Reglas del Código de Trabajo de Panamá:
-- 1 día por cada 11 trabajados (hasta 30 días)
-- Balance acumulado por empleado
-- Integración con planilla (pago de vacaciones)
-- Historial de solicitudes y aprobaciones
-
-**Milestone:** Generar planilla completa con XIII Mes correcto para un empleado de prueba.
+**Milestone:** ✅ Generar planilla completa con conceptos por fórmula para empleados activos.
 
 ---
 
 ## Fase 4 — Frontend Astro
 **Duración:** 8–12 días  
 **Depende de:** Fases 0, 2, 3 (parcial)  
-**Estado: 🔄 EN PROGRESO (UI base + módulos 3a/3b listos — planillas/asistencia/vacaciones pendientes)**
+**Estado: 🔄 EN PROGRESO — UI funcional para empleados, catálogos y planillas; faltan PDFs, DataTables, asistencia y vacaciones**
 
 ### Objetivos
 - [x] UI moderna y responsiva (Tailwind CSS, sidebar, layout base)
 - [x] Empleados: lista, nuevo, editar con tabs
-- [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos
+- [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos (con switch activo/inactivo)
 - [x] Préstamos: tab en empleado + páginas new/edit
-- [ ] Flujo completo Empleado → Planilla → PDF
-- [ ] DataTables con filtros y exportación
-- [ ] Calendario de asistencia
-- [ ] Módulo de vacaciones
+- [x] Planillas: lista estilo Vercel, detalle con stepper, acciones por estado
+- [x] Planilla detail: tabla por empleado, desglose de conceptos colapsable
+- [ ] Generación de PDFs (stub retorna error "Phase 4")
+- [ ] DataTables con filtros y paginación (TanStack Table)
+- [ ] Calendario de asistencia (FullCalendar)
+- [ ] Módulo de vacaciones (UI)
+- [ ] Editor de fórmulas con syntax highlight
 
-### Tareas
-
-#### 4.1 Design System
-- Tailwind CSS + `shadcn/ui` (portado a Astro)
-- Tema corporativo configurable por tenant (logo, colores)
-- Componentes base: Button, Table, Modal, Form, Badge
-
-#### 4.2 Páginas principales (Astro SSR)
+### Páginas implementadas (23 rutas Astro)
 ```
 apps/web/src/pages/
-├── index.astro              # Redirect a dashboard
-├── login.astro
-├── dashboard/
-│   └── index.astro
+├── index.astro                         ✅ → /
+├── login.astro                         ✅ → /login
+├── dashboard/index.astro               ✅ → /dashboard
 ├── employees/
-│   ├── index.astro          # Lista
-│   └── [id].astro           # Detalle/edición
+│   ├── index.astro                     ✅ Listado con búsqueda
+│   ├── new.astro                       ✅ Crear empleado
+│   ├── [id].astro                      ✅ Editar + tabs (datos, préstamos, documentos)
+│   └── [id]/loans/
+│       ├── new.astro                   ✅ Nuevo préstamo
+│       └── [loanId].astro              ✅ Editar préstamo
 ├── payroll/
-│   ├── index.astro          # Lista de planillas
-│   └── [id]/
-│       ├── index.astro      # Vista planilla
-│       └── pdf.astro        # Preview PDF
-└── attendance/
-    └── index.astro          # Calendario
+│   ├── index.astro                     ✅ Lista estilo Vercel (status pills, totales)
+│   ├── new.astro                       ✅ Crear planilla
+│   └── [id].astro                      ✅ Detalle: stepper, acciones, tabla empleados
+├── config/
+│   ├── conceptos/[index|new|id].astro  ✅ CRUD + switch activo/inactivo
+│   ├── cargos/[index|new|id].astro     ✅ CRUD
+│   ├── departamentos/[index|new|id].astro ✅ CRUD árbol
+│   └── funciones/[index|new|id].astro  ✅ CRUD
+└── api/ (proxy handlers)               ✅ 6 rutas POST server-side
 ```
 
-#### 4.3 Islands Interactivos (React)
-- `DataTable.tsx` — TanStack Table v8 con filtros, sort, paginación
-- `PayrollForm.tsx` — Wizard de creación de planilla
+### Pendiente
+
+#### 4.3 Islands Interactivos (React) 🔲
+- `DataTable.tsx` — TanStack Table v8 (carpeta `/components/` existe pero vacía)
 - `AttendanceCalendar.tsx` — FullCalendar con localización Panamá
-- `FormulaEditor.tsx` — Editor de fórmulas con syntax highlight
+- `FormulaEditor.tsx` — Editor con syntax highlight
 
-#### 4.4 Cliente API tipado
-```typescript
-// apps/web/src/lib/api.ts
-// Cliente fetch tipado usando los tipos de packages/types
-```
-- Wrapper con manejo de errores, CSRF token automático
-- Tipos inferidos desde el backend (Eden Treaty de Elysia)
-
-#### 4.5 Generación de PDFs
-- `@react-pdf/renderer` o `puppeteer` para planillas
+#### 4.5 Generación de PDFs 🔲
+- `packages/utils/src/pdf.ts` es stub — lanza error "coming in Phase 4"
+- Implementar `@react-pdf/renderer` o `puppeteer`
 - Templates: Planilla estándar, Recibo individual, Reporte XIII Mes
-- Preview en browser antes de descargar
 
 **Milestone:** Flujo completo Empleado → Planilla → PDF desde la UI sin errores.
 
