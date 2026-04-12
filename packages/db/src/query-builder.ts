@@ -3,6 +3,14 @@ import type { createPublicDb, createTenantDb } from './client'
 import {
   attendanceRecords,
   cargos,
+  conceptAccumulatorLinks,
+  conceptAccumulators,
+  conceptFrequencies,
+  conceptFrequencyLinks,
+  conceptPayrollTypeLinks,
+  conceptPayrollTypes,
+  conceptSituationLinks,
+  conceptSituations,
   concepts,
   departamentos,
   employees,
@@ -755,6 +763,85 @@ export async function activateConcept(db: Db, id: string) {
     .where(eq(concepts.id, id))
     .returning()
   return row ?? null
+}
+
+// ─── Concept Config Catalogs ──────────────────────────────────────────────────
+
+export async function getConceptCatalogs(db: Db) {
+  const [payrollTypes, frequencies, situations, accumulators] = await Promise.all([
+    db.select().from(conceptPayrollTypes).orderBy(asc(conceptPayrollTypes.sortOrder)),
+    db.select().from(conceptFrequencies).orderBy(asc(conceptFrequencies.sortOrder)),
+    db.select().from(conceptSituations).orderBy(asc(conceptSituations.sortOrder)),
+    db.select().from(conceptAccumulators).orderBy(asc(conceptAccumulators.sortOrder)),
+  ])
+  return { payrollTypes, frequencies, situations, accumulators }
+}
+
+export type ConceptLinks = {
+  payrollTypeIds: string[]
+  frequencyIds: string[]
+  situationIds: string[]
+  accumulatorIds: string[]
+}
+
+export async function getConceptLinks(db: Db, conceptId: string): Promise<ConceptLinks> {
+  const [ptLinks, frLinks, siLinks, acLinks] = await Promise.all([
+    db
+      .select({ id: conceptPayrollTypeLinks.payrollTypeId })
+      .from(conceptPayrollTypeLinks)
+      .where(eq(conceptPayrollTypeLinks.conceptId, conceptId)),
+    db
+      .select({ id: conceptFrequencyLinks.frequencyId })
+      .from(conceptFrequencyLinks)
+      .where(eq(conceptFrequencyLinks.conceptId, conceptId)),
+    db
+      .select({ id: conceptSituationLinks.situationId })
+      .from(conceptSituationLinks)
+      .where(eq(conceptSituationLinks.conceptId, conceptId)),
+    db
+      .select({ id: conceptAccumulatorLinks.accumulatorId })
+      .from(conceptAccumulatorLinks)
+      .where(eq(conceptAccumulatorLinks.conceptId, conceptId)),
+  ])
+  return {
+    payrollTypeIds: ptLinks.map((r) => r.id),
+    frequencyIds: frLinks.map((r) => r.id),
+    situationIds: siLinks.map((r) => r.id),
+    accumulatorIds: acLinks.map((r) => r.id),
+  }
+}
+
+export async function setConceptLinks(db: Db, conceptId: string, links: ConceptLinks) {
+  // Delete all existing links, then re-insert
+  await Promise.all([
+    db.delete(conceptPayrollTypeLinks).where(eq(conceptPayrollTypeLinks.conceptId, conceptId)),
+    db.delete(conceptFrequencyLinks).where(eq(conceptFrequencyLinks.conceptId, conceptId)),
+    db.delete(conceptSituationLinks).where(eq(conceptSituationLinks.conceptId, conceptId)),
+    db.delete(conceptAccumulatorLinks).where(eq(conceptAccumulatorLinks.conceptId, conceptId)),
+  ])
+
+  await Promise.all([
+    links.payrollTypeIds.length > 0
+      ? db
+          .insert(conceptPayrollTypeLinks)
+          .values(links.payrollTypeIds.map((id) => ({ conceptId, payrollTypeId: id })))
+      : Promise.resolve(),
+    links.frequencyIds.length > 0
+      ? db
+          .insert(conceptFrequencyLinks)
+          .values(links.frequencyIds.map((id) => ({ conceptId, frequencyId: id })))
+      : Promise.resolve(),
+    links.situationIds.length > 0
+      ? db
+          .insert(conceptSituationLinks)
+          .values(links.situationIds.map((id) => ({ conceptId, situationId: id })))
+      : Promise.resolve(),
+    links.accumulatorIds.length > 0
+      ? db
+          .insert(conceptAccumulatorLinks)
+          .values(links.accumulatorIds.map((id) => ({ conceptId, accumulatorId: id })))
+      : Promise.resolve(),
+  ])
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

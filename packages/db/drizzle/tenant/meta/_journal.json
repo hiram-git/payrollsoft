@@ -43,6 +43,13 @@
       "when": 1744365600000,
       "tag": "0005_ensure_payroll_acumulados",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1744400000000,
+      "tag": "0006_concept_config",
+      "breakpoints": true
     }
   ]
 }

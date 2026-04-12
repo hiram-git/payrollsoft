@@ -9,16 +9,34 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
+  const bool = (k: string) => form.get(k) === '1'
 
-  const body = {
-    code: g('code'),
-    name: g('name'),
-    type: g('type'),
-    formula: g('formula') || null,
+  const code = g('code')
+  const name = g('name')
+  const type = g('type')
+
+  if (!code || !name || !type) {
+    return redirect('/config/conceptos/new?error=missing-fields')
   }
 
-  if (!body.code || !body.name || !body.type) {
-    return redirect('/config/conceptos/new?error=missing-fields')
+  const body = {
+    code,
+    name,
+    type,
+    formula: g('formula') || null,
+    unit: g('unit') || 'amount',
+    printDetails: bool('printDetails'),
+    prorates: bool('prorates'),
+    allowModify: bool('allowModify'),
+    isReferenceValue: bool('isReferenceValue'),
+    useAmountCalc: bool('useAmountCalc'),
+    allowZero: bool('allowZero'),
+    links: {
+      payrollTypeIds: form.getAll('payrollTypeIds[]').map(String),
+      frequencyIds: form.getAll('frequencyIds[]').map(String),
+      situationIds: form.getAll('situationIds[]').map(String),
+      accumulatorIds: form.getAll('accumulatorIds[]').map(String),
+    },
   }
 
   let res: Response
