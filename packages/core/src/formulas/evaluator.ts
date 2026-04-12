@@ -69,6 +69,20 @@ function resolveVariable(name: string, ctx: FormulaContext): number | string | u
 
   const paymentDateYMD = ctx.payroll?.paymentDate ? toYMD(new Date(ctx.payroll.paymentDate)) : 0
 
+  // XIII mes: effective days worked in the current period accounting for hire date
+  // - Hired on/before period start → full period days
+  // - Hired during period → days from hire to period end (inclusive)
+  // - Hired after period end → 0
+  const hireTime = ctx.employee.hireDate.getTime()
+  const periodStartTime = ctx.period.start.getTime()
+  const periodEndTime = ctx.period.end.getTime()
+  const diasHabilesXIII =
+    hireTime <= periodStartTime
+      ? ctx.period.totalDays
+      : hireTime > periodEndTime
+        ? 0
+        : Math.round((periodEndTime - hireTime) / 86_400_000) + 1
+
   // ── Numeric variables ──────────────────────────────────────────────────────
   const numeric: Record<string, number> = {
     // Salary
@@ -95,6 +109,9 @@ function resolveVariable(name: string, ctx: FormulaContext): number | string | u
     // Representation expenses (from custom fields, default 0)
     GASTOS_REP: Number(ctx.employee.customFields?.gastos_rep ?? 0),
     GASTOS_REPRESENTACION: Number(ctx.employee.customFields?.gastos_rep ?? 0),
+    // XIII mes: effective calendar days worked in the period (respects hire date)
+    DIAS_HABILES_XIII: diasHabilesXIII,
+    DIAS_XIII: diasHabilesXIII, // alias
   }
 
   if (name in numeric) return numeric[name]

@@ -497,6 +497,49 @@ export async function loadAccumulated(
   return Number(result[0]?.total ?? 0)
 }
 
+/**
+ * Sum a specific concept across closed payrolls whose period falls within
+ * the given date range [from, to] (YYYY-MM-DD strings).
+ * Used by the ACUMULADOS() date-range form for XIII mes calculations.
+ */
+export async function loadAccumulatedByDateRange(
+  db: Db,
+  employeeId: string,
+  conceptCode: string,
+  from: string,
+  to: string
+): Promise<number> {
+  const payrollsInRange = await db
+    .select({ id: payrolls.id })
+    .from(payrolls)
+    .where(
+      and(
+        eq(payrolls.status, 'closed'),
+        gte(payrolls.periodStart, from),
+        lte(payrolls.periodEnd, to)
+      )
+    )
+
+  if (payrollsInRange.length === 0) return 0
+
+  const payrollIds = payrollsInRange.map((p) => p.id)
+
+  const result = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+    })
+    .from(payrollAcumulados)
+    .where(
+      and(
+        eq(payrollAcumulados.employeeId, employeeId),
+        eq(payrollAcumulados.conceptCode, conceptCode),
+        inArray(payrollAcumulados.payrollId, payrollIds)
+      )
+    )
+
+  return Number(result[0]?.total ?? 0)
+}
+
 // ─── Catalog Helpers ──────────────────────────────────────────────────────────
 
 type CatalogTable = typeof cargos | typeof funciones
