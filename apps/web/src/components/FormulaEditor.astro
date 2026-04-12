@@ -1,0 +1,175 @@
+---
+interface Props {
+  name?: string
+  value?: string
+  rows?: number
+}
+const { name = 'formula', value = '', rows = 5 } = Astro.props
+---
+
+<div class="formula-editor-wrap">
+  <!-- Toolbar: operators & functions -->
+  <div class="fe-toolbar">
+    {
+      [
+        { label: '+', insert: '+' },
+        { label: '−', insert: '-' },
+        { label: '×', insert: '*' },
+        { label: '÷', insert: '/' },
+        { label: '( )', insert: '()' },
+        { label: 'IF', insert: 'IF(condicion, valor_si, valor_no)' },
+        { label: 'ROUND', insert: 'ROUND(valor, 2)' },
+        { label: 'MIN', insert: 'MIN(a, b)' },
+        { label: 'MAX', insert: 'MAX(a, b)' },
+        { label: 'ABS', insert: 'ABS(valor)' },
+      ].map((op) => (
+        <button
+          type="button"
+          class="fe-op"
+          data-insert={op.insert}
+          title={op.insert}
+        >
+          {op.label}
+        </button>
+      ))
+    }
+  </div>
+
+  <!-- Textarea -->
+  <textarea
+    id="formula-textarea"
+    name={name}
+    class="fe-textarea"
+    rows={rows}
+    spellcheck="false"
+    autocomplete="off"
+    placeholder="SALARIO * DIAS_TRABAJADOS / DIAS_PERIODO"
+  >{value}</textarea>
+
+  <!-- Variable reference panel -->
+  <div class="fe-vars-panel">
+    <p class="fe-vars-title">Variables disponibles — clic para insertar</p>
+    <div class="fe-vars-grid">
+      {
+        [
+          { name: 'SALARIO', desc: 'Salario base' },
+          { name: 'SALARIO_DIARIO', desc: 'Salario base ÷ 30' },
+          { name: 'DIAS_PERIODO', desc: 'Total días del período' },
+          { name: 'DIAS_TRABAJADOS', desc: 'Días trabajados' },
+          { name: 'DIAS_HABILES', desc: 'Días hábiles del período' },
+          { name: 'DIAS_AUSENCIA', desc: 'Días de ausencia' },
+          { name: 'HORAS_EXTRA', desc: 'Horas extra trabajadas' },
+          { name: 'MINUTOS_EXTRA', desc: 'Minutos extra trabajados' },
+          { name: 'MINUTOS_TARDANZA', desc: 'Minutos de tardanza' },
+          { name: 'HORAS', desc: 'Horas trabajadas (días × 8)' },
+          { name: 'ANTIGUEDAD', desc: 'Antigüedad en años' },
+          { name: 'ANTIGUEDAD_DIAS', desc: 'Antigüedad en días' },
+          { name: 'FECHAINICIO', desc: 'Inicio período (YYYYMMDD)' },
+          { name: 'FECHAFIN', desc: 'Fin período (YYYYMMDD)' },
+          { name: 'FECHAPAGO', desc: 'Fecha de pago (YYYYMMDD)' },
+          { name: 'GASTOS_REP', desc: 'Gastos de representación' },
+          { name: 'FICHA', desc: 'Código del empleado' },
+        ].map((v) => (
+          <button
+            type="button"
+            class="fe-var"
+            data-insert={v.name}
+            title={v.desc}
+          >
+            <span class="fe-var-name">{v.name}</span>
+            <span class="fe-var-desc">{v.desc}</span>
+          </button>
+        ))
+      }
+    </div>
+  </div>
+</div>
+
+<script>
+  function initFormulaEditor(wrap: HTMLElement) {
+    const ta = wrap.querySelector<HTMLTextAreaElement>('#formula-textarea')
+    if (!ta) return
+
+    wrap.querySelectorAll<HTMLButtonElement>('[data-insert]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const snippet = btn.dataset.insert ?? ''
+        const start = ta.selectionStart
+        const end = ta.selectionEnd
+        const before = ta.value.slice(0, start)
+        const after = ta.value.slice(end)
+
+        // Smart spacing: add space before if previous char is word char
+        const needSpaceBefore =
+          before.length > 0 && /[\w\d]$/.test(before) && /^\w/.test(snippet)
+        const needSpaceAfter =
+          after.length > 0 && /^\w/.test(after) && /[\w\d]$/.test(snippet)
+
+        const inserted =
+          (needSpaceBefore ? ' ' : '') + snippet + (needSpaceAfter ? ' ' : '')
+        ta.value = before + inserted + after
+
+        // Position cursor inside parens if snippet ends with ()
+        const cursor = start + inserted.length
+        const parenPos = before.length + (needSpaceBefore ? 1 : 0) + snippet.indexOf('(')
+        if (snippet.includes('(') && snippet.includes(')')) {
+          ta.setSelectionRange(parenPos + 1, parenPos + 1)
+        } else {
+          ta.setSelectionRange(cursor, cursor)
+        }
+        ta.focus()
+      })
+    })
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll<HTMLElement>('.formula-editor-wrap').forEach(initFormulaEditor)
+  })
+</script>
+
+<style>
+  .formula-editor-wrap {
+    @apply rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent;
+  }
+
+  .fe-toolbar {
+    @apply flex flex-wrap gap-1 px-3 py-2 bg-gray-50 border-b border-gray-200;
+  }
+
+  .fe-op {
+    @apply px-2.5 py-1 rounded text-xs font-mono font-semibold bg-white border border-gray-300 text-gray-700
+           hover:bg-gray-100 hover:border-gray-400 transition-colors cursor-pointer select-none;
+  }
+
+  .fe-textarea {
+    @apply w-full px-3 py-3 font-mono text-xs text-gray-900 bg-white resize-none
+           focus:outline-none;
+    /* Remove default browser focus ring — wrap handles it */
+    border: none;
+    line-height: 1.6;
+  }
+
+  .fe-vars-panel {
+    @apply border-t border-gray-200 bg-gray-50 px-3 py-3;
+  }
+
+  .fe-vars-title {
+    @apply text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide;
+  }
+
+  .fe-vars-grid {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .fe-var {
+    @apply flex flex-col items-start px-2.5 py-1.5 rounded-md border border-gray-200 bg-white
+           hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer text-left select-none;
+  }
+
+  .fe-var-name {
+    @apply text-xs font-mono font-semibold text-blue-700 leading-none;
+  }
+
+  .fe-var-desc {
+    @apply text-[10px] text-gray-400 leading-tight mt-0.5;
+  }
+</style>

@@ -1,4 +1,5 @@
 ---
+import FormulaEditor from '../../../components/FormulaEditor.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 
 const authCookie = Astro.cookies.get('auth')?.value
@@ -50,8 +51,7 @@ const errorMessages: Record<string, string> = {
         </div>
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1">Fórmula</label>
-          <textarea name="formula" class="input font-mono text-xs" rows="4" placeholder="baseSalary * 0.5"></textarea>
-          <p class="mt-1 text-xs text-gray-400">Expresión JavaScript. Variables disponibles: <code>baseSalary</code>, <code>workedDays</code>, <code>totalDays</code>.</p>
+          <FormulaEditor name="formula" rows={5} />
         </div>
       </div>
 

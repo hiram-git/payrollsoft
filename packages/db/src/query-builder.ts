@@ -621,6 +621,40 @@ export async function activateConcept(db: Db, id: string) {
   return row ?? null
 }
 
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export async function getDashboardStats(db: Db) {
+  const now = new Date()
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+  const [empResult, conceptResult, loanResult, payrollCountResult, netResult, recentResult] =
+    await Promise.all([
+      db.select({ total: count() }).from(employees).where(eq(employees.isActive, true)),
+      db.select({ total: count() }).from(concepts).where(eq(concepts.isActive, true)),
+      db.select({ total: count() }).from(loans).where(eq(loans.isActive, true)),
+      db.select({ total: count() }).from(payrolls).where(gte(payrolls.createdAt, firstOfMonth)),
+      db
+        .select({ net: sql<string>`COALESCE(SUM(${payrolls.totalNet}::numeric), 0)` })
+        .from(payrolls)
+        .where(
+          and(
+            gte(payrolls.createdAt, firstOfMonth),
+            sql`${payrolls.status} IN ('generated', 'closed')`
+          )
+        ),
+      db.select().from(payrolls).orderBy(desc(payrolls.createdAt)).limit(5),
+    ])
+
+  return {
+    activeEmployees: Number(empResult[0]?.total ?? 0),
+    activeConcepts: Number(conceptResult[0]?.total ?? 0),
+    activeLoans: Number(loanResult[0]?.total ?? 0),
+    payrollsThisMonth: Number(payrollCountResult[0]?.total ?? 0),
+    netThisMonth: Number(netResult[0]?.net ?? 0),
+    recentPayrolls: recentResult,
+  }
+}
+
 // ─── Loans ────────────────────────────────────────────────────────────────────
 
 export async function listLoansByEmployee(db: Db, employeeId: string) {
