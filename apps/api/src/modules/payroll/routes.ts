@@ -1,3 +1,4 @@
+import { determinarPeriodoTrimestral, getThirteenthPeriods } from '@payroll/core'
 import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
@@ -198,6 +199,34 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+  )
+
+  // GET /payroll/thirteenth/period?date=YYYY-MM-DD — return period info for a date
+  .get(
+    '/thirteenth/period',
+    ({ query }) => {
+      const date = query.date ?? new Date().toISOString().slice(0, 10)
+      const period = determinarPeriodoTrimestral(date)
+      return { success: true, data: period }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      query: t.Object({ date: t.Optional(t.String()) }),
+    }
+  )
+
+  // GET /payroll/thirteenth/periods?year=2025 — return all 3 periods for a year
+  .get(
+    '/thirteenth/periods',
+    ({ query }) => {
+      const year = Number(query.year ?? new Date().getFullYear())
+      const periods = getThirteenthPeriods(year)
+      return { success: true, data: periods }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      query: t.Object({ year: t.Optional(t.String()) }),
+    }
   )
 
   // Legacy alias: POST /payroll/:id/process → generate

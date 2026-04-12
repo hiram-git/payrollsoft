@@ -1,8 +1,16 @@
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
 import {
   attendanceRecords,
   cargos,
+  conceptAccumulatorLinks,
+  conceptAccumulators,
+  conceptFrequencies,
+  conceptFrequencyLinks,
+  conceptPayrollTypeLinks,
+  conceptPayrollTypes,
+  conceptSituationLinks,
+  conceptSituations,
   concepts,
   departamentos,
   employees,
@@ -315,6 +323,99 @@ export async function getPayrollAcumulados(db: Db, payrollId: string, employeeId
     .orderBy(asc(payrollAcumulados.conceptCode))
 }
 
+export type AcumuladosFilter = {
+  employeeId?: string
+  conceptCode?: string
+  conceptType?: string
+  from?: string // YYYY-MM-DD — filters on payroll.periodStart
+  to?: string // YYYY-MM-DD — filters on payroll.periodEnd
+}
+
+export async function queryAcumulados(db: Db, filter: AcumuladosFilter, page = 1, limit = 100) {
+  const conditions = buildAcumuladosConditions(filter)
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  const rows = await db
+    .select({
+      id: payrollAcumulados.id,
+      payrollId: payrollAcumulados.payrollId,
+      employeeId: payrollAcumulados.employeeId,
+      conceptCode: payrollAcumulados.conceptCode,
+      conceptName: payrollAcumulados.conceptName,
+      conceptType: payrollAcumulados.conceptType,
+      amount: payrollAcumulados.amount,
+      payrollName: payrolls.name,
+      periodStart: payrolls.periodStart,
+      periodEnd: payrolls.periodEnd,
+      payrollStatus: payrolls.status,
+      employeeCode: employees.code,
+      firstName: employees.firstName,
+      lastName: employees.lastName,
+    })
+    .from(payrollAcumulados)
+    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .leftJoin(employees, eq(payrollAcumulados.employeeId, employees.id))
+    .where(where)
+    .orderBy(
+      desc(payrolls.periodStart),
+      asc(employees.lastName),
+      asc(payrollAcumulados.conceptCode)
+    )
+    .limit(limit)
+    .offset((page - 1) * limit)
+
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(payrollAcumulados)
+    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .where(where)
+
+  return { rows, total: Number(total) }
+}
+
+export async function getAcumuladosSummary(db: Db, filter: AcumuladosFilter) {
+  const conditions = buildAcumuladosConditions(filter)
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  return db
+    .select({
+      employeeId: payrollAcumulados.employeeId,
+      conceptCode: payrollAcumulados.conceptCode,
+      conceptName: payrollAcumulados.conceptName,
+      conceptType: payrollAcumulados.conceptType,
+      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+      occurrences: count(),
+      employeeCode: employees.code,
+      firstName: employees.firstName,
+      lastName: employees.lastName,
+    })
+    .from(payrollAcumulados)
+    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .leftJoin(employees, eq(payrollAcumulados.employeeId, employees.id))
+    .where(where)
+    .groupBy(
+      payrollAcumulados.employeeId,
+      payrollAcumulados.conceptCode,
+      payrollAcumulados.conceptName,
+      payrollAcumulados.conceptType,
+      employees.code,
+      employees.firstName,
+      employees.lastName
+    )
+    .orderBy(asc(employees.lastName), asc(employees.firstName), asc(payrollAcumulados.conceptCode))
+}
+
+function buildAcumuladosConditions(filter: AcumuladosFilter) {
+  const conditions = []
+  if (filter.employeeId) conditions.push(eq(payrollAcumulados.employeeId, filter.employeeId))
+  if (filter.conceptCode)
+    conditions.push(eq(payrollAcumulados.conceptCode, filter.conceptCode.toUpperCase()))
+  if (filter.conceptType) conditions.push(eq(payrollAcumulados.conceptType, filter.conceptType))
+  if (filter.from) conditions.push(gte(payrolls.periodStart, filter.from))
+  if (filter.to) conditions.push(lte(payrolls.periodEnd, filter.to))
+  return conditions
+}
+
 export async function upsertPayrollLine(
   db: Db,
   data: {
@@ -398,6 +499,49 @@ export async function loadAccumulated(
         eq(payrollAcumulados.employeeId, employeeId),
         eq(payrollAcumulados.conceptCode, conceptCode),
         sql`${payrollAcumulados.payrollId} = ANY(${sql.raw(`ARRAY['${payrollIds.join("','")}'::uuid]`)})`
+      )
+    )
+
+  return Number(result[0]?.total ?? 0)
+}
+
+/**
+ * Sum a specific concept across closed payrolls whose period falls within
+ * the given date range [from, to] (YYYY-MM-DD strings).
+ * Used by the ACUMULADOS() date-range form for XIII mes calculations.
+ */
+export async function loadAccumulatedByDateRange(
+  db: Db,
+  employeeId: string,
+  conceptCode: string,
+  from: string,
+  to: string
+): Promise<number> {
+  const payrollsInRange = await db
+    .select({ id: payrolls.id })
+    .from(payrolls)
+    .where(
+      and(
+        eq(payrolls.status, 'closed'),
+        gte(payrolls.periodStart, from),
+        lte(payrolls.periodEnd, to)
+      )
+    )
+
+  if (payrollsInRange.length === 0) return 0
+
+  const payrollIds = payrollsInRange.map((p) => p.id)
+
+  const result = await db
+    .select({
+      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+    })
+    .from(payrollAcumulados)
+    .where(
+      and(
+        eq(payrollAcumulados.employeeId, employeeId),
+        eq(payrollAcumulados.conceptCode, conceptCode),
+        inArray(payrollAcumulados.payrollId, payrollIds)
       )
     )
 
@@ -619,6 +763,85 @@ export async function activateConcept(db: Db, id: string) {
     .where(eq(concepts.id, id))
     .returning()
   return row ?? null
+}
+
+// ─── Concept Config Catalogs ──────────────────────────────────────────────────
+
+export async function getConceptCatalogs(db: Db) {
+  const [payrollTypes, frequencies, situations, accumulators] = await Promise.all([
+    db.select().from(conceptPayrollTypes).orderBy(asc(conceptPayrollTypes.sortOrder)),
+    db.select().from(conceptFrequencies).orderBy(asc(conceptFrequencies.sortOrder)),
+    db.select().from(conceptSituations).orderBy(asc(conceptSituations.sortOrder)),
+    db.select().from(conceptAccumulators).orderBy(asc(conceptAccumulators.sortOrder)),
+  ])
+  return { payrollTypes, frequencies, situations, accumulators }
+}
+
+export type ConceptLinks = {
+  payrollTypeIds: string[]
+  frequencyIds: string[]
+  situationIds: string[]
+  accumulatorIds: string[]
+}
+
+export async function getConceptLinks(db: Db, conceptId: string): Promise<ConceptLinks> {
+  const [ptLinks, frLinks, siLinks, acLinks] = await Promise.all([
+    db
+      .select({ id: conceptPayrollTypeLinks.payrollTypeId })
+      .from(conceptPayrollTypeLinks)
+      .where(eq(conceptPayrollTypeLinks.conceptId, conceptId)),
+    db
+      .select({ id: conceptFrequencyLinks.frequencyId })
+      .from(conceptFrequencyLinks)
+      .where(eq(conceptFrequencyLinks.conceptId, conceptId)),
+    db
+      .select({ id: conceptSituationLinks.situationId })
+      .from(conceptSituationLinks)
+      .where(eq(conceptSituationLinks.conceptId, conceptId)),
+    db
+      .select({ id: conceptAccumulatorLinks.accumulatorId })
+      .from(conceptAccumulatorLinks)
+      .where(eq(conceptAccumulatorLinks.conceptId, conceptId)),
+  ])
+  return {
+    payrollTypeIds: ptLinks.map((r) => r.id),
+    frequencyIds: frLinks.map((r) => r.id),
+    situationIds: siLinks.map((r) => r.id),
+    accumulatorIds: acLinks.map((r) => r.id),
+  }
+}
+
+export async function setConceptLinks(db: Db, conceptId: string, links: ConceptLinks) {
+  // Delete all existing links, then re-insert
+  await Promise.all([
+    db.delete(conceptPayrollTypeLinks).where(eq(conceptPayrollTypeLinks.conceptId, conceptId)),
+    db.delete(conceptFrequencyLinks).where(eq(conceptFrequencyLinks.conceptId, conceptId)),
+    db.delete(conceptSituationLinks).where(eq(conceptSituationLinks.conceptId, conceptId)),
+    db.delete(conceptAccumulatorLinks).where(eq(conceptAccumulatorLinks.conceptId, conceptId)),
+  ])
+
+  await Promise.all([
+    links.payrollTypeIds.length > 0
+      ? db
+          .insert(conceptPayrollTypeLinks)
+          .values(links.payrollTypeIds.map((id) => ({ conceptId, payrollTypeId: id })))
+      : Promise.resolve(),
+    links.frequencyIds.length > 0
+      ? db
+          .insert(conceptFrequencyLinks)
+          .values(links.frequencyIds.map((id) => ({ conceptId, frequencyId: id })))
+      : Promise.resolve(),
+    links.situationIds.length > 0
+      ? db
+          .insert(conceptSituationLinks)
+          .values(links.situationIds.map((id) => ({ conceptId, situationId: id })))
+      : Promise.resolve(),
+    links.accumulatorIds.length > 0
+      ? db
+          .insert(conceptAccumulatorLinks)
+          .values(links.accumulatorIds.map((id) => ({ conceptId, accumulatorId: id })))
+      : Promise.resolve(),
+  ])
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

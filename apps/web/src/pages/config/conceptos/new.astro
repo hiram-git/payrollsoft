@@ -5,21 +5,44 @@ import AppLayout from '../../../layouts/AppLayout.astro'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+
+type CatalogItem = { id: string; code: string; name: string; sortOrder: number }
+type ConceptConfig = {
+  payrollTypes: CatalogItem[]
+  frequencies: CatalogItem[]
+  situations: CatalogItem[]
+  accumulators: CatalogItem[]
+}
+
+let config: ConceptConfig = { payrollTypes: [], frequencies: [], situations: [], accumulators: [] }
+
+try {
+  const res = await fetch(`${API_URL}/concepts/config`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) config = ((await res.json()) as { data: ConceptConfig }).data
+} catch {
+  // show empty catalogs — user can still save
+}
+
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   code_taken: 'El código ya está en uso.',
-  invalid_type: 'El tipo debe ser Ingreso o Deducción.',
+  invalid_type: 'El tipo debe ser Asignación, Deducción o Patronal.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
 ---
 
 <AppLayout title="Nuevo Concepto">
-  <div class="p-8 max-w-2xl">
-    <div class="flex items-center gap-3 mb-6">
-      <a href="/config/conceptos" class="text-sm text-gray-500 hover:text-gray-700">← Conceptos</a>
+  <div class="px-6 py-8 max-w-4xl mx-auto">
+
+    <!-- Breadcrumb -->
+    <div class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+      <a href="/config/conceptos" class="hover:text-gray-700 transition-colors">← Conceptos</a>
       <span class="text-gray-300">/</span>
-      <h1 class="text-2xl font-bold text-gray-900">Nuevo Concepto</h1>
+      <span class="text-gray-900 font-medium">Nuevo Concepto</span>
     </div>
 
     {error && (
@@ -29,38 +52,203 @@ const errorMessages: Record<string, string> = {
     )}
 
     <form method="POST" action="/api/config/conceptos">
-      <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
-            <input type="text" name="code" class="input" required maxlength="20" placeholder="BASICO" />
-            <p class="mt-1 text-xs text-gray-400">Identificador único. Se guardará en mayúsculas.</p>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
-            <select name="type" class="input" required>
-              <option value="">— Seleccionar —</option>
-              <option value="income">Ingreso</option>
-              <option value="deduction">Deducción</option>
-            </select>
-          </div>
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
-          <input type="text" name="name" class="input" required maxlength="255" placeholder="Salario Básico" />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Fórmula</label>
-          <FormulaEditor name="formula" rows={5} />
-        </div>
-      </div>
 
-      <div class="flex justify-end gap-3 mt-6">
-        <a href="/config/conceptos" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-          Cancelar
-        </a>
-        <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-          Guardar concepto
+      <!-- ── 1. Información Básica ──────────────────────────────────────────── -->
+      <section class="section-card mb-4">
+        <h2 class="section-title">
+          <span class="section-icon bg-blue-50 text-blue-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          </span>
+          Información Básica
+        </h2>
+        <div class="grid grid-cols-3 gap-4 p-5">
+          <div>
+            <label class="field-label">Código *</label>
+            <input type="text" name="code" class="input uppercase" required maxlength="20" placeholder="BONO01" />
+            <p class="field-hint">Se guardará en mayúsculas</p>
+          </div>
+          <div class="col-span-2">
+            <label class="field-label">Nombre / Descripción *</label>
+            <input type="text" name="name" class="input" required maxlength="255" placeholder="Bono de Productividad" />
+          </div>
+        </div>
+      </section>
+
+      <!-- ── 2. Naturaleza del Concepto ────────────────────────────────────── -->
+      <section class="section-card mb-4">
+        <h2 class="section-title">
+          <span class="section-icon bg-emerald-50 text-emerald-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+          </span>
+          Naturaleza del Concepto
+        </h2>
+        <div class="grid grid-cols-2 gap-6 p-5">
+          <!-- Tipo -->
+          <div>
+            <p class="field-label mb-2">Tipo de Concepto *</p>
+            <div class="flex flex-col gap-2">
+              {[
+                { value: 'income', label: 'Asignación', desc: 'Ingreso para el empleado', color: 'blue' },
+                { value: 'deduction', label: 'Deducción', desc: 'Descuento al empleado', color: 'red' },
+                { value: 'patronal', label: 'Patronal', desc: 'Cargo del empleador', color: 'amber' },
+              ].map(({ value, label, desc, color }) => (
+                <label class={`radio-card border-${color}-200 has-[:checked]:border-${color}-500 has-[:checked]:bg-${color}-50`}>
+                  <input type="radio" name="type" value={value} class="sr-only" required />
+                  <span class={`radio-dot border-${color}-400`} />
+                  <span>
+                    <span class="radio-label">{label}</span>
+                    <span class="radio-desc">{desc}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <!-- Unidad -->
+          <div>
+            <p class="field-label mb-2">Unidad de Medida</p>
+            <div class="grid grid-cols-2 gap-2">
+              {[
+                { value: 'amount', label: 'Monto ($)', icon: '$' },
+                { value: 'hours', label: 'Horas', icon: 'h' },
+                { value: 'percentage', label: 'Porcentaje (%)', icon: '%' },
+                { value: 'days', label: 'Días', icon: 'd' },
+              ].map(({ value, label, icon }) => (
+                <label class="unit-card has-[:checked]:border-gray-900 has-[:checked]:bg-gray-900 has-[:checked]:text-white">
+                  <input type="radio" name="unit" value={value} class="sr-only" checked={value === 'amount'} />
+                  <span class="text-xs font-bold">{icon}</span>
+                  <span class="text-xs">{label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── 3. Fórmula ────────────────────────────────────────────────────── -->
+      <section class="section-card mb-4">
+        <h2 class="section-title">
+          <span class="section-icon bg-violet-50 text-violet-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="12" y2="14"/></svg>
+          </span>
+          Fórmula de Cálculo
+        </h2>
+        <div class="p-5">
+          <FormulaEditor name="formula" rows={4} />
+        </div>
+      </section>
+
+      <!-- ── 4. Opciones de Comportamiento ─────────────────────────────────── -->
+      <section class="section-card mb-4">
+        <h2 class="section-title">
+          <span class="section-icon bg-amber-50 text-amber-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M12 2v2M12 20v2M20 12h2M2 12h2M17.66 17.66l-1.41-1.41M6.34 6.34L4.93 4.93"/></svg>
+          </span>
+          Opciones de Comportamiento
+        </h2>
+        <div class="grid grid-cols-2 gap-x-8 gap-y-3 p-5">
+          {[
+            { name: 'printDetails', label: 'Imprimir detalles en el recibo', desc: 'Muestra este concepto en el comprobante de pago' },
+            { name: 'prorates', label: 'Prorratear el concepto', desc: 'Divide el monto entre los días del período' },
+            { name: 'allowModify', label: 'Permitir modificar valor manualmente', desc: 'El usuario puede sobreescribir el valor calculado' },
+            { name: 'isReferenceValue', label: 'Es valor de referencia', desc: 'Solo sirve como base de cálculo, no aparece en la planilla' },
+            { name: 'useAmountCalc', label: 'Usar cálculo de monto', desc: 'Aplica la lógica de cálculo por monto fijo' },
+            { name: 'allowZero', label: 'Permitir monto en cero', desc: 'Incluye el concepto aunque el resultado sea $0.00' },
+          ].map(({ name, label, desc }) => (
+            <label class="flex items-start gap-3 cursor-pointer group">
+              <div class="relative flex-shrink-0 mt-0.5">
+                <input type="checkbox" name={name} value="1" class="peer sr-only" />
+                <div class="w-4 h-4 rounded border-2 border-gray-300 bg-white peer-checked:bg-gray-900 peer-checked:border-gray-900 group-hover:border-gray-400 transition-colors" />
+                <svg class="absolute inset-0 w-4 h-4 text-white opacity-0 peer-checked:opacity-100 pointer-events-none" viewBox="0 0 16 16" fill="none"><path d="M3 8l3.5 3.5L13 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+              <span>
+                <span class="text-sm font-medium text-gray-800 leading-none">{label}</span>
+                <span class="block text-xs text-gray-400 mt-0.5">{desc}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </section>
+
+      <!-- ── 5. Configuraciones Avanzadas ──────────────────────────────────── -->
+      <section class="section-card mb-6">
+        <h2 class="section-title">
+          <span class="section-icon bg-gray-100 text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/><circle cx="2" cy="6" r="2" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="2" fill="currentColor" stroke="none"/><circle cx="8" cy="18" r="2" fill="currentColor" stroke="none"/></svg>
+          </span>
+          Configuraciones Avanzadas
+        </h2>
+        <div class="p-5">
+          <div class="grid grid-cols-4 gap-4">
+
+            <!-- Tipos de planilla -->
+            <div>
+              <p class="adv-panel-label text-blue-700">Tipos de Planilla</p>
+              <div class="adv-panel">
+                {config.payrollTypes.map((item) => (
+                  <label class="adv-check-item">
+                    <input type="checkbox" name="payrollTypeIds[]" value={item.id} class="adv-checkbox" />
+                    <span>{item.name}</span>
+                  </label>
+                ))}
+                {config.payrollTypes.length === 0 && <p class="text-xs text-gray-400 py-1">Sin datos</p>}
+              </div>
+            </div>
+
+            <!-- Frecuencias -->
+            <div>
+              <p class="adv-panel-label text-emerald-700">Frecuencias</p>
+              <div class="adv-panel">
+                {config.frequencies.map((item) => (
+                  <label class="adv-check-item">
+                    <input type="checkbox" name="frequencyIds[]" value={item.id} class="adv-checkbox" />
+                    <span>{item.name}</span>
+                  </label>
+                ))}
+                {config.frequencies.length === 0 && <p class="text-xs text-gray-400 py-1">Sin datos</p>}
+              </div>
+            </div>
+
+            <!-- Situaciones -->
+            <div>
+              <p class="adv-panel-label text-amber-700">Situaciones del Empleado</p>
+              <div class="adv-panel">
+                {config.situations.map((item) => (
+                  <label class="adv-check-item">
+                    <input type="checkbox" name="situationIds[]" value={item.id} class="adv-checkbox" />
+                    <span>{item.name}</span>
+                  </label>
+                ))}
+                {config.situations.length === 0 && <p class="text-xs text-gray-400 py-1">Sin datos</p>}
+              </div>
+            </div>
+
+            <!-- Acumulados -->
+            <div>
+              <p class="adv-panel-label text-violet-700">Acumulados</p>
+              <div class="adv-panel" style="max-height: 220px">
+                {config.accumulators.map((item) => (
+                  <label class="adv-check-item">
+                    <input type="checkbox" name="accumulatorIds[]" value={item.id} class="adv-checkbox" />
+                    <span>{item.name}</span>
+                  </label>
+                ))}
+                {config.accumulators.length === 0 && <p class="text-xs text-gray-400 py-1">Sin datos</p>}
+              </div>
+            </div>
+
+          </div>
+          <p class="mt-3 text-xs text-gray-400">
+            Los acumulados permiten que este concepto contribuya al cálculo de XIII mes, vacaciones, indemnizaciones y otros beneficios según la legislación panameña.
+          </p>
+        </div>
+      </section>
+
+      <!-- Actions -->
+      <div class="flex justify-end gap-3">
+        <a href="/config/conceptos" class="btn-secondary">Cancelar</a>
+        <button type="submit" class="btn-primary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+          Crear Concepto
         </button>
       </div>
     </form>
@@ -68,7 +256,60 @@ const errorMessages: Record<string, string> = {
 </AppLayout>
 
 <style>
+  .section-card {
+    @apply bg-white border border-gray-200 rounded-xl overflow-hidden;
+  }
+  .section-title {
+    @apply flex items-center gap-2.5 px-5 py-3.5 border-b border-gray-100 text-sm font-semibold text-gray-800 bg-gray-50/50;
+  }
+  .section-icon {
+    @apply p-1.5 rounded-lg flex-shrink-0;
+  }
+  .field-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  .field-hint {
+    @apply mt-1 text-xs text-gray-400;
+  }
   .input {
-    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+    @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow;
+  }
+  .radio-card {
+    @apply flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:border-gray-300;
+  }
+  .radio-dot {
+    @apply w-4 h-4 rounded-full border-2 flex-shrink-0 transition-all;
+  }
+  input[type="radio"]:checked ~ .radio-dot {
+    @apply bg-current;
+  }
+  .radio-label {
+    @apply block text-sm font-medium text-gray-800;
+  }
+  .radio-desc {
+    @apply block text-xs text-gray-400;
+  }
+  .unit-card {
+    @apply flex flex-col items-center justify-center gap-1 p-3 rounded-lg border-2 border-gray-200 text-gray-600 cursor-pointer transition-all hover:border-gray-400;
+  }
+  .adv-panel-label {
+    @apply text-xs font-semibold uppercase tracking-wide mb-2;
+  }
+  .adv-panel {
+    @apply border border-gray-200 rounded-lg p-3 bg-gray-50 overflow-y-auto;
+    min-height: 120px;
+    max-height: 160px;
+  }
+  .adv-check-item {
+    @apply flex items-center gap-2 py-1 cursor-pointer group text-sm text-gray-700 hover:text-gray-900;
+  }
+  .adv-checkbox {
+    @apply w-3.5 h-3.5 rounded border-gray-400 accent-gray-900 cursor-pointer;
+  }
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition-colors;
+  }
+  .btn-secondary {
+    @apply px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors;
   }
 </style>

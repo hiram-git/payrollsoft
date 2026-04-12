@@ -5,16 +5,32 @@ import {
   activateConceptService,
   createConceptService,
   deactivateConceptService,
+  getConceptConfigService,
   getConceptService,
   listConceptsService,
   updateConceptService,
 } from './service'
+
+const LinksBody = t.Object({
+  payrollTypeIds: t.Optional(t.Array(t.String())),
+  frequencyIds: t.Optional(t.Array(t.String())),
+  situationIds: t.Optional(t.Array(t.String())),
+  accumulatorIds: t.Optional(t.Array(t.String())),
+})
 
 const ConceptBody = t.Object({
   code: t.String({ minLength: 1, maxLength: 20 }),
   name: t.String({ minLength: 1, maxLength: 255 }),
   type: t.String({ minLength: 1, maxLength: 20 }),
   formula: t.Optional(t.Nullable(t.String())),
+  unit: t.Optional(t.String()),
+  printDetails: t.Optional(t.Boolean()),
+  prorates: t.Optional(t.Boolean()),
+  allowModify: t.Optional(t.Boolean()),
+  isReferenceValue: t.Optional(t.Boolean()),
+  useAmountCalc: t.Optional(t.Boolean()),
+  allowZero: t.Optional(t.Boolean()),
+  links: t.Optional(LinksBody),
 })
 
 const ConceptUpdateBody = t.Object({
@@ -23,11 +39,33 @@ const ConceptUpdateBody = t.Object({
   type: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
   formula: t.Optional(t.Nullable(t.String())),
   isActive: t.Optional(t.Boolean()),
+  unit: t.Optional(t.String()),
+  printDetails: t.Optional(t.Boolean()),
+  prorates: t.Optional(t.Boolean()),
+  allowModify: t.Optional(t.Boolean()),
+  isReferenceValue: t.Optional(t.Boolean()),
+  useAmountCalc: t.Optional(t.Boolean()),
+  allowZero: t.Optional(t.Boolean()),
+  links: t.Optional(LinksBody),
 })
 
 export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
   .use(authPlugin)
   .use(tenantPlugin)
+
+  // GET /concepts/config — all 4 catalog lists for the form dropdowns
+  .get(
+    '/config',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await getConceptConfigService(db)
+      return { success: true, data }
+    },
+    { beforeHandle: [guardAuth, guardRole('VIEWER')] }
+  )
 
   .get(
     '/',
@@ -69,7 +107,17 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const result = await createConceptService(db, body)
+      const result = await createConceptService(db, {
+        ...body,
+        links: body.links
+          ? {
+              payrollTypeIds: body.links.payrollTypeIds ?? [],
+              frequencyIds: body.links.frequencyIds ?? [],
+              situationIds: body.links.situationIds ?? [],
+              accumulatorIds: body.links.accumulatorIds ?? [],
+            }
+          : undefined,
+      })
       if (!result.success) {
         set.status = result.error === 'code_taken' ? 409 : 400
         return { success: false, error: result.message }
@@ -87,7 +135,17 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const result = await updateConceptService(db, params.id, body)
+      const result = await updateConceptService(db, params.id, {
+        ...body,
+        links: body.links
+          ? {
+              payrollTypeIds: body.links.payrollTypeIds ?? [],
+              frequencyIds: body.links.frequencyIds ?? [],
+              situationIds: body.links.situationIds ?? [],
+              accumulatorIds: body.links.accumulatorIds ?? [],
+            }
+          : undefined,
+      })
       if (!result.success) {
         set.status = result.error === 'not_found' ? 404 : 409
         return { success: false, error: result.message }

@@ -4,6 +4,7 @@ import { env } from './config/env'
 import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
+import { acumuladosRoutes } from './modules/acumulados/routes'
 import { authRoutes } from './modules/auth/routes'
 import { cargosRoutes } from './modules/catalogs/cargos/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
@@ -41,6 +42,7 @@ const app = new Elysia()
   .use(departamentosRoutes)
   .use(conceptsRoutes)
   .use(dashboardRoutes)
+  .use(acumuladosRoutes)
   .use(loansRoutes)
   .use(payrollRoutes)
 

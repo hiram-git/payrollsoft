@@ -12,6 +12,7 @@ import {
   listLoansByEmployee,
   listPayrolls,
   loadAccumulated,
+  loadAccumulatedByDateRange,
   updatePayroll,
   upsertPayrollLine,
 } from '@payroll/db'
@@ -224,6 +225,8 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         })),
         loanInstallments,
         loadAccumulated: (code, periods) => loadAccumulated(db, emp.id, code, periods),
+        loadAccumulatedByDateRange: (code, from, to) =>
+          loadAccumulatedByDateRange(db, emp.id, code, from, to),
         loadBalance: async () => 0,
       })
 

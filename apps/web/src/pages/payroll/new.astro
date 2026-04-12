@@ -44,6 +44,13 @@ const defaultName = `Planilla Quincenal ${defaultStart}`
           <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
           <input type="text" name="name" class="input" required value={defaultName} />
         </div>
+        <!-- XIII Mes info banner (hidden by default) -->
+        <div id="xiii-banner" class="hidden rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+          <p class="font-medium mb-0.5">Planilla de XIII Mes</p>
+          <p class="xiii-desc text-xs text-amber-700"></p>
+          <p class="text-xs text-amber-600 mt-1">Las fechas del período se calcularon automáticamente. Puedes ajustarlas si es necesario.</p>
+        </div>
+
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Tipo *</label>
@@ -89,6 +96,69 @@ const defaultName = `Planilla Quincenal ${defaultStart}`
     </form>
   </div>
 </AppLayout>
+
+<script>
+  // Pure-JS port of determinarPeriodoTrimestral (no API call needed)
+  function getThirteenthPeriod(date: Date) {
+    const mes = date.getMonth() + 1
+    const dia = date.getDate()
+    const año = date.getFullYear()
+    const pad = (n: number) => String(n).padStart(2, '0')
+
+    if ((mes === 12 && dia >= 16) || mes <= 3 || (mes === 4 && dia <= 15)) {
+      if (mes === 12 && dia >= 16) {
+        return {
+          fechaInicio: `${año}-12-16`,
+          fechaFin: `${año + 1}-04-15`,
+          descripcion: `XIII Mes — Dic ${año} / Abr ${año + 1}`,
+        }
+      }
+      return {
+        fechaInicio: `${año - 1}-12-16`,
+        fechaFin: `${año}-04-15`,
+        descripcion: `XIII Mes — Dic ${año - 1} / Abr ${año}`,
+      }
+    }
+    if ((mes === 4 && dia >= 16) || (mes >= 5 && mes <= 7) || (mes === 8 && dia <= 15)) {
+      return {
+        fechaInicio: `${año}-04-16`,
+        fechaFin: `${año}-08-15`,
+        descripcion: `XIII Mes — Abr / Ago ${año}`,
+      }
+    }
+    return {
+      fechaInicio: `${año}-08-16`,
+      fechaFin: `${año}-12-15`,
+      descripcion: `XIII Mes — Ago / Dic ${año}`,
+    }
+  }
+
+  const typeSelect = document.querySelector<HTMLSelectElement>('[name="type"]')
+  const startInput = document.querySelector<HTMLInputElement>('[name="periodStart"]')
+  const endInput = document.querySelector<HTMLInputElement>('[name="periodEnd"]')
+  const nameInput = document.querySelector<HTMLInputElement>('[name="name"]')
+  const xiiiBanner = document.getElementById('xiii-banner')
+
+  let userEditedName = false
+  nameInput?.addEventListener('input', () => { userEditedName = true })
+
+  typeSelect?.addEventListener('change', () => {
+    if (typeSelect.value !== 'thirteenth') {
+      xiiiBanner?.classList.add('hidden')
+      return
+    }
+    const { fechaInicio, fechaFin, descripcion } = getThirteenthPeriod(new Date())
+    if (startInput) startInput.value = fechaInicio
+    if (endInput) endInput.value = fechaFin
+    if (!userEditedName && nameInput) nameInput.value = descripcion
+
+    if (xiiiBanner) {
+      const descEl = xiiiBanner.querySelector<HTMLElement>('.xiii-desc')
+      if (descEl) descEl.textContent = `Período: ${fechaInicio} → ${fechaFin}`
+      xiiiBanner.classList.remove('hidden')
+    }
+  })
+</script>
 
 <style>
   .input {

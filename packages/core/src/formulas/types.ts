@@ -65,10 +65,15 @@ export type FormulaContext = {
   /** Resolved concept values within the current payroll line (code → amount) */
   concepts: Record<string, number>
   /**
-   * Async loader: returns the sum of `concept` over the last `periods` payroll periods.
+   * Async loader: returns the sum of `concept` over the last `periods` closed payrolls.
    * Implement against the DB in Phase 3; use a stub that returns 0 for testing.
    */
   loadAccumulated: (code: string, periods: number) => Promise<number>
+  /**
+   * Async loader: returns the sum of `concept` across closed payrolls whose period
+   * falls within [from, to] (YYYY-MM-DD strings). Used by XIII mes formulas.
+   */
+  loadAccumulatedByDateRange: (code: string, from: string, to: string) => Promise<number>
   /**
    * Async loader: returns a balance (loan balance, vacation balance, etc.)
    * by a string key. Implement against the DB in Phase 3.

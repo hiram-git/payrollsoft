@@ -15,9 +15,18 @@ export const concepts = pgTable('concepts', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
   name: varchar('name', { length: 255 }).notNull(),
-  type: varchar('type', { length: 20 }).notNull(), // income | deduction
+  type: varchar('type', { length: 20 }).notNull(), // income | deduction | patronal
   formula: text('formula'),
   isActive: boolean('is_active').notNull().default(true),
+  // Unit of measure
+  unit: varchar('unit', { length: 20 }).notNull().default('amount'), // amount | hours | percentage | days
+  // Behavior flags
+  printDetails: boolean('print_details').notNull().default(false),
+  prorates: boolean('prorates').notNull().default(false),
+  allowModify: boolean('allow_modify').notNull().default(false),
+  isReferenceValue: boolean('is_reference_value').notNull().default(false),
+  useAmountCalc: boolean('use_amount_calc').notNull().default(false),
+  allowZero: boolean('allow_zero').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 

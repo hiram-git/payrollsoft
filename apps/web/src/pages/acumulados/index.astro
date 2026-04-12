@@ -1,0 +1,404 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const TENANT = 'demo'
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+
+// ─── Filter params from URL ────────────────────────────────────────────────────
+const sp = Astro.url.searchParams
+const filterEmployeeId = sp.get('employeeId') ?? ''
+const filterConcept = sp.get('conceptCode') ?? ''
+const filterType = sp.get('conceptType') ?? ''
+const filterFrom = sp.get('from') ?? ''
+const filterTo = sp.get('to') ?? ''
+const filterView = sp.get('view') ?? 'summary' // 'summary' | 'detail'
+const page = Math.max(1, Number(sp.get('page') ?? 1))
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type SummaryRow = {
+  employeeId: string
+  conceptCode: string
+  conceptName: string
+  conceptType: string
+  total: string
+  occurrences: number
+  employeeCode: string | null
+  firstName: string | null
+  lastName: string | null
+}
+
+type DetailRow = {
+  id: string
+  payrollId: string
+  employeeId: string
+  conceptCode: string
+  conceptName: string
+  conceptType: string
+  amount: string
+  payrollName: string | null
+  periodStart: string | null
+  periodEnd: string | null
+  payrollStatus: string | null
+  employeeCode: string | null
+  firstName: string | null
+  lastName: string | null
+}
+
+type Employee = { id: string; code: string; firstName: string; lastName: string }
+
+// ─── Fetch data ───────────────────────────────────────────────────────────────
+
+let summaryRows: SummaryRow[] = []
+let detailRows: DetailRow[] = []
+let detailTotal = 0
+let detailPages = 1
+let employees: Employee[] = []
+let fetchError = ''
+
+const filterQs = new URLSearchParams({
+  ...(filterEmployeeId && { employeeId: filterEmployeeId }),
+  ...(filterConcept && { conceptCode: filterConcept }),
+  ...(filterType && { conceptType: filterType }),
+  ...(filterFrom && { from: filterFrom }),
+  ...(filterTo && { to: filterTo }),
+})
+
+try {
+  const [empRes, dataRes] = await Promise.all([
+    fetch(`${API_URL}/employees?limit=500`, { headers }),
+    filterView === 'summary'
+      ? fetch(`${API_URL}/acumulados/summary?${filterQs}`, { headers })
+      : fetch(`${API_URL}/acumulados?${filterQs}&page=${page}&limit=100`, { headers }),
+  ])
+
+  if (empRes.status === 401 || dataRes.status === 401) return Astro.redirect('/login')
+
+  if (empRes.ok) {
+    const json = (await empRes.json()) as { data: Employee[] }
+    employees = json.data ?? []
+  }
+
+  if (dataRes.ok) {
+    const json = await dataRes.json()
+    if (filterView === 'summary') {
+      summaryRows = (json as { data: SummaryRow[] }).data ?? []
+    } else {
+      const j = json as { data: DetailRow[]; meta: { total: number; pages: number } }
+      detailRows = j.data ?? []
+      detailTotal = j.meta?.total ?? 0
+      detailPages = j.meta?.pages ?? 1
+    }
+  } else {
+    fetchError = 'Error al cargar los acumulados'
+  }
+} catch {
+  fetchError = 'No se pudo conectar con el servidor'
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(v: string | number) {
+  return Number(v).toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+const empMap = Object.fromEntries(employees.map((e) => [e.id, e]))
+const selectedEmp = filterEmployeeId ? empMap[filterEmployeeId] : null
+
+const typeLabel: Record<string, string> = { income: 'Ingreso', deduction: 'Deducción' }
+const typePill: Record<string, string> = {
+  income: 'bg-blue-50 text-blue-700',
+  deduction: 'bg-red-50 text-red-700',
+}
+
+// Totals for summary view
+const grandTotalIncome = summaryRows
+  .filter((r) => r.conceptType === 'income')
+  .reduce((s, r) => s + Number(r.total), 0)
+const grandTotalDeductions = summaryRows
+  .filter((r) => r.conceptType === 'deduction')
+  .reduce((s, r) => s + Number(r.total), 0)
+
+// Build URL helpers
+function buildUrl(extra: Record<string, string>) {
+  const params = new URLSearchParams({
+    view: filterView,
+    ...(filterEmployeeId && { employeeId: filterEmployeeId }),
+    ...(filterConcept && { conceptCode: filterConcept }),
+    ...(filterType && { conceptType: filterType }),
+    ...(filterFrom && { from: filterFrom }),
+    ...(filterTo && { to: filterTo }),
+    ...extra,
+  })
+  return `/acumulados?${params}`
+}
+---
+
+<AppLayout title="Acumulados">
+  <div class="px-6 py-8 max-w-6xl mx-auto">
+
+    <!-- Header -->
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Acumulados</h1>
+      <p class="text-sm text-gray-400 mt-0.5">Historial acumulado de conceptos por empleado</p>
+    </div>
+
+    <!-- Filters -->
+    <form method="GET" action="/acumulados" class="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+      <input type="hidden" name="view" value={filterView} />
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+
+        <!-- Employee -->
+        <div class="lg:col-span-2">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Empleado</label>
+          <select name="employeeId" class="filter-input">
+            <option value="">— Todos —</option>
+            {employees.map((e) => (
+              <option value={e.id} selected={filterEmployeeId === e.id}>
+                {e.lastName}, {e.firstName} ({e.code})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <!-- Concept code -->
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Código concepto</label>
+          <input
+            type="text"
+            name="conceptCode"
+            value={filterConcept}
+            placeholder="SUELDO"
+            class="filter-input uppercase"
+          />
+        </div>
+
+        <!-- Type -->
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+          <select name="conceptType" class="filter-input">
+            <option value="">— Todos —</option>
+            <option value="income" selected={filterType === 'income'}>Ingreso</option>
+            <option value="deduction" selected={filterType === 'deduction'}>Deducción</option>
+          </select>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex flex-col justify-end gap-2">
+          <button
+            type="submit"
+            class="px-3 py-2 rounded-md bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+          >
+            Filtrar
+          </button>
+          <a
+            href="/acumulados"
+            class="px-3 py-2 rounded-md border border-gray-300 text-gray-600 text-xs text-center hover:bg-gray-50 transition-colors"
+          >
+            Limpiar
+          </a>
+        </div>
+      </div>
+
+      <!-- Date range -->
+      <div class="grid grid-cols-2 gap-3 mt-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Desde (inicio período)</label>
+          <input type="date" name="from" value={filterFrom} class="filter-input" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1">Hasta (fin período)</label>
+          <input type="date" name="to" value={filterTo} class="filter-input" />
+        </div>
+      </div>
+    </form>
+
+    <!-- View switcher -->
+    <div class="flex items-center gap-2 mb-4">
+      <a
+        href={buildUrl({ view: 'summary', page: '1' })}
+        class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filterView === 'summary' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+      >
+        Resumen
+      </a>
+      <a
+        href={buildUrl({ view: 'detail', page: '1' })}
+        class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filterView === 'detail' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+      >
+        Detalle
+      </a>
+      {selectedEmp && (
+        <span class="ml-2 text-sm text-gray-500">
+          Mostrando: <span class="font-medium text-gray-800">{selectedEmp.lastName}, {selectedEmp.firstName}</span>
+        </span>
+      )}
+    </div>
+
+    {fetchError && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{fetchError}</div>
+    )}
+
+    <!-- ── SUMMARY VIEW ─────────────────────────────────────────────────────── -->
+    {filterView === 'summary' && (
+      <>
+        {/* Grand totals */}
+        {summaryRows.length > 0 && (
+          <div class="grid grid-cols-3 gap-4 mb-5">
+            <div class="bg-white border border-gray-200 rounded-lg p-4">
+              <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Ingresos</p>
+              <p class="text-xl font-bold text-gray-900 tabular-nums">{fmt(grandTotalIncome)}</p>
+            </div>
+            <div class="bg-white border border-gray-200 rounded-lg p-4">
+              <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Total Deducciones</p>
+              <p class="text-xl font-bold text-red-600 tabular-nums">{fmt(grandTotalDeductions)}</p>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+              <p class="text-xs text-emerald-700 uppercase tracking-wide mb-1">Neto Acumulado</p>
+              <p class="text-xl font-bold text-emerald-700 tabular-nums">
+                {fmt(grandTotalIncome - grandTotalDeductions)}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          {summaryRows.length === 0 ? (
+            <div class="py-16 text-center">
+              <p class="text-sm text-gray-400">No hay acumulados para los filtros seleccionados</p>
+              <p class="text-xs text-gray-400 mt-1">Genera y cierra una planilla para ver acumulados</p>
+            </div>
+          ) : (
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50">
+                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
+                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                  <th class="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planillas</th>
+                  <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total acumulado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summaryRows.map((r, i) => (
+                  <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                    <td class="px-4 py-3">
+                      <a
+                        href={buildUrl({ view: 'detail', employeeId: r.employeeId })}
+                        class="font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                      >
+                        {r.lastName ?? '—'}, {r.firstName ?? '—'}
+                      </a>
+                      <p class="text-xs text-gray-400 font-mono">{r.employeeCode ?? '—'}</p>
+                    </td>
+                    <td class="px-4 py-3">
+                      <span class="font-mono text-xs font-semibold text-gray-700">{r.conceptCode}</span>
+                      <p class="text-xs text-gray-400 mt-0.5">{r.conceptName}</p>
+                    </td>
+                    <td class="px-4 py-3">
+                      <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typePill[r.conceptType] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {typeLabel[r.conceptType] ?? r.conceptType}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3 text-center text-gray-500 tabular-nums">{r.occurrences}</td>
+                    <td class={`px-4 py-3 text-right font-semibold tabular-nums ${r.conceptType === 'income' ? 'text-gray-900' : 'text-red-600'}`}>
+                      {r.conceptType === 'deduction' && '−'}{fmt(r.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </>
+    )}
+
+    <!-- ── DETAIL VIEW ──────────────────────────────────────────────────────── -->
+    {filterView === 'detail' && (
+      <>
+        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          {detailRows.length === 0 ? (
+            <div class="py-16 text-center">
+              <p class="text-sm text-gray-400">No hay registros para los filtros seleccionados</p>
+            </div>
+          ) : (
+            <>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-200 bg-gray-50">
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planilla</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Período</th>
+                    <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Monto</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailRows.map((r, i) => (
+                    <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                      <td class="px-4 py-3">
+                        <span class="font-medium text-gray-900">{r.lastName ?? '—'}, {r.firstName ?? '—'}</span>
+                        <p class="text-xs text-gray-400 font-mono">{r.employeeCode ?? '—'}</p>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class="font-mono text-xs font-semibold text-gray-700">{r.conceptCode}</span>
+                        <span class={`ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${typePill[r.conceptType] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {typeLabel[r.conceptType] ?? r.conceptType}
+                        </span>
+                        <p class="text-xs text-gray-400 mt-0.5">{r.conceptName}</p>
+                      </td>
+                      <td class="px-4 py-3">
+                        {r.payrollName ? (
+                          <a href={`/payroll/${r.payrollId}`} class="text-gray-700 hover:text-blue-600 transition-colors">
+                            {r.payrollName}
+                          </a>
+                        ) : (
+                          <span class="text-gray-400">—</span>
+                        )}
+                      </td>
+                      <td class="px-4 py-3 font-mono text-xs text-gray-500">
+                        {r.periodStart} → {r.periodEnd}
+                      </td>
+                      <td class={`px-4 py-3 text-right font-semibold tabular-nums ${r.conceptType === 'income' ? 'text-gray-900' : 'text-red-600'}`}>
+                        {r.conceptType === 'deduction' && '−'}{fmt(r.amount)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <!-- Pagination -->
+              {detailPages > 1 && (
+                <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+                  <p class="text-xs text-gray-500">{detailTotal} registros · página {page} de {detailPages}</p>
+                  <div class="flex gap-2">
+                    {page > 1 && (
+                      <a href={buildUrl({ view: 'detail', page: String(page - 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                        ← Anterior
+                      </a>
+                    )}
+                    {page < detailPages && (
+                      <a href={buildUrl({ view: 'detail', page: String(page + 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                        Siguiente →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </>
+    )}
+
+  </div>
+</AppLayout>
+
+<style>
+  .filter-input {
+    @apply w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white;
+  }
+</style>
