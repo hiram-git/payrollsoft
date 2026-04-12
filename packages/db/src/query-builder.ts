@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql } from 'drizzle-orm'
+import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
 import {
   attendanceRecords,
@@ -313,6 +313,99 @@ export async function getPayrollAcumulados(db: Db, payrollId: string, employeeId
     .from(payrollAcumulados)
     .where(and(...conditions))
     .orderBy(asc(payrollAcumulados.conceptCode))
+}
+
+export type AcumuladosFilter = {
+  employeeId?: string
+  conceptCode?: string
+  conceptType?: string
+  from?: string // YYYY-MM-DD — filters on payroll.periodStart
+  to?: string // YYYY-MM-DD — filters on payroll.periodEnd
+}
+
+export async function queryAcumulados(db: Db, filter: AcumuladosFilter, page = 1, limit = 100) {
+  const conditions = buildAcumuladosConditions(filter)
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  const rows = await db
+    .select({
+      id: payrollAcumulados.id,
+      payrollId: payrollAcumulados.payrollId,
+      employeeId: payrollAcumulados.employeeId,
+      conceptCode: payrollAcumulados.conceptCode,
+      conceptName: payrollAcumulados.conceptName,
+      conceptType: payrollAcumulados.conceptType,
+      amount: payrollAcumulados.amount,
+      payrollName: payrolls.name,
+      periodStart: payrolls.periodStart,
+      periodEnd: payrolls.periodEnd,
+      payrollStatus: payrolls.status,
+      employeeCode: employees.code,
+      firstName: employees.firstName,
+      lastName: employees.lastName,
+    })
+    .from(payrollAcumulados)
+    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .leftJoin(employees, eq(payrollAcumulados.employeeId, employees.id))
+    .where(where)
+    .orderBy(
+      desc(payrolls.periodStart),
+      asc(employees.lastName),
+      asc(payrollAcumulados.conceptCode)
+    )
+    .limit(limit)
+    .offset((page - 1) * limit)
+
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(payrollAcumulados)
+    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .where(where)
+
+  return { rows, total: Number(total) }
+}
+
+export async function getAcumuladosSummary(db: Db, filter: AcumuladosFilter) {
+  const conditions = buildAcumuladosConditions(filter)
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+
+  return db
+    .select({
+      employeeId: payrollAcumulados.employeeId,
+      conceptCode: payrollAcumulados.conceptCode,
+      conceptName: payrollAcumulados.conceptName,
+      conceptType: payrollAcumulados.conceptType,
+      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+      occurrences: count(),
+      employeeCode: employees.code,
+      firstName: employees.firstName,
+      lastName: employees.lastName,
+    })
+    .from(payrollAcumulados)
+    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .leftJoin(employees, eq(payrollAcumulados.employeeId, employees.id))
+    .where(where)
+    .groupBy(
+      payrollAcumulados.employeeId,
+      payrollAcumulados.conceptCode,
+      payrollAcumulados.conceptName,
+      payrollAcumulados.conceptType,
+      employees.code,
+      employees.firstName,
+      employees.lastName
+    )
+    .orderBy(asc(employees.lastName), asc(employees.firstName), asc(payrollAcumulados.conceptCode))
+}
+
+function buildAcumuladosConditions(filter: AcumuladosFilter) {
+  const conditions = []
+  if (filter.employeeId) conditions.push(eq(payrollAcumulados.employeeId, filter.employeeId))
+  if (filter.conceptCode)
+    conditions.push(eq(payrollAcumulados.conceptCode, filter.conceptCode.toUpperCase()))
+  if (filter.conceptType) conditions.push(eq(payrollAcumulados.conceptType, filter.conceptType))
+  if (filter.from) conditions.push(gte(payrolls.periodStart, filter.from))
+  if (filter.to) conditions.push(lte(payrolls.periodEnd, filter.to))
+  return conditions
 }
 
 export async function upsertPayrollLine(
