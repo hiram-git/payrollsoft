@@ -436,6 +436,37 @@ export async function upsertPayrollLine(
   return row
 }
 
+export async function getPayrollLineById(db: Db, lineId: string) {
+  const [row] = await db
+    .select({
+      line: payrollLines,
+      employee: {
+        id: employees.id,
+        code: employees.code,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        department: employees.department,
+        position: employees.position,
+      },
+    })
+    .from(payrollLines)
+    .innerJoin(employees, eq(payrollLines.employeeId, employees.id))
+    .where(eq(payrollLines.id, lineId))
+  return row ?? null
+}
+
+export async function deletePayrollAcumuladosByEmployee(
+  db: Db,
+  payrollId: string,
+  employeeId: string
+) {
+  await db
+    .delete(payrollAcumulados)
+    .where(
+      and(eq(payrollAcumulados.payrollId, payrollId), eq(payrollAcumulados.employeeId, employeeId))
+    )
+}
+
 /**
  * Aggregate attendance records for an employee within a date range.
  * Returns summed workedMinutes, lateMinutes, overtimeMinutes and record count.

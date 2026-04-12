@@ -166,7 +166,7 @@ const errorMessages: Record<string, string> = {
                 { value: 'percentage', label: 'Porcentaje (%)', icon: '%' },
                 { value: 'days', label: 'Días', icon: 'd' },
               ].map(({ value, label, icon }) => (
-                <label class="unit-card has-[:checked]:border-gray-900 has-[:checked]:bg-gray-900 has-[:checked]:text-white">
+                <label class="unit-card has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50 has-[:checked]:text-indigo-700">
                   <input type="radio" name="unit" value={value} class="sr-only" checked={concept!.unit === value || (!concept!.unit && value === 'amount')} />
                   <span class="text-xs font-bold">{icon}</span>
                   <span class="text-xs">{label}</span>
