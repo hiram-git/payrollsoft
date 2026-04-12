@@ -1,27 +1,208 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+
+const TENANT = 'demo'
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+
+type RecentPayroll = {
+  id: string
+  name: string
+  type: string
+  status: string
+  totalNet: string
+  periodStart: string
+  periodEnd: string
+}
+
+type Stats = {
+  activeEmployees: number
+  activeConcepts: number
+  activeLoans: number
+  payrollsThisMonth: number
+  netThisMonth: number
+  recentPayrolls: RecentPayroll[]
+}
+
+let stats: Stats = {
+  activeEmployees: 0,
+  activeConcepts: 0,
+  activeLoans: 0,
+  payrollsThisMonth: 0,
+  netThisMonth: 0,
+  recentPayrolls: [],
+}
+
+try {
+  const res = await fetch(`${API_URL}/dashboard/stats`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { data: Stats }
+    stats = json.data
+  }
+} catch {
+  // mostrar stats en cero si falla
+}
+
+const now = new Date()
+const monthName = now.toLocaleString('es-PA', { month: 'long', year: 'numeric' })
+
+function fmt(v: number) {
+  return v.toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+const statusLabel: Record<string, string> = {
+  created: 'Creada',
+  processing: 'Procesando',
+  generated: 'Generada',
+  closed: 'Cerrada',
+  draft: 'Borrador',
+  processed: 'Procesada',
+  paid: 'Pagada',
+}
+const statusStyle: Record<string, string> = {
+  created: 'bg-zinc-100 text-zinc-600',
+  processing: 'bg-amber-50 text-amber-700',
+  generated: 'bg-blue-50 text-blue-700',
+  closed: 'bg-emerald-50 text-emerald-700',
+}
+const typeLabel: Record<string, string> = {
+  regular: 'Regular',
+  thirteenth: 'XIII Mes',
+  special: 'Especial',
+}
 ---
 
 <AppLayout title="Dashboard">
-  <div class="p-8">
-    <h1 class="text-2xl font-bold text-gray-900 mb-6">Dashboard</h1>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-white rounded-xl border border-gray-200 p-6">
-        <p class="text-sm text-gray-500">Empleados activos</p>
-        <p class="text-3xl font-bold text-gray-900 mt-1">—</p>
-      </div>
-      <div class="bg-white rounded-xl border border-gray-200 p-6">
-        <p class="text-sm text-gray-500">Planillas este mes</p>
-        <p class="text-3xl font-bold text-gray-900 mt-1">—</p>
-      </div>
-      <div class="bg-white rounded-xl border border-gray-200 p-6">
-        <p class="text-sm text-gray-500">Total nómina</p>
-        <p class="text-3xl font-bold text-gray-900 mt-1">—</p>
-      </div>
+  <div class="px-6 py-8 max-w-6xl mx-auto">
+
+    <!-- Header -->
+    <div class="mb-8">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Resumen</h1>
+      <p class="text-sm text-gray-400 mt-0.5 capitalize">{monthName}</p>
     </div>
-    <p class="mt-8 text-sm text-gray-400">Sistema en construcción — Fase 3 en progreso</p>
+
+    <!-- Stat cards -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+
+      <!-- Empleados activos -->
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Empleados activos</p>
+          <span class="p-1.5 rounded-md bg-gray-50 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </span>
+        </div>
+        <p class="text-2xl font-bold text-gray-900 tabular-nums">{stats.activeEmployees}</p>
+        <a href="/employees" class="text-xs text-gray-400 hover:text-gray-600 mt-1 inline-block">Ver empleados →</a>
+      </div>
+
+      <!-- Conceptos activos -->
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Conceptos activos</p>
+          <span class="p-1.5 rounded-md bg-gray-50 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </span>
+        </div>
+        <p class="text-2xl font-bold text-gray-900 tabular-nums">{stats.activeConcepts}</p>
+        <a href="/config/conceptos" class="text-xs text-gray-400 hover:text-gray-600 mt-1 inline-block">Ver conceptos →</a>
+      </div>
+
+      <!-- Planillas este mes -->
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Planillas este mes</p>
+          <span class="p-1.5 rounded-md bg-gray-50 text-gray-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          </span>
+        </div>
+        <p class="text-2xl font-bold text-gray-900 tabular-nums">{stats.payrollsThisMonth}</p>
+        <a href="/payroll" class="text-xs text-gray-400 hover:text-gray-600 mt-1 inline-block">Ver planillas →</a>
+      </div>
+
+      <!-- Total nómina del mes -->
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <div class="flex items-center justify-between mb-3">
+          <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Neto pagado este mes</p>
+          <span class="p-1.5 rounded-md bg-emerald-50 text-emerald-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </span>
+        </div>
+        <p class="text-2xl font-bold text-emerald-700 tabular-nums">{fmt(stats.netThisMonth)}</p>
+        <p class="text-xs text-gray-400 mt-1">Planillas generadas y cerradas</p>
+      </div>
+
+    </div>
+
+    <!-- Planillas recientes -->
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-800">Planillas recientes</h2>
+        <a href="/payroll" class="text-xs text-gray-400 hover:text-gray-600">Ver todas →</a>
+      </div>
+
+      {stats.recentPayrolls.length === 0 ? (
+        <div class="py-12 text-center">
+          <p class="text-sm text-gray-400">No hay planillas creadas aún.</p>
+          <a href="/payroll/new" class="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors">
+            Crear primera planilla
+          </a>
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 bg-gray-50">
+              <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planilla</th>
+              <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Período</th>
+              <th class="text-left px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+              <th class="text-right px-5 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Neto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stats.recentPayrolls.map((p) => (
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-5 py-3.5">
+                  <a href={`/payroll/${p.id}`} class="font-medium text-gray-900 hover:text-blue-600 transition-colors">{p.name}</a>
+                  <p class="text-xs text-gray-400 mt-0.5">{typeLabel[p.type] ?? p.type}</p>
+                </td>
+                <td class="px-5 py-3.5 text-gray-500 font-mono text-xs">
+                  {p.periodStart} → {p.periodEnd}
+                </td>
+                <td class="px-5 py-3.5">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[p.status] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {statusLabel[p.status] ?? p.status}
+                  </span>
+                </td>
+                <td class="px-5 py-3.5 text-right font-semibold text-gray-900 tabular-nums">
+                  {Number(p.totalNet) > 0 ? fmt(Number(p.totalNet)) : '—'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+
+    <!-- Quick links -->
+    <div class="mt-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {[
+        { href: '/payroll/new', label: 'Nueva planilla', icon: 'M12 5v14M5 12h14' },
+        { href: '/employees/new', label: 'Nuevo empleado', icon: 'M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M12 7a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM19 8v6M22 11h-6' },
+        { href: '/config/conceptos/new', label: 'Nuevo concepto', icon: 'M12 5v14M5 12h14' },
+        { href: '/config/conceptos', label: 'Configurar conceptos', icon: 'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z' },
+      ].map(({ href, label, icon }) => (
+        <a href={href} class="flex items-center gap-2.5 px-4 py-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:border-gray-300 hover:text-gray-900 transition-colors">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 text-gray-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d={icon} />
+          </svg>
+          {label}
+        </a>
+      ))}
+    </div>
+
   </div>
 </AppLayout>
