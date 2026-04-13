@@ -221,8 +221,10 @@ Esta es la fase más crítica. Contiene toda la lógica de negocio.
 #### 3b Conceptos + Préstamos ✅
 - [x] `GET/POST/PUT/DELETE /concepts` — tipo income|deduction + fórmula
 - [x] `POST /concepts/:id/activate` + `DELETE /concepts/:id` — toggle activo/inactivo
-- [x] `GET /loans?employeeId` + `POST/PUT/DELETE /loans/:id`
+- [x] `GET /loans` (sin employeeId = lista global) + `GET /loans?employeeId` + `POST/PUT/DELETE /loans/:id`
 - [x] Cierre de préstamo (soft-delete `isActive=false`)
+- [x] Campos extendidos en `loans`: `loanType`, `frequency`, `creditor` (texto), `allowDecember`
+- [x] `listAllLoans()` — query con JOIN a `employees` para mostrar nombre en lista global
 
 #### 3c Motor de Planillas ✅
 ```
@@ -265,7 +267,30 @@ apps/api/src/modules/payroll/
 - [ ] Integración con planilla (pago de vacaciones) ← Fase 5
 - [ ] UI de solicitud y aprobación ← Fase 5
 
-#### 3g Liquidaciones ⏸ DIFERIDO — depende de Fase 5
+#### 3g Módulo Acreedores ⏸ PENDIENTE
+
+Catálogo de acreedores (bancos, cooperativas, juzgados) con **creación automática de concepto** al registrar un acreedor.
+
+**Diseño:**
+- Nueva tabla `creditors` (id, code, description, conceptId, isActive)
+- Al `POST /creditors` → se crea automáticamente un concepto de deducción vinculado (tipo `deduction`, fórmula usa `SALDO()` del préstamo)
+- `DELETE /creditors/:id` — desactiva el concepto vinculado también
+- En `/loans`: el campo `creditor` (actualmente texto libre) migrará a FK `creditorId → creditors.id`
+- Migración requerida: `ALTER TABLE loans ADD creditor_id uuid; ALTER TABLE loans DROP COLUMN creditor;`
+
+**Endpoints:**
+```
+GET    /creditors          — lista (VIEWER+)
+POST   /creditors          — crear + auto-crear concepto (HR+)
+GET    /creditors/:id
+PUT    /creditors/:id      — editar (HR+)
+DELETE /creditors/:id      — desactivar + desactivar concepto (ADMIN+)
+```
+
+**Frontend:**
+- `/config/acreedores` — lista, nuevo (con vista previa del concepto que se generará), editar
+
+#### 3h Liquidaciones ⏸ DIFERIDO — depende de Fase 5
 - [ ] Cálculo de liquidación al desvincularse (prima de antigüedad, vacaciones pendientes, etc.)
 - [ ] Endpoint + UI de liquidación ← Fase 5
 
@@ -279,25 +304,33 @@ apps/api/src/modules/payroll/
 **Estado: 🔄 EN PROGRESO**
 
 ### Completado
-- [x] UI moderna y responsiva (Tailwind CSS, sidebar, layout base)
-- [x] Empleados: lista, nuevo, editar con tabs (datos, préstamos, documentos)
+- [x] UI moderna y responsiva (Tailwind CSS puro, sidebar, layout base)
+- [x] Empleados: lista con búsqueda, nuevo, editar con tabs (Personal, Laboral, Préstamos)
 - [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos (toggle activo/inactivo)
-- [x] Préstamos: tab en empleado + páginas new/edit
 - [x] Planillas: lista estilo Vercel, detalle con stepper, acciones contextuales por estado
 - [x] Detalle planilla: tabla por empleado, desglose de conceptos colapsable, totales bruto/deducciones/neto
+- [x] **Módulo Préstamos standalone** (`/loans`):
+  - Lista global con empleado, tipo, acreedor, monto, saldo, cuota, frecuencia, estado
+  - Formulario `/loans/new` con selector de empleado + acreedor + tipo + frecuencia
+  - Calculadora de cuotas client-side — tabla de amortización completa (fecha, cuota, saldo inicial, amortización, saldo final)
+  - Frecuencias: semanal / quincenal / mensual (preserva día del mes en mensual)
+  - Toggle "Descontar en diciembre" (cuotas de dic pasan a ene si desactivado)
+  - Botón Guardar deshabilitado hasta generar tabla; se re-bloquea si el usuario modifica inputs
+  - Tab "Préstamos" en `/employees/[id]` usa el mismo formulario en contexto de empleado
+  - "Préstamos" en sidebar (entre Empleados y Planillas)
 
 ### Pendiente (prioridad Fase 4)
 - [ ] **Dashboard** — métricas reales (empleados activos, última planilla, acumulados del mes)
 - [ ] **PDF planilla** — descarga de planilla generada (recibo individual + reporte general)
-- [ ] **Editor de fórmulas** — textarea con referencia de variables inline
 - [ ] **Exportación Excel** — planilla generada a `.xlsx`
+- [ ] **Módulo Acreedores** — `/config/acreedores` (espera diseño de concepto auto-generado, ver Fase 3g)
 
 ### Diferido a Fase 5
 - [ ] DataTables con TanStack Table (filtros, sort, paginación cliente)
 - [ ] Calendario de asistencia (FullCalendar)
 - [ ] Módulo de vacaciones (UI)
 
-### Páginas implementadas (23 rutas Astro)
+### Páginas implementadas (27 rutas Astro)
 ```
 apps/web/src/pages/
 ├── index.astro                              ✅
@@ -305,9 +338,11 @@ apps/web/src/pages/
 ├── dashboard/index.astro                    ✅ (métricas pendientes)
 ├── employees/index.astro                    ✅ listado con búsqueda
 ├── employees/new.astro                      ✅
-├── employees/[id].astro                     ✅ tabs datos/préstamos/documentos
-├── employees/[id]/loans/new.astro           ✅
-├── employees/[id]/loans/[loanId].astro      ✅
+├── employees/[id].astro                     ✅ tabs Personal/Laboral/Préstamos
+├── employees/[id]/loans/new.astro           ✅ calculadora de cuotas
+├── employees/[id]/loans/[loanId].astro      ✅ editar/cerrar
+├── loans/index.astro                        ✅ lista global todos los préstamos
+├── loans/new.astro                          ✅ form completo + calculadora + selector empleado
 ├── payroll/index.astro                      ✅ lista + status pills
 ├── payroll/new.astro                        ✅
 ├── payroll/[id].astro                       ✅ stepper + tabla + acciones
