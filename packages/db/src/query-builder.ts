@@ -289,6 +289,10 @@ export async function deleteCreatedPayroll(db: Db, id: string) {
   await db.delete(payrolls).where(and(eq(payrolls.id, id), eq(payrolls.status, 'created')))
 }
 
+export async function deletePayrollLines(db: Db, payrollId: string) {
+  await db.delete(payrollLines).where(eq(payrollLines.payrollId, payrollId))
+}
+
 /** @deprecated use deleteCreatedPayroll */
 export async function deleteDraftPayroll(db: Db, id: string) {
   await deleteCreatedPayroll(db, id)

@@ -4,6 +4,7 @@ import {
   deleteCreatedPayroll,
   deletePayrollAcumulados,
   deletePayrollAcumuladosByEmployee,
+  deletePayrollLines,
   getAttendanceSummaryForPeriod,
   getEmployee,
   getPayroll,
@@ -328,7 +329,7 @@ export async function closePayrollService(db: AnyDb, id: string) {
   return { success: true as const, data: row }
 }
 
-/** closed → generated */
+/** closed → created (deletes acumulados + lines so the payroll can be regenerated or deleted) */
 export async function reopenPayrollService(db: AnyDb, id: string) {
   const existing = await getPayroll(db, id)
   if (!existing)
@@ -340,7 +341,9 @@ export async function reopenPayrollService(db: AnyDb, id: string) {
       message: 'Only closed payrolls can be reopened',
     }
   }
-  const row = await updatePayroll(db, id, { status: 'generated' })
+  await deletePayrollAcumulados(db, id)
+  await deletePayrollLines(db, id)
+  const row = await updatePayroll(db, id, { status: 'created' })
   return { success: true as const, data: row }
 }
 

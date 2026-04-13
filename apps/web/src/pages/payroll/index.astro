@@ -123,6 +123,7 @@ function fmt(v: string) {
           </thead>
           <tbody>
             {payrolls.map((p) => {
+              const isCreated = p.status === 'created' || p.status === 'draft'
               const isGen = p.status === 'generated' || p.status === 'processed'
               return (
               <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
@@ -161,6 +162,14 @@ function fmt(v: string) {
                         <input type="hidden" name="_method" value="CLOSE" />
                         <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="Cerrar planilla">
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        </button>
+                      </form>
+                    )}
+                    {isCreated && (
+                      <form method="POST" action={`/api/payroll/${p.id}`} onsubmit="return confirm('¿Eliminar esta planilla? Esta acción no se puede deshacer.')">
+                        <input type="hidden" name="_method" value="DELETE" />
+                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Eliminar planilla">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                         </button>
                       </form>
                     )}
