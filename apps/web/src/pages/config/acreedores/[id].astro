@@ -1,0 +1,165 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const { id } = Astro.params
+
+type Creditor = {
+  id: string
+  code: string
+  name: string
+  conceptId: string | null
+  conceptCode: string | null
+  conceptName: string | null
+  isActive: boolean
+}
+
+let creditor: Creditor | null = null
+let fetchError = ''
+
+try {
+  const res = await fetch(`${API_URL}/creditors/${id}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data: Creditor }
+    creditor = json.data
+  } else if (res.status === 401) {
+    return Astro.redirect('/login')
+  } else if (res.status === 404) {
+    return Astro.redirect('/config/acreedores')
+  } else {
+    fetchError = 'Error al cargar el acreedor'
+  }
+} catch {
+  fetchError = 'No se pudo conectar con el servidor'
+}
+
+const errorParam = Astro.url.searchParams.get('error')
+const successParam = Astro.url.searchParams.get('success')
+const errorMessages: Record<string, string> = {
+  'missing-fields': 'El nombre es obligatorio.',
+  'server-error': 'Error al conectar con el servidor.',
+}
+const errorMsg =
+  fetchError || (errorParam ? (errorMessages[errorParam] ?? 'Error desconocido.') : null)
+const successMsg = successParam === '1' ? 'Acreedor actualizado correctamente.' : null
+---
+
+<AppLayout title={creditor?.name ?? 'Acreedor'}>
+  <div class="p-8 max-w-xl">
+    <div class="mb-6">
+      <nav class="text-sm text-gray-400 mb-1">
+        <a href="/config/acreedores" class="hover:text-gray-600">Acreedores</a>
+        <span class="mx-1.5">›</span>
+        <span class="text-gray-600">{creditor?.name ?? '...'}</span>
+      </nav>
+      <h1 class="text-2xl font-bold text-gray-900">{creditor?.name ?? 'Acreedor'}</h1>
+      {creditor && (
+        <p class="text-sm text-gray-500 mt-0.5 font-mono">{creditor.code}</p>
+      )}
+    </div>
+
+    {successMsg && (
+      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        {successMsg}
+      </div>
+    )}
+    {errorMsg && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMsg}
+      </div>
+    )}
+
+    {creditor && (
+      <>
+        <form method="POST" action={`/api/config/acreedores/${creditor.id}`} class="bg-white rounded-xl border border-gray-200 p-6 space-y-5 mb-4">
+          <input type="hidden" name="_method" value="PUT" />
+
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5" for="name">
+              Nombre <span class="text-red-500">*</span>
+            </label>
+            <input
+              id="name"
+              name="name"
+              type="text"
+              required
+              maxlength="255"
+              value={creditor.name}
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {creditor.conceptCode && (
+            <div class="rounded-lg bg-blue-50 border border-blue-100 px-4 py-3">
+              <p class="text-xs font-medium text-blue-700 mb-0.5">Concepto asociado</p>
+              <p class="text-sm text-blue-800">
+                <span class="font-mono mr-2">{creditor.conceptCode}</span>
+                {creditor.conceptName}
+              </p>
+              <p class="text-xs text-blue-600 mt-1">
+                Para editar la fórmula, ve a{' '}
+                <a href={`/config/conceptos/${creditor.conceptId}`} class="underline hover:text-blue-800">
+                  Conceptos → {creditor.conceptCode}
+                </a>
+              </p>
+            </div>
+          )}
+
+          <div class="flex gap-3 pt-2">
+            <button
+              type="submit"
+              class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors"
+            >
+              Guardar cambios
+            </button>
+            <a
+              href="/config/acreedores"
+              class="text-sm text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+            >
+              Volver
+            </a>
+          </div>
+        </form>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 class="text-sm font-semibold text-gray-700 mb-3">Estado del acreedor</h2>
+          <div class="flex items-center justify-between">
+            <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${creditor.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+              {creditor.isActive ? 'Activo' : 'Inactivo'}
+            </span>
+            {creditor.isActive ? (
+              <form
+                method="POST"
+                action={`/api/config/acreedores/${creditor.id}`}
+                onsubmit="return confirm('¿Dar de baja este acreedor?')"
+              >
+                <input type="hidden" name="_method" value="DEACTIVATE" />
+                <button
+                  type="submit"
+                  class="text-sm text-red-600 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Dar de baja
+                </button>
+              </form>
+            ) : (
+              <form method="POST" action={`/api/config/acreedores/${creditor.id}`}>
+                <input type="hidden" name="_method" value="ACTIVATE" />
+                <button
+                  type="submit"
+                  class="text-sm text-green-600 hover:text-green-700 hover:bg-green-50 px-3 py-1.5 rounded-lg transition-colors"
+                >
+                  Activar
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      </>
+    )}
+  </div>
+</AppLayout>

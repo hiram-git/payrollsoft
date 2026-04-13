@@ -1,4 +1,14 @@
-import { boolean, date, jsonb, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  date,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 
 export const payrollAcumulados = pgTable('payroll_acumulados', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -58,15 +68,37 @@ export const payrollLines = pgTable('payroll_lines', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+export const creditors = pgTable('creditors', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  code: varchar('code', { length: 20 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  conceptId: uuid('concept_id'), // FK to concepts — auto-created on creditor creation
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
 export const loans = pgTable('loans', {
   id: uuid('id').defaultRandom().primaryKey(),
   employeeId: uuid('employee_id').notNull(),
+  creditorId: uuid('creditor_id'), // optional FK to creditors
   amount: varchar('amount', { length: 20 }).notNull(),
   balance: varchar('balance', { length: 20 }).notNull(),
   installment: varchar('installment', { length: 20 }).notNull(),
   startDate: date('start_date').notNull(),
   endDate: date('end_date'),
   isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+})
+
+export const loanInstallments = pgTable('loan_installments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  loanId: uuid('loan_id').notNull(),
+  installmentNumber: integer('installment_number').notNull(),
+  amount: varchar('amount', { length: 20 }).notNull(),
+  status: varchar('status', { length: 20 }).notNull().default('pending'), // pending | paid
+  payrollId: uuid('payroll_id'), // filled when paid on payroll close
+  paidAt: timestamp('paid_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -79,3 +111,7 @@ export type Loan = typeof loans.$inferSelect
 export type NewLoan = typeof loans.$inferInsert
 export type PayrollAcumulado = typeof payrollAcumulados.$inferSelect
 export type NewPayrollAcumulado = typeof payrollAcumulados.$inferInsert
+export type Creditor = typeof creditors.$inferSelect
+export type NewCreditor = typeof creditors.$inferInsert
+export type LoanInstallment = typeof loanInstallments.$inferSelect
+export type NewLoanInstallment = typeof loanInstallments.$inferInsert

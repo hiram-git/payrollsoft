@@ -50,6 +50,13 @@
       "when": 1744400000000,
       "tag": "0006_concept_config",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1744490000000,
+      "tag": "0007_creditors_loan_installments",
+      "breakpoints": true
     }
   ]
 }

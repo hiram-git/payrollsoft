@@ -12,9 +12,11 @@ import {
   conceptSituationLinks,
   conceptSituations,
   concepts,
+  creditors,
   departamentos,
   employees,
   funciones,
+  loanInstallments,
   loans,
   payrollAcumulados,
   payrollLines,
@@ -939,6 +941,148 @@ export async function updateLoan(db: Db, id: string, data: Partial<CreateLoanDat
 export async function closeLoan(db: Db, id: string) {
   const [row] = await db.update(loans).set({ isActive: false }).where(eq(loans.id, id)).returning()
   return row ?? null
+}
+
+// ─── Creditors ────────────────────────────────────────────────────────────────
+
+export async function listCreditors(db: Db) {
+  return db
+    .select({
+      id: creditors.id,
+      code: creditors.code,
+      name: creditors.name,
+      conceptId: creditors.conceptId,
+      isActive: creditors.isActive,
+      createdAt: creditors.createdAt,
+      conceptCode: concepts.code,
+      conceptName: concepts.name,
+    })
+    .from(creditors)
+    .leftJoin(concepts, eq(creditors.conceptId, concepts.id))
+    .orderBy(asc(creditors.name))
+}
+
+export async function getCreditorById(db: Db, id: string) {
+  const [row] = await db
+    .select({
+      id: creditors.id,
+      code: creditors.code,
+      name: creditors.name,
+      conceptId: creditors.conceptId,
+      isActive: creditors.isActive,
+      createdAt: creditors.createdAt,
+      updatedAt: creditors.updatedAt,
+      conceptCode: concepts.code,
+      conceptName: concepts.name,
+    })
+    .from(creditors)
+    .leftJoin(concepts, eq(creditors.conceptId, concepts.id))
+    .where(eq(creditors.id, id))
+  return row ?? null
+}
+
+export async function getCreditorByCode(db: Db, code: string) {
+  const [row] = await db.select().from(creditors).where(eq(creditors.code, code.toUpperCase()))
+  return row ?? null
+}
+
+export type CreateCreditorData = typeof creditors.$inferInsert
+export async function createCreditor(db: Db, data: CreateCreditorData) {
+  const [row] = await db.insert(creditors).values(data).returning()
+  return row
+}
+
+export async function updateCreditor(db: Db, id: string, data: Partial<CreateCreditorData>) {
+  const [row] = await db
+    .update(creditors)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(creditors.id, id))
+    .returning()
+  return row ?? null
+}
+
+// ─── Loan Installments ────────────────────────────────────────────────────────
+
+export type CreateLoanInstallmentData = typeof loanInstallments.$inferInsert
+
+export async function createLoanInstallments(
+  db: Db,
+  items: CreateLoanInstallmentData[]
+): Promise<void> {
+  if (items.length === 0) return
+  await db.insert(loanInstallments).values(items)
+}
+
+export async function getLoanInstallments(db: Db, loanId: string) {
+  return db
+    .select()
+    .from(loanInstallments)
+    .where(eq(loanInstallments.loanId, loanId))
+    .orderBy(asc(loanInstallments.installmentNumber))
+}
+
+/**
+ * For each active loan belonging to the employee that applies to the given
+ * period, return the oldest pending installment (one per loan).
+ */
+export async function getPendingInstallmentsByEmployee(
+  db: Db,
+  employeeId: string,
+  periodEnd: string
+) {
+  // Get active loans applicable to the payroll period
+  const activeLoans = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(
+      and(
+        eq(loans.employeeId, employeeId),
+        eq(loans.isActive, true),
+        lte(loans.startDate, periodEnd)
+      )
+    )
+
+  if (activeLoans.length === 0) return []
+
+  const loanIds = activeLoans.map((l) => l.id)
+  const pendingByLoan: Array<typeof loanInstallments.$inferSelect> = []
+
+  for (const lId of loanIds) {
+    const [oldest] = await db
+      .select()
+      .from(loanInstallments)
+      .where(and(eq(loanInstallments.loanId, lId), eq(loanInstallments.status, 'pending')))
+      .orderBy(asc(loanInstallments.installmentNumber))
+      .limit(1)
+    if (oldest) pendingByLoan.push(oldest)
+  }
+
+  return pendingByLoan
+}
+
+export async function markInstallmentPaid(db: Db, installmentId: string, payrollId: string) {
+  const [row] = await db
+    .update(loanInstallments)
+    .set({ status: 'paid', payrollId, paidAt: new Date() })
+    .where(eq(loanInstallments.id, installmentId))
+    .returning()
+  return row ?? null
+}
+
+export async function countPendingInstallments(db: Db, loanId: string) {
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(loanInstallments)
+    .where(and(eq(loanInstallments.loanId, loanId), eq(loanInstallments.status, 'pending')))
+  return Number(total)
+}
+
+/** Undo installment payments made by a specific payroll (used on reopen). */
+export async function revertPayrollInstallments(db: Db, payrollId: string) {
+  await db
+    .update(loanInstallments)
+    .set({ status: 'pending', payrollId: null, paidAt: null })
+    .where(eq(loanInstallments.payrollId, payrollId))
 }
 
 // ─── User Queries ─────────────────────────────────────────────────────────────
