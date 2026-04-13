@@ -187,6 +187,22 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
             <form
               method="POST"
               action={`/api/payroll/${id}`}
+              onsubmit="return confirm('¿Devolver al estado Creada? Se eliminarán las líneas generadas.')"
+            >
+              <input type="hidden" name="_method" value="REVERT" />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                Revertir
+              </button>
+            </form>
+          )}
+          {isGenerated && (
+            <form
+              method="POST"
+              action={`/api/payroll/${id}`}
               onsubmit="return confirm('¿Cerrar esta planilla? Quedará registrada como definitiva.')"
             >
               <input type="hidden" name="_method" value="CLOSE" />
