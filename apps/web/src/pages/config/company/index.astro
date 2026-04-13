@@ -1,0 +1,563 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+
+type CompanyConfig = {
+  id: string
+  companyName: string | null
+  ruc: string | null
+  legalRepresentative: string | null
+  address: string | null
+  phone: string | null
+  email: string | null
+  tipoInstitucion: string
+  currencyCode: string
+  currencySymbol: string
+  mailHost: string | null
+  mailPort: number
+  mailEncryption: string
+  mailUsername: string | null
+  mailPassword: string | null
+  mailFromAddress: string | null
+  mailFromName: string | null
+  elaboradoPor: string | null
+  cargoElaborador: string | null
+  jefeRecursosHumanos: string | null
+  cargoJefeRrhh: string | null
+  logoEmpresa: string | null
+  logoIzquierdoReportes: string | null
+  logoDerechoReportes: string | null
+  updatedAt: string
+}
+
+let company: CompanyConfig | null = null
+
+try {
+  const res = await fetch(`${API_URL}/company`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) company = ((await res.json()) as { data: CompanyConfig | null }).data
+} catch {
+  // proceed with null (first-time setup)
+}
+
+const success = Astro.url.searchParams.get('success') === '1'
+const error = Astro.url.searchParams.get('error') ?? ''
+const errorMessages: Record<string, string> = {
+  'missing-required': 'Nombre de la empresa y RUC son obligatorios.',
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+}
+
+// Completion stats
+type StatField = { key: keyof CompanyConfig; label: string }
+const trackedFields: StatField[] = [
+  { key: 'companyName', label: 'Nombre de empresa' },
+  { key: 'ruc', label: 'RUC/NIT' },
+  { key: 'address', label: 'Dirección' },
+  { key: 'phone', label: 'Teléfono' },
+  { key: 'email', label: 'Correo' },
+  { key: 'legalRepresentative', label: 'Representante legal' },
+  { key: 'logoEmpresa', label: 'Logo principal' },
+  { key: 'mailHost', label: 'Servidor SMTP' },
+]
+const missingFields = company
+  ? trackedFields.filter((f) => !company![f.key]).map((f) => f.label)
+  : trackedFields.map((f) => f.label)
+const completion = Math.round(((trackedFields.length - missingFields.length) / trackedFields.length) * 100)
+
+const v = <K extends keyof CompanyConfig>(key: K, fallback = '') =>
+  (company?.[key] as string | null | undefined) ?? fallback
+
+const currencies = [
+  { code: 'USD', symbol: '$', name: 'Dólar Americano' },
+  { code: 'PAB', symbol: 'B/.', name: 'Balboa Panameño' },
+  { code: 'GTQ', symbol: 'Q', name: 'Quetzal Guatemalteco' },
+  { code: 'HNL', symbol: 'L', name: 'Lempira Hondureño' },
+  { code: 'NIO', symbol: 'C$', name: 'Córdoba Nicaragüense' },
+  { code: 'CRC', symbol: '₡', name: 'Colón Costarricense' },
+  { code: 'DOP', symbol: 'RD$', name: 'Peso Dominicano' },
+  { code: 'MXN', symbol: '$', name: 'Peso Mexicano' },
+  { code: 'COP', symbol: '$', name: 'Peso Colombiano' },
+  { code: 'PEN', symbol: 'S/', name: 'Sol Peruano' },
+  { code: 'CLP', symbol: '$', name: 'Peso Chileno' },
+  { code: 'ARS', symbol: '$', name: 'Peso Argentino' },
+  { code: 'BOB', symbol: 'Bs.', name: 'Boliviano' },
+  { code: 'UYU', symbol: '$U', name: 'Peso Uruguayo' },
+  { code: 'EUR', symbol: '€', name: 'Euro' },
+]
+
+const smtpPorts = [
+  { value: 587, label: '587 — TLS (recomendado)' },
+  { value: 465, label: '465 — SSL' },
+  { value: 25, label: '25 — Sin cifrado' },
+  { value: 2525, label: '2525 — Alternativo' },
+]
+
+const hasSmtpPassword = Boolean(company?.mailPassword)
+---
+
+<AppLayout title="Configuración de Empresa">
+  <div class="p-8 max-w-5xl">
+
+    <!-- Header -->
+    <div class="flex items-start justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">
+          {company ? 'Configuración de Empresa' : 'Configurar Empresa'}
+        </h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          {company ? 'Actualiza los datos y parámetros de tu empresa.' : 'Completa la información inicial de tu empresa.'}
+        </p>
+      </div>
+      {company && (
+        <div class={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${completion === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
+          {completion}% completado
+        </div>
+      )}
+    </div>
+
+    <!-- Alerts -->
+    {success && (
+      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Configuración guardada correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+    {company && missingFields.length > 0 && !success && (
+      <div class="mb-6 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+        <strong>Configuración incompleta.</strong> Faltan: {missingFields.join(', ')}.
+      </div>
+    )}
+
+    <!-- Tabs -->
+    <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
+      <button type="button" class="tab-btn active" onclick="switchTab('empresa', this)">
+        Empresa
+      </button>
+      <button type="button" class="tab-btn" onclick="switchTab('smtp', this)">
+        Correo Electrónico
+      </button>
+    </div>
+
+    <form method="POST" action="/api/config/company" id="companyForm">
+
+      <!-- ══════════════════ TAB: EMPRESA ══════════════════ -->
+      <div id="tab-empresa">
+
+        <!-- Basic info + Contact (2 cols) -->
+        <div class="grid grid-cols-2 gap-6 mb-4">
+
+          <!-- Left: Información Básica -->
+          <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <span class="w-1.5 h-5 bg-blue-500 rounded-full inline-block"></span>
+              Información Básica
+            </h2>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de la Empresa *</label>
+              <input type="text" name="companyName" class="input" required maxlength="255"
+                placeholder="Empresa S.A." value={v('companyName')} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">RUC / NIT *</label>
+              <input type="text" name="ruc" class="input" required maxlength="50"
+                placeholder="1-234-567" value={v('ruc')} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Representante Legal</label>
+              <input type="text" name="legalRepresentative" class="input" maxlength="255"
+                placeholder="Nombre completo" value={v('legalRepresentative')} />
+            </div>
+          </div>
+
+          <!-- Right: Contacto -->
+          <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <span class="w-1.5 h-5 bg-blue-500 rounded-full inline-block"></span>
+              Información de Contacto
+            </h2>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+              <textarea name="address" class="input resize-none" rows="3" maxlength="500"
+                placeholder="Dirección completa">{v('address')}</textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+              <input type="tel" name="phone" class="input" maxlength="20"
+                placeholder="(507) 000-0000" value={v('phone')} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
+              <input type="email" name="email" class="input" maxlength="100"
+                placeholder="info@empresa.com" value={v('email')} />
+            </div>
+          </div>
+        </div>
+
+        <!-- Institution type + Currency (2 cols) -->
+        <div class="grid grid-cols-2 gap-6 mb-4">
+
+          <!-- Institution type -->
+          <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <span class="w-1.5 h-5 bg-violet-500 rounded-full inline-block"></span>
+              Tipo de Institución
+            </h2>
+            <p class="text-xs text-gray-500 -mt-2">Determina cómo se gestionan sueldos y cargos.</p>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Empresa *</label>
+              <select name="tipoInstitucion" class="input" id="tipoInstitucion">
+                <option value="privada" selected={v('tipoInstitucion', 'privada') === 'privada'}>
+                  Empresa sin posiciones
+                </option>
+                <option value="publica" selected={v('tipoInstitucion', 'privada') === 'publica'}>
+                  Empresa con posiciones
+                </option>
+              </select>
+            </div>
+            <div class="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 space-y-1">
+              <p><strong>Sin posiciones:</strong> Sueldos individuales por empleado.</p>
+              <p><strong>Con posiciones:</strong> Sueldos tomados de posiciones presupuestarias.</p>
+            </div>
+          </div>
+
+          <!-- Currency -->
+          <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <span class="w-1.5 h-5 bg-emerald-500 rounded-full inline-block"></span>
+              Moneda
+            </h2>
+            <p class="text-xs text-gray-500 -mt-2">Afecta todos los reportes y documentos.</p>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Moneda</label>
+              <select name="currencyCode" id="currencyCode" class="input">
+                {currencies.map((c) => (
+                  <option value={c.code} data-symbol={c.symbol}
+                    selected={v('currencyCode', 'USD') === c.code}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Símbolo</label>
+              <input type="text" name="currencySymbol" id="currencySymbol" class="input bg-gray-50"
+                maxlength="5" readonly value={v('currencySymbol', '$')} />
+              <p class="text-xs text-gray-400 mt-1">Se actualiza al cambiar la moneda.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h2 class="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            <span class="w-1.5 h-5 bg-orange-400 rounded-full inline-block"></span>
+            Firmas para Reportes de Planilla
+          </h2>
+          <p class="text-xs text-gray-500 mb-4">Aparecerán al pie de los reportes PDF de planillas.</p>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Elaborado por</label>
+              <input type="text" name="elaboradoPor" class="input" maxlength="255"
+                placeholder="Nombre completo" value={v('elaboradoPor')} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Cargo del elaborador</label>
+              <input type="text" name="cargoElaborador" class="input" maxlength="255"
+                placeholder="Especialista en Nóminas"
+                value={v('cargoElaborador', 'Especialista en Nóminas')} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Jefe de Recursos Humanos</label>
+              <input type="text" name="jefeRecursosHumanos" class="input" maxlength="255"
+                placeholder="Nombre completo" value={v('jefeRecursosHumanos')} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Cargo del jefe de RRHH</label>
+              <input type="text" name="cargoJefeRrhh" class="input" maxlength="255"
+                placeholder="Jefe de Recursos Humanos"
+                value={v('cargoJefeRrhh', 'Jefe de Recursos Humanos')} />
+            </div>
+          </div>
+        </div>
+
+        <!-- Logos -->
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h2 class="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            <span class="w-1.5 h-5 bg-pink-500 rounded-full inline-block"></span>
+            Logos de la Empresa
+          </h2>
+          <p class="text-xs text-gray-500 mb-4">Aparecerán en reportes y documentos generados por el sistema.</p>
+
+          <div class="grid grid-cols-3 gap-6">
+            {([
+              { field: 'logoEmpresa', label: 'Logo Principal', hint: 'Interfaz general del sistema' },
+              { field: 'logoIzquierdoReportes', label: 'Logo Izquierdo (Reportes)', hint: 'Esquina superior izquierda de PDFs' },
+              { field: 'logoDerechoReportes', label: 'Logo Derecho (Reportes)', hint: 'Esquina superior derecha de PDFs' },
+            ] as const).map(({ field, label, hint }) => (
+              <div class="space-y-2">
+                <label class="block text-sm font-medium text-gray-700">{label}</label>
+                <p class="text-xs text-gray-400 -mt-1">{hint}</p>
+
+                <!-- Hidden input holds the base64 or existing URL -->
+                <input type="hidden" name={field} id={`data_${field}`}
+                  value={v(field as keyof typeof company)} />
+
+                <!-- Drop / click zone -->
+                <label for={`file_${field}`}
+                  class="logo-zone group block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-colors p-4 text-center"
+                  id={`zone_${field}`}>
+                  <input type="file" id={`file_${field}`} accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    class="sr-only" data-field={field} />
+                  <div id={`placeholder_${field}`} class={v(field as keyof typeof company) ? 'hidden' : ''}>
+                    <svg class="mx-auto w-8 h-8 text-gray-300 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                    </svg>
+                    <p class="text-xs text-gray-400">Clic o arrastra imagen</p>
+                    <p class="text-xs text-gray-300">PNG, JPG, SVG — máx 2 MB</p>
+                  </div>
+                  <div id={`preview_${field}`} class={v(field as keyof typeof company) ? '' : 'hidden'}>
+                    <img id={`img_${field}`}
+                      src={v(field as keyof typeof company) || undefined}
+                      alt={label}
+                      class="mx-auto max-h-20 max-w-full object-contain rounded" />
+                  </div>
+                </label>
+
+                {v(field as keyof typeof company) && (
+                  <button type="button" data-remove={field}
+                    class="w-full text-xs text-red-500 hover:text-red-700 transition-colors py-1">
+                    Eliminar logo
+                  </button>
+                ) || (
+                  <button type="button" data-remove={field}
+                    class="w-full text-xs text-red-500 hover:text-red-700 transition-colors py-1 hidden"
+                    id={`remove_${field}`}>
+                    Eliminar logo
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div><!-- /tab-empresa -->
+
+
+      <!-- ══════════════════ TAB: SMTP ══════════════════ -->
+      <div id="tab-smtp" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h2 class="font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            <span class="w-1.5 h-5 bg-blue-500 rounded-full inline-block"></span>
+            Servidor SMTP
+          </h2>
+          <p class="text-xs text-gray-500 mb-5">
+            Configura el servidor de correo para enviar comprobantes, notificaciones y reportes.
+          </p>
+
+          <div class="grid grid-cols-2 gap-6">
+            <!-- Left column -->
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Host SMTP</label>
+                <input type="text" name="mailHost" class="input" maxlength="255"
+                  placeholder="smtp.gmail.com" value={v('mailHost')} />
+                <p class="text-xs text-gray-400 mt-1">Ej: smtp.gmail.com, smtp.zeptomail.com</p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Puerto</label>
+                <select name="mailPort" class="input">
+                  {smtpPorts.map((p) => (
+                    <option value={p.value} selected={(company?.mailPort ?? 587) === p.value}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Cifrado</label>
+                <select name="mailEncryption" class="input">
+                  <option value="tls" selected={v('mailEncryption', 'tls') === 'tls'}>TLS (recomendado)</option>
+                  <option value="ssl" selected={v('mailEncryption', 'tls') === 'ssl'}>SSL</option>
+                  <option value="" selected={!company?.mailEncryption}>Sin cifrado</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">TLS → puerto 587 · SSL → puerto 465</p>
+              </div>
+            </div>
+
+            <!-- Right column -->
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Usuario SMTP</label>
+                <input type="text" name="mailUsername" class="input" maxlength="255"
+                  placeholder="usuario@ejemplo.com" autocomplete="off" value={v('mailUsername')} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña SMTP</label>
+                <input type="password" name="mailPassword" class="input" maxlength="255"
+                  placeholder={hasSmtpPassword ? '••••••••' : 'Contraseña SMTP'}
+                  autocomplete="new-password" />
+                <p class="text-xs text-gray-400 mt-1">
+                  {hasSmtpPassword
+                    ? 'Contraseña configurada. Deja en blanco para mantenerla.'
+                    : 'Contraseña de autenticación SMTP.'}
+                </p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Correo Remitente</label>
+                <input type="email" name="mailFromAddress" class="input" maxlength="255"
+                  placeholder="noreply@empresa.com" value={v('mailFromAddress')} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Nombre Remitente</label>
+                <input type="text" name="mailFromName" class="input" maxlength="255"
+                  placeholder="Sistema de Planillas" value={v('mailFromName')} />
+              </div>
+            </div>
+          </div>
+
+          <!-- Security note -->
+          <div class="mt-5 rounded-lg bg-amber-50 border border-amber-100 p-4 text-xs text-amber-800 space-y-1">
+            <p class="font-semibold">Seguridad</p>
+            <p>• Verifica que el puerto coincida con el cifrado (587→TLS, 465→SSL).</p>
+            <p>• Las credenciales se almacenan en la base de datos del tenant.</p>
+            <p>• Puedes probar el envío desde el módulo de planillas.</p>
+          </div>
+        </div>
+      </div><!-- /tab-smtp -->
+
+      <!-- Footer actions (always visible) -->
+      <div class="flex justify-between mt-2">
+        <a href="/dashboard" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          ← Dashboard
+        </a>
+        <button type="submit"
+          class="px-6 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+          Guardar configuración
+        </button>
+      </div>
+
+    </form>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+  .tab-btn {
+    padding: 10px 20px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #6b7280;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    font-weight: 500;
+    transition: color 0.15s;
+  }
+  .tab-btn.active {
+    color: #2563eb;
+    border-bottom-color: #2563eb;
+    font-weight: 600;
+  }
+</style>
+
+<script is:inline>
+// ── Tab switching ───────────────────────────────────────────────────────────
+function switchTab(tab, btn) {
+  document.querySelectorAll('[id^="tab-"]').forEach(function(el) { el.style.display = 'none' })
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active') })
+  document.getElementById('tab-' + tab).style.display = ''
+  btn.classList.add('active')
+}
+
+// ── Currency symbol auto-update ─────────────────────────────────────────────
+;(function () {
+  var sel = document.getElementById('currencyCode')
+  var sym = document.getElementById('currencySymbol')
+  if (!sel || !sym) return
+  sel.addEventListener('change', function () {
+    var opt = sel.options[sel.selectedIndex]
+    var s = opt.getAttribute('data-symbol')
+    if (s) sym.value = s
+  })
+})()
+
+// ── Logo upload + preview ───────────────────────────────────────────────────
+;(function () {
+  var MAX_SIZE = 2 * 1024 * 1024 // 2 MB
+
+  document.querySelectorAll('input[type="file"][data-field]').forEach(function (input) {
+    input.addEventListener('change', function () {
+      var field = input.getAttribute('data-field')
+      var file = input.files && input.files[0]
+      if (!file) return
+
+      if (file.size > MAX_SIZE) {
+        alert('El archivo supera los 2 MB. Por favor elige una imagen más pequeña.')
+        input.value = ''
+        return
+      }
+
+      var reader = new FileReader()
+      reader.onload = function (e) {
+        var dataUrl = e.target.result
+        document.getElementById('data_' + field).value = dataUrl
+        document.getElementById('img_' + field).src = dataUrl
+        document.getElementById('placeholder_' + field).classList.add('hidden')
+        document.getElementById('preview_' + field).classList.remove('hidden')
+        var removeBtn = document.getElementById('remove_' + field)
+        if (removeBtn) removeBtn.classList.remove('hidden')
+      }
+      reader.readAsDataURL(file)
+    })
+  })
+
+  // Remove logo buttons
+  document.querySelectorAll('button[data-remove]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var field = btn.getAttribute('data-remove')
+      document.getElementById('data_' + field).value = ''
+      document.getElementById('img_' + field).src = ''
+      document.getElementById('placeholder_' + field).classList.remove('hidden')
+      document.getElementById('preview_' + field).classList.add('hidden')
+      btn.classList.add('hidden')
+      // Reset file input so same file can be re-selected
+      var fileInput = document.getElementById('file_' + field)
+      if (fileInput) fileInput.value = ''
+    })
+  })
+
+  // Drag-and-drop support
+  document.querySelectorAll('.logo-zone').forEach(function (zone) {
+    zone.addEventListener('dragover', function (e) {
+      e.preventDefault()
+      zone.classList.add('border-blue-400', 'bg-blue-50')
+    })
+    zone.addEventListener('dragleave', function () {
+      zone.classList.remove('border-blue-400', 'bg-blue-50')
+    })
+    zone.addEventListener('drop', function (e) {
+      e.preventDefault()
+      zone.classList.remove('border-blue-400', 'bg-blue-50')
+      var fileInput = zone.querySelector('input[type="file"]')
+      if (!fileInput || !e.dataTransfer || !e.dataTransfer.files.length) return
+      // Transfer dropped files to the input and fire change event
+      var dt = new DataTransfer()
+      dt.items.add(e.dataTransfer.files[0])
+      fileInput.files = dt.files
+      fileInput.dispatchEvent(new Event('change'))
+    })
+  })
+})()
+</script>
