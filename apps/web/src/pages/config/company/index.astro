@@ -65,9 +65,11 @@ const trackedFields: StatField[] = [
   { key: 'mailHost', label: 'Servidor SMTP' },
 ]
 const missingFields = company
-  ? trackedFields.filter((f) => !company![f.key]).map((f) => f.label)
+  ? trackedFields.filter((f) => !company?.[f.key]).map((f) => f.label)
   : trackedFields.map((f) => f.label)
-const completion = Math.round(((trackedFields.length - missingFields.length) / trackedFields.length) * 100)
+const completion = Math.round(
+  ((trackedFields.length - missingFields.length) / trackedFields.length) * 100
+)
 
 const v = <K extends keyof CompanyConfig>(key: K, fallback = '') =>
   (company?.[key] as string | null | undefined) ?? fallback
