@@ -12,6 +12,7 @@ import {
   regenerateEmployeeService,
   regeneratePayrollService,
   reopenPayrollService,
+  revertPayrollService,
   updatePayrollService,
 } from './service'
 
@@ -175,6 +176,24 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         return { success: false, error: 'Tenant required' }
       }
       const result = await closePayrollService(db, params.id)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+  )
+
+  // POST /payroll/:id/revert — generated → created
+  .post(
+    '/:id/revert',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await revertPayrollService(db, params.id)
       if (!result.success) {
         set.status = result.error === 'not_found' ? 404 : 400
         return { success: false, error: result.message }

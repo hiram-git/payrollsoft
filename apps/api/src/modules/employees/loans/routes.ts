@@ -5,6 +5,7 @@ import {
   closeLoanService,
   createLoanService,
   getLoanService,
+  listAllLoansService,
   listLoansService,
   updateLoanService,
 } from './service'
@@ -16,6 +17,10 @@ const LoanBody = t.Object({
   installment: t.String({ minLength: 1 }),
   startDate: t.String({ minLength: 1 }),
   endDate: t.Optional(t.Nullable(t.String())),
+  loanType: t.Optional(t.Nullable(t.String())),
+  frequency: t.Optional(t.Nullable(t.String())),
+  creditor: t.Optional(t.Nullable(t.String())),
+  allowDecember: t.Optional(t.Boolean()),
 })
 
 const LoanUpdateBody = t.Object({
@@ -24,13 +29,17 @@ const LoanUpdateBody = t.Object({
   installment: t.Optional(t.String({ minLength: 1 })),
   startDate: t.Optional(t.String({ minLength: 1 })),
   endDate: t.Optional(t.Nullable(t.String())),
+  loanType: t.Optional(t.Nullable(t.String())),
+  frequency: t.Optional(t.Nullable(t.String())),
+  creditor: t.Optional(t.Nullable(t.String())),
+  allowDecember: t.Optional(t.Boolean()),
 })
 
 export const loansRoutes = new Elysia({ prefix: '/loans' })
   .use(authPlugin)
   .use(tenantPlugin)
 
-  // List loans for a given employee: GET /loans?employeeId=xxx
+  // List loans: GET /loans?employeeId=xxx  (omit employeeId to list all)
   .get(
     '/',
     async ({ db, query, set }) => {
@@ -38,11 +47,11 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      if (!query.employeeId) {
-        set.status = 400
-        return { success: false, error: 'employeeId query parameter required' }
+      if (query.employeeId) {
+        const data = await listLoansService(db, query.employeeId)
+        return { success: true, data }
       }
-      const data = await listLoansService(db, query.employeeId)
+      const data = await listAllLoansService(db, {})
       return { success: true, data }
     },
     {

@@ -68,6 +68,18 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     return redirect(`/payroll/${id}`)
   }
 
+  // ── REVERT (generated → created) ─────────────────────────────────────────────
+  if (method === 'REVERT') {
+    let res: Response
+    try {
+      res = await fetch(`${API_URL}/payroll/${id}/revert`, { method: 'POST', headers })
+    } catch {
+      return redirect(`/payroll/${id}?error=server-error`)
+    }
+    if (res.status === 401) return redirect('/login')
+    return redirect(`/payroll/${id}`)
+  }
+
   // ── REOPEN (closed → generated) ──────────────────────────────────────────────
   if (method === 'REOPEN') {
     let res: Response

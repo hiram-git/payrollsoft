@@ -4,6 +4,7 @@ import {
   createLoanInstallments,
   getEmployee,
   getLoanById,
+  listAllLoans,
   listLoansByEmployee,
   updateLoan,
 } from '@payroll/db'
@@ -18,10 +19,18 @@ export type LoanInput = {
   installment: string
   startDate: string
   endDate?: string | null
+  loanType?: string | null
+  frequency?: string | null
+  creditor?: string | null
+  allowDecember?: boolean
 }
 
 export function listLoansService(db: AnyDb, employeeId: string) {
   return listLoansByEmployee(db, employeeId)
+}
+
+export function listAllLoansService(db: AnyDb, filter: { isActive?: boolean }) {
+  return listAllLoans(db, filter)
 }
 
 export function getLoanService(db: AnyDb, id: string) {
@@ -40,6 +49,10 @@ export async function createLoanService(db: AnyDb, input: LoanInput) {
     installment: input.installment,
     startDate: input.startDate,
     endDate: input.endDate ?? null,
+    loanType: input.loanType ?? null,
+    frequency: input.frequency ?? null,
+    creditor: input.creditor ?? null,
+    allowDecember: input.allowDecember ?? true,
   })
 
   // Generate installment schedule
@@ -75,6 +88,10 @@ export async function updateLoanService(db: AnyDb, id: string, input: LoanUpdate
   if (input.installment !== undefined) patch.installment = input.installment
   if (input.startDate !== undefined) patch.startDate = input.startDate
   if (input.endDate !== undefined) patch.endDate = input.endDate ?? null
+  if (input.loanType !== undefined) patch.loanType = input.loanType ?? null
+  if (input.frequency !== undefined) patch.frequency = input.frequency ?? null
+  if (input.creditor !== undefined) patch.creditor = input.creditor ?? null
+  if (input.allowDecember !== undefined) patch.allowDecember = input.allowDecember
   const row = await updateLoan(db, id, patch)
   return { success: true as const, data: row }
 }

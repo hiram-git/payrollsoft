@@ -3,6 +3,7 @@ import type { createPublicDb, createTenantDb } from './client'
 import {
   attendanceRecords,
   cargos,
+  companyConfig,
   conceptAccumulatorLinks,
   conceptAccumulators,
   conceptFrequencies,
@@ -288,6 +289,10 @@ export async function updatePayroll(db: Db, id: string, data: Partial<CreatePayr
 
 export async function deleteCreatedPayroll(db: Db, id: string) {
   await db.delete(payrolls).where(and(eq(payrolls.id, id), eq(payrolls.status, 'created')))
+}
+
+export async function deletePayrollLines(db: Db, payrollId: string) {
+  await db.delete(payrollLines).where(eq(payrollLines.payrollId, payrollId))
 }
 
 /** @deprecated use deleteCreatedPayroll */
@@ -919,6 +924,37 @@ export async function listLoansByEmployee(db: Db, employeeId: string) {
     .from(loans)
     .where(eq(loans.employeeId, employeeId))
     .orderBy(desc(loans.createdAt))
+}
+
+export async function listAllLoans(db: Db, filter: { isActive?: boolean } = {}) {
+  const conditions = []
+  if (filter.isActive !== undefined) {
+    conditions.push(eq(loans.isActive, filter.isActive))
+  }
+  return db
+    .select({
+      id: loans.id,
+      employeeId: loans.employeeId,
+      amount: loans.amount,
+      balance: loans.balance,
+      installment: loans.installment,
+      startDate: loans.startDate,
+      endDate: loans.endDate,
+      isActive: loans.isActive,
+      loanType: loans.loanType,
+      frequency: loans.frequency,
+      creditor: loans.creditor,
+      allowDecember: loans.allowDecember,
+      createdAt: loans.createdAt,
+      employeeCode: employees.code,
+      employeeFirstName: employees.firstName,
+      employeeLastName: employees.lastName,
+    })
+    .from(loans)
+    .innerJoin(employees, eq(loans.employeeId, employees.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(loans.createdAt))
+    .limit(200)
 }
 
 export async function getLoanById(db: Db, id: string) {

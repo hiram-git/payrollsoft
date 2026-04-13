@@ -42,6 +42,7 @@ export type ProcessLineInput = {
   /** Total loan installment amount to deduct for this employee this period */
   loanInstallments: number
   loadAccumulated: (code: string, periods: number) => Promise<number>
+  loadAccumulatedByDateRange: (code: string, from: string, to: string) => Promise<number>
   loadBalance: (type: string) => Promise<number>
 }
 
@@ -92,6 +93,7 @@ export async function processLine(input: ProcessLineInput): Promise<ProcessLineR
     attendance: input.attendance,
     concepts: resolvedConcepts,
     loadAccumulated: input.loadAccumulated,
+    loadAccumulatedByDateRange: input.loadAccumulatedByDateRange,
     loadBalance: input.loadBalance,
   }
 
