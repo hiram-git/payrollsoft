@@ -3,6 +3,7 @@ import type { createPublicDb, createTenantDb } from './client'
 import {
   attendanceRecords,
   cargos,
+  companyConfig,
   conceptAccumulatorLinks,
   conceptAccumulators,
   conceptFrequencies,
@@ -970,6 +971,34 @@ export async function updateLoan(db: Db, id: string, data: Partial<CreateLoanDat
 export async function closeLoan(db: Db, id: string) {
   const [row] = await db.update(loans).set({ isActive: false }).where(eq(loans.id, id)).returning()
   return row ?? null
+}
+
+// ─── Company Config ───────────────────────────────────────────────────────────
+
+/** Returns the single company config row for this tenant, or null if not yet configured. */
+export async function getCompanyConfig(db: Db) {
+  const [row] = await db.select().from(companyConfig).limit(1)
+  return row ?? null
+}
+
+export type UpsertCompanyConfigData = Omit<typeof companyConfig.$inferInsert, 'id' | 'updatedAt'>
+
+/**
+ * Upsert pattern: if a row exists update it, otherwise insert.
+ * Returns the final row.
+ */
+export async function upsertCompanyConfig(db: Db, data: UpsertCompanyConfigData) {
+  const existing = await getCompanyConfig(db)
+  if (existing) {
+    const [row] = await db
+      .update(companyConfig)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(companyConfig.id, existing.id))
+      .returning()
+    return row
+  }
+  const [row] = await db.insert(companyConfig).values(data).returning()
+  return row
 }
 
 // ─── User Queries ─────────────────────────────────────────────────────────────
