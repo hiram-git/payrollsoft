@@ -1121,6 +1121,32 @@ export async function revertPayrollInstallments(db: Db, payrollId: string) {
     .where(eq(loanInstallments.payrollId, payrollId))
 }
 
+// ─── Company Config ───────────────────────────────────────────────────────────
+
+export async function getCompanyConfig(db: Db) {
+  const [row] = await db.select().from(companyConfig).limit(1)
+  return row ?? null
+}
+
+export type UpsertCompanyConfigData = Partial<typeof companyConfig.$inferInsert>
+
+export async function upsertCompanyConfig(db: Db, data: UpsertCompanyConfigData) {
+  const existing = await getCompanyConfig(db)
+  if (existing) {
+    const [row] = await db
+      .update(companyConfig)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(companyConfig.id, existing.id))
+      .returning()
+    return row
+  }
+  const [row] = await db
+    .insert(companyConfig)
+    .values({ ...data, updatedAt: new Date() })
+    .returning()
+  return row
+}
+
 // ─── User Queries ─────────────────────────────────────────────────────────────
 
 /** Find a tenant user by email (case-insensitive). */
