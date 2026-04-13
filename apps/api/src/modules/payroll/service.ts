@@ -346,7 +346,7 @@ export async function reopenPayrollService(db: AnyDb, id: string) {
   return { success: true as const, data: row }
 }
 
-/** generated → created (deletes lines so the payroll can be regenerated or deleted) */
+/** generated → created (deletes lines and acumulados so the payroll can be regenerated or deleted) */
 export async function revertPayrollService(db: AnyDb, id: string) {
   const existing = await getPayroll(db, id)
   if (!existing)
@@ -358,6 +358,7 @@ export async function revertPayrollService(db: AnyDb, id: string) {
       message: 'Only generated payrolls can be reverted to created',
     }
   }
+  await deletePayrollAcumulados(db, id)
   await deletePayrollLines(db, id)
   const row = await updatePayroll(db, id, { status: 'created' })
   return { success: true as const, data: row }
