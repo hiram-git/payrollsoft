@@ -1,6 +1,7 @@
 import {
   closeLoan,
   createLoan,
+  createLoanInstallments,
   getEmployee,
   getLoanById,
   listAllLoans,
@@ -55,6 +56,24 @@ export async function createLoanService(db: AnyDb, input: LoanInput) {
     creditorId: input.creditorId ?? null,
     allowDecember: input.allowDecember ?? true,
   })
+
+  // Generate installment schedule
+  const totalAmount = Number(input.amount)
+  const installmentAmount = Number(input.installment)
+  if (installmentAmount > 0 && totalAmount > 0) {
+    const count = Math.ceil(totalAmount / installmentAmount)
+    const installments = Array.from({ length: count }, (_, i) => {
+      const isLast = i === count - 1
+      const remainder = totalAmount - installmentAmount * (count - 1)
+      return {
+        loanId: row.id,
+        installmentNumber: i + 1,
+        amount: String(isLast ? Math.min(installmentAmount, remainder) : installmentAmount),
+      }
+    })
+    await createLoanInstallments(db, installments)
+  }
+
   return { success: true as const, data: row }
 }
 
