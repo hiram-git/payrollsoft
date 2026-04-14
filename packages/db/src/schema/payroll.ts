@@ -70,6 +70,7 @@ export const loans = pgTable('loans', {
   loanType: varchar('loan_type', { length: 50 }),
   frequency: varchar('frequency', { length: 20 }),
   creditor: varchar('creditor', { length: 255 }),
+  creditorId: uuid('creditor_id'),
   allowDecember: boolean('allow_december').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })

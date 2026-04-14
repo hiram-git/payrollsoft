@@ -64,6 +64,13 @@
       "when": 1744500000000,
       "tag": "0008_company_config",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1744560000000,
+      "tag": "0009_creditors",
+      "breakpoints": true
     }
   ]
 }

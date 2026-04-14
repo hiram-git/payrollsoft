@@ -13,6 +13,7 @@ import {
   conceptSituationLinks,
   conceptSituations,
   concepts,
+  creditors,
   departamentos,
   employees,
   funciones,
@@ -1020,4 +1021,77 @@ export async function findSuperAdminByEmail(db: Db, email: string) {
     .from(superAdmins)
     .where(eq(superAdmins.email, email.toLowerCase()))
   return row ?? null
+}
+
+// ─── Creditors ────────────────────────────────────────────────────────────────
+
+export type CreateCreditorData = typeof creditors.$inferInsert
+
+export async function listCreditors(db: Db, includeInactive = false) {
+  const where = includeInactive ? undefined : eq(creditors.isActive, true)
+  return db.select().from(creditors).where(where).orderBy(asc(creditors.name))
+}
+
+export async function getCreditorById(db: Db, id: string) {
+  const [row] = await db.select().from(creditors).where(eq(creditors.id, id))
+  return row ?? null
+}
+
+export async function getCreditorByCode(db: Db, code: string) {
+  const [row] = await db
+    .select()
+    .from(creditors)
+    .where(eq(creditors.code, code.toUpperCase()))
+  return row ?? null
+}
+
+export async function createCreditor(db: Db, data: CreateCreditorData) {
+  const [row] = await db.insert(creditors).values(data).returning()
+  return row
+}
+
+export async function updateCreditor(db: Db, id: string, data: Partial<CreateCreditorData>) {
+  const [row] = await db
+    .update(creditors)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(creditors.id, id))
+    .returning()
+  return row ?? null
+}
+
+/**
+ * Sum all pending loan installments for a given employee + creditor within a payroll period.
+ * Used by the CUOTA_ACREEDOR() formula function.
+ *
+ * Matches loans where:
+ *  - creditorId links to the creditor with the given code, OR
+ *    the creditor varchar matches the code (legacy free-text loans)
+ *  - loan is active
+ *  - period overlaps: loan.startDate <= periodEnd AND (loan.endDate IS NULL OR loan.endDate >= periodStart)
+ */
+export async function loadInstallmentsByCreditor(
+  db: Db,
+  employeeId: string,
+  creditorCode: string,
+  periodStart: string,
+  periodEnd: string
+): Promise<number> {
+  // Resolve creditor UUID from code
+  const creditor = await getCreditorByCode(db, creditorCode)
+  if (!creditor) return 0
+
+  const rows = await db
+    .select({ installment: loans.installment })
+    .from(loans)
+    .where(
+      and(
+        eq(loans.employeeId, employeeId),
+        eq(loans.creditorId, creditor.id),
+        eq(loans.isActive, true),
+        lte(loans.startDate, periodEnd),
+        or(sql`${loans.endDate} IS NULL`, gte(loans.endDate, periodStart))
+      )
+    )
+
+  return rows.reduce((sum, r) => sum + Number(r.installment), 0)
 }

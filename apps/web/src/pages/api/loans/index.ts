@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const endDate = g('endDate') || null
   const loanType = g('loanType') || null
   const frequency = g('frequency') || null
-  const creditor = g('creditor') || null
+  const creditorId = g('creditorId') || null
   const allowDecember = form.get('allowDecember') !== null // checkbox: present = checked
 
   if (!employeeId || !totalAmount || !installment || !startDate) {
@@ -33,7 +33,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     endDate,
     loanType,
     frequency,
-    creditor,
+    creditorId,
     allowDecember,
   }
 

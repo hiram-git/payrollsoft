@@ -21,6 +21,7 @@ export type LoanInput = {
   loanType?: string | null
   frequency?: string | null
   creditor?: string | null
+  creditorId?: string | null
   allowDecember?: boolean
 }
 
@@ -51,6 +52,7 @@ export async function createLoanService(db: AnyDb, input: LoanInput) {
     loanType: input.loanType ?? null,
     frequency: input.frequency ?? null,
     creditor: input.creditor ?? null,
+    creditorId: input.creditorId ?? null,
     allowDecember: input.allowDecember ?? true,
   })
   return { success: true as const, data: row }

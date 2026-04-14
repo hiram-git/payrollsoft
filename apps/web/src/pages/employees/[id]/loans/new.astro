@@ -6,17 +6,25 @@ const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
 const { id } = Astro.params
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
 
 type Employee = { id: string; firstName: string; lastName: string }
+type Creditor = { id: string; code: string; name: string; isActive: boolean }
 let emp: Employee | null = null
+let creditors: Creditor[] = []
 
 try {
-  const res = await fetch(`${API_URL}/employees/${id}`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
-  })
-  if (res.status === 401) return Astro.redirect('/login')
-  if (res.status === 404) return Astro.redirect('/employees')
-  if (res.ok) emp = ((await res.json()) as { data: Employee }).data
+  const [empRes, credRes] = await Promise.all([
+    fetch(`${API_URL}/employees/${id}`, { headers }),
+    fetch(`${API_URL}/creditors`, { headers }),
+  ])
+  if (empRes.status === 401) return Astro.redirect('/login')
+  if (empRes.status === 404) return Astro.redirect('/employees')
+  if (empRes.ok) emp = ((await empRes.json()) as { data: Employee }).data
+  if (credRes.ok) {
+    const json = (await credRes.json()) as { data: Creditor[] }
+    creditors = (json.data ?? []).filter((c) => c.isActive)
+  }
 } catch {
   return Astro.redirect('/employees')
 }
@@ -71,7 +79,19 @@ const loanTypes = [
           <!-- Creditor -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Acreedor</label>
-            <input type="text" name="creditor" class="input" placeholder="Nombre del banco o institución" maxlength="255" />
+            {creditors.length > 0 ? (
+              <select name="creditorId" class="input">
+                <option value="">Sin acreedor</option>
+                {creditors.map((c) => (
+                  <option value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            ) : (
+              <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-400">
+                No hay acreedores —{' '}
+                <a href="/creditors/new" class="underline text-gray-600 hover:text-gray-800">crear acreedor</a>
+              </div>
+            )}
           </div>
 
           <!-- Loan type -->
