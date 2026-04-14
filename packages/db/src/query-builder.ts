@@ -982,7 +982,7 @@ export async function closeLoan(db: Db, id: string) {
 // ─── Creditors ────────────────────────────────────────────────────────────────
 
 export async function listCreditors(db: Db, includeInactive = false) {
-  const q = db
+  return db
     .select({
       id: creditors.id,
       code: creditors.code,
@@ -996,11 +996,8 @@ export async function listCreditors(db: Db, includeInactive = false) {
     })
     .from(creditors)
     .leftJoin(concepts, eq(creditors.conceptId, concepts.id))
+    .where(includeInactive ? undefined : eq(creditors.isActive, true))
     .orderBy(asc(creditors.name))
-  if (!includeInactive) {
-    return q.where(eq(creditors.isActive, true))
-  }
-  return q
 }
 
 export async function getCreditorById(db: Db, id: string) {

@@ -39,24 +39,34 @@ export const POST: APIRoute = async ({ request, params, cookies, redirect }) => 
 
   if (method === 'DEACTIVATE') {
     try {
-      await fetch(`${API_URL}/creditors/${id}/deactivate`, {
-        method: 'POST',
-        headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
+      await fetch(`${API_URL}/creditors/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `auth=${authCookie}`,
+          'X-Tenant': TENANT,
+        },
+        body: JSON.stringify({ isActive: false }),
       })
     } catch {
-      // ignore
+      // ignore — redirect regardless
     }
     return redirect('/config/acreedores')
   }
 
   if (method === 'ACTIVATE') {
     try {
-      await fetch(`${API_URL}/creditors/${id}/activate`, {
-        method: 'POST',
-        headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
+      await fetch(`${API_URL}/creditors/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: `auth=${authCookie}`,
+          'X-Tenant': TENANT,
+        },
+        body: JSON.stringify({ isActive: true }),
       })
     } catch {
-      // ignore
+      // ignore — redirect regardless
     }
     return redirect('/config/acreedores')
   }
