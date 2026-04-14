@@ -20,6 +20,7 @@ const LoanBody = t.Object({
   loanType: t.Optional(t.Nullable(t.String())),
   frequency: t.Optional(t.Nullable(t.String())),
   creditor: t.Optional(t.Nullable(t.String())),
+  creditorId: t.Optional(t.Nullable(t.String())),
   allowDecember: t.Optional(t.Boolean()),
 })
 

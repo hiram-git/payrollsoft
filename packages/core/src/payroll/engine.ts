@@ -44,6 +44,7 @@ export type ProcessLineInput = {
   loadAccumulated: (code: string, periods: number) => Promise<number>
   loadAccumulatedByDateRange: (code: string, from: string, to: string) => Promise<number>
   loadBalance: (type: string) => Promise<number>
+  loadInstallmentsByCreditor: (creditorCode: string, from: string, to: string) => Promise<number>
 }
 
 export type LineConceptEntry = {
@@ -95,6 +96,7 @@ export async function processLine(input: ProcessLineInput): Promise<ProcessLineR
     loadAccumulated: input.loadAccumulated,
     loadAccumulatedByDateRange: input.loadAccumulatedByDateRange,
     loadBalance: input.loadBalance,
+    loadInstallmentsByCreditor: input.loadInstallmentsByCreditor,
   }
 
   for (const concept of input.concepts) {

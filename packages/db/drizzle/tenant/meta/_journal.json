@@ -57,6 +57,13 @@
       "when": 1744490000000,
       "tag": "0007_creditors_loan_installments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1744560000000,
+      "tag": "0009_creditors",
+      "breakpoints": true
     }
   ]
 }

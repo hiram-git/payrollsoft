@@ -6,6 +6,8 @@ import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
 import { authRoutes } from './modules/auth/routes'
+import { companyRoutes } from './modules/company/routes'
+import { creditorRoutes } from './modules/creditors/routes'
 import { cargosRoutes } from './modules/catalogs/cargos/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
 import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
@@ -47,7 +49,7 @@ const app = new Elysia()
   .use(dashboardRoutes)
   .use(acumuladosRoutes)
   .use(loansRoutes)
-  .use(creditorsRoutes)
+  .use(creditorRoutes)
   .use(payrollRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────

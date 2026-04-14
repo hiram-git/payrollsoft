@@ -79,6 +79,12 @@ export type FormulaContext = {
    * by a string key. Implement against the DB in Phase 3.
    */
   loadBalance: (type: string) => Promise<number>
+  /**
+   * Async loader: returns the sum of loan installments for the current employee
+   * linked to a specific creditor (by code) within the given period [from, to].
+   * Used by CUOTA_ACREEDOR().
+   */
+  loadInstallmentsByCreditor: (creditorCode: string, from: string, to: string) => Promise<number>
 }
 
 // ─── Engine Result ────────────────────────────────────────────────────────────

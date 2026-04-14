@@ -1,0 +1,147 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const { id } = Astro.params
+
+type Creditor = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  conceptCode: string | null
+  isActive: boolean
+  createdAt: string
+}
+
+let creditor: Creditor | null = null
+
+try {
+  const res = await fetch(`${API_URL}/creditors/${id}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.status === 404) return Astro.redirect('/creditors')
+  if (res.ok) {
+    const json = (await res.json()) as { data: Creditor }
+    creditor = json.data
+  }
+} catch {
+  return Astro.redirect('/creditors')
+}
+
+if (!creditor) return Astro.redirect('/creditors')
+
+const error = Astro.url.searchParams.get('error') ?? ''
+const success = Astro.url.searchParams.get('success') === '1'
+const errorMessages: Record<string, string> = {
+  'server-error': 'Error del servidor. Intenta de nuevo.',
+  'missing-fields': 'Completa todos los campos requeridos.',
+}
+---
+
+<AppLayout title={creditor.name}>
+  <div class="px-6 py-8 max-w-2xl mx-auto">
+
+    <div class="mb-6">
+      <a href="/creditors" class="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        Acreedores
+      </a>
+      <div class="flex items-center gap-3">
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">{creditor.name}</h1>
+        <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+          creditor.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-zinc-100 text-zinc-500'
+        }`}>
+          {creditor.isActive ? 'Activo' : 'Inactivo'}
+        </span>
+      </div>
+      <p class="text-sm text-gray-500 mt-0.5 font-mono">{creditor.code}</p>
+    </div>
+
+    {success && (
+      <div class="mb-5 flex items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Acreedor actualizado correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <form method="POST" action={`/api/creditors/${id}`}>
+      <input type="hidden" name="_method" value="PUT" />
+
+      <div class="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Código</label>
+          <input
+            type="text"
+            value={creditor.code}
+            disabled
+            class="w-full rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-mono text-gray-500 cursor-not-allowed"
+          />
+          <p class="text-xs text-gray-400 mt-1">El código no se puede modificar.</p>
+        </div>
+
+        <div>
+          <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Nombre <span class="text-red-500">*</span></label>
+          <input
+            id="name" name="name" type="text" required maxlength="255"
+            value={creditor.name}
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+          />
+        </div>
+
+        <div>
+          <label for="description" class="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+          <textarea
+            id="description" name="description" rows="2"
+            placeholder="Descripción opcional del acreedor..."
+            class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400 resize-none"
+          >{creditor.description ?? ''}</textarea>
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+          <div class="flex items-center gap-2">
+            <input
+              type="checkbox" id="isActive" name="isActive" value="true"
+              checked={creditor.isActive}
+              class="w-4 h-4 rounded border-gray-300"
+            />
+            <label for="isActive" class="text-sm text-gray-700">Activo</label>
+          </div>
+        </div>
+
+        {creditor.conceptCode && (
+          <div class="rounded-md bg-gray-50 border border-gray-200 px-4 py-3 text-sm text-gray-600">
+            Concepto asociado: <code class="font-mono font-semibold text-gray-900">{creditor.conceptCode}</code>
+            · fórmula <code class="font-mono font-semibold text-gray-900">CUOTA_ACREEDOR("{creditor.code}")</code>
+          </div>
+        )}
+      </div>
+
+      <div class="flex gap-3 pt-4">
+        <button
+          type="submit"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
+        >
+          Guardar cambios
+        </button>
+        <a
+          href="/creditors"
+          class="inline-flex items-center px-4 py-2 rounded-md border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </a>
+      </div>
+    </form>
+  </div>
+</AppLayout>

@@ -1,6 +1,7 @@
 import type { FormulaContext } from '../types'
 import { ACUMULADOS } from './acumulados'
 import { CONCEPTO } from './concepto'
+import { CUOTA_ACREEDOR } from './cuota'
 import { DIAS } from './dias'
 import { ABS, MAX, MIN, REDONDEAR, TRUNCAR } from './math'
 import { ANIOPERIODO, FINPERIODO, INIPERIODO, MESPERIODO } from './periodo'
@@ -32,6 +33,9 @@ export const FUNCTIONS: Record<string, FunctionHandler> = {
   // Accumulated & balances (DB-backed via context loaders)
   ACUMULADOS,
   SALDO,
+
+  // Creditor loan installments
+  CUOTA_ACREEDOR,
 
   // Math utilities
   REDONDEAR,
