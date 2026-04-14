@@ -65,7 +65,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       return redirect(`/payroll/${id}?error=server-error`)
     }
     if (res.status === 401) return redirect('/login')
-    return redirect(`/payroll/${id}`)
+    if (res.ok) return redirect(`/payroll/${id}?success=1`)
+    const closeData = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    const closeMsg = closeData.error ?? closeData.message ?? `HTTP ${res.status}`
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(closeMsg)}`)
   }
 
   // ── REVERT (generated → created) ─────────────────────────────────────────────
@@ -77,7 +80,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       return redirect(`/payroll/${id}?error=server-error`)
     }
     if (res.status === 401) return redirect('/login')
-    return redirect(`/payroll/${id}`)
+    if (res.ok) return redirect(`/payroll/${id}`)
+    const revertData = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    const revertMsg = revertData.error ?? revertData.message ?? `HTTP ${res.status}`
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(revertMsg)}`)
   }
 
   // ── REOPEN (closed → generated) ──────────────────────────────────────────────
@@ -89,7 +95,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       return redirect(`/payroll/${id}?error=server-error`)
     }
     if (res.status === 401) return redirect('/login')
-    return redirect(`/payroll/${id}`)
+    if (res.ok) return redirect(`/payroll/${id}`)
+    const reopenData = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+    const reopenMsg = reopenData.error ?? reopenData.message ?? `HTTP ${res.status}`
+    return redirect(`/payroll/${id}?error=${encodeURIComponent(reopenMsg)}`)
   }
 
   // ── PUT (edit name / payment date — only for created payrolls) ────────────────

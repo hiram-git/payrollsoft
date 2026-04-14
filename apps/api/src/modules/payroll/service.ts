@@ -4,6 +4,7 @@ import {
   createPayroll,
   deleteCreatedPayroll,
   deletePayrollAcumulados,
+  deletePayrollLines,
   getAttendanceSummaryForPeriod,
   getEmployee,
   getPayroll,
@@ -18,6 +19,9 @@ import {
   loadAccumulated,
   loadAccumulatedByDateRange,
   loadInstallmentsByCreditor,
+  markInstallmentPaid,
+  revertPayrollInstallments,
+  updateLoan,
   updatePayroll,
   upsertPayrollLine,
 } from '@payroll/db'
