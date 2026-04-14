@@ -72,7 +72,9 @@ export const creditors = pgTable('creditors', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
   name: varchar('name', { length: 255 }).notNull(),
-  conceptId: uuid('concept_id'), // FK to concepts — auto-created on creditor creation
+  description: text('description'),
+  /** UUID of the deduction concept auto-created for this creditor */
+  conceptId: uuid('concept_id'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -91,7 +93,6 @@ export const loans = pgTable('loans', {
   loanType: varchar('loan_type', { length: 50 }),
   frequency: varchar('frequency', { length: 20 }),
   creditor: varchar('creditor', { length: 255 }),
-  creditorId: uuid('creditor_id'),
   allowDecember: boolean('allow_december').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })

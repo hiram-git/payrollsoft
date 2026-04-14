@@ -47,18 +47,10 @@ export async function createCreditorService(db: AnyDb, input: CreateCreditorInpu
 
   const conceptCode = `ACR_${code}`
 
-  // Create creditor first (without conceptCode, update after concept is created)
-  const creditor = await createCreditor(db, {
-    code,
-    name: input.name.trim(),
-    description: input.description ?? null,
-    conceptCode,
-    isActive: true,
-  })
-
-  // Auto-create the deduction concept for this creditor
+  // Auto-create the deduction concept first so we can link by ID
+  let conceptId: string | null = null
   try {
-    await createConcept(db, {
+    const concept = await createConcept(db, {
       code: conceptCode,
       name: input.name.trim(),
       type: 'deduction',
@@ -72,10 +64,20 @@ export async function createCreditorService(db: AnyDb, input: CreateCreditorInpu
       useAmountCalc: false,
       allowZero: true,
     })
+    conceptId = concept?.id ?? null
   } catch {
-    // Concept creation failed (e.g. duplicate concept code). The creditor is
-    // still created — the user can manually create or link a concept later.
+    // Concept creation failed (e.g. duplicate concept code) — try to find existing
+    const existing = await getConceptByCode(db, conceptCode).catch(() => null)
+    conceptId = existing?.id ?? null
   }
+
+  const creditor = await createCreditor(db, {
+    code,
+    name: input.name.trim(),
+    description: input.description ?? null,
+    conceptId,
+    isActive: true,
+  })
 
   return { success: true as const, data: creditor }
 }
@@ -97,9 +99,8 @@ export async function updateCreditorService(
   })
 
   // Keep the auto-generated concept name in sync
-  if (input.name && existing.conceptCode) {
-    const concept = await getConceptByCode(db, existing.conceptCode).catch(() => null)
-    if (concept) await updateConcept(db, concept.id, { name: input.name.trim() }).catch(() => {})
+  if (input.name && existing.conceptId) {
+    await updateConcept(db, existing.conceptId, { name: input.name.trim() }).catch(() => {})
   }
 
   return { success: true as const, data: creditor }
