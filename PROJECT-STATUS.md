@@ -1,4 +1,4 @@
-# Estado del Proyecto — Payroll Panamá v2
+# Estado del Proyecto — PayrollSoft
 
 **Última actualización:** Abril 2026  
 **Branch activo:** `claude/refactor-loans-astro-YT615`
@@ -16,10 +16,10 @@
 | 3b | API — Conceptos + Préstamos | ✅ Completo | 100% |
 | 3c | API — Motor de Planillas | ✅ Completo | 100% |
 | 3d | API — XIII Mes Panameño | 🔲 Pendiente | 0% |
-| 3e | API — Asistencia + Webhooks | 🔲 Pendiente | 0% |
+| 3e | API — Asistencia (CRUD + UI completo) | 🔄 Parcial | 70% |
 | 3f | API — Vacaciones | 🔲 Pendiente | 0% |
-| 3g | API — Acreedores (+ auto-concepto) | 🔲 Pendiente | 0% |
-| 4 | Frontend — Empleados, Catálogos, Planillas, Préstamos | 🔄 En progreso | 75% |
+| 3g | API — Acreedores (+ auto-concepto) | ✅ Completo | 100% |
+| 4 | Frontend — Empleados, Catálogos, Planillas, Préstamos, Asistencia, Acreedores | 🔄 En progreso | 90% |
 | 5 | Módulos Avanzados (Excel, PDF, Importación) | 🔲 Pendiente | 0% |
 | 6 | Testing, Docker, Deploy | 🔲 Pendiente | 0% |
 
@@ -47,17 +47,29 @@
 | `tenant.ts` | `tenants`, `super_admins` |
 | `users.ts` | `users` (tenant-level) |
 | `employee.ts` | `employees` |
-| `payroll.ts` | `payrolls`, `payroll_lines`, `concepts`, `loans` |
+| `payroll.ts` | `payrolls`, `payroll_lines`, `payroll_acumulados`, `concepts`, `loans`, `loan_installments` |
+| `creditors.ts` | `creditors` |
 | `vacation.ts` | `vacation_balances`, `vacation_requests` |
-| `attendance.ts` | `attendance_records`, `shifts`, `tolerances` |
+| `attendance.ts` | `attendance_records`, `shifts` |
 | `catalog.ts` | `cargos`, `funciones`, `departamentos` |
 
 **Tabla `loans` — columnas actuales:**
 ```
 id, employeeId, amount, balance, installment,
 startDate, endDate, isActive,
-loanType, frequency, creditor, allowDecember,   ← añadidas en migración 0007
+loanType, frequency, creditorId, allowDecember,
 createdAt
+```
+
+**Tabla `shifts` — columnas actuales:**
+```
+id, name,
+entryTime, lunchStartTime, lunchEndTime, exitTime,
+entryToleranceBefore, entryToleranceAfter,
+lunchStartToleranceBefore, lunchStartToleranceAfter,
+lunchEndToleranceBefore, lunchEndToleranceAfter,
+exitToleranceBefore, exitToleranceAfter,
+isDefault, createdAt, updatedAt
 ```
 
 **Multitenancy:**
@@ -81,14 +93,22 @@ createdAt
 | `0004_normalise_payroll_status` | Status estándar en payrolls |
 | `0005_ensure_payroll_acumulados` | Ensure migration |
 | `0006_concept_config` | Config avanzada de conceptos |
-| `0007_loans_extra_fields` | loanType, frequency, creditor, allowDecember en loans |
+| `0007_loans_extra_fields` | loanType, frequency, creditor (texto), allowDecember en loans |
+| `0007_creditors_loan_installments` | Tabla loan_installments |
+| `0008_company_config` | Configuración por empresa |
+| `0009_creditors` | Tabla creditors + creditorId FK en loans |
+| `0010_add_description_to_creditors` | Campo description en creditors |
+| `0011_attendance_shifts_redesign` | Rediseño de shifts: entryTime/exitTime/lunchStartTime/lunchEndTime + 8 columnas de tolerancias |
 
 **Custom Query Builder** (`packages/db/src/query-builder.ts`):
 - Empleados: `listEmployees`, `getEmployee`, `createEmployee`, `updateEmployee`, `deactivateEmployee`
-- Planillas: `listPayrolls`, `getPayrollLines`, `loadAccumulated`
+- Planillas: `listPayrolls`, `getPayroll`, `getPayrollLines`, `getPayrollLineById`, `createPayroll`, `updatePayroll`, `upsertPayrollLine`, `deletePayrollLines`, `deleteCreatedPayroll`, `loadAccumulated`, `loadAccumulatedByDateRange`, `insertPayrollAcumulados`, `deletePayrollAcumulados`
+- Préstamos: `listLoansByEmployee`, `listAllLoans`, `getLoanById`, `createLoan`, `updateLoan`, `closeLoan`, `getPendingInstallmentsByEmployee`, `countPendingInstallments`, `loadInstallmentsByCreditor`, `markInstallmentPaid`, `revertPayrollInstallments`
+- Acreedores: `listCreditors`, `getCreditor`, `createCreditor`, `updateCreditor`, `deleteCreditor`
 - Catálogos: `listCargos`, `getCargoById`, `createCargo`, `updateCargo`, `deactivateCargo` (+ funciones y departamentos)
 - Conceptos: `listConcepts`, `getConceptById`, `createConcept`, `updateConcept`, `deactivateConcept`
-- Préstamos: `listLoansByEmployee`, `listAllLoans` (con JOIN a employees), `getLoanById`, `createLoan`, `updateLoan`, `closeLoan`
+- Asistencia: `listAttendanceRecords`, `getAttendanceRecord`, `upsertAttendanceRecord`, `updateAttendanceById`, `deleteAttendanceRecord`
+- Horarios: `listShifts`, `getShift`, `createShift`, `updateShift`, `deleteShift`
 - Árbol: `getActiveChildCount`, `buildDepartamentoTree`, `getDescendantIds`
 
 ---
@@ -109,8 +129,6 @@ createdAt
 
 ### ✅ Fase 3a — API Catálogos
 
-**Endpoints implementados:**
-
 | Recurso | Rutas | Auth mínima |
 |---------|-------|-------------|
 | Cargos | `GET/POST /cargos`, `GET/PUT/DELETE /cargos/:id` | VIEWER / HR / ADMIN |
@@ -126,13 +144,10 @@ createdAt
 - `/config/cargos` — lista, nuevo, editar
 - `/config/funciones` — lista, nuevo, editar
 - `/config/departamentos` — lista con árbol JS, nuevo, editar (dropdown de padre con protección de ciclos)
-- Sidebar con sección "Configuración" desplegable
 
 ---
 
 ### ✅ Fase 3b — API Conceptos + Préstamos
-
-**Endpoints implementados:**
 
 | Recurso | Rutas | Auth mínima |
 |---------|-------|-------------|
@@ -142,7 +157,7 @@ createdAt
 **Campos del body `POST /loans`:**
 ```
 employeeId, amount, balance, installment, startDate, endDate,
-loanType?, frequency?, creditor?, allowDecember?
+loanType?, frequency?, creditorId?, allowDecember?
 ```
 
 **Frontend (Astro SSR):**
@@ -165,12 +180,12 @@ packages/core/payroll/
 
 apps/api/src/modules/payroll/
 ├── service.ts    — runGeneration(), closePayrollService(), reopenPayrollService()
-└── routes.ts     — /generate, /regenerate, /close, /reopen
+└── routes.ts     — /generate, /regenerate, /close, /revert, /reopen
 ```
 
 - Tipos de planilla: `regular`, `thirteenth`, `special`
 - Frecuencias: `biweekly`, `monthly`, `weekly`
-- Máquina de estados con rollback en caso de error
+- Máquina de estados: `created → generated → closed` (+ regenerate, revert, reopen)
 - `payroll_acumulados` — registro por empleado+concepto para consultas históricas
 - Variables de fórmula: SALARIO, SUELDO, FICHA, FECHAINICIO/FIN/PAGO, ANTIGUEDAD, etc.
 
@@ -184,10 +199,30 @@ apps/api/src/modules/payroll/
 
 ---
 
-### 🔲 Fase 3e — Asistencia + Webhooks (PENDIENTE)
+### 🔄 Fase 3e — Asistencia (PARCIALMENTE COMPLETO)
 
-- Tablas: `attendance_records`, `shifts`, `tolerances` definidas
-- Pendiente: procesamiento de marcaciones, webhook `POST /webhooks/attendance`, UI `/attendance`
+**Completado:**
+- [x] Tablas: `attendance_records`, `shifts` definidas y migradas
+- [x] Rediseño de `shifts`: 4 campos de hora (entry/lunchStart/lunchEnd/exit) + 8 columnas de tolerancias (-antes/+después por cada punto)
+- [x] API CRUD completo:
+  - `GET /attendance` — lista con filtros (fecha, empleado) + JOIN a employees
+  - `POST /attendance` — crear/actualizar por (employeeId, date) — upsert
+  - `GET /attendance/:id` — detalle con datos del empleado
+  - `PUT /attendance/:id` — editar marcaciones individuales
+  - `DELETE /attendance/:id` — eliminar registro
+  - `GET /attendance/shifts` — listar horarios
+  - `POST /attendance/shifts` — crear horario
+  - `GET /attendance/shifts/:id` — detalle horario
+  - `PUT /attendance/shifts/:id` — editar horario
+  - `DELETE /attendance/shifts/:id` — eliminar horario
+- [x] `upsertAttendanceRecord` — crea o actualiza por `(employeeId, date)`, calcula `workedMinutes` automáticamente
+- [x] `updateAttendanceById` — preserva campos omitidos, recalcula `workedMinutes`
+- [x] Frontend completo: lista, nuevo, editar, horarios lista, nuevo, editar
+
+**Pendiente:**
+- [ ] Procesamiento de marcaciones brutas (tolerancias → lateMinutes, overtimeMinutes)
+- [ ] Webhook `POST /webhooks/attendance` para integración con dispositivos externos
+- [ ] Cálculo de `lateMinutes` y `overtimeMinutes` al guardar
 
 ---
 
@@ -199,19 +234,19 @@ apps/api/src/modules/payroll/
 
 ---
 
-### 🔲 Fase 3g — Módulo Acreedores (PENDIENTE)
+### ✅ Fase 3g — Módulo Acreedores (COMPLETO)
 
-**Diseño previsto:**
-- Catálogo `creditors` (id, code, description, isActive)
+**Implementado:**
+- Tabla `creditors` (id, code, description, conceptId, isActive)
 - Al crear un acreedor → se crea automáticamente un **concepto de deducción** vinculado
-- La planilla usa ese concepto para descontar la cuota del préstamo correspondiente
+- `DELETE /creditors/:id` — desactiva el acreedor y su concepto vinculado
+- Campo `creditor` en `loans` migrado de texto libre a FK `creditorId → creditors.id`
 - Endpoints: `GET/POST /creditors`, `GET/PUT/DELETE /creditors/:id`
-- Frontend: `/config/acreedores` — lista, nuevo (con vista previa del concepto generado)
-- En `/loans/new` y `/employees/[id]/loans/new`: el campo "Acreedor" pasará de texto libre a selector del catálogo
+- Frontend: `/config/acreedores` — lista, nuevo (con vista previa del concepto generado), editar
 
 ---
 
-## 🔄 Fase 4 — Frontend Astro (En Progreso — 75%)
+## 🔄 Fase 4 — Frontend Astro (En Progreso — 90%)
 
 ### Completado
 
@@ -219,24 +254,27 @@ apps/api/src/modules/payroll/
 - [x] Empleados: lista con búsqueda, nuevo, editar con tabs (Personal, Laboral, Préstamos)
 - [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos
 - [x] Planillas: lista, nuevo, detalle con stepper + tabla por empleado + desglose de conceptos
+- [x] Acciones de planilla con modal de confirmación (Generar, Regenerar, Revertir, Cerrar, Reabrir)
 - [x] **Módulo de Préstamos standalone:**
   - Lista global `/loans` — todos los préstamos con nombre de empleado, tipo, acreedor, frecuencia, estado
-  - Formulario `/loans/new` con selector de empleado, tipo, acreedor (texto), frecuencia
+  - Formulario `/loans/new` con selector de empleado, tipo, acreedor (selector del catálogo), frecuencia
   - Calculadora de cuotas client-side: genera tabla de amortización completa
   - Soporte de frecuencias: semanal / quincenal / mensual
   - Toggle "Descontar en diciembre" (mueve cuotas dic → ene si desactivado)
-  - Botón guardar bloqueado hasta generar tabla (previene submit incompleto)
-  - Re-bloqueo automático si el usuario modifica los inputs después de generar
-  - Formulario en contexto de empleado `/employees/[id]/loans/new` (sin selector)
-- [x] "Préstamos" añadido al sidebar (entre Empleados y Planillas)
+- [x] **Módulo Acreedores:** `/config/acreedores` — lista, nuevo, editar
+- [x] **Módulo Asistencia:**
+  - `/attendance` — lista ordenada por fecha, filtros por fecha y empleado
+  - `/attendance/new` — formulario con selector de empleado + 4 campos de hora
+  - `/attendance/[id]` — editar marcaciones individuales + eliminar
+  - `/attendance/shifts` — lista de horarios con tolerancias por punto
+  - `/attendance/shifts/new` — formulario 4 secciones (Entrada/Sal.Alm./Ent.Alm./Salida) con tolerancias
+  - `/attendance/shifts/[id]` — editar horario
 
 ### Pendiente
 
 - [ ] **Dashboard** — métricas reales (empleados activos, última planilla, acumulados del mes)
 - [ ] **PDF planilla** — descarga de planilla generada
 - [ ] **Exportación Excel** — planilla a `.xlsx`
-- [ ] **Módulo Acreedores** — `/config/acreedores` (pendiente diseño de concepto auto-generado)
-- [ ] **Asistencia, Vacaciones** — diferido a Fase 5
 
 ---
 
@@ -253,6 +291,8 @@ apps/api/src/
     ├── employees/routes.ts + service.ts
     ├── employees/loans/routes.ts + service.ts
     ├── payroll/routes.ts + service.ts
+    ├── attendance/routes.ts + service.ts       ← NUEVO
+    ├── creditors/routes.ts + service.ts        ← NUEVO
     └── catalogs/
         ├── cargos/, funciones/, departamentos/
         └── concepts/routes.ts + service.ts
@@ -260,31 +300,38 @@ apps/api/src/
 packages/db/src/
 ├── schema/
 │   ├── tenant.ts, users.ts, employee.ts
-│   ├── payroll.ts          ← loans con: loanType, frequency, creditor, allowDecember
+│   ├── payroll.ts
+│   ├── creditors.ts                            ← NUEVO
 │   ├── vacation.ts, attendance.ts
 │   ├── catalog.ts
 │   └── index.ts
 ├── client.ts
-├── query-builder.ts        ← listAllLoans() con JOIN a employees
+├── query-builder.ts
 └── migrate.ts
 
 apps/web/src/
-├── layouts/AppLayout.astro          ← sidebar: Dashboard, Empleados, Préstamos, Planillas...
+├── layouts/AppLayout.astro
 ├── pages/
 │   ├── login.astro
 │   ├── employees/ (index, new, [id])
 │   ├── employees/[id]/loans/ (new, [loanId])
-│   ├── loans/ (index, new)          ← NUEVO módulo standalone
+│   ├── loans/ (index, new)
 │   ├── payroll/ (index, new, [id])
+│   ├── attendance/ (index, new, [id])          ← NUEVO
+│   ├── attendance/shifts/ (index, new, [id])   ← NUEVO
 │   ├── config/
 │   │   ├── cargos/, funciones/, departamentos/, conceptos/
+│   │   └── acreedores/ (index, new, [id])      ← NUEVO
 │   └── api/
 │       ├── auth/
 │       ├── employees/ ([id].ts, index.ts)
 │       ├── employees/[id]/loans/ (index.ts, [loanId].ts)
-│       ├── loans/index.ts           ← NUEVO handler POST standalone
+│       ├── loans/index.ts
+│       ├── attendance/ (index.ts, [id].ts)     ← NUEVO
+│       ├── attendance/shifts/ (index.ts, [id].ts) ← NUEVO
 │       └── config/
 │           ├── cargos/, funciones/, departamentos/, conceptos/
+│           └── acreedores/ (index.ts, [id].ts) ← NUEVO
 ```
 
 ---
@@ -299,6 +346,14 @@ apps/web/src/
 
 4. **`buildOptions()`** — Helper en páginas de edición que incluye el ítem actualmente vinculado aunque esté inactivo, para no romper el select del formulario.
 
-5. **Calculadora de cuotas** — Lógica client-side (`is:inline`) sin dependencias externas. Divide el monto total en céntimos para evitar errores de punto flotante. La última cuota absorbe el residuo (centavos) para que el total sea exacto. Llena campos ocultos `installment` y `endDate` antes del submit; el botón Guardar permanece deshabilitado hasta generar la tabla y se re-bloquea si el usuario modifica los inputs.
+5. **Calculadora de cuotas** — Lógica client-side (`is:inline`) sin dependencias externas. Divide el monto total en céntimos para evitar errores de punto flotante. La última cuota absorbe el residuo (centavos) para que el total sea exacto.
 
-6. **Acreedor como texto libre** — Temporalmente `creditor` es un `varchar(255)` libre en la tabla `loans`. Cuando se implemente el módulo de Acreedores (Fase 3g), se migrará a una FK con la tabla `creditors`.
+6. **Modal de confirmación** — Patrón `data-confirm` en botones: `data-form`, `data-title`, `data-body`, `data-confirm-label`, `data-confirm-style`. Estilos disponibles: `danger` (rojo), `warning` (ámbar), `success` (esmeralda), `primary` (azul). Modal con backdrop-click y Escape-to-close. Aplicado en planillas, asistencia y horarios.
+
+7. **Formularios anidados prohibidos** — HTML no permite `<form>` dentro de `<form>`. En páginas con formulario de edición + botón de eliminar, el form de delete se coloca fuera del form de edición (sección separada con borde).
+
+8. **Orden de rutas Elysia** — Las rutas estáticas (e.g., `/shifts`) deben declararse ANTES de las rutas con parámetros (`/:id`) para evitar que Elysia interprete "shifts" como un ID.
+
+9. **Timestamps de asistencia** — La DB almacena columnas `timestamp` en PostgreSQL. El API acepta strings `HH:MM` y construye objetos `Date`. El frontend usa `toLocaleTimeString('es-PA', { hour12: false, timeZone: 'America/Panama' })`. Las columnas `time` de `shifts` retornan `HH:MM:SS`; se recortan con `.slice(0, 5)`.
+
+10. **`getPendingInstallmentsByEmployee`** — Requiere 3 argumentos: `(db, employeeId, periodEnd)`. El `periodEnd` filtra préstamos por `lte(loans.startDate, periodEnd)`. Pasar `undefined` genera SQL inválido → HTTP 500.
