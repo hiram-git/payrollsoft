@@ -53,8 +53,8 @@ const app = new Elysia()
   .use(payrollRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
-  .listen(env.PORT)
+  .listen({ port: env.PORT, hostname: env.HOST })
 
-console.log(`API running at http://localhost:${app.server?.port}`)
+console.log(`API running at http://${env.HOST}:${app.server?.port}`)
 
 export type App = typeof app
