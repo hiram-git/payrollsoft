@@ -172,10 +172,16 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
             </form>
           )}
           {isGenerated && (
-            <form method="POST" action={`/api/payroll/${id}`}>
+            <form id="form-regenerate" method="POST" action={`/api/payroll/${id}`}>
               <input type="hidden" name="_method" value="REGENERATE" />
               <button
-                type="submit"
+                type="button"
+                data-confirm
+                data-form="form-regenerate"
+                data-title="Regenerar planilla"
+                data-body="¿Volver a calcular todas las líneas? Los valores actuales serán reemplazados con los cálculos más recientes."
+                data-confirm-label="Regenerar"
+                data-confirm-style="warning"
                 class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
