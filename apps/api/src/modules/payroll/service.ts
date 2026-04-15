@@ -339,7 +339,7 @@ export async function closePayrollService(db: AnyDb, id: string) {
   // Mark one pending installment as paid per active loan per employee
   const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
   for (const empId of employeeIds) {
-    const pendingInstallments = await getPendingInstallmentsByEmployee(db, empId)
+    const pendingInstallments = await getPendingInstallmentsByEmployee(db, empId, existing.periodEnd)
     for (const inst of pendingInstallments) {
       await markInstallmentPaid(db, inst.id, id)
       const remaining = await countPendingInstallments(db, inst.loanId)
