@@ -1,0 +1,279 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+type AttendanceRecord = {
+  id: string
+  employeeId: string
+  date: string
+  checkIn: string | null
+  lunchStart: string | null
+  lunchEnd: string | null
+  checkOut: string | null
+  workedMinutes: number | null
+  lateMinutes: number | null
+  overtimeMinutes: number | null
+  source: string
+}
+type AttendanceEmployee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  department: string | null
+  position: string | null
+}
+type AttendanceEntry = {
+  record: AttendanceRecord
+  employee: AttendanceEmployee
+}
+
+const searchParams = Astro.url.searchParams
+const dateParam = searchParams.get('date') ?? ''
+const employeeSearch = searchParams.get('q') ?? ''
+const msgSuccess = searchParams.get('success') ?? ''
+const msgError = searchParams.get('error') ?? ''
+
+// Default to today if no date param
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Panama' })
+const activeDate = dateParam || today
+
+let entries: AttendanceEntry[] = []
+let fetchError = ''
+
+try {
+  const url = new URL(`${API_URL}/attendance`)
+  url.searchParams.set('date', activeDate)
+  if (employeeSearch) url.searchParams.set('q', employeeSearch)
+
+  const res = await fetch(url.toString(), {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { success: boolean; data: AttendanceEntry[] }
+    entries = json.data ?? []
+  } else {
+    fetchError = 'Error al cargar registros de asistencia'
+  }
+} catch {
+  fetchError = 'No se pudo conectar con el servidor'
+}
+
+function fmtTime(ts: string | null): string {
+  if (!ts) return '—'
+  const d = new Date(ts)
+  return d.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' })
+}
+
+function fmtMinutes(m: number | null): string {
+  if (!m || m <= 0) return '—'
+  const h = Math.floor(m / 60)
+  const min = m % 60
+  return h > 0 ? (min > 0 ? `${h}h ${min}m` : `${h}h`) : `${min}m`
+}
+---
+
+<AppLayout title="Asistencia">
+  <div class="px-6 py-8 max-w-7xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Asistencia</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{entries.length} {entries.length === 1 ? 'registro' : 'registros'}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a
+          href="/attendance/shifts"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Horarios
+        </a>
+        <a
+          href="/attendance/new"
+          class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+        >
+          + Nueva marcación
+        </a>
+      </div>
+    </div>
+
+    <!-- Alerts -->
+    {msgSuccess === '1' && (
+      <div class="mb-5 flex items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Registro guardado correctamente.
+      </div>
+    )}
+    {msgError && (
+      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        Error: {decodeURIComponent(msgError)}
+      </div>
+    )}
+    {fetchError && (
+      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {fetchError}
+      </div>
+    )}
+
+    <!-- Filters -->
+    <form method="GET" action="/attendance" class="mb-5 flex items-end gap-3 flex-wrap">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="filter-date">Fecha</label>
+        <input
+          id="filter-date"
+          type="date"
+          name="date"
+          value={activeDate}
+          class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <div class="flex-1 min-w-[200px]">
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="filter-q">Empleado</label>
+        <input
+          id="filter-q"
+          type="text"
+          name="q"
+          value={employeeSearch}
+          placeholder="Buscar por nombre…"
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <button
+        type="submit"
+        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+      >
+        Filtrar
+      </button>
+    </form>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {entries.length === 0 ? (
+        <div class="py-14 text-center text-sm text-gray-400">
+          No hay registros de asistencia para la fecha seleccionada.
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-100 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Entrada</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Salida Alm.</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Entrada Alm.</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Salida</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Trabajadas</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tard.</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Extra</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e) => (
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3.5">
+                  <p class="font-medium text-gray-900">{e.employee.firstName} {e.employee.lastName}</p>
+                  <p class="text-xs text-gray-400 font-mono mt-0.5">{e.employee.code}</p>
+                </td>
+                <td class="px-4 py-3.5 text-gray-600 font-mono text-xs">{e.record.date}</td>
+                <td class="px-4 py-3.5 text-gray-700 tabular-nums">{fmtTime(e.record.checkIn)}</td>
+                <td class="px-4 py-3.5 text-gray-700 tabular-nums">{fmtTime(e.record.lunchStart)}</td>
+                <td class="px-4 py-3.5 text-gray-700 tabular-nums">{fmtTime(e.record.lunchEnd)}</td>
+                <td class="px-4 py-3.5 text-gray-700 tabular-nums">{fmtTime(e.record.checkOut)}</td>
+                <td class="px-4 py-3.5 text-gray-700 tabular-nums">{fmtMinutes(e.record.workedMinutes)}</td>
+                <td class="px-4 py-3.5 tabular-nums">
+                  {e.record.lateMinutes && e.record.lateMinutes > 0
+                    ? <span class="text-amber-600">{e.record.lateMinutes}m</span>
+                    : <span class="text-gray-400">—</span>
+                  }
+                </td>
+                <td class="px-4 py-3.5 tabular-nums">
+                  {e.record.overtimeMinutes && e.record.overtimeMinutes > 0
+                    ? <span class="text-emerald-600">{fmtMinutes(e.record.overtimeMinutes)}</span>
+                    : <span class="text-gray-400">—</span>
+                  }
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="flex items-center gap-1 justify-end">
+                    <a
+                      href={`/attendance/${e.record.id}`}
+                      class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      title="Editar"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </a>
+                    <form id={`del-${e.record.id}`} method="POST" action={`/api/attendance/${e.record.id}`}>
+                      <input type="hidden" name="_method" value="DELETE" />
+                      <button
+                        type="button"
+                        data-confirm
+                        data-form={`del-${e.record.id}`}
+                        data-title="Eliminar registro"
+                        data-body={`¿Eliminar el registro de ${e.employee.firstName} ${e.employee.lastName} del ${e.record.date}? Esta acción no se puede deshacer.`}
+                        data-confirm-label="Eliminar"
+                        data-confirm-style="danger"
+                        class="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Eliminar"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+
+  <!-- Confirmation modal -->
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div id="modal-icon" class="w-10 h-10 rounded-full flex items-center justify-center mb-4"></div>
+      <h3 id="modal-title" class="text-base font-semibold text-gray-900 mb-1.5"></h3>
+      <p id="modal-body" class="text-sm text-gray-500 leading-relaxed mb-6"></p>
+      <div class="flex justify-end gap-2.5">
+        <button id="modal-cancel" type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancelar</button>
+        <button id="modal-confirm" type="button" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</AppLayout>
+
+<script>
+  const modal = document.getElementById('confirm-modal') as HTMLElement
+  const modalBackdrop = document.getElementById('modal-backdrop') as HTMLElement
+  const modalIcon = document.getElementById('modal-icon') as HTMLElement
+  const modalTitle = document.getElementById('modal-title') as HTMLElement
+  const modalBody = document.getElementById('modal-body') as HTMLElement
+  const modalConfirm = document.getElementById('modal-confirm') as HTMLButtonElement
+  const modalCancel = document.getElementById('modal-cancel') as HTMLButtonElement
+  const dangerStyle = { btn: 'bg-red-600 hover:bg-red-700 text-white', icon: 'bg-red-100', svg: '<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>' }
+  let pendingFormId: string | null = null
+  function openModal(btn: HTMLElement) {
+    pendingFormId = btn.getAttribute('data-form')
+    modalTitle.textContent = btn.getAttribute('data-title') ?? ''
+    modalBody.textContent = btn.getAttribute('data-body') ?? ''
+    modalConfirm.textContent = btn.getAttribute('data-confirm-label') ?? 'Confirmar'
+    modalConfirm.className = `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${dangerStyle.btn}`
+    modalIcon.className = `w-10 h-10 rounded-full flex items-center justify-center mb-4 ${dangerStyle.icon}`
+    modalIcon.innerHTML = dangerStyle.svg
+    modal.classList.remove('hidden')
+    modalConfirm.focus()
+  }
+  function closeModal() { modal.classList.add('hidden'); pendingFormId = null }
+  document.querySelectorAll<HTMLElement>('[data-confirm]').forEach(btn => btn.addEventListener('click', () => openModal(btn)))
+  modalCancel.addEventListener('click', closeModal)
+  modalBackdrop.addEventListener('click', closeModal)
+  modalConfirm.addEventListener('click', () => { if (pendingFormId) (document.getElementById(pendingFormId) as HTMLFormElement | null)?.submit(); closeModal() })
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal() })
+</script>

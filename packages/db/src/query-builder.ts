@@ -22,6 +22,7 @@ import {
   payrollAcumulados,
   payrollLines,
   payrolls,
+  shifts,
   superAdmins,
   users,
 } from './schema'
@@ -503,7 +504,271 @@ export async function getAttendanceSummaryForPeriod(
   return { workedMinutes, lateMinutes, overtimeMinutes, daysWithRecords, recordCount: rows.length }
 }
 
-// ─── Accumulator Query ────────────────────────────────────────────────────────
+// ─── Shifts CRUD ──────────────────────────────────────────────────────────────
+
+export async function listShifts(db: Db) {
+  return db.select().from(shifts).orderBy(asc(shifts.name))
+}
+
+export async function getShift(db: Db, id: string) {
+  const [row] = await db.select().from(shifts).where(eq(shifts.id, id)).limit(1)
+  return row ?? null
+}
+
+export type CreateShiftData = {
+  name: string
+  entryTime: string
+  lunchStartTime?: string | null
+  lunchEndTime?: string | null
+  exitTime: string
+  entryToleranceBefore?: number
+  entryToleranceAfter?: number
+  lunchStartToleranceBefore?: number
+  lunchStartToleranceAfter?: number
+  lunchEndToleranceBefore?: number
+  lunchEndToleranceAfter?: number
+  exitToleranceBefore?: number
+  exitToleranceAfter?: number
+  isDefault?: boolean
+}
+
+export async function createShift(db: Db, data: CreateShiftData) {
+  const [row] = await db
+    .insert(shifts)
+    .values({
+      name: data.name,
+      entryTime: data.entryTime,
+      lunchStartTime: data.lunchStartTime ?? null,
+      lunchEndTime: data.lunchEndTime ?? null,
+      exitTime: data.exitTime,
+      entryToleranceBefore: data.entryToleranceBefore ?? 0,
+      entryToleranceAfter: data.entryToleranceAfter ?? 0,
+      lunchStartToleranceBefore: data.lunchStartToleranceBefore ?? 0,
+      lunchStartToleranceAfter: data.lunchStartToleranceAfter ?? 0,
+      lunchEndToleranceBefore: data.lunchEndToleranceBefore ?? 0,
+      lunchEndToleranceAfter: data.lunchEndToleranceAfter ?? 0,
+      exitToleranceBefore: data.exitToleranceBefore ?? 0,
+      exitToleranceAfter: data.exitToleranceAfter ?? 0,
+      isDefault: data.isDefault ?? false,
+    })
+    .returning()
+  return row
+}
+
+export async function updateShift(db: Db, id: string, data: Partial<CreateShiftData>) {
+  const patch: Record<string, unknown> = { updatedAt: new Date() }
+  if (data.name !== undefined) patch.name = data.name
+  if (data.entryTime !== undefined) patch.entryTime = data.entryTime
+  if ('lunchStartTime' in data) patch.lunchStartTime = data.lunchStartTime ?? null
+  if ('lunchEndTime' in data) patch.lunchEndTime = data.lunchEndTime ?? null
+  if (data.exitTime !== undefined) patch.exitTime = data.exitTime
+  if (data.entryToleranceBefore !== undefined) patch.entryToleranceBefore = data.entryToleranceBefore
+  if (data.entryToleranceAfter !== undefined) patch.entryToleranceAfter = data.entryToleranceAfter
+  if (data.lunchStartToleranceBefore !== undefined) patch.lunchStartToleranceBefore = data.lunchStartToleranceBefore
+  if (data.lunchStartToleranceAfter !== undefined) patch.lunchStartToleranceAfter = data.lunchStartToleranceAfter
+  if (data.lunchEndToleranceBefore !== undefined) patch.lunchEndToleranceBefore = data.lunchEndToleranceBefore
+  if (data.lunchEndToleranceAfter !== undefined) patch.lunchEndToleranceAfter = data.lunchEndToleranceAfter
+  if (data.exitToleranceBefore !== undefined) patch.exitToleranceBefore = data.exitToleranceBefore
+  if (data.exitToleranceAfter !== undefined) patch.exitToleranceAfter = data.exitToleranceAfter
+  if (data.isDefault !== undefined) patch.isDefault = data.isDefault
+  const [row] = await db.update(shifts).set(patch).where(eq(shifts.id, id)).returning()
+  return row ?? null
+}
+
+export async function deleteShift(db: Db, id: string) {
+  await db.delete(shifts).where(eq(shifts.id, id))
+}
+
+// ─── Attendance Records CRUD ──────────────────────────────────────────────────
+
+export type AttendanceFilter = {
+  date?: string
+  employeeId?: string
+  from?: string
+  to?: string
+}
+
+export type AttendanceRecordWithEmployee = {
+  record: typeof attendanceRecords.$inferSelect
+  employee: {
+    id: string
+    code: string
+    firstName: string
+    lastName: string
+    department: string | null
+    position: string | null
+  }
+}
+
+export async function listAttendanceRecords(
+  db: Db,
+  filter: AttendanceFilter = {}
+): Promise<AttendanceRecordWithEmployee[]> {
+  const conditions = []
+  if (filter.date) conditions.push(eq(attendanceRecords.date, filter.date))
+  if (filter.employeeId) conditions.push(eq(attendanceRecords.employeeId, filter.employeeId))
+  if (filter.from) conditions.push(gte(attendanceRecords.date, filter.from))
+  if (filter.to) conditions.push(lte(attendanceRecords.date, filter.to))
+
+  const rows = await db
+    .select({
+      record: attendanceRecords,
+      employee: {
+        id: employees.id,
+        code: employees.code,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        department: employees.department,
+        position: employees.position,
+      },
+    })
+    .from(attendanceRecords)
+    .innerJoin(employees, eq(attendanceRecords.employeeId, employees.id))
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(attendanceRecords.date), asc(employees.lastName), asc(employees.firstName))
+
+  return rows
+}
+
+export async function getAttendanceRecord(
+  db: Db,
+  id: string
+): Promise<AttendanceRecordWithEmployee | null> {
+  const [row] = await db
+    .select({
+      record: attendanceRecords,
+      employee: {
+        id: employees.id,
+        code: employees.code,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        department: employees.department,
+        position: employees.position,
+      },
+    })
+    .from(attendanceRecords)
+    .innerJoin(employees, eq(attendanceRecords.employeeId, employees.id))
+    .where(eq(attendanceRecords.id, id))
+    .limit(1)
+  return row ?? null
+}
+
+export type CreateAttendanceData = {
+  employeeId: string
+  date: string
+  checkIn?: string | null
+  lunchStart?: string | null
+  lunchEnd?: string | null
+  checkOut?: string | null
+}
+
+export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData) {
+  // Check if a record already exists for this employee+date
+  const [existing] = await db
+    .select({ id: attendanceRecords.id })
+    .from(attendanceRecords)
+    .where(
+      and(
+        eq(attendanceRecords.employeeId, data.employeeId),
+        eq(attendanceRecords.date, data.date)
+      )
+    )
+    .limit(1)
+
+  // Helper: convert "HH:MM" or "HH:MM:SS" time string to full timestamp for the given date
+  function toTimestamp(dateStr: string, timeStr: string | null | undefined): Date | null {
+    if (!timeStr) return null
+    const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr
+    return new Date(`${dateStr}T${t}`)
+  }
+
+  const checkIn = toTimestamp(data.date, data.checkIn as string | null)
+  const lunchStart = toTimestamp(data.date, data.lunchStart as string | null)
+  const lunchEnd = toTimestamp(data.date, data.lunchEnd as string | null)
+  const checkOut = toTimestamp(data.date, data.checkOut as string | null)
+
+  // Calculate workedMinutes (checkIn to checkOut minus lunch duration)
+  let workedMinutes = 0
+  if (checkIn && checkOut) {
+    const total = (checkOut.getTime() - checkIn.getTime()) / 60000
+    const lunch = lunchStart && lunchEnd
+      ? (lunchEnd.getTime() - lunchStart.getTime()) / 60000
+      : 0
+    workedMinutes = Math.max(0, Math.round(total - lunch))
+  }
+
+  if (existing) {
+    const [row] = await db
+      .update(attendanceRecords)
+      .set({ checkIn, lunchStart, lunchEnd, checkOut, workedMinutes })
+      .where(eq(attendanceRecords.id, existing.id))
+      .returning()
+    return row
+  }
+
+  const [row] = await db
+    .insert(attendanceRecords)
+    .values({
+      employeeId: data.employeeId,
+      date: data.date,
+      checkIn,
+      lunchStart,
+      lunchEnd,
+      checkOut,
+      workedMinutes,
+      source: 'manual',
+    })
+    .returning()
+  return row
+}
+
+export async function deleteAttendanceRecord(db: Db, id: string) {
+  await db.delete(attendanceRecords).where(eq(attendanceRecords.id, id))
+}
+
+export type UpdateAttendanceData = {
+  checkIn?: string | null
+  lunchStart?: string | null
+  lunchEnd?: string | null
+  checkOut?: string | null
+}
+
+export async function updateAttendanceById(db: Db, id: string, data: UpdateAttendanceData) {
+  const [existing] = await db
+    .select()
+    .from(attendanceRecords)
+    .where(eq(attendanceRecords.id, id))
+    .limit(1)
+  if (!existing) return null
+
+  function toTimestamp(dateStr: string, timeStr: string | null | undefined): Date | null {
+    if (!timeStr) return null
+    const t = timeStr.length === 5 ? `${timeStr}:00` : timeStr
+    return new Date(`${dateStr}T${t}`)
+  }
+
+  const dateStr = existing.date
+  const checkIn = 'checkIn' in data ? toTimestamp(dateStr, data.checkIn) : existing.checkIn
+  const lunchStart = 'lunchStart' in data ? toTimestamp(dateStr, data.lunchStart) : existing.lunchStart
+  const lunchEnd = 'lunchEnd' in data ? toTimestamp(dateStr, data.lunchEnd) : existing.lunchEnd
+  const checkOut = 'checkOut' in data ? toTimestamp(dateStr, data.checkOut) : existing.checkOut
+
+  let workedMinutes = existing.workedMinutes ?? 0
+  if (checkIn && checkOut) {
+    const total = (checkOut.getTime() - checkIn.getTime()) / 60000
+    const lunch = lunchStart && lunchEnd
+      ? (lunchEnd.getTime() - lunchStart.getTime()) / 60000
+      : 0
+    workedMinutes = Math.max(0, Math.round(total - lunch))
+  }
+
+  const [row] = await db
+    .update(attendanceRecords)
+    .set({ checkIn, lunchStart, lunchEnd, checkOut, workedMinutes })
+    .where(eq(attendanceRecords.id, id))
+    .returning()
+  return row ?? null
+}
 
 /**
  * Sum a specific concept across the last N closed payrolls for an employee.

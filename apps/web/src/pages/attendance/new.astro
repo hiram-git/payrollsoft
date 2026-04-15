@@ -1,0 +1,153 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  department: string | null
+  position: string | null
+}
+
+let employees: Employee[] = []
+
+try {
+  const res = await fetch(`${API_URL}/employees?isActive=true&limit=200`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { success: boolean; data: Employee[] }
+    employees = json.data ?? []
+  }
+} catch {
+  // non-fatal; show empty dropdown
+}
+
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Panama' })
+const msgError = Astro.url.searchParams.get('error') ?? ''
+---
+
+<AppLayout title="Nueva marcación">
+  <div class="px-6 py-8 max-w-2xl mx-auto">
+
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-1.5 text-sm text-gray-500 mb-6">
+      <a href="/attendance" class="hover:text-gray-700 transition-colors">Asistencia</a>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-gray-900 font-medium">Nueva marcación</span>
+    </nav>
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Nueva marcación</h1>
+
+    {msgError && (
+      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {msgError === 'server-error' ? 'Error del servidor. Intente nuevamente.' : decodeURIComponent(msgError)}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <form method="POST" action="/api/attendance">
+        <div class="space-y-5">
+
+          <!-- Employee -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5" for="employeeId">
+              Empleado <span class="text-red-500">*</span>
+            </label>
+            <select
+              id="employeeId"
+              name="employeeId"
+              required
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar empleado…</option>
+              {employees.map((emp) => (
+                <option value={emp.id}>
+                  {emp.code} — {emp.firstName} {emp.lastName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <!-- Date -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5" for="date">
+              Fecha <span class="text-red-500">*</span>
+            </label>
+            <input
+              id="date"
+              type="date"
+              name="date"
+              value={today}
+              required
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <!-- Time fields grid -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5" for="checkIn">Entrada</label>
+              <input
+                id="checkIn"
+                type="time"
+                name="checkIn"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchStart">Salida almuerzo</label>
+              <input
+                id="lunchStart"
+                type="time"
+                name="lunchStart"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchEnd">Entrada almuerzo</label>
+              <input
+                id="lunchEnd"
+                type="time"
+                name="lunchEnd"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1.5" for="checkOut">Salida</label>
+              <input
+                id="checkOut"
+                type="time"
+                name="checkOut"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <a
+            href="/attendance"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </a>
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Guardar marcación
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</AppLayout>

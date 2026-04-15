@@ -1,0 +1,239 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const msgError = Astro.url.searchParams.get('error') ?? ''
+---
+
+<AppLayout title="Nuevo horario">
+  <div class="px-6 py-8 max-w-3xl mx-auto">
+
+    <!-- Breadcrumb -->
+    <nav class="flex items-center gap-1.5 text-sm text-gray-500 mb-6">
+      <a href="/attendance" class="hover:text-gray-700 transition-colors">Asistencia</a>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <a href="/attendance/shifts" class="hover:text-gray-700 transition-colors">Horarios</a>
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-gray-900 font-medium">Nuevo</span>
+    </nav>
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-6">Nuevo horario</h1>
+
+    {msgError && (
+      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {msgError === 'server-error' ? 'Error del servidor. Intente nuevamente.' : decodeURIComponent(msgError)}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 p-6">
+      <form method="POST" action="/api/attendance/shifts">
+        <div class="space-y-6">
+
+          <!-- Name -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5" for="name">
+              Nombre <span class="text-red-500">*</span>
+            </label>
+            <input
+              id="name"
+              type="text"
+              name="name"
+              required
+              placeholder="Ej. Turno regular"
+              class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <!-- Entrada -->
+          <div class="border border-gray-100 rounded-lg p-4 bg-gray-50">
+            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Entrada</p>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="entryTime">
+                  Hora <span class="text-red-500">*</span>
+                </label>
+                <input
+                  id="entryTime"
+                  type="time"
+                  name="entryTime"
+                  required
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="entryToleranceBefore">Anticipado (min)</label>
+                <input
+                  id="entryToleranceBefore"
+                  type="number"
+                  name="entryToleranceBefore"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="entryToleranceAfter">Tardanza (min)</label>
+                <input
+                  id="entryToleranceAfter"
+                  type="number"
+                  name="entryToleranceAfter"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Salida almuerzo -->
+          <div class="border border-gray-100 rounded-lg p-4 bg-gray-50">
+            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Salida almuerzo</p>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchStartTime">Hora</label>
+                <input
+                  id="lunchStartTime"
+                  type="time"
+                  name="lunchStartTime"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchStartToleranceBefore">Anticipado (min)</label>
+                <input
+                  id="lunchStartToleranceBefore"
+                  type="number"
+                  name="lunchStartToleranceBefore"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchStartToleranceAfter">Tardanza (min)</label>
+                <input
+                  id="lunchStartToleranceAfter"
+                  type="number"
+                  name="lunchStartToleranceAfter"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Entrada almuerzo -->
+          <div class="border border-gray-100 rounded-lg p-4 bg-gray-50">
+            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Entrada almuerzo</p>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchEndTime">Hora</label>
+                <input
+                  id="lunchEndTime"
+                  type="time"
+                  name="lunchEndTime"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchEndToleranceBefore">Anticipado (min)</label>
+                <input
+                  id="lunchEndToleranceBefore"
+                  type="number"
+                  name="lunchEndToleranceBefore"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="lunchEndToleranceAfter">Tardanza (min)</label>
+                <input
+                  id="lunchEndToleranceAfter"
+                  type="number"
+                  name="lunchEndToleranceAfter"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Salida -->
+          <div class="border border-gray-100 rounded-lg p-4 bg-gray-50">
+            <p class="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Salida</p>
+            <div class="grid grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="exitTime">
+                  Hora <span class="text-red-500">*</span>
+                </label>
+                <input
+                  id="exitTime"
+                  type="time"
+                  name="exitTime"
+                  required
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="exitToleranceBefore">Anticipado (min)</label>
+                <input
+                  id="exitToleranceBefore"
+                  type="number"
+                  name="exitToleranceBefore"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5" for="exitToleranceAfter">Tardanza (min)</label>
+                <input
+                  id="exitToleranceAfter"
+                  type="number"
+                  name="exitToleranceAfter"
+                  min="0"
+                  value="0"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Default -->
+          <div class="flex items-center gap-2.5">
+            <input
+              id="isDefault"
+              type="checkbox"
+              name="isDefault"
+              class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <label class="text-sm font-medium text-gray-700" for="isDefault">Predeterminado</label>
+            <span class="text-xs text-gray-400">(se asigna automáticamente a nuevos empleados)</span>
+          </div>
+
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 flex items-center justify-end gap-3">
+          <a
+            href="/attendance/shifts"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </a>
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          >
+            Guardar horario
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</AppLayout>
