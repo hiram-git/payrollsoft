@@ -5,15 +5,14 @@ import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
+import { attendanceRoutes } from './modules/attendance/routes'
 import { authRoutes } from './modules/auth/routes'
-import { companyRoutes } from './modules/company/routes'
-import { creditorRoutes } from './modules/creditors/routes'
 import { cargosRoutes } from './modules/catalogs/cargos/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
 import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
 import { funcionesRoutes } from './modules/catalogs/funciones/routes'
 import { companyRoutes } from './modules/company/routes'
-import { creditorsRoutes } from './modules/creditors/routes'
+import { creditorRoutes } from './modules/creditors/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
@@ -48,6 +47,7 @@ const app = new Elysia()
   .use(conceptsRoutes)
   .use(dashboardRoutes)
   .use(acumuladosRoutes)
+  .use(attendanceRoutes)
   .use(loansRoutes)
   .use(creditorRoutes)
   .use(payrollRoutes)

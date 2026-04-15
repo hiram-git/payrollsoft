@@ -9,14 +9,25 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
+
 export const shifts = pgTable('shifts', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 100 }).notNull(),
-  startTime: time('start_time').notNull(),
-  endTime: time('end_time').notNull(),
-  lunchMinutes: integer('lunch_minutes').notNull().default(60),
+  entryTime: time('entry_time').notNull(),
+  lunchStartTime: time('lunch_start_time'),
+  lunchEndTime: time('lunch_end_time'),
+  exitTime: time('exit_time').notNull(),
+  entryToleranceBefore: integer('entry_tolerance_before').notNull().default(0),
+  entryToleranceAfter: integer('entry_tolerance_after').notNull().default(0),
+  lunchStartToleranceBefore: integer('lunch_start_tolerance_before').notNull().default(0),
+  lunchStartToleranceAfter: integer('lunch_start_tolerance_after').notNull().default(0),
+  lunchEndToleranceBefore: integer('lunch_end_tolerance_before').notNull().default(0),
+  lunchEndToleranceAfter: integer('lunch_end_tolerance_after').notNull().default(0),
+  exitToleranceBefore: integer('exit_tolerance_before').notNull().default(0),
+  exitToleranceAfter: integer('exit_tolerance_after').notNull().default(0),
   isDefault: boolean('is_default').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
 export const tolerances = pgTable('tolerances', {
@@ -45,6 +56,7 @@ export const attendanceRecords = pgTable('attendance_records', {
 
 export type Shift = typeof shifts.$inferSelect
 export type NewShift = typeof shifts.$inferInsert
+export type ShiftRow = Shift
 export type Tolerance = typeof tolerances.$inferSelect
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect
 export type NewAttendanceRecord = typeof attendanceRecords.$inferInsert

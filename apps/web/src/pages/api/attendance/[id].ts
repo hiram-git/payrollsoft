@@ -1,0 +1,55 @@
+import type { APIRoute } from 'astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const TENANT = 'demo'
+
+export const POST: APIRoute = async ({ request, cookies, params, redirect }) => {
+  const authCookie = cookies.get('auth')?.value
+  if (!authCookie) return redirect('/login')
+
+  const { id } = params
+  const form = await request.formData()
+  const method = form.get('_method')?.toString() ?? 'PUT'
+
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+
+  // ── DELETE ────────────────────────────────────────────────────────────────────
+  if (method === 'DELETE') {
+    try {
+      const res = await fetch(`${API_URL}/attendance/${id}`, { method: 'DELETE', headers })
+      if (res.status === 401) return redirect('/login')
+    } catch {
+      return redirect(`/attendance/${id}?error=server-error`)
+    }
+    return redirect('/attendance')
+  }
+
+  // ── PUT ───────────────────────────────────────────────────────────────────────
+  const g = (k: string) => form.get(k)?.toString().trim() ?? ''
+  const orNull = (v: string) => v || null
+
+  const body = {
+    checkIn: orNull(g('checkIn')),
+    lunchStart: orNull(g('lunchStart')),
+    lunchEnd: orNull(g('lunchEnd')),
+    checkOut: orNull(g('checkOut')),
+  }
+
+  let res: Response
+  try {
+    res = await fetch(`${API_URL}/attendance/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    })
+  } catch {
+    return redirect(`/attendance/${id}?error=server-error`)
+  }
+
+  if (res.status === 401) return redirect('/login')
+  if (res.ok) return redirect(`/attendance/${id}?success=1`)
+
+  const data = (await res.json().catch(() => ({}))) as { error?: string; message?: string }
+  const msg = encodeURIComponent(data.error ?? data.message ?? 'server-error')
+  return redirect(`/attendance/${id}?error=${msg}`)
+}
