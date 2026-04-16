@@ -11,7 +11,8 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "migrate": "bun run --filter @payroll/db migrate:prod"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
