@@ -1,15 +1,24 @@
 /**
- * Seed script — creates demo data for local development
- * Usage: bun --env-file ../../.env src/seed.ts
+ * Seed script — creates demo data for local development and Railway
+ * Usage: bun --env-file ../../.env src/seed.ts   (local)
+ *        bun src/seed.ts                          (Railway — DATABASE_URL injected)
  *
- * Requires migrations to have been applied first:
- *   bun run db:migrate:public
- *   bun run db:migrate:tenant
+ * Requires migrations to have been applied first.
+ * All inserts are idempotent (ON CONFLICT DO UPDATE / DO NOTHING).
  *
  * Creates:
- *  - 1 super admin  (superadmin@payroll.dev / SuperAdmin123!)
- *  - 1 tenant       (slug: demo, schema: tenant_demo)
- *  - 1 tenant user  (admin@demo.com / Admin123!)  role: ADMIN
+ *  Public schema:
+ *    - 1 super admin  (superadmin@payroll.dev / SuperAdmin123!)
+ *    - 1 tenant       (slug: demo)
+ *
+ *  Tenant demo schema:
+ *    - 1 usuario admin (admin@demo.com / Admin123!)
+ *    - 1 función       (ADM - Administrativo)
+ *    - 1 cargo         (EMP - Empleado General)
+ *    - 2 departamentos (ADMIN → RRHH)
+ *    - 1 horario       (Turno Regular 8-5)
+ *    - 1 acreedor      (BN - Banco Nacional) + su concepto vinculado
+ *    - 5 conceptos de nómina (SUELDO, SS, SE, SSP, SEP)
  */
 import postgres from 'postgres'
 
@@ -30,16 +39,9 @@ const USER_EMAIL = 'admin@demo.com'
 const USER_PASSWORD = 'Admin123!'
 const USER_NAME = 'Demo Admin'
 
-const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
-  algorithm: 'bcrypt',
-  cost: 12,
-})
-const userHash = await Bun.password.hash(USER_PASSWORD, {
-  algorithm: 'bcrypt',
-  cost: 12,
-})
+const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
+const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
 
-// Use tenant schema in search_path so the users INSERT works without schema prefix
 const publicSql = postgres(url, { prepare: false })
 const tenantSql = postgres(url, {
   prepare: false,
@@ -47,57 +49,157 @@ const tenantSql = postgres(url, {
 })
 
 try {
-  // ── Super admin ────────────────────────────────────────────────────────────
+  // ── Super admin ──────────────────────────────────────────────────────────────
   await publicSql`
     INSERT INTO super_admins (email, password_hash, name)
     VALUES (${SUPER_ADMIN_EMAIL}, ${superAdminHash}, ${SUPER_ADMIN_NAME})
     ON CONFLICT (email) DO UPDATE
       SET password_hash = EXCLUDED.password_hash,
-          name = EXCLUDED.name
+          name          = EXCLUDED.name
   `
-  console.log(`✓ Super admin: ${SUPER_ADMIN_EMAIL}`)
+  console.log(`✓ Super admin : ${SUPER_ADMIN_EMAIL}`)
 
-  // ── Tenant ─────────────────────────────────────────────────────────────────
+  // ── Tenant ───────────────────────────────────────────────────────────────────
   await publicSql`
     INSERT INTO tenants (slug, name, database_schema)
     VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`})
     ON CONFLICT (slug) DO UPDATE
       SET name = EXCLUDED.name
   `
-  console.log(`✓ Tenant: ${TENANT_SLUG}`)
+  console.log(`✓ Tenant      : ${TENANT_SLUG}`)
 
-  // ── Tenant user (requires db:migrate:tenant to have been run) ──────────────
-  try {
+  // ── Tenant user ──────────────────────────────────────────────────────────────
+  await tenantSql`
+    INSERT INTO users (email, password_hash, name, role)
+    VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'})
+    ON CONFLICT (email) DO UPDATE
+      SET password_hash = EXCLUDED.password_hash,
+          name          = EXCLUDED.name,
+          role          = EXCLUDED.role
+  `
+  console.log(`✓ Usuario     : ${USER_EMAIL}`)
+
+  // ── Función ──────────────────────────────────────────────────────────────────
+  await tenantSql`
+    INSERT INTO funciones (code, name)
+    VALUES ('ADM', 'Administrativo')
+    ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+  `
+  console.log('✓ Función     : ADM - Administrativo')
+
+  // ── Cargo ────────────────────────────────────────────────────────────────────
+  await tenantSql`
+    INSERT INTO cargos (code, name)
+    VALUES ('EMP', 'Empleado General')
+    ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+  `
+  console.log('✓ Cargo       : EMP - Empleado General')
+
+  // ── Departamentos (padre → hijo) ─────────────────────────────────────────────
+  const [deptAdmin] = await tenantSql<{ id: string }[]>`
+    INSERT INTO departamentos (code, name)
+    VALUES ('ADMIN', 'Administración')
+    ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `
+  console.log('✓ Departamento: ADMIN - Administración')
+
+  await tenantSql`
+    INSERT INTO departamentos (code, name, parent_id)
+    VALUES ('RRHH', 'Recursos Humanos', ${deptAdmin.id})
+    ON CONFLICT (code) DO UPDATE
+      SET name      = EXCLUDED.name,
+          parent_id = EXCLUDED.parent_id
+  `
+  console.log('✓ Departamento: RRHH - Recursos Humanos (hijo de ADMIN)')
+
+  // ── Horario ──────────────────────────────────────────────────────────────────
+  await tenantSql`
+    INSERT INTO shifts (
+      name, entry_time, lunch_start_time, lunch_end_time, exit_time, is_default
+    )
+    SELECT 'Turno Regular 8-5', '08:00'::time, '12:00'::time, '13:00'::time, '17:00'::time, true
+    WHERE NOT EXISTS (SELECT 1 FROM shifts WHERE name = 'Turno Regular 8-5')
+  `
+  console.log('✓ Horario     : Turno Regular 8-5 (08:00-12:00 / 13:00-17:00)')
+
+  // ── Concepto del acreedor ────────────────────────────────────────────────────
+  const [creditorConcept] = await tenantSql<{ id: string }[]>`
+    INSERT INTO concepts (code, name, type, formula, is_active)
+    VALUES ('PRST_BN', 'Préstamo Banco Nacional', 'deduction', '0', true)
+    ON CONFLICT (code) DO UPDATE
+      SET name      = EXCLUDED.name,
+          type      = EXCLUDED.type,
+          formula   = EXCLUDED.formula
+    RETURNING id
+  `
+
+  // ── Acreedor ─────────────────────────────────────────────────────────────────
+  await tenantSql`
+    INSERT INTO creditors (code, name, description, concept_id)
+    VALUES ('BN', 'Banco Nacional', 'Banco Nacional de Panamá', ${creditorConcept.id})
+    ON CONFLICT (code) DO UPDATE
+      SET name       = EXCLUDED.name,
+          description = EXCLUDED.description,
+          concept_id  = EXCLUDED.concept_id
+  `
+  console.log('✓ Acreedor    : BN - Banco Nacional')
+
+  // ── Conceptos de nómina ──────────────────────────────────────────────────────
+  const nominaConcepts = [
+    {
+      code:    'SUELDO',
+      name:    'Sueldo',
+      type:    'income',
+      formula: 'SALARIO*0.5',
+    },
+    {
+      code:    'SS',
+      name:    'Seguro Social',
+      type:    'deduction',
+      formula: 'CONCEPTO("SUELDO")*0.095',
+    },
+    {
+      code:    'SE',
+      name:    'Seguro Educativo',
+      type:    'deduction',
+      formula: 'CONCEPTO("SUELDO")*0.0975',
+    },
+    {
+      code:    'SSP',
+      name:    'Seguro Social Patronal',
+      type:    'deduction',
+      formula: 'CONCEPTO("SUELDO")*0.1325',
+    },
+    {
+      code:    'SEP',
+      name:    'Seguro Educativo Patronal',
+      type:    'deduction',
+      formula: 'CONCEPTO("SUELDO")*0.015',
+    },
+  ]
+
+  for (const c of nominaConcepts) {
     await tenantSql`
-      INSERT INTO users (email, password_hash, name, role)
-      VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'})
-      ON CONFLICT (email) DO UPDATE
-        SET password_hash = EXCLUDED.password_hash,
-            name = EXCLUDED.name,
-            role = EXCLUDED.role
+      INSERT INTO concepts (code, name, type, formula, is_active)
+      VALUES (${c.code}, ${c.name}, ${c.type}, ${c.formula}, true)
+      ON CONFLICT (code) DO UPDATE
+        SET name    = EXCLUDED.name,
+            type    = EXCLUDED.type,
+            formula = EXCLUDED.formula
     `
-    console.log(`✓ Tenant user: ${USER_EMAIL}`)
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    if (msg.includes('does not exist') || msg.includes('no existe')) {
-      console.error('\n✗ Tenant tables not found.')
-      console.error('  Run migrations first: bun run db:migrate:tenant\n')
-    } else {
-      console.error('✗ Failed to insert tenant user:', msg)
-    }
-    process.exit(1)
+    console.log(`✓ Concepto    : ${c.code} - ${c.name}`)
   }
 
-  console.log('\nSeed complete!')
-  console.log(`  Super admin : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
-  console.log(`  Tenant user : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)
+  console.log('\n✅  Seed completo!')
+  console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
+  console.log(`  Tenant user  : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err)
   if (msg.includes('does not exist') || msg.includes('no existe')) {
-    console.error('\n✗ Public tables not found.')
-    console.error('  Run migrations first: bun run db:migrate:public\n')
+    console.error('\n✗ Tablas no encontradas. Ejecuta las migraciones primero.')
   } else {
-    console.error('✗ Seed failed:', msg)
+    console.error('✗ Seed falló:', msg)
   }
   process.exit(1)
 } finally {
