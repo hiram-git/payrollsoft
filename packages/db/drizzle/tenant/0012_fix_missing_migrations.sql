@@ -1,0 +1,39 @@
+-- Recovery migration: applies content from 0007_loans_extra_fields and
+-- 0008_company_config which were never registered in the journal.
+-- All statements use IF NOT EXISTS / idempotent syntax.
+
+ALTER TABLE "loans" ADD COLUMN IF NOT EXISTS "loan_type" varchar(50);
+--> statement-breakpoint
+ALTER TABLE "loans" ADD COLUMN IF NOT EXISTS "frequency" varchar(20);
+--> statement-breakpoint
+ALTER TABLE "loans" ADD COLUMN IF NOT EXISTS "creditor" varchar(255);
+--> statement-breakpoint
+ALTER TABLE "loans" ADD COLUMN IF NOT EXISTS "allow_december" boolean NOT NULL DEFAULT true;
+--> statement-breakpoint
+CREATE TABLE IF NOT EXISTS "company_config" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"company_name" varchar(255),
+	"ruc" varchar(50),
+	"legal_representative" varchar(255),
+	"address" varchar(500),
+	"phone" varchar(20),
+	"email" varchar(100),
+	"tipo_institucion" varchar(20) DEFAULT 'privada' NOT NULL,
+	"currency_code" varchar(10) DEFAULT 'USD' NOT NULL,
+	"currency_symbol" varchar(5) DEFAULT '$' NOT NULL,
+	"mail_host" varchar(255),
+	"mail_port" integer DEFAULT 587 NOT NULL,
+	"mail_encryption" varchar(10) DEFAULT 'tls' NOT NULL,
+	"mail_username" varchar(255),
+	"mail_password" varchar(255),
+	"mail_from_address" varchar(255),
+	"mail_from_name" varchar(255),
+	"elaborado_por" varchar(255),
+	"cargo_elaborador" varchar(255) DEFAULT 'Especialista en Nóminas',
+	"jefe_recursos_humanos" varchar(255),
+	"cargo_jefe_rrhh" varchar(255) DEFAULT 'Jefe de Recursos Humanos',
+	"logo_empresa" text,
+	"logo_izquierdo_reportes" text,
+	"logo_derecho_reportes" text,
+	"updated_at" timestamp DEFAULT now() NOT NULL
+);
