@@ -140,6 +140,17 @@ export async function listEmployees(
 }
 
 /**
+ * Fetch ALL active employees with no pagination cap — for internal use (payroll generation).
+ */
+export async function getAllActiveEmployees(db: Db) {
+  return db
+    .select()
+    .from(employees)
+    .where(eq(employees.isActive, true))
+    .orderBy(asc(employees.lastName))
+}
+
+/**
  * Get a single employee by ID.
  */
 export async function getEmployee(db: Db, id: string) {
@@ -266,6 +277,44 @@ export async function getPayrollLines(db: Db, payrollId: string) {
     .innerJoin(employees, eq(payrollLines.employeeId, employees.id))
     .where(eq(payrollLines.payrollId, payrollId))
     .orderBy(asc(employees.lastName))
+}
+
+/**
+ * Paginated version of getPayrollLines — for the detail UI with large payrolls.
+ */
+export async function getPayrollLinesPaged(
+  db: Db,
+  payrollId: string,
+  options: { page?: number; limit?: number } = {}
+) {
+  const page = Math.max(1, options.page ?? 1)
+  const limit = Math.min(200, Math.max(1, options.limit ?? 50))
+  const offset = (page - 1) * limit
+
+  const [data, totalResult] = await Promise.all([
+    db
+      .select({
+        line: payrollLines,
+        employee: {
+          id: employees.id,
+          code: employees.code,
+          firstName: employees.firstName,
+          lastName: employees.lastName,
+          department: employees.department,
+          position: employees.position,
+        },
+      })
+      .from(payrollLines)
+      .innerJoin(employees, eq(payrollLines.employeeId, employees.id))
+      .where(eq(payrollLines.payrollId, payrollId))
+      .orderBy(asc(employees.lastName))
+      .limit(limit)
+      .offset(offset),
+    db.select({ total: count() }).from(payrollLines).where(eq(payrollLines.payrollId, payrollId)),
+  ])
+
+  const total = Number(totalResult[0]?.total ?? 0)
+  return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
 }
 
 export async function getPayroll(db: Db, id: string) {
