@@ -233,32 +233,23 @@ for (let batchStart = start; batchStart < TOTAL; batchStart += BATCH_SIZE) {
     })
   }
 
-  // Build VALUES clause manually for a single multi-row INSERT
   await sql`
-    INSERT INTO employees
-      (code, first_name, last_name, id_number, social_security_number,
-       email, cargo_id, funcion_id, departamento_id,
-       hire_date, base_salary, pay_frequency, is_active)
-    SELECT * FROM ${sql(
-      rows.map((r) => [
-        r.code,
-        r.first_name,
-        r.last_name,
-        r.id_number,
-        r.social_security_number,
-        r.email,
-        r.cargo_id,
-        r.funcion_id,
-        r.departamento_id,
-        r.hire_date,
-        r.base_salary,
-        r.pay_frequency,
-        r.is_active,
-      ])
+    INSERT INTO employees ${sql(
+      rows,
+      'code',
+      'first_name',
+      'last_name',
+      'id_number',
+      'social_security_number',
+      'email',
+      'cargo_id',
+      'funcion_id',
+      'departamento_id',
+      'hire_date',
+      'base_salary',
+      'pay_frequency',
+      'is_active'
     )}
-      AS t(code, first_name, last_name, id_number, social_security_number,
-           email, cargo_id, funcion_id, departamento_id,
-           hire_date, base_salary, pay_frequency, is_active)
     ON CONFLICT (code) DO NOTHING
   `
 
