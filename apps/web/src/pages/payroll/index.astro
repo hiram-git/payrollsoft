@@ -20,20 +20,41 @@ type Payroll = {
 }
 
 let payrolls: Payroll[] = []
+let total = 0
+let totalPages = 1
 let error = ''
 
+const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1'))
+const PAGE_SIZE = 25
+
 try {
-  const res = await fetch(`${API_URL}/payroll`, {
+  const params = new URLSearchParams({ page: String(page) })
+  const res = await fetch(`${API_URL}/payroll?${params}`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
   })
   if (res.status === 401) return Astro.redirect('/login')
-  if (res.ok) payrolls = ((await res.json()) as { data: Payroll[] }).data ?? []
-  else error = 'Error al cargar las planillas'
+  if (res.ok) {
+    const json = (await res.json()) as { data: Payroll[]; total: number; totalPages: number }
+    payrolls = json.data ?? []
+    total = json.total ?? 0
+    totalPages = json.totalPages ?? 1
+  } else {
+    error = 'Error al cargar las planillas'
+  }
 } catch {
   error = 'No se pudo conectar con el servidor'
 }
 
 const success = Astro.url.searchParams.get('success') === '1'
+
+function pageUrl(p: number) {
+  const u = new URL(Astro.url)
+  u.searchParams.set('page', String(p))
+  return u.pathname + u.search
+}
+
+const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+const showingTo = Math.min(page * PAGE_SIZE, total)
 
 const statusLabel: Record<string, string> = {
   created: 'Creada',
@@ -77,7 +98,7 @@ function fmt(v: string) {
     <div class="flex items-center justify-between mb-8">
       <div>
         <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Planillas</h1>
-        <p class="text-sm text-gray-500 mt-0.5">{payrolls.length} {payrolls.length === 1 ? 'planilla' : 'planillas'}</p>
+        <p class="text-sm text-gray-500 mt-0.5">{total} {total === 1 ? 'planilla' : 'planillas'}</p>
       </div>
       <a
         href="/payroll/new"
@@ -274,6 +295,30 @@ function fmt(v: string) {
       )}
     </div>
   </div>
+
+  <!-- Pagination -->
+  {totalPages > 1 && (
+    <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
+      <span>Mostrando {showingFrom}–{showingTo} de {total}</span>
+      <div class="flex items-center gap-1">
+        {page > 1 ? (
+          <a href={pageUrl(page - 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">
+            ← Anterior
+          </a>
+        ) : (
+          <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">← Anterior</span>
+        )}
+        <span class="px-3 py-1.5 text-xs text-gray-600">Pág. {page} / {totalPages}</span>
+        {page < totalPages ? (
+          <a href={pageUrl(page + 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">
+            Siguiente →
+          </a>
+        ) : (
+          <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">Siguiente →</span>
+        )}
+      </div>
+    </div>
+  )}
 
   <!-- Confirmation modal -->
   <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">

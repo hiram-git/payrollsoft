@@ -41,11 +41,15 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const data = await listPayrollsService(db, {
-        status: query.status,
-        type: query.type,
-        year: query.year ? Number(query.year) : undefined,
-      })
+      const data = await listPayrollsService(
+        db,
+        {
+          status: query.status,
+          type: query.type,
+          year: query.year ? Number(query.year) : undefined,
+        },
+        query.page ? Number(query.page) : 1
+      )
       return { success: true, ...data }
     },
     {
@@ -54,25 +58,35 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         status: t.Optional(t.String()),
         type: t.Optional(t.String()),
         year: t.Optional(t.String()),
+        page: t.Optional(t.String()),
       }),
     }
   )
 
   .get(
     '/:id',
-    async ({ db, params, set }) => {
+    async ({ db, params, query, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const data = await getPayrollService(db, params.id)
+      const linesPage = query.linesPage ? Number(query.linesPage) : 1
+      const linesLimit = query.linesLimit ? Number(query.linesLimit) : 50
+      const data = await getPayrollService(db, params.id, linesPage, linesLimit)
       if (!data) {
         set.status = 404
         return { success: false, error: 'Payroll not found' }
       }
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      params: t.Object({ id: t.String() }),
+      query: t.Object({
+        linesPage: t.Optional(t.String()),
+        linesLimit: t.Optional(t.String()),
+      }),
+    }
   )
 
   .post(

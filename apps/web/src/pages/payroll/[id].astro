@@ -45,25 +45,53 @@ type Payroll = {
   totalNet: string
 }
 
+const LINES_PER_PAGE = 50
+const linesPage = Math.max(1, Number(Astro.url.searchParams.get('linesPage') ?? '1'))
+
 let payroll: Payroll | null = null
 let lines: PayrollLine[] = []
+let linesTotal = 0
+let linesTotalPages = 1
 
 try {
-  const res = await fetch(`${API_URL}/payroll/${id}`, {
+  const params = new URLSearchParams({
+    linesPage: String(linesPage),
+    linesLimit: String(LINES_PER_PAGE),
+  })
+  const res = await fetch(`${API_URL}/payroll/${id}?${params}`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
   })
   if (res.status === 401) return Astro.redirect('/login')
   if (res.status === 404) return Astro.redirect('/payroll')
   if (res.ok) {
-    const json = (await res.json()) as { data: { payroll: Payroll; lines: PayrollLine[] } }
+    const json = (await res.json()) as {
+      data: {
+        payroll: Payroll
+        lines: PayrollLine[]
+        linesTotal: number
+        linesPage: number
+        linesTotalPages: number
+      }
+    }
     payroll = json.data.payroll
     lines = json.data.lines
+    linesTotal = json.data.linesTotal ?? 0
+    linesTotalPages = json.data.linesTotalPages ?? 1
   }
 } catch {
   return Astro.redirect('/payroll')
 }
 
 if (!payroll) return Astro.redirect('/payroll')
+
+function linesPageUrl(p: number) {
+  const u = new URL(Astro.url)
+  u.searchParams.set('linesPage', String(p))
+  return u.pathname + u.search
+}
+
+const linesFrom = linesTotal === 0 ? 0 : (linesPage - 1) * LINES_PER_PAGE + 1
+const linesTo = Math.min(linesPage * LINES_PER_PAGE, linesTotal)
 
 const msgSuccess = Astro.url.searchParams.get('success') ?? ''
 const msgError = Astro.url.searchParams.get('error') ?? ''
@@ -321,7 +349,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     <div class="border border-gray-200 rounded-lg bg-white overflow-hidden">
       <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
         <h2 class="text-sm font-semibold text-gray-800">Detalle por empleado</h2>
-        <span class="text-xs text-gray-400">{lines.length} {lines.length === 1 ? 'empleado' : 'empleados'}</span>
+        <span class="text-xs text-gray-400">{linesTotal} {linesTotal === 1 ? 'empleado' : 'empleados'}</span>
       </div>
 
       {lines.length === 0 ? (
@@ -379,6 +407,30 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         </table>
       )}
     </div>
+
+    <!-- Lines pagination -->
+    {linesTotalPages > 1 && (
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
+        <span>Mostrando {linesFrom}–{linesTo} de {linesTotal} empleados</span>
+        <div class="flex items-center gap-1">
+          {linesPage > 1 ? (
+            <a href={linesPageUrl(linesPage - 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">
+              ← Anterior
+            </a>
+          ) : (
+            <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">← Anterior</span>
+          )}
+          <span class="px-3 py-1.5 text-xs text-gray-600">Pág. {linesPage} / {linesTotalPages}</span>
+          {linesPage < linesTotalPages ? (
+            <a href={linesPageUrl(linesPage + 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">
+              Siguiente →
+            </a>
+          ) : (
+            <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">Siguiente →</span>
+          )}
+        </div>
+      </div>
+    )}
   </div>
 
   <!-- Confirmation modal -->

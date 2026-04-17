@@ -5,6 +5,7 @@ import {
   deleteCreatedPayroll,
   deletePayrollAcumulados,
   deletePayrollLines,
+  getAllActiveEmployees,
   getAttendanceSummaryForPeriod,
   getCompanyConfig,
   getConceptCatalogs,
@@ -12,12 +13,12 @@ import {
   getPayroll,
   getPayrollLineById,
   getPayrollLines,
+  getPayrollLinesPaged,
   getPendingInstallmentsByEmployee,
   getPosition,
   insertPayrollAcumulados,
   listConceptsWithLinks,
   listCreditors,
-  listEmployees,
   listLoansByEmployee,
   listPayrolls,
   loadAccumulated,
@@ -46,15 +47,26 @@ export type CreatePayrollInput = {
 
 export function listPayrollsService(
   db: AnyDb,
-  filter: { status?: string; type?: string; year?: number } = {}
+  filter: { status?: string; type?: string; year?: number } = {},
+  page = 1
 ) {
-  return listPayrolls(db, filter, { limit: 50 })
+  return listPayrolls(db, filter, { limit: 25, page })
 }
 
-export async function getPayrollService(db: AnyDb, id: string) {
-  const [payroll, lines] = await Promise.all([getPayroll(db, id), getPayrollLines(db, id)])
+export async function getPayrollService(db: AnyDb, id: string, linesPage = 1, linesLimit = 50) {
+  const [payroll, linesResult] = await Promise.all([
+    getPayroll(db, id),
+    getPayrollLinesPaged(db, id, { page: linesPage, limit: linesLimit }),
+  ])
   if (!payroll) return null
-  return { payroll, lines }
+  return {
+    payroll,
+    lines: linesResult.data,
+    linesTotal: linesResult.total,
+    linesPage: linesResult.page,
+    linesLimit: linesResult.limit,
+    linesTotalPages: linesResult.totalPages,
+  }
 }
 
 // ─── Mutations ────────────────────────────────────────────────────────────────
@@ -152,9 +164,9 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     // Mark as processing (inside try so we can revert on any failure)
     await updatePayroll(db, id, { status: 'processing' })
 
-    const [employeeResult, allConceptsWithLinks, companyConfig, conceptCatalogs, allCreditors] =
+    const [allEmployees, allConceptsWithLinks, companyConfig, conceptCatalogs, allCreditors] =
       await Promise.all([
-        listEmployees(db, { isActive: true }, { limit: 1000 }),
+        getAllActiveEmployees(db),
         listConceptsWithLinks(db),
         getCompanyConfig(db),
         getConceptCatalogs(db),
@@ -220,7 +232,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     let totalDeductions = 0
     const allWarnings: string[] = []
 
-    for (const emp of employeeResult.data) {
+    for (const emp of allEmployees) {
       // Resolve base salary: public institutions use position salary when available
       let effectiveBaseSalary = Number(emp.baseSalary)
       if (isPublicInstitution && emp.positionId) {
@@ -317,7 +329,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     return {
       success: true as const,
       data: {
-        processedEmployees: employeeResult.data.length,
+        processedEmployees: allEmployees.length,
         totalGross: round2(totalGross),
         totalDeductions: round2(totalDeductions),
         totalNet,
