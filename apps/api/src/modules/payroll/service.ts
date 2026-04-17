@@ -1,12 +1,14 @@
 import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core'
 import {
+  batchUpsertPayrollLines,
+  bulkGetAttendanceSummary,
+  bulkGetLoansByEmployees,
   countPendingInstallments,
   createPayroll,
   deleteCreatedPayroll,
   deletePayrollAcumulados,
   deletePayrollLines,
   getAllActiveEmployees,
-  getAttendanceSummaryForPeriod,
   getCompanyConfig,
   getConceptCatalogs,
   getEmployee,
@@ -175,12 +177,10 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
 
     const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
 
-    // Creditors whose loans are handled by CUOTA_ACREEDOR() concept formulas
     const creditorIdsWithConcepts = new Set(
       allCreditors.filter((c) => c.conceptId).map((c) => c.id)
     )
 
-    // Map payroll frequency/type to catalog IDs for concept filtering
     const freqCodeMap: Record<string, string> = {
       weekly: 'semanal',
       biweekly: 'quincenal',
@@ -193,8 +193,6 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     const payrollTypeId = conceptCatalogs.payrollTypes.find((t) => t.code === payroll.type)?.id
     const activoSituationId = conceptCatalogs.situations.find((s) => s.code === 'activo')?.id
 
-    // Income first, then deductions — enables CONCEPTO() forward references within type
-    // Filter by payrollType, frequency, situation links (empty links = no restriction)
     const activeConcepts = allConceptsWithLinks
       .filter((c) => c.isActive)
       .sort((a, b) => {
@@ -228,38 +226,81 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     const totalDays = countCalendarDays(periodStart, periodEnd)
     const totalBusinessDays = countBusinessDays(periodStart, periodEnd)
 
+    const employeeIds = allEmployees.map((e) => e.id)
+
+    // Bulk-load attendance and loans in 2 queries instead of 2×N
+    const [attendanceMap, loansMap] = await Promise.all([
+      bulkGetAttendanceSummary(db, employeeIds, payroll.periodStart, payroll.periodEnd),
+      bulkGetLoansByEmployees(db, employeeIds),
+    ])
+
+    // Cache position lookups (public institutions only, usually few distinct positions)
+    const positionCache = new Map<string, { salary: string } | null>()
+
+    // Memoize accumulator queries — same concept+employee combo is never queried twice
+    const accumCache = new Map<string, number>()
+    const memoAccumulated = async (empId: string, code: string, periods: number) => {
+      const key = `${empId}:${code}:${periods}`
+      if (accumCache.has(key)) return accumCache.get(key) ?? 0
+      const val = await loadAccumulated(db, empId, code, periods)
+      accumCache.set(key, val)
+      return val
+    }
+    const accumRangeCache = new Map<string, number>()
+    const memoAccumulatedByRange = async (
+      empId: string,
+      code: string,
+      from: string,
+      to: string
+    ) => {
+      const key = `${empId}:${code}:${from}:${to}`
+      if (accumRangeCache.has(key)) return accumRangeCache.get(key) ?? 0
+      const val = await loadAccumulatedByDateRange(db, empId, code, from, to)
+      accumRangeCache.set(key, val)
+      return val
+    }
+
     let totalGross = 0
     let totalDeductions = 0
     const allWarnings: string[] = []
+    const pendingLines: Array<{
+      employeeId: string
+      grossAmount: string
+      deductions: string
+      netAmount: string
+      concepts: unknown
+    }> = []
 
     for (const emp of allEmployees) {
-      // Resolve base salary: public institutions use position salary when available
+      // Position salary (public institutions) — cached by positionId
       let effectiveBaseSalary = Number(emp.baseSalary)
       if (isPublicInstitution && emp.positionId) {
-        const pos = await getPosition(db, emp.positionId)
+        if (!positionCache.has(emp.positionId)) {
+          positionCache.set(emp.positionId, await getPosition(db, emp.positionId))
+        }
+        const pos = positionCache.get(emp.positionId)
         if (pos) effectiveBaseSalary = Number(pos.salary)
       }
 
-      // Attendance for the period
-      const att = await getAttendanceSummaryForPeriod(
-        db,
-        emp.id,
-        payroll.periodStart,
-        payroll.periodEnd
-      )
-
+      // Attendance from pre-loaded map (O(1))
+      const att = attendanceMap.get(emp.id) ?? {
+        workedMinutes: 0,
+        lateMinutes: 0,
+        overtimeMinutes: 0,
+        daysWithRecords: 0,
+        recordCount: 0,
+      }
       const workedDays = att.recordCount > 0 ? att.daysWithRecords : totalBusinessDays
       const absenceDays = Math.max(0, totalBusinessDays - workedDays)
 
-      // Active loans applicable to this period — exclude those handled by creditor concepts
-      const empLoans = await listLoansByEmployee(db, emp.id)
+      // Loans from pre-loaded map (O(1))
+      const empLoans = loansMap.get(emp.id) ?? []
       const loanInstallments = empLoans
         .filter(
           (l) =>
             l.isActive &&
             l.startDate <= payroll.periodEnd &&
             (l.endDate === null || l.endDate >= payroll.periodStart) &&
-            // Only sum loans NOT already handled by a CUOTA_ACREEDOR() concept formula
             (!l.creditorId || !creditorIdsWithConcepts.has(l.creditorId))
         )
         .reduce((sum, l) => sum + Number(l.installment), 0)
@@ -293,9 +334,9 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
           formula: c.formula,
         })),
         loanInstallments,
-        loadAccumulated: (code, periods) => loadAccumulated(db, emp.id, code, periods),
+        loadAccumulated: (code, periods) => memoAccumulated(emp.id, code, periods),
         loadAccumulatedByDateRange: (code, from, to) =>
-          loadAccumulatedByDateRange(db, emp.id, code, from, to),
+          memoAccumulatedByRange(emp.id, code, from, to),
         loadBalance: async () => 0,
         loadInstallmentsByCreditor: (creditorCode, from, to) =>
           loadInstallmentsByCreditor(db, emp.id, creditorCode, from, to),
@@ -305,8 +346,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         allWarnings.push(...result.warnings.map((w) => `${emp.code}: ${w}`))
       }
 
-      await upsertPayrollLine(db, {
-        payrollId: id,
+      pendingLines.push({
         employeeId: emp.id,
         grossAmount: String(result.grossAmount),
         deductions: String(result.deductions),
@@ -317,6 +357,9 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       totalGross += result.grossAmount
       totalDeductions += result.deductions
     }
+
+    // Batch-insert all lines (replaces N individual upserts)
+    await batchUpsertPayrollLines(db, id, pendingLines)
 
     const totalNet = round2(totalGross - totalDeductions)
     await updatePayroll(db, id, {
