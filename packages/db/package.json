@@ -16,6 +16,8 @@
     "migrate:prod": "bun src/migrate.ts --public && bun src/migrate.ts --tenant=demo",
     "db:seed": "bun --env-file=../../.env src/seed.ts",
     "seed:prod": "bun src/seed.ts",
+    "db:seed-stress": "bun --env-file=../../.env src/seed-stress.ts",
+    "seed-stress:prod": "bun src/seed-stress.ts",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"
   },
