@@ -9,6 +9,7 @@ import {
   deletePayrollAcumulados,
   deletePayrollLines,
   getAllActiveEmployees,
+  getAttendanceSummaryForPeriod,
   getCompanyConfig,
   getConceptCatalogs,
   getEmployee,
