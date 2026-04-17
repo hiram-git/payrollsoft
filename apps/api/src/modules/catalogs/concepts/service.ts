@@ -1,7 +1,15 @@
 import {
   activateConcept,
   createConcept,
+  createConceptAccumulator,
+  createConceptFrequency,
+  createConceptPayrollType,
+  createConceptSituation,
   deactivateConcept,
+  deleteConceptAccumulator,
+  deleteConceptFrequency,
+  deleteConceptPayrollType,
+  deleteConceptSituation,
   getConceptByCode,
   getConceptById,
   getConceptCatalogs,
@@ -9,6 +17,10 @@ import {
   listConcepts,
   setConceptLinks,
   updateConcept,
+  updateConceptAccumulator,
+  updateConceptFrequency,
+  updateConceptPayrollType,
+  updateConceptSituation,
 } from '@payroll/db'
 import type { ConceptLinks } from '@payroll/db'
 
@@ -151,4 +163,71 @@ export async function activateConceptService(db: AnyDb, id: string) {
   }
   const row = await activateConcept(db, id)
   return { success: true as const, data: row }
+}
+
+// ─── Concept Catalog CRUD ─────────────────────────────────────────────────────
+
+type CatalogKind = 'payrollType' | 'frequency' | 'situation' | 'accumulator'
+type CatalogInput = { code: string; name: string; sortOrder?: number }
+type CatalogUpdate = { name?: string; sortOrder?: number }
+
+const createFns = {
+  payrollType: createConceptPayrollType,
+  frequency: createConceptFrequency,
+  situation: createConceptSituation,
+  accumulator: createConceptAccumulator,
+}
+const updateFns = {
+  payrollType: updateConceptPayrollType,
+  frequency: updateConceptFrequency,
+  situation: updateConceptSituation,
+  accumulator: updateConceptAccumulator,
+}
+const deleteFns = {
+  payrollType: deleteConceptPayrollType,
+  frequency: deleteConceptFrequency,
+  situation: deleteConceptSituation,
+  accumulator: deleteConceptAccumulator,
+}
+
+export async function createCatalogItemService(db: AnyDb, kind: CatalogKind, input: CatalogInput) {
+  try {
+    const row = await createFns[kind](db, input)
+    return { success: true as const, data: row }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : ''
+    if (msg.includes('unique') || msg.includes('duplicate')) {
+      return { success: false as const, error: 'code_taken', message: 'El código ya existe' }
+    }
+    throw err
+  }
+}
+
+export async function updateCatalogItemService(
+  db: AnyDb,
+  kind: CatalogKind,
+  id: string,
+  input: CatalogUpdate
+) {
+  const row = await updateFns[kind](db, id, input)
+  if (!row) return { success: false as const, error: 'not_found', message: 'No encontrado' }
+  return { success: true as const, data: row }
+}
+
+export async function deleteCatalogItemService(db: AnyDb, kind: CatalogKind, id: string) {
+  try {
+    const row = await deleteFns[kind](db, id)
+    if (!row) return { success: false as const, error: 'not_found', message: 'No encontrado' }
+    return { success: true as const, data: row }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : ''
+    if (msg === 'has_links') {
+      return {
+        success: false as const,
+        error: 'has_links',
+        message: 'No se puede eliminar: está en uso por conceptos',
+      }
+    }
+    throw err
+  }
 }

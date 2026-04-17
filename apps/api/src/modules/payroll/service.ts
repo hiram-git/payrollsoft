@@ -7,6 +7,7 @@ import {
   deletePayrollLines,
   getAttendanceSummaryForPeriod,
   getCompanyConfig,
+  getConceptCatalogs,
   getEmployee,
   getPayroll,
   getPayrollLineById,
@@ -14,7 +15,8 @@ import {
   getPendingInstallmentsByEmployee,
   getPosition,
   insertPayrollAcumulados,
-  listConcepts,
+  listConceptsWithLinks,
+  listCreditors,
   listEmployees,
   listLoansByEmployee,
   listPayrolls,
@@ -150,20 +152,63 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     // Mark as processing (inside try so we can revert on any failure)
     await updatePayroll(db, id, { status: 'processing' })
 
-    const [employeeResult, allConcepts, companyConfig] = await Promise.all([
-      listEmployees(db, { isActive: true }, { limit: 1000 }),
-      listConcepts(db),
-      getCompanyConfig(db),
-    ])
+    const [employeeResult, allConceptsWithLinks, companyConfig, conceptCatalogs, allCreditors] =
+      await Promise.all([
+        listEmployees(db, { isActive: true }, { limit: 1000 }),
+        listConceptsWithLinks(db),
+        getCompanyConfig(db),
+        getConceptCatalogs(db),
+        listCreditors(db, true),
+      ])
 
     const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
 
+    // Creditors whose loans are handled by CUOTA_ACREEDOR() concept formulas
+    const creditorIdsWithConcepts = new Set(
+      allCreditors.filter((c) => c.conceptId).map((c) => c.id)
+    )
+
+    // Map payroll frequency/type to catalog IDs for concept filtering
+    const freqCodeMap: Record<string, string> = {
+      weekly: 'semanal',
+      biweekly: 'quincenal',
+      monthly: 'mensual',
+    }
+    const payrollFreqCode = freqCodeMap[payroll.frequency] ?? payroll.frequency
+    const payrollFrequencyId = conceptCatalogs.frequencies.find(
+      (f) => f.code === payrollFreqCode
+    )?.id
+    const payrollTypeId = conceptCatalogs.payrollTypes.find((t) => t.code === payroll.type)?.id
+    const activoSituationId = conceptCatalogs.situations.find((s) => s.code === 'activo')?.id
+
     // Income first, then deductions — enables CONCEPTO() forward references within type
-    const activeConcepts = allConcepts
+    // Filter by payrollType, frequency, situation links (empty links = no restriction)
+    const activeConcepts = allConceptsWithLinks
       .filter((c) => c.isActive)
       .sort((a, b) => {
         if (a.type !== b.type) return a.type === 'income' ? -1 : 1
         return a.code.localeCompare(b.code)
+      })
+      .filter((c) => {
+        if (
+          c.payrollTypeIds.length > 0 &&
+          payrollTypeId &&
+          !c.payrollTypeIds.includes(payrollTypeId)
+        )
+          return false
+        if (
+          c.frequencyIds.length > 0 &&
+          payrollFrequencyId &&
+          !c.frequencyIds.includes(payrollFrequencyId)
+        )
+          return false
+        if (
+          c.situationIds.length > 0 &&
+          activoSituationId &&
+          !c.situationIds.includes(activoSituationId)
+        )
+          return false
+        return true
       })
 
     const periodStart = new Date(payroll.periodStart)
@@ -194,14 +239,16 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       const workedDays = att.recordCount > 0 ? att.daysWithRecords : totalBusinessDays
       const absenceDays = Math.max(0, totalBusinessDays - workedDays)
 
-      // Active loans applicable to this period
+      // Active loans applicable to this period — exclude those handled by creditor concepts
       const empLoans = await listLoansByEmployee(db, emp.id)
       const loanInstallments = empLoans
         .filter(
           (l) =>
             l.isActive &&
             l.startDate <= payroll.periodEnd &&
-            (l.endDate === null || l.endDate >= payroll.periodStart)
+            (l.endDate === null || l.endDate >= payroll.periodStart) &&
+            // Only sum loans NOT already handled by a CUOTA_ACREEDOR() concept formula
+            (!l.creditorId || !creditorIdsWithConcepts.has(l.creditorId))
         )
         .reduce((sum, l) => sum + Number(l.installment), 0)
 
@@ -443,10 +490,13 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
   const emp = await getEmployee(db, lineData.employee.id)
   if (!emp) return { success: false as const, error: 'not_found', message: 'Employee not found' }
 
-  const [allConcepts, companyConfigSingle] = await Promise.all([
-    listConcepts(db),
-    getCompanyConfig(db),
-  ])
+  const [allConceptsWithLinksSingle, companyConfigSingle, catalogsSingle, creditorsSingle] =
+    await Promise.all([
+      listConceptsWithLinks(db),
+      getCompanyConfig(db),
+      getConceptCatalogs(db),
+      listCreditors(db, true),
+    ])
 
   // Resolve base salary for public institutions
   let effectiveBaseSalaryForRegen = Number(emp.baseSalary)
@@ -455,11 +505,48 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
     if (pos) effectiveBaseSalaryForRegen = Number(pos.salary)
   }
 
-  const activeConcepts = allConcepts
+  const creditorIdsWithConceptsSingle = new Set(
+    creditorsSingle.filter((c) => c.conceptId).map((c) => c.id)
+  )
+
+  const freqCodeMapSingle: Record<string, string> = {
+    weekly: 'semanal',
+    biweekly: 'quincenal',
+    monthly: 'mensual',
+  }
+  const payrollFreqCodeSingle = freqCodeMapSingle[payroll.frequency] ?? payroll.frequency
+  const payrollFrequencyIdSingle = catalogsSingle.frequencies.find(
+    (f) => f.code === payrollFreqCodeSingle
+  )?.id
+  const payrollTypeIdSingle = catalogsSingle.payrollTypes.find((t) => t.code === payroll.type)?.id
+  const activoSituationIdSingle = catalogsSingle.situations.find((s) => s.code === 'activo')?.id
+
+  const activeConcepts = allConceptsWithLinksSingle
     .filter((c) => c.isActive)
     .sort((a, b) => {
       if (a.type !== b.type) return a.type === 'income' ? -1 : 1
       return a.code.localeCompare(b.code)
+    })
+    .filter((c) => {
+      if (
+        c.payrollTypeIds.length > 0 &&
+        payrollTypeIdSingle &&
+        !c.payrollTypeIds.includes(payrollTypeIdSingle)
+      )
+        return false
+      if (
+        c.frequencyIds.length > 0 &&
+        payrollFrequencyIdSingle &&
+        !c.frequencyIds.includes(payrollFrequencyIdSingle)
+      )
+        return false
+      if (
+        c.situationIds.length > 0 &&
+        activoSituationIdSingle &&
+        !c.situationIds.includes(activoSituationIdSingle)
+      )
+        return false
+      return true
     })
 
   const periodStart = new Date(payroll.periodStart)
@@ -483,7 +570,8 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
         (l) =>
           l.isActive &&
           l.startDate <= payroll.periodEnd &&
-          (l.endDate === null || l.endDate >= payroll.periodStart)
+          (l.endDate === null || l.endDate >= payroll.periodStart) &&
+          (!l.creditorId || !creditorIdsWithConceptsSingle.has(l.creditorId))
       )
       .reduce((sum, l) => sum + Number(l.installment), 0)
 
@@ -520,6 +608,8 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
       loadAccumulatedByDateRange: (code, from, to) =>
         loadAccumulatedByDateRange(db, emp.id, code, from, to),
       loadBalance: async () => 0,
+      loadInstallmentsByCreditor: (creditorCode, from, to) =>
+        loadInstallmentsByCreditor(db, emp.id, creditorCode, from, to),
     })
 
     await upsertPayrollLine(db, {

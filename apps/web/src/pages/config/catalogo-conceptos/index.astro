@@ -1,0 +1,219 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+type CatalogItem = { id: string; code: string; name: string; sortOrder: number }
+type Catalogs = {
+  payrollTypes: CatalogItem[]
+  frequencies: CatalogItem[]
+  situations: CatalogItem[]
+  accumulators: CatalogItem[]
+}
+
+let catalogs: Catalogs = { payrollTypes: [], frequencies: [], situations: [], accumulators: [] }
+let loadError = ''
+
+try {
+  const res = await fetch(`${API_URL}/concepts/config`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) catalogs = ((await res.json()) as { data: Catalogs }).data
+} catch {
+  loadError = 'No se pudo conectar con el servidor'
+}
+
+const activeTab = Astro.url.searchParams.get('tab') ?? 'payrollTypes'
+const success = Astro.url.searchParams.get('success') === '1'
+const error = Astro.url.searchParams.get('error') ?? ''
+
+const errorMessages: Record<string, string> = {
+  code_taken: 'El código ya está en uso.',
+  has_links: 'No se puede eliminar: está siendo usado por conceptos.',
+  'server-error': 'Error del servidor.',
+  'missing-fields': 'Completa todos los campos.',
+}
+
+const tabs = [
+  {
+    key: 'payrollTypes',
+    label: 'Tipos de Planilla',
+    kind: 'payroll-types',
+    items: catalogs.payrollTypes,
+  },
+  { key: 'frequencies', label: 'Frecuencias', kind: 'frequencies', items: catalogs.frequencies },
+  { key: 'situations', label: 'Situaciones', kind: 'situations', items: catalogs.situations },
+  { key: 'accumulators', label: 'Acumulados', kind: 'accumulators', items: catalogs.accumulators },
+]
+const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
+---
+
+<AppLayout title="Catálogos de Conceptos">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Catálogos de Conceptos</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Gestión de tipos, frecuencias, situaciones y acumulados</p>
+      </div>
+    </div>
+
+    {loadError && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{loadError}</div>
+    )}
+
+    <!-- Tab Navigation -->
+    <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
+      {tabs.map((tab) => (
+        <a
+          href={`/config/catalogo-conceptos?tab=${tab.key}`}
+          class={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-[2px] transition-colors ${
+            tab.key === activeTab
+              ? 'border-blue-600 text-blue-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          {tab.label}
+        </a>
+      ))}
+    </div>
+
+    {success && (
+      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Guardado correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
+      </div>
+    )}
+
+    <!-- Current Tab Content -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <h2 class="font-semibold text-gray-800">{currentTab.label}</h2>
+        <button
+          type="button"
+          onclick="document.getElementById('newItemForm').classList.toggle('hidden')"
+          class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+        >
+          + Nuevo
+        </button>
+      </div>
+
+      <!-- New item form (hidden by default) -->
+      <div id="newItemForm" class="hidden border-b border-gray-100 px-6 py-4 bg-gray-50">
+        <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}`} class="flex gap-3 items-end">
+          <input type="hidden" name="_tab" value={activeTab} />
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Código *</label>
+            <input type="text" name="code" class="input" required maxlength="50" placeholder="ej: quincenal" />
+          </div>
+          <div class="flex-1">
+            <label class="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
+            <input type="text" name="name" class="input" required maxlength="100" placeholder="ej: Quincenal" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Orden</label>
+            <input type="number" name="sortOrder" class="input w-20" value="0" min="0" />
+          </div>
+          <button type="submit" class="px-4 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
+            Guardar
+          </button>
+          <button type="button" onclick="document.getElementById('newItemForm').classList.add('hidden')" class="px-4 py-2.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancelar
+          </button>
+        </form>
+      </div>
+
+      <!-- Items table -->
+      {currentTab.items.length === 0 ? (
+        <div class="p-12 text-center text-gray-400 text-sm">
+          No hay registros en este catálogo.
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Orden</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {currentTab.items.map((item) => (
+              <tr class="hover:bg-gray-50 transition-colors" id={`row-${item.id}`}>
+                <td class="px-4 py-3 font-mono text-xs text-gray-500">{item.code}</td>
+                <!-- View mode -->
+                <td class="px-4 py-3 font-medium text-gray-900 view-name">{item.name}</td>
+                <td class="px-4 py-3 text-gray-600 view-order">{item.sortOrder}</td>
+                <!-- Edit mode (hidden) -->
+                <td class="px-4 py-3 edit-fields hidden">
+                  <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`} class="flex gap-2 items-center">
+                    <input type="hidden" name="_method" value="PUT" />
+                    <input type="hidden" name="_tab" value={activeTab} />
+                    <input type="text" name="name" value={item.name} class="input" required maxlength="100" />
+                    <input type="number" name="sortOrder" value={item.sortOrder} class="input w-20" min="0" />
+                    <button type="submit" class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg">Guardar</button>
+                    <button type="button" onclick={`cancelEdit('${item.id}')`} class="px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 rounded-lg">Cancelar</button>
+                  </form>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1 view-actions">
+                    <button
+                      type="button"
+                      onclick={`startEdit('${item.id}')`}
+                      title="Editar"
+                      class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                    <form
+                      method="POST"
+                      action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
+                      onsubmit="return confirm('¿Eliminar este registro?')"
+                    >
+                      <input type="hidden" name="_method" value="DELETE" />
+                      <input type="hidden" name="_tab" value={activeTab} />
+                      <button type="submit" title="Eliminar" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                        </svg>
+                      </button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</AppLayout>
+
+<style>
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+</style>
+
+<script is:inline>
+  function startEdit(id) {
+    const row = document.getElementById('row-' + id)
+    row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.add('hidden'))
+    row.querySelectorAll('.edit-fields').forEach(el => el.classList.remove('hidden'))
+  }
+  function cancelEdit(id) {
+    const row = document.getElementById('row-' + id)
+    row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.remove('hidden'))
+    row.querySelectorAll('.edit-fields').forEach(el => el.classList.add('hidden'))
+  }
+</script>
