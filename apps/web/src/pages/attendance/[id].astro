@@ -39,7 +39,10 @@ try {
   if (res.status === 401) return Astro.redirect('/login')
   if (res.status === 404) return Astro.redirect('/attendance')
   if (res.ok) {
-    const json = (await res.json()) as { success: boolean; data: { record: AttendanceRecord; employee: AttendanceEmployee } }
+    const json = (await res.json()) as {
+      success: boolean
+      data: { record: AttendanceRecord; employee: AttendanceEmployee }
+    }
     record = json.data.record
     employee = json.data.employee
   }
@@ -55,7 +58,12 @@ const msgError = Astro.url.searchParams.get('error') ?? ''
 function tsToTime(ts: string | null): string {
   if (!ts) return ''
   const d = new Date(ts)
-  return d.toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Panama' })
+  return d.toLocaleTimeString('es-PA', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'America/Panama',
+  })
 }
 ---
 

@@ -28,7 +28,10 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
   .get(
     '/',
     async ({ db, query, set }) => {
-      if (!db) { set.status = 400; return { success: false, error: 'Tenant required' } }
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
       const data = await listCreditorsService(db, query.all === 'true')
       return { success: true, data }
     },
@@ -42,9 +45,15 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
   .get(
     '/:id',
     async ({ db, params, set }) => {
-      if (!db) { set.status = 400; return { success: false, error: 'Tenant required' } }
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
       const data = await getCreditorService(db, params.id)
-      if (!data) { set.status = 404; return { success: false, error: 'Acreedor no encontrado' } }
+      if (!data) {
+        set.status = 404
+        return { success: false, error: 'Acreedor no encontrado' }
+      }
       return { success: true, data }
     },
     { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
@@ -54,7 +63,10 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
   .post(
     '/',
     async ({ db, body, set }) => {
-      if (!db) { set.status = 400; return { success: false, error: 'Tenant required' } }
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
       const result = await createCreditorService(db, body)
       if (!result.success) {
         set.status = result.error === 'duplicate_code' ? 409 : 400
@@ -70,7 +82,10 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
   .put(
     '/:id',
     async ({ db, params, body, set }) => {
-      if (!db) { set.status = 400; return { success: false, error: 'Tenant required' } }
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
       const result = await updateCreditorService(db, params.id, body)
       if (!result.success) {
         set.status = result.error === 'not_found' ? 404 : 400

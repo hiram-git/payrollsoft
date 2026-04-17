@@ -39,7 +39,10 @@ const USER_EMAIL = 'admin@demo.com'
 const USER_PASSWORD = 'Admin123!'
 const USER_NAME = 'Demo Admin'
 
-const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
+const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
+  algorithm: 'bcrypt',
+  cost: 12,
+})
 const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
 
 const publicSql = postgres(url, { prepare: false })
@@ -148,33 +151,33 @@ try {
   // ── Conceptos de nómina ──────────────────────────────────────────────────────
   const nominaConcepts = [
     {
-      code:    'SUELDO',
-      name:    'Sueldo',
-      type:    'income',
+      code: 'SUELDO',
+      name: 'Sueldo',
+      type: 'income',
       formula: 'SALARIO*0.5',
     },
     {
-      code:    'SS',
-      name:    'Seguro Social',
-      type:    'deduction',
+      code: 'SS',
+      name: 'Seguro Social',
+      type: 'deduction',
       formula: 'CONCEPTO("SUELDO")*0.095',
     },
     {
-      code:    'SE',
-      name:    'Seguro Educativo',
-      type:    'deduction',
+      code: 'SE',
+      name: 'Seguro Educativo',
+      type: 'deduction',
       formula: 'CONCEPTO("SUELDO")*0.0975',
     },
     {
-      code:    'SSP',
-      name:    'Seguro Social Patronal',
-      type:    'deduction',
+      code: 'SSP',
+      name: 'Seguro Social Patronal',
+      type: 'deduction',
       formula: 'CONCEPTO("SUELDO")*0.1325',
     },
     {
-      code:    'SEP',
-      name:    'Seguro Educativo Patronal',
-      type:    'deduction',
+      code: 'SEP',
+      name: 'Seguro Educativo Patronal',
+      type: 'deduction',
       formula: 'CONCEPTO("SUELDO")*0.015',
     },
   ]

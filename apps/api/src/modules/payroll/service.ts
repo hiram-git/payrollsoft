@@ -6,11 +6,13 @@ import {
   deletePayrollAcumulados,
   deletePayrollLines,
   getAttendanceSummaryForPeriod,
+  getCompanyConfig,
   getEmployee,
   getPayroll,
   getPayrollLineById,
   getPayrollLines,
   getPendingInstallmentsByEmployee,
+  getPosition,
   insertPayrollAcumulados,
   listConcepts,
   listEmployees,
@@ -148,10 +150,13 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     // Mark as processing (inside try so we can revert on any failure)
     await updatePayroll(db, id, { status: 'processing' })
 
-    const [employeeResult, allConcepts] = await Promise.all([
+    const [employeeResult, allConcepts, companyConfig] = await Promise.all([
       listEmployees(db, { isActive: true }, { limit: 1000 }),
       listConcepts(db),
+      getCompanyConfig(db),
     ])
+
+    const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
 
     // Income first, then deductions — enables CONCEPTO() forward references within type
     const activeConcepts = allConcepts
@@ -171,6 +176,13 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     const allWarnings: string[] = []
 
     for (const emp of employeeResult.data) {
+      // Resolve base salary: public institutions use position salary when available
+      let effectiveBaseSalary = Number(emp.baseSalary)
+      if (isPublicInstitution && emp.positionId) {
+        const pos = await getPosition(db, emp.positionId)
+        if (pos) effectiveBaseSalary = Number(pos.salary)
+      }
+
       // Attendance for the period
       const att = await getAttendanceSummaryForPeriod(
         db,
@@ -197,7 +209,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         employee: {
           id: emp.id,
           code: emp.code,
-          baseSalary: Number(emp.baseSalary),
+          baseSalary: effectiveBaseSalary,
           hireDate: new Date(emp.hireDate),
           customFields: (emp.customFields as Record<string, unknown>) ?? {},
         },
@@ -339,7 +351,11 @@ export async function closePayrollService(db: AnyDb, id: string) {
   // Mark one pending installment as paid per active loan per employee
   const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
   for (const empId of employeeIds) {
-    const pendingInstallments = await getPendingInstallmentsByEmployee(db, empId, existing.periodEnd)
+    const pendingInstallments = await getPendingInstallmentsByEmployee(
+      db,
+      empId,
+      existing.periodEnd
+    )
     for (const inst of pendingInstallments) {
       await markInstallmentPaid(db, inst.id, id)
       const remaining = await countPendingInstallments(db, inst.loanId)
@@ -427,7 +443,18 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
   const emp = await getEmployee(db, lineData.employee.id)
   if (!emp) return { success: false as const, error: 'not_found', message: 'Employee not found' }
 
-  const allConcepts = await listConcepts(db)
+  const [allConcepts, companyConfigSingle] = await Promise.all([
+    listConcepts(db),
+    getCompanyConfig(db),
+  ])
+
+  // Resolve base salary for public institutions
+  let effectiveBaseSalaryForRegen = Number(emp.baseSalary)
+  if (companyConfigSingle?.tipoInstitucion === 'publica' && emp.positionId) {
+    const pos = await getPosition(db, emp.positionId)
+    if (pos) effectiveBaseSalaryForRegen = Number(pos.salary)
+  }
+
   const activeConcepts = allConcepts
     .filter((c) => c.isActive)
     .sort((a, b) => {
@@ -464,7 +491,7 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
       employee: {
         id: emp.id,
         code: emp.code,
-        baseSalary: Number(emp.baseSalary),
+        baseSalary: effectiveBaseSalaryForRegen,
         hireDate: new Date(emp.hireDate),
         customFields: (emp.customFields as Record<string, unknown>) ?? {},
       },

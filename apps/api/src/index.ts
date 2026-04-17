@@ -17,6 +17,7 @@ import { dashboardRoutes } from './modules/dashboard/routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 import { payrollRoutes } from './modules/payroll/routes'
+import { positionsRoutes } from './modules/positions/routes'
 
 const app = new Elysia()
   // ── Global middleware (order matters) ──────────────────────────────────────
@@ -40,6 +41,7 @@ const app = new Elysia()
   }))
   .use(authRoutes)
   .use(companyRoutes)
+  .use(positionsRoutes)
   .use(employeeRoutes)
   .use(cargosRoutes)
   .use(funcionesRoutes)

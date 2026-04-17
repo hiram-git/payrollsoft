@@ -1,12 +1,12 @@
 import {
-  createCreditor,
   createConcept,
+  createCreditor,
   getConceptByCode,
   getCreditorByCode,
   getCreditorById,
   listCreditors,
-  updateCreditor,
   updateConcept,
+  updateCreditor,
 } from '@payroll/db'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
@@ -42,7 +42,11 @@ export async function createCreditorService(db: AnyDb, input: CreateCreditorInpu
 
   const existing = await getCreditorByCode(db, code)
   if (existing) {
-    return { success: false as const, error: 'duplicate_code', message: `El código ${code} ya está en uso` }
+    return {
+      success: false as const,
+      error: 'duplicate_code',
+      message: `El código ${code} ya está en uso`,
+    }
   }
 
   const conceptCode = `ACR_${code}`
@@ -82,11 +86,7 @@ export async function createCreditorService(db: AnyDb, input: CreateCreditorInpu
   return { success: true as const, data: creditor }
 }
 
-export async function updateCreditorService(
-  db: AnyDb,
-  id: string,
-  input: UpdateCreditorInput
-) {
+export async function updateCreditorService(db: AnyDb, id: string, input: UpdateCreditorInput) {
   const existing = await getCreditorById(db, id)
   if (!existing) {
     return { success: false as const, error: 'not_found', message: 'Acreedor no encontrado' }

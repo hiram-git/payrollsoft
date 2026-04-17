@@ -13,6 +13,7 @@ export const employees = pgTable('employees', {
   cargoId: uuid('cargo_id'),
   funcionId: uuid('funcion_id'),
   departamentoId: uuid('departamento_id'),
+  positionId: uuid('position_id'), // NO .references() — multi-tenant
   // Denormalized text copies for display (auto-set from catalog on save)
   position: varchar('position', { length: 100 }),
   department: varchar('department', { length: 100 }),

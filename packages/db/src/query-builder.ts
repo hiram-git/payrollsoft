@@ -22,6 +22,7 @@ import {
   payrollAcumulados,
   payrollLines,
   payrolls,
+  positions,
   shifts,
   superAdmins,
   users,
@@ -562,12 +563,17 @@ export async function updateShift(db: Db, id: string, data: Partial<CreateShiftD
   if ('lunchStartTime' in data) patch.lunchStartTime = data.lunchStartTime ?? null
   if ('lunchEndTime' in data) patch.lunchEndTime = data.lunchEndTime ?? null
   if (data.exitTime !== undefined) patch.exitTime = data.exitTime
-  if (data.entryToleranceBefore !== undefined) patch.entryToleranceBefore = data.entryToleranceBefore
+  if (data.entryToleranceBefore !== undefined)
+    patch.entryToleranceBefore = data.entryToleranceBefore
   if (data.entryToleranceAfter !== undefined) patch.entryToleranceAfter = data.entryToleranceAfter
-  if (data.lunchStartToleranceBefore !== undefined) patch.lunchStartToleranceBefore = data.lunchStartToleranceBefore
-  if (data.lunchStartToleranceAfter !== undefined) patch.lunchStartToleranceAfter = data.lunchStartToleranceAfter
-  if (data.lunchEndToleranceBefore !== undefined) patch.lunchEndToleranceBefore = data.lunchEndToleranceBefore
-  if (data.lunchEndToleranceAfter !== undefined) patch.lunchEndToleranceAfter = data.lunchEndToleranceAfter
+  if (data.lunchStartToleranceBefore !== undefined)
+    patch.lunchStartToleranceBefore = data.lunchStartToleranceBefore
+  if (data.lunchStartToleranceAfter !== undefined)
+    patch.lunchStartToleranceAfter = data.lunchStartToleranceAfter
+  if (data.lunchEndToleranceBefore !== undefined)
+    patch.lunchEndToleranceBefore = data.lunchEndToleranceBefore
+  if (data.lunchEndToleranceAfter !== undefined)
+    patch.lunchEndToleranceAfter = data.lunchEndToleranceAfter
   if (data.exitToleranceBefore !== undefined) patch.exitToleranceBefore = data.exitToleranceBefore
   if (data.exitToleranceAfter !== undefined) patch.exitToleranceAfter = data.exitToleranceAfter
   if (data.isDefault !== undefined) patch.isDefault = data.isDefault
@@ -668,10 +674,7 @@ export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData)
     .select({ id: attendanceRecords.id })
     .from(attendanceRecords)
     .where(
-      and(
-        eq(attendanceRecords.employeeId, data.employeeId),
-        eq(attendanceRecords.date, data.date)
-      )
+      and(eq(attendanceRecords.employeeId, data.employeeId), eq(attendanceRecords.date, data.date))
     )
     .limit(1)
 
@@ -691,9 +694,7 @@ export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData)
   let workedMinutes = 0
   if (checkIn && checkOut) {
     const total = (checkOut.getTime() - checkIn.getTime()) / 60000
-    const lunch = lunchStart && lunchEnd
-      ? (lunchEnd.getTime() - lunchStart.getTime()) / 60000
-      : 0
+    const lunch = lunchStart && lunchEnd ? (lunchEnd.getTime() - lunchStart.getTime()) / 60000 : 0
     workedMinutes = Math.max(0, Math.round(total - lunch))
   }
 
@@ -749,16 +750,15 @@ export async function updateAttendanceById(db: Db, id: string, data: UpdateAtten
 
   const dateStr = existing.date
   const checkIn = 'checkIn' in data ? toTimestamp(dateStr, data.checkIn) : existing.checkIn
-  const lunchStart = 'lunchStart' in data ? toTimestamp(dateStr, data.lunchStart) : existing.lunchStart
+  const lunchStart =
+    'lunchStart' in data ? toTimestamp(dateStr, data.lunchStart) : existing.lunchStart
   const lunchEnd = 'lunchEnd' in data ? toTimestamp(dateStr, data.lunchEnd) : existing.lunchEnd
   const checkOut = 'checkOut' in data ? toTimestamp(dateStr, data.checkOut) : existing.checkOut
 
   let workedMinutes = existing.workedMinutes ?? 0
   if (checkIn && checkOut) {
     const total = (checkOut.getTime() - checkIn.getTime()) / 60000
-    const lunch = lunchStart && lunchEnd
-      ? (lunchEnd.getTime() - lunchStart.getTime()) / 60000
-      : 0
+    const lunch = lunchStart && lunchEnd ? (lunchEnd.getTime() - lunchStart.getTime()) / 60000 : 0
     workedMinutes = Math.max(0, Math.round(total - lunch))
   }
 
@@ -1432,42 +1432,6 @@ export async function findSuperAdminByEmail(db: Db, email: string) {
   return row ?? null
 }
 
-// ─── Creditors ────────────────────────────────────────────────────────────────
-
-export type CreateCreditorData = typeof creditors.$inferInsert
-
-export async function listCreditors(db: Db, includeInactive = false) {
-  const where = includeInactive ? undefined : eq(creditors.isActive, true)
-  return db.select().from(creditors).where(where).orderBy(asc(creditors.name))
-}
-
-export async function getCreditorById(db: Db, id: string) {
-  const [row] = await db.select().from(creditors).where(eq(creditors.id, id))
-  return row ?? null
-}
-
-export async function getCreditorByCode(db: Db, code: string) {
-  const [row] = await db
-    .select()
-    .from(creditors)
-    .where(eq(creditors.code, code.toUpperCase()))
-  return row ?? null
-}
-
-export async function createCreditor(db: Db, data: CreateCreditorData) {
-  const [row] = await db.insert(creditors).values(data).returning()
-  return row
-}
-
-export async function updateCreditor(db: Db, id: string, data: Partial<CreateCreditorData>) {
-  const [row] = await db
-    .update(creditors)
-    .set({ ...data, updatedAt: new Date() })
-    .where(eq(creditors.id, id))
-    .returning()
-  return row ?? null
-}
-
 /**
  * Sum all pending loan installments for a given employee + creditor within a payroll period.
  * Used by the CUOTA_ACREEDOR() formula function.
@@ -1503,4 +1467,59 @@ export async function loadInstallmentsByCreditor(
     )
 
   return rows.reduce((sum, r) => sum + Number(r.installment), 0)
+}
+
+// ─── Positions ────────────────────────────────────────────────────────────────
+
+// biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
+type AnyDb = any
+
+export async function listPositions(db: AnyDb, onlyActive = false) {
+  const rows = await db
+    .select()
+    .from(positions)
+    .where(onlyActive ? eq(positions.isActive, true) : undefined)
+    .orderBy(asc(positions.code))
+  return rows
+}
+
+export async function getPosition(db: AnyDb, id: string) {
+  const rows = await db.select().from(positions).where(eq(positions.id, id))
+  return rows[0] ?? null
+}
+
+export type CreatePositionData = {
+  code: string
+  name: string
+  salary: string
+  cargoId?: string | null
+  departamentoId?: string | null
+  funcionId?: string | null
+}
+
+export async function createPosition(db: AnyDb, data: CreatePositionData) {
+  const rows = await db.insert(positions).values(data).returning()
+  return rows[0]
+}
+
+export async function updatePosition(
+  db: AnyDb,
+  id: string,
+  data: Partial<CreatePositionData> & { isActive?: boolean }
+) {
+  const rows = await db
+    .update(positions)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(positions.id, id))
+    .returning()
+  return rows[0] ?? null
+}
+
+export async function deactivatePosition(db: AnyDb, id: string) {
+  const rows = await db
+    .update(positions)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(positions.id, id))
+    .returning()
+  return rows[0] ?? null
 }
