@@ -1028,6 +1028,65 @@ export async function listConcepts(db: Db, search?: string) {
   return db.select().from(concepts).where(where).orderBy(asc(concepts.name))
 }
 
+/**
+ * List all concepts with their junction link IDs (payrollType, frequency, situation, accumulator).
+ * Uses 4 bulk queries instead of N+1 per concept.
+ */
+export async function listConceptsWithLinks(db: Db, search?: string) {
+  const allConcepts = await listConcepts(db, search)
+  if (allConcepts.length === 0) return []
+
+  const ids = allConcepts.map((c) => c.id)
+  const [ptLinks, frLinks, siLinks, acLinks] = await Promise.all([
+    db
+      .select()
+      .from(conceptPayrollTypeLinks)
+      .where(inArray(conceptPayrollTypeLinks.conceptId, ids)),
+    db.select().from(conceptFrequencyLinks).where(inArray(conceptFrequencyLinks.conceptId, ids)),
+    db.select().from(conceptSituationLinks).where(inArray(conceptSituationLinks.conceptId, ids)),
+    db
+      .select()
+      .from(conceptAccumulatorLinks)
+      .where(inArray(conceptAccumulatorLinks.conceptId, ids)),
+  ])
+
+  const ptMap = new Map<string, string[]>()
+  const frMap = new Map<string, string[]>()
+  const siMap = new Map<string, string[]>()
+  const acMap = new Map<string, string[]>()
+
+  for (const r of ptLinks) {
+    const arr = ptMap.get(r.conceptId) ?? []
+    arr.push(r.payrollTypeId)
+    ptMap.set(r.conceptId, arr)
+  }
+  for (const r of frLinks) {
+    const arr = frMap.get(r.conceptId) ?? []
+    arr.push(r.frequencyId)
+    frMap.set(r.conceptId, arr)
+  }
+  for (const r of siLinks) {
+    const arr = siMap.get(r.conceptId) ?? []
+    arr.push(r.situationId)
+    siMap.set(r.conceptId, arr)
+  }
+  for (const r of acLinks) {
+    const arr = acMap.get(r.conceptId) ?? []
+    arr.push(r.accumulatorId)
+    acMap.set(r.conceptId, arr)
+  }
+
+  return allConcepts.map((c) => ({
+    ...c,
+    payrollTypeIds: ptMap.get(c.id) ?? [],
+    frequencyIds: frMap.get(c.id) ?? [],
+    situationIds: siMap.get(c.id) ?? [],
+    accumulatorIds: acMap.get(c.id) ?? [],
+  }))
+}
+
+export type ConceptWithLinks = Awaited<ReturnType<typeof listConceptsWithLinks>>[number]
+
 export async function getConceptById(db: Db, id: string) {
   const [row] = await db.select().from(concepts).where(eq(concepts.id, id))
   return row ?? null
@@ -1078,6 +1137,113 @@ export async function getConceptCatalogs(db: Db) {
     db.select().from(conceptAccumulators).orderBy(asc(conceptAccumulators.sortOrder)),
   ])
   return { payrollTypes, frequencies, situations, accumulators }
+}
+
+// ─── Concept Catalog CRUD ─────────────────────────────────────────────────────
+
+type CatalogInput = { code: string; name: string; sortOrder?: number }
+type CatalogUpdate = { name?: string; sortOrder?: number }
+
+// Payroll Types
+export async function createConceptPayrollType(db: Db, data: CatalogInput) {
+  const [row] = await db.insert(conceptPayrollTypes).values(data).returning()
+  return row
+}
+export async function updateConceptPayrollType(db: Db, id: string, data: CatalogUpdate) {
+  const [row] = await db
+    .update(conceptPayrollTypes)
+    .set(data)
+    .where(eq(conceptPayrollTypes.id, id))
+    .returning()
+  return row ?? null
+}
+export async function deleteConceptPayrollType(db: Db, id: string) {
+  const [link] = await db
+    .select()
+    .from(conceptPayrollTypeLinks)
+    .where(eq(conceptPayrollTypeLinks.payrollTypeId, id))
+    .limit(1)
+  if (link) throw new Error('has_links')
+  const [row] = await db
+    .delete(conceptPayrollTypes)
+    .where(eq(conceptPayrollTypes.id, id))
+    .returning()
+  return row ?? null
+}
+
+// Frequencies
+export async function createConceptFrequency(db: Db, data: CatalogInput) {
+  const [row] = await db.insert(conceptFrequencies).values(data).returning()
+  return row
+}
+export async function updateConceptFrequency(db: Db, id: string, data: CatalogUpdate) {
+  const [row] = await db
+    .update(conceptFrequencies)
+    .set(data)
+    .where(eq(conceptFrequencies.id, id))
+    .returning()
+  return row ?? null
+}
+export async function deleteConceptFrequency(db: Db, id: string) {
+  const [link] = await db
+    .select()
+    .from(conceptFrequencyLinks)
+    .where(eq(conceptFrequencyLinks.frequencyId, id))
+    .limit(1)
+  if (link) throw new Error('has_links')
+  const [row] = await db.delete(conceptFrequencies).where(eq(conceptFrequencies.id, id)).returning()
+  return row ?? null
+}
+
+// Situations
+export async function createConceptSituation(db: Db, data: CatalogInput) {
+  const [row] = await db.insert(conceptSituations).values(data).returning()
+  return row
+}
+export async function updateConceptSituation(db: Db, id: string, data: CatalogUpdate) {
+  const [row] = await db
+    .update(conceptSituations)
+    .set(data)
+    .where(eq(conceptSituations.id, id))
+    .returning()
+  return row ?? null
+}
+export async function deleteConceptSituation(db: Db, id: string) {
+  const [link] = await db
+    .select()
+    .from(conceptSituationLinks)
+    .where(eq(conceptSituationLinks.situationId, id))
+    .limit(1)
+  if (link) throw new Error('has_links')
+  const [row] = await db.delete(conceptSituations).where(eq(conceptSituations.id, id)).returning()
+  return row ?? null
+}
+
+// Accumulators
+export async function createConceptAccumulator(db: Db, data: CatalogInput) {
+  const [row] = await db.insert(conceptAccumulators).values(data).returning()
+  return row
+}
+export async function updateConceptAccumulator(db: Db, id: string, data: CatalogUpdate) {
+  const [row] = await db
+    .update(conceptAccumulators)
+    .set(data)
+    .where(eq(conceptAccumulators.id, id))
+    .returning()
+  return row ?? null
+}
+export async function deleteConceptAccumulator(db: Db, id: string) {
+  const [link] = await db
+    .select()
+    .from(conceptAccumulatorLinks)
+    .where(eq(conceptAccumulatorLinks.accumulatorId, id))
+    .limit(1)
+  if (link) throw new Error('has_links')
+  const [row] = await db
+    .delete(conceptAccumulators)
+    .where(eq(conceptAccumulators.id, id))
+    .returning()
+  return row ?? null
 }
 
 export type ConceptLinks = {

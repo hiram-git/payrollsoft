@@ -3,11 +3,14 @@ import { authPlugin, guardAuth, guardRole } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
   activateConceptService,
+  createCatalogItemService,
   createConceptService,
   deactivateConceptService,
+  deleteCatalogItemService,
   getConceptConfigService,
   getConceptService,
   listConceptsService,
+  updateCatalogItemService,
   updateConceptService,
 } from './service'
 
@@ -174,6 +177,116 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       return { success: true, data: result.data }
     },
     { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+  )
+
+  // ─── Concept Catalog CRUD ──────────────────────────────────────────────────
+  // Reusable for all 4 catalog kinds: payroll-types, frequencies, situations, accumulators
+
+  .post(
+    '/config/:kind',
+    async ({ db, params, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const validKinds = ['payrollType', 'frequency', 'situation', 'accumulator'] as const
+      type Kind = (typeof validKinds)[number]
+      const kindMap: Record<string, Kind> = {
+        'payroll-types': 'payrollType',
+        frequencies: 'frequency',
+        situations: 'situation',
+        accumulators: 'accumulator',
+      }
+      const kind = kindMap[params.kind]
+      if (!kind) {
+        set.status = 400
+        return { success: false, error: 'Invalid catalog kind' }
+      }
+      const result = await createCatalogItemService(db, kind, body)
+      if (!result.success) {
+        set.status = result.error === 'code_taken' ? 409 : 400
+        return { success: false, error: result.message }
+      }
+      set.status = 201
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      params: t.Object({ kind: t.String() }),
+      body: t.Object({
+        code: t.String({ minLength: 1, maxLength: 50 }),
+        name: t.String({ minLength: 1, maxLength: 100 }),
+        sortOrder: t.Optional(t.Number()),
+      }),
+    }
+  )
+
+  .put(
+    '/config/:kind/:id',
+    async ({ db, params, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      type Kind = 'payrollType' | 'frequency' | 'situation' | 'accumulator'
+      const kindMap: Record<string, Kind> = {
+        'payroll-types': 'payrollType',
+        frequencies: 'frequency',
+        situations: 'situation',
+        accumulators: 'accumulator',
+      }
+      const kind = kindMap[params.kind]
+      if (!kind) {
+        set.status = 400
+        return { success: false, error: 'Invalid catalog kind' }
+      }
+      const result = await updateCatalogItemService(db, kind, params.id, body)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      params: t.Object({ kind: t.String(), id: t.String() }),
+      body: t.Object({
+        name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
+        sortOrder: t.Optional(t.Number()),
+      }),
+    }
+  )
+
+  .delete(
+    '/config/:kind/:id',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      type Kind = 'payrollType' | 'frequency' | 'situation' | 'accumulator'
+      const kindMap: Record<string, Kind> = {
+        'payroll-types': 'payrollType',
+        frequencies: 'frequency',
+        situations: 'situation',
+        accumulators: 'accumulator',
+      }
+      const kind = kindMap[params.kind]
+      if (!kind) {
+        set.status = 400
+        return { success: false, error: 'Invalid catalog kind' }
+      }
+      const result = await deleteCatalogItemService(db, kind, params.id)
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : result.error === 'has_links' ? 409 : 400
+        return { success: false, error: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      params: t.Object({ kind: t.String(), id: t.String() }),
+    }
   )
 
   .post(
