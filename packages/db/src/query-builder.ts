@@ -554,6 +554,110 @@ export async function getAttendanceSummaryForPeriod(
   return { workedMinutes, lateMinutes, overtimeMinutes, daysWithRecords, recordCount: rows.length }
 }
 
+/**
+ * Bulk version — loads attendance for ALL employees in a period in a single query.
+ * Returns a Map keyed by employeeId for O(1) lookup during payroll generation.
+ */
+export async function bulkGetAttendanceSummary(
+  db: Db,
+  employeeIds: string[],
+  startDate: string,
+  endDate: string
+) {
+  if (employeeIds.length === 0)
+    return new Map<
+      string,
+      ReturnType<typeof getAttendanceSummaryForPeriod> extends Promise<infer T> ? T : never
+    >()
+
+  const rows = await db
+    .select()
+    .from(attendanceRecords)
+    .where(
+      and(
+        inArray(attendanceRecords.employeeId, employeeIds),
+        gte(attendanceRecords.date, startDate),
+        lte(attendanceRecords.date, endDate)
+      )
+    )
+
+  const result = new Map<
+    string,
+    {
+      workedMinutes: number
+      lateMinutes: number
+      overtimeMinutes: number
+      daysWithRecords: number
+      recordCount: number
+    }
+  >()
+
+  for (const row of rows) {
+    const eid = row.employeeId
+    const cur = result.get(eid) ?? {
+      workedMinutes: 0,
+      lateMinutes: 0,
+      overtimeMinutes: 0,
+      daysWithRecords: 0,
+      recordCount: 0,
+    }
+    cur.workedMinutes += row.workedMinutes ?? 0
+    cur.lateMinutes += row.lateMinutes ?? 0
+    cur.overtimeMinutes += row.overtimeMinutes ?? 0
+    if ((row.workedMinutes ?? 0) > 0) cur.daysWithRecords += 1
+    cur.recordCount += 1
+    result.set(eid, cur)
+  }
+  return result
+}
+
+/**
+ * Bulk-load all active loans for a set of employees — for payroll generation.
+ * Returns a Map keyed by employeeId.
+ */
+export async function bulkGetLoansByEmployees(db: Db, employeeIds: string[]) {
+  if (employeeIds.length === 0) return new Map<string, (typeof loans.$inferSelect)[]>()
+
+  const rows = await db
+    .select()
+    .from(loans)
+    .where(inArray(loans.employeeId, employeeIds))
+    .orderBy(desc(loans.createdAt))
+
+  const result = new Map<string, (typeof loans.$inferSelect)[]>()
+  for (const row of rows) {
+    const arr = result.get(row.employeeId) ?? []
+    arr.push(row)
+    result.set(row.employeeId, arr)
+  }
+  return result
+}
+
+/**
+ * Batch INSERT payroll lines for a full payroll — replaces 5000 individual upserts.
+ * Deletes all existing lines for the payroll first, then inserts all at once.
+ */
+export async function batchUpsertPayrollLines(
+  db: Db,
+  payrollId: string,
+  lines: Array<{
+    employeeId: string
+    grossAmount: string
+    deductions: string
+    netAmount: string
+    concepts: unknown
+  }>
+) {
+  await db.delete(payrollLines).where(eq(payrollLines.payrollId, payrollId))
+  if (lines.length === 0) return
+
+  const CHUNK = 500
+  for (let i = 0; i < lines.length; i += CHUNK) {
+    const chunk = lines.slice(i, i + CHUNK)
+    await db.insert(payrollLines).values(chunk.map((l) => ({ payrollId, ...l })))
+  }
+}
+
 // ─── Shifts CRUD ──────────────────────────────────────────────────────────────
 
 export async function listShifts(db: Db) {
