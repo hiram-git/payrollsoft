@@ -125,6 +125,7 @@ function fmt(v: string) {
             {payrolls.map((p) => {
               const isCreated = p.status === 'created' || p.status === 'draft'
               const isGen = p.status === 'generated' || p.status === 'processed'
+              const isClosed = p.status === 'closed' || p.status === 'paid'
               return (
               <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3.5">
@@ -149,38 +150,117 @@ function fmt(v: string) {
                 </td>
                 <td class="px-4 py-3.5">
                   <div class="flex items-center gap-1 justify-end">
-                    {isGen && (
+
+                    {/* Generate (created → no modal, direct submit) */}
+                    {isCreated && (
                       <form method="POST" action={`/api/payroll/${p.id}`}>
+                        <input type="hidden" name="_method" value="GENERATE" />
+                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors" title="Generar planilla">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Regenerate */}
+                    {isGen && (
+                      <form id={`form-regenerate-${p.id}`} method="POST" action={`/api/payroll/${p.id}`}>
                         <input type="hidden" name="_method" value="REGENERATE" />
-                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Regenerar planilla">
+                        <button
+                          type="button"
+                          data-confirm
+                          data-form={`form-regenerate-${p.id}`}
+                          data-title="Regenerar planilla"
+                          data-body="¿Volver a calcular todas las líneas? Los valores actuales serán reemplazados con los cálculos más recientes."
+                          data-confirm-label="Regenerar"
+                          data-confirm-style="warning"
+                          class="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                          title="Regenerar planilla"
+                        >
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                         </button>
                       </form>
                     )}
+
+                    {/* Revert */}
                     {isGen && (
-                      <form method="POST" action={`/api/payroll/${p.id}`} onsubmit="return confirm('¿Devolver al estado Creada? Se eliminarán las líneas generadas.')">
+                      <form id={`form-revert-${p.id}`} method="POST" action={`/api/payroll/${p.id}`}>
                         <input type="hidden" name="_method" value="REVERT" />
-                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors" title="Revertir a Creada">
+                        <button
+                          type="button"
+                          data-confirm
+                          data-form={`form-revert-${p.id}`}
+                          data-title="Revertir planilla"
+                          data-body="¿Devolver al estado Creada? Se eliminarán las líneas generadas y los cálculos deberán rehacerse."
+                          data-confirm-label="Revertir"
+                          data-confirm-style="warning"
+                          class="p-1.5 rounded text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors"
+                          title="Revertir a Creada"
+                        >
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
                         </button>
                       </form>
                     )}
+
+                    {/* Close */}
                     {isGen && (
-                      <form method="POST" action={`/api/payroll/${p.id}`} onsubmit="return confirm('¿Cerrar esta planilla?')">
+                      <form id={`form-close-${p.id}`} method="POST" action={`/api/payroll/${p.id}`}>
                         <input type="hidden" name="_method" value="CLOSE" />
-                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors" title="Cerrar planilla">
+                        <button
+                          type="button"
+                          data-confirm
+                          data-form={`form-close-${p.id}`}
+                          data-title="Cerrar planilla"
+                          data-body="¿Cerrar esta planilla? Quedará registrada como definitiva y se guardarán los acumulados de cada empleado."
+                          data-confirm-label="Cerrar planilla"
+                          data-confirm-style="success"
+                          class="p-1.5 rounded text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                          title="Cerrar planilla"
+                        >
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                         </button>
                       </form>
                     )}
+
+                    {/* Reopen */}
+                    {isClosed && (
+                      <form id={`form-reopen-${p.id}`} method="POST" action={`/api/payroll/${p.id}`}>
+                        <input type="hidden" name="_method" value="REOPEN" />
+                        <button
+                          type="button"
+                          data-confirm
+                          data-form={`form-reopen-${p.id}`}
+                          data-title="Reabrir planilla"
+                          data-body="¿Reabrir esta planilla? Volverá al estado Generada y los acumulados registrados serán eliminados para poder recalcularse al volver a cerrarla."
+                          data-confirm-label="Reabrir"
+                          data-confirm-style="primary"
+                          class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title="Reabrir planilla"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/></svg>
+                        </button>
+                      </form>
+                    )}
+
+                    {/* Delete */}
                     {isCreated && (
-                      <form method="POST" action={`/api/payroll/${p.id}`} onsubmit="return confirm('¿Eliminar esta planilla? Esta acción no se puede deshacer.')">
+                      <form id={`form-delete-${p.id}`} method="POST" action={`/api/payroll/${p.id}`}>
                         <input type="hidden" name="_method" value="DELETE" />
-                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Eliminar planilla">
+                        <button
+                          type="button"
+                          data-confirm
+                          data-form={`form-delete-${p.id}`}
+                          data-title="Eliminar planilla"
+                          data-body="¿Eliminar esta planilla? Esta acción es irreversible y no podrá deshacerse."
+                          data-confirm-label="Eliminar"
+                          data-confirm-style="danger"
+                          class="p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Eliminar planilla"
+                        >
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
                         </button>
                       </form>
                     )}
+
                     <a href={`/payroll/${p.id}`} class="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors" title="Ver detalle">
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
                     </a>
@@ -194,4 +274,100 @@ function fmt(v: string) {
       )}
     </div>
   </div>
+
+  <!-- Confirmation modal -->
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div id="modal-icon" class="w-10 h-10 rounded-full flex items-center justify-center mb-4"></div>
+      <h3 id="modal-title" class="text-base font-semibold text-gray-900 mb-1.5"></h3>
+      <p id="modal-body" class="text-sm text-gray-500 leading-relaxed mb-6"></p>
+      <div class="flex justify-end gap-2.5">
+        <button id="modal-cancel" type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          Cancelar
+        </button>
+        <button id="modal-confirm" type="button" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors">
+          Confirmar
+        </button>
+      </div>
+    </div>
+  </div>
 </AppLayout>
+
+<script>
+  const modal = document.getElementById('confirm-modal') as HTMLElement
+  const modalBackdrop = document.getElementById('modal-backdrop') as HTMLElement
+  const modalIcon = document.getElementById('modal-icon') as HTMLElement
+  const modalTitle = document.getElementById('modal-title') as HTMLElement
+  const modalBody = document.getElementById('modal-body') as HTMLElement
+  const modalConfirm = document.getElementById('modal-confirm') as HTMLButtonElement
+  const modalCancel = document.getElementById('modal-cancel') as HTMLButtonElement
+
+  const styleMap: Record<string, { btn: string; icon: string; svg: string }> = {
+    danger: {
+      btn: 'bg-red-600 hover:bg-red-700 text-white',
+      icon: 'bg-red-100',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>',
+    },
+    warning: {
+      btn: 'bg-amber-500 hover:bg-amber-600 text-white',
+      icon: 'bg-amber-100',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    },
+    success: {
+      btn: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+      icon: 'bg-emerald-100',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+    },
+    primary: {
+      btn: 'bg-blue-600 hover:bg-blue-700 text-white',
+      icon: 'bg-blue-100',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/></svg>',
+    },
+  }
+
+  let pendingFormId: string | null = null
+
+  function openModal(btn: HTMLElement) {
+    pendingFormId = btn.getAttribute('data-form')
+    const title = btn.getAttribute('data-title') ?? ''
+    const body = btn.getAttribute('data-body') ?? ''
+    const label = btn.getAttribute('data-confirm-label') ?? 'Confirmar'
+    const style = btn.getAttribute('data-confirm-style') ?? 'primary'
+    const s = styleMap[style] ?? styleMap.primary
+
+    modalTitle.textContent = title
+    modalBody.textContent = body
+    modalConfirm.textContent = label
+    modalConfirm.className = `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${s.btn}`
+    modalIcon.className = `w-10 h-10 rounded-full flex items-center justify-center mb-4 ${s.icon}`
+    modalIcon.innerHTML = s.svg
+
+    modal.classList.remove('hidden')
+    modalConfirm.focus()
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden')
+    pendingFormId = null
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-confirm]').forEach((btn) => {
+    btn.addEventListener('click', () => openModal(btn))
+  })
+
+  modalCancel.addEventListener('click', closeModal)
+  modalBackdrop.addEventListener('click', closeModal)
+
+  modalConfirm.addEventListener('click', () => {
+    if (pendingFormId) {
+      const form = document.getElementById(pendingFormId) as HTMLFormElement | null
+      form?.submit()
+    }
+    closeModal()
+  })
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal()
+  })
+</script>
