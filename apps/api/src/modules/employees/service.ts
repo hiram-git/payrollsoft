@@ -25,6 +25,7 @@ export type EmployeeCreateInput = {
   cargoId?: string | null
   funcionId?: string | null
   departamentoId?: string | null
+  positionId?: string | null
   hireDate: string
   baseSalary: string
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
@@ -98,6 +99,7 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
     cargoId: input.cargoId || null,
     funcionId: input.funcionId || null,
     departamentoId: input.departamentoId || null,
+    positionId: input.positionId || null,
     position,
     department,
     hireDate: input.hireDate,
@@ -141,6 +143,7 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
   if (input.baseSalary !== undefined) patch.baseSalary = input.baseSalary
   if (input.payFrequency !== undefined) patch.payFrequency = input.payFrequency
   if (input.customFields !== undefined) patch.customFields = input.customFields
+  if ('positionId' in input) patch.positionId = input.positionId || null
 
   // Catalog IDs — resolve names when any ID changes
   const catalogChanged =

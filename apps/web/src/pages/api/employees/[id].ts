@@ -36,6 +36,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     socialSecurityNumber: g('socialSecurityNumber') || null,
     email: g('email') || null,
     phone: g('phone') || null,
+    positionId: g('positionId') || null,
     cargoId: g('cargoId') || null,
     funcionId: g('funcionId') || null,
     departamentoId: g('departamentoId') || null,

@@ -1,0 +1,146 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+type Position = {
+  id: string
+  code: string
+  name: string
+  salary: string
+  cargoId: string | null
+  departamentoId: string | null
+  funcionId: string | null
+  isActive: boolean
+}
+type CatalogItem = { id: string; code: string; name: string }
+
+let positions: Position[] = []
+let cargos: CatalogItem[] = []
+let funciones: CatalogItem[] = []
+let departamentos: CatalogItem[] = []
+let error = ''
+
+try {
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [pRes, cRes, fRes, dRes] = await Promise.all([
+    fetch(`${API_URL}/positions`, { headers }),
+    fetch(`${API_URL}/cargos`, { headers }),
+    fetch(`${API_URL}/funciones`, { headers }),
+    fetch(`${API_URL}/departamentos`, { headers }),
+  ])
+  if (pRes.status === 401) return Astro.redirect('/login')
+  if (pRes.ok) positions = ((await pRes.json()) as { data: Position[] }).data ?? []
+  if (cRes.ok) cargos = ((await cRes.json()) as { data: CatalogItem[] }).data ?? []
+  if (fRes.ok) funciones = ((await fRes.json()) as { data: CatalogItem[] }).data ?? []
+  if (dRes.ok) departamentos = ((await dRes.json()) as { data: CatalogItem[] }).data ?? []
+} catch {
+  error = 'No se pudo conectar con el servidor'
+}
+
+const cargoMap = new Map(cargos.map((c) => [c.id, c.name]))
+const funcionMap = new Map(funciones.map((f) => [f.id, f.name]))
+const deptMap = new Map(departamentos.map((d) => [d.id, d.name]))
+
+const success = Astro.url.searchParams.get('success') === '1'
+---
+
+<AppLayout title="Estructura">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Estructura</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{positions.length} posiciones registradas</p>
+      </div>
+      <a href="/config/estructura/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+        + Nueva posición
+      </a>
+    </div>
+
+    {success && (
+      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Posición guardada correctamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {error}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {positions.length === 0 ? (
+        <div class="p-12 text-center text-gray-400 text-sm">
+          No hay posiciones registradas.{' '}
+          <a href="/config/estructura/new" class="text-blue-600 hover:underline">Agregar la primera</a>.
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Salario</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Cargo</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Departamento</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Función</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {positions.map((pos) => (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 font-mono text-xs text-gray-500">{pos.code}</td>
+                <td class="px-4 py-3 font-medium text-gray-900">{pos.name}</td>
+                <td class="px-4 py-3 text-gray-700">${pos.salary}</td>
+                <td class="px-4 py-3 text-gray-600">{pos.cargoId ? (cargoMap.get(pos.cargoId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3 text-gray-600">{pos.departamentoId ? (deptMap.get(pos.departamentoId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3 text-gray-600">{pos.funcionId ? (funcionMap.get(pos.funcionId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${pos.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                    {pos.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center justify-end gap-1">
+                    <a
+                      href={`/config/estructura/${pos.id}`}
+                      title="Editar"
+                      class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </a>
+                    {pos.isActive && (
+                      <form
+                        method="POST"
+                        action={`/api/config/estructura/${pos.id}`}
+                        onsubmit="return confirm('¿Dar de baja esta posición?')"
+                      >
+                        <input type="hidden" name="_method" value="DELETE" />
+                        <button
+                          type="submit"
+                          title="Dar de baja"
+                          class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          </svg>
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</AppLayout>

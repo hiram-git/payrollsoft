@@ -26,7 +26,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   // ── PUT ───────────────────────────────────────────────────────────────────────
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
-  const gInt = (k: string) => { const v = g(k); return v ? parseInt(v, 10) : 0 }
+  const gInt = (k: string) => {
+    const v = g(k)
+    return v ? Number.parseInt(v, 10) : 0
+  }
   const orNull = (v: string) => v || null
 
   const body = {
