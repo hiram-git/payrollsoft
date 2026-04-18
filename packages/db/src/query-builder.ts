@@ -655,6 +655,51 @@ export async function bulkGetLoansByEmployees(db: Db, employeeIds: string[]) {
 }
 
 /**
+ * Bulk-load total installment amounts per employee per creditor code for a payroll period.
+ * Returns Map<employeeId, Map<creditorCode, totalInstallment>>.
+ * Replaces the per-employee per-creditor DB calls inside CUOTA_ACREEDOR() during generation.
+ */
+export async function bulkLoadCreditorInstallments(
+  db: Db,
+  employeeIds: string[],
+  periodStart: string,
+  periodEnd: string
+): Promise<Map<string, Map<string, number>>> {
+  if (employeeIds.length === 0) return new Map()
+
+  const rows = await db
+    .select({
+      employeeId: loans.employeeId,
+      creditorCode: creditors.code,
+      installment: loans.installment,
+    })
+    .from(loans)
+    .innerJoin(creditors, eq(loans.creditorId, creditors.id))
+    .where(
+      and(
+        inArray(loans.employeeId, employeeIds),
+        eq(loans.isActive, true),
+        lte(loans.startDate, periodEnd),
+        or(sql`${loans.endDate} IS NULL`, gte(loans.endDate, periodStart))
+      )
+    )
+
+  const result = new Map<string, Map<string, number>>()
+  for (const row of rows) {
+    let byCreditor = result.get(row.employeeId)
+    if (!byCreditor) {
+      byCreditor = new Map()
+      result.set(row.employeeId, byCreditor)
+    }
+    byCreditor.set(
+      row.creditorCode,
+      (byCreditor.get(row.creditorCode) ?? 0) + Number(row.installment)
+    )
+  }
+  return result
+}
+
+/**
  * Batch INSERT payroll lines for a full payroll — replaces 5000 individual upserts.
  * Deletes all existing lines for the payroll first, then inserts all at once.
  */
