@@ -3,6 +3,7 @@ import {
   batchUpsertPayrollLines,
   bulkGetAttendanceSummary,
   bulkGetLoansByEmployees,
+  bulkLoadCreditorInstallments,
   countPendingInstallments,
   createPayroll,
   deleteCreatedPayroll,
@@ -151,7 +152,8 @@ export async function deletePayrollService(db: AnyDb, id: string) {
 
 // Accept both new and legacy status names for backward compatibility
 const ALLOWED_FOR_GENERATE = new Set(['created', 'draft'])
-const ALLOWED_FOR_REGENERATE = new Set(['generated', 'processed'])
+// 'processing' is included so a payroll stuck by a previous timeout can be retried
+const ALLOWED_FOR_REGENERATE = new Set(['generated', 'processed', 'processing'])
 
 async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regenerate') {
   const payroll = await getPayroll(db, id)
@@ -167,7 +169,8 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     }
   }
 
-  const originalStatus = payroll.status
+  // If already stuck at 'processing', roll back to 'generated' on failure
+  const originalStatus = payroll.status === 'processing' ? 'generated' : payroll.status
 
   try {
     // Mark as processing (inside try so we can revert on any failure)
@@ -245,10 +248,11 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
 
     const employeeIds = allEmployees.map((e) => e.id)
 
-    // Bulk-load attendance and loans in 2 queries instead of 2×N
-    const [attendanceMap, loansMap] = await Promise.all([
+    // Bulk-load attendance, loans, and creditor installments — 3 queries instead of N×M
+    const [attendanceMap, loansMap, creditorInstallmentsMap] = await Promise.all([
       bulkGetAttendanceSummary(db, employeeIds, payroll.periodStart, payroll.periodEnd),
       bulkGetLoansByEmployees(db, employeeIds),
+      bulkLoadCreditorInstallments(db, employeeIds, payroll.periodStart, payroll.periodEnd),
     ])
 
     // Cache position lookups (public institutions only, usually few distinct positions)
@@ -349,14 +353,17 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
           name: c.name,
           type: c.type as 'income' | 'deduction',
           formula: c.formula,
+          allowZero: c.allowZero,
         })),
         loanInstallments,
         loadAccumulated: (code, periods) => memoAccumulated(emp.id, code, periods),
         loadAccumulatedByDateRange: (code, from, to) =>
           memoAccumulatedByRange(emp.id, code, from, to),
         loadBalance: async () => 0,
-        loadInstallmentsByCreditor: (creditorCode, from, to) =>
-          loadInstallmentsByCreditor(db, emp.id, creditorCode, from, to),
+        loadInstallmentsByCreditor: (creditorCode) => {
+          const byEmp = creditorInstallmentsMap.get(emp.id)
+          return Promise.resolve(byEmp?.get(creditorCode) ?? 0)
+        },
       })
 
       if (result.warnings.length > 0) {

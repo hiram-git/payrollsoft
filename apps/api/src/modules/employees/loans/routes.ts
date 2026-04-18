@@ -4,6 +4,7 @@ import { tenantPlugin } from '../../../middleware/tenant'
 import {
   closeLoanService,
   createLoanService,
+  getLoanInstallmentsService,
   getLoanService,
   listAllLoansService,
   listLoansService,
@@ -92,6 +93,19 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
         return { success: false, error: 'Loan not found' }
       }
       return { success: true, data: row }
+    },
+    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+  )
+
+  .get(
+    '/:id/installments',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await getLoanInstallmentsService(db, params.id)
+      return { success: true, data }
     },
     { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
   )

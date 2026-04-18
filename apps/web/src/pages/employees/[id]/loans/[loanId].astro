@@ -16,21 +16,37 @@ type Loan = {
   startDate: string
   endDate: string | null
   isActive: boolean
+  loanType: string | null
+  frequency: string | null
+  creditor: string | null
+  creditorId: string | null
+  allowDecember: boolean
+}
+type Installment = {
+  id: string
+  installmentNumber: number
+  amount: string
+  status: string
+  payrollId: string | null
+  paidAt: string | null
 }
 
 let emp: Employee | null = null
 let loan: Loan | null = null
+let installments: Installment[] = []
 
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
-  const [empRes, loanRes] = await Promise.all([
+  const [empRes, loanRes, instRes] = await Promise.all([
     fetch(`${API_URL}/employees/${id}`, { headers }),
     fetch(`${API_URL}/loans/${loanId}`, { headers }),
+    fetch(`${API_URL}/loans/${loanId}/installments`, { headers }),
   ])
   if (empRes.status === 401) return Astro.redirect('/login')
   if (empRes.status === 404) return Astro.redirect('/employees')
   if (empRes.ok) emp = ((await empRes.json()) as { data: Employee }).data
   if (loanRes.ok) loan = ((await loanRes.json()) as { data: Loan }).data
+  if (instRes.ok) installments = ((await instRes.json()) as { data: Installment[] }).data ?? []
 } catch {
   return Astro.redirect('/employees')
 }
@@ -43,28 +59,61 @@ const errorMessages: Record<string, string> = {
   'missing-fields': 'Completa todos los campos requeridos.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
 }
+
+// Compute due dates from startDate + frequency
+function computeDueDate(
+  startDate: string,
+  frequency: string | null,
+  installmentNumber: number
+): string {
+  const date = new Date(`${startDate}T00:00:00`)
+  const n = installmentNumber - 1
+  if (frequency === 'semanal') {
+    date.setDate(date.getDate() + n * 7)
+  } else if (frequency === 'quincenal') {
+    date.setDate(date.getDate() + n * 15)
+  } else {
+    // monthly (default)
+    date.setMonth(date.getMonth() + n)
+  }
+  return date.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+const paid = installments.filter((i) => i.status === 'paid').length
+const pending = installments.filter((i) => i.status === 'pending').length
+const totalAmount = installments.reduce((s, i) => s + Number(i.amount), 0)
+const paidAmount = installments
+  .filter((i) => i.status === 'paid')
+  .reduce((s, i) => s + Number(i.amount), 0)
+
+const frequencyLabels: Record<string, string> = {
+  semanal: 'Semanal',
+  quincenal: 'Quincenal',
+  mensual: 'Mensual',
+  monthly: 'Mensual',
+  weekly: 'Semanal',
+  biweekly: 'Quincenal',
+}
 ---
 
 <AppLayout title="Editar Préstamo">
-  <div class="p-8 max-w-2xl">
+  <div class="p-8 max-w-4xl">
     <div class="flex items-center gap-3 mb-6">
-      <a href={`/employees/${id}`} class="text-sm text-gray-500 hover:text-gray-700">
+      <a href={`/employees/${id}?tab=prestamos`} class="text-sm" style="color:var(--mute)">
         ← {emp.firstName} {emp.lastName}
       </a>
-      <span class="text-gray-300">/</span>
-      <h1 class="text-2xl font-bold text-gray-900">Préstamo</h1>
+      <span style="color:var(--rule)">/</span>
+      <h1 class="text-xl font-semibold" style="color:var(--ink)">Préstamo</h1>
       {!loan.isActive && (
-        <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Cerrado</span>
+        <span class="pill-closed">Cerrado</span>
       )}
     </div>
 
     {success && (
-      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-        Préstamo actualizado correctamente.
-      </div>
+      <div class="banner banner-ok mb-5">Préstamo actualizado correctamente.</div>
     )}
     {error && (
-      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div class="banner banner-err mb-5">
         {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
       </div>
     )}
@@ -72,57 +121,288 @@ const errorMessages: Record<string, string> = {
     <form method="POST" action={`/api/employees/${id}/loans/${loanId}`}>
       <input type="hidden" name="_method" value="PUT" />
 
-      <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+      <div class="card mb-4">
+        <h2 class="section-title mb-4">Datos del Préstamo</h2>
+
+        <!-- Context info (read-only) -->
+        {(loan.creditor || loan.loanType || loan.frequency) && (
+          <div class="context-row mb-4">
+            {loan.creditor && <span class="context-chip">{loan.creditor}</span>}
+            {loan.loanType && <span class="context-chip">{loan.loanType}</span>}
+            {loan.frequency && <span class="context-chip">{frequencyLabels[loan.frequency] ?? loan.frequency}</span>}
+          </div>
+        )}
+
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Monto total (USD) *</label>
+            <label class="field-label">Monto total (USD) *</label>
             <input type="text" name="amount" class="input" required value={loan.amount} />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Saldo actual (USD) *</label>
+            <label class="field-label">Saldo actual (USD) *</label>
             <input type="text" name="balance" class="input" required value={loan.balance} />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Cuota por período (USD) *</label>
+            <label class="field-label">Cuota por período (USD) *</label>
             <input type="text" name="installment" class="input" required value={loan.installment} />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de inicio *</label>
+            <label class="field-label">Fecha de inicio *</label>
             <input type="date" name="startDate" class="input" required value={loan.startDate} />
           </div>
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Fecha estimada de fin</label>
+            <label class="field-label">Fecha estimada de fin</label>
             <input type="date" name="endDate" class="input" value={loan.endDate ?? ''} />
+          </div>
+          <div class="flex items-center gap-2 pt-5">
+            <input
+              type="checkbox"
+              name="allowDecember"
+              id="allowDecember"
+              class="w-4 h-4"
+              checked={loan.allowDecember}
+            />
+            <label for="allowDecember" class="field-label mb-0">Descontar en diciembre</label>
           </div>
         </div>
       </div>
 
-      <div class="flex justify-between mt-6">
+      <div class="flex justify-between">
         {loan.isActive && (
-          <form method="POST" action={`/api/employees/${id}/loans/${loanId}`}
+          <form
+            method="POST"
+            action={`/api/employees/${id}/loans/${loanId}`}
             onsubmit="return confirm('¿Cerrar este préstamo? Ya no se descontará de la nómina.')"
           >
             <input type="hidden" name="_method" value="DELETE" />
-            <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
-              Cerrar préstamo
-            </button>
+            <button type="submit" class="btn-danger">Cerrar préstamo</button>
           </form>
         )}
         <div class="flex gap-3 ml-auto">
-          <a href={`/employees/${id}`} class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-            Cancelar
-          </a>
-          <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-            Guardar cambios
-          </button>
+          <a href={`/employees/${id}?tab=prestamos`} class="btn-ghost">Cancelar</a>
+          <button type="submit" class="btn-primary">Guardar cambios</button>
         </div>
       </div>
     </form>
+
+    <!-- Installments table -->
+    {installments.length > 0 && (
+      <div class="card mt-6">
+        <div class="table-header">
+          <h2 class="section-title">Tabla de Cuotas</h2>
+          <div class="table-stats">
+            <span><strong>{paid}</strong> pagadas</span>
+            <span class="sep">·</span>
+            <span><strong>{pending}</strong> pendientes</span>
+            <span class="sep">·</span>
+            <span>Total <strong>${totalAmount.toLocaleString('es-PA', { minimumFractionDigits: 2 })}</strong></span>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="col-num">#</th>
+                <th class="col-date">Fecha estimada</th>
+                <th class="col-amt">Cuota</th>
+                <th class="col-status">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {installments.map((inst) => (
+                <tr>
+                  <td class="col-num">{inst.installmentNumber}</td>
+                  <td class="col-date">{computeDueDate(loan!.startDate, loan!.frequency, inst.installmentNumber)}</td>
+                  <td class="col-amt">${Number(inst.amount).toLocaleString('es-PA', { minimumFractionDigits: 2 })}</td>
+                  <td class="col-status">
+                    {inst.status === 'paid'
+                      ? <span class="pill-paid">Pagada</span>
+                      : <span class="pill-pending">Pendiente</span>
+                    }
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <!-- Summary bar -->
+        <div class="summary-bar">
+          <div class="summary-item">
+            <span class="summary-label">Cuota fija</span>
+            <span class="summary-value">${Number(loan.installment).toLocaleString('es-PA', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Total amortizado</span>
+            <span class="summary-value paid-color">${paidAmount.toLocaleString('es-PA', { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Saldo pendiente</span>
+            <span class="summary-value">${Number(loan.balance).toLocaleString('es-PA', { minimumFractionDigits: 2 })}</span>
+          </div>
+        </div>
+      </div>
+    )}
   </div>
 </AppLayout>
 
 <style>
-  .input {
-    @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  .card {
+    background: var(--ink-3);
+    border: 1px solid var(--rule);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
   }
+  .section-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .field-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mute);
+    margin-bottom: 0.25rem;
+  }
+  .input {
+    width: 100%;
+    border-radius: 0.5rem;
+    border: 1px solid var(--rule);
+    background: var(--fore);
+    color: var(--ink);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .input:focus {
+    border-color: var(--navy-hi);
+  }
+  .context-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .context-chip {
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: var(--ink-3);
+    border: 1px solid var(--rule);
+    color: var(--mute);
+  }
+  .pill-closed {
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    background: rgba(156,163,175,0.15);
+    color: var(--mute);
+  }
+  .pill-paid {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    background: rgba(16,185,129,0.12);
+    color: var(--ok);
+  }
+  .pill-pending {
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    background: rgba(245,158,11,0.12);
+    color: var(--warn);
+  }
+  .banner {
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
+  }
+  .banner-ok { background: rgba(16,185,129,0.1); color: var(--ok); border: 1px solid rgba(16,185,129,0.25); }
+  .banner-err { background: rgba(239,68,68,0.08); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
+  .btn-primary {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    background: var(--navy-hi);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-ghost {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--rule);
+    background: transparent;
+    color: var(--mute);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    transition: background 0.15s;
+  }
+  .btn-ghost:hover { background: var(--ink-3); }
+  .btn-danger {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(239,68,68,0.4);
+    background: transparent;
+    color: #ef4444;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-danger:hover { background: rgba(239,68,68,0.06); }
+
+  /* Installments table */
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+  .table-stats {
+    font-size: 0.75rem;
+    color: var(--mute);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .table-stats strong { color: var(--ink); }
+  .sep { color: var(--rule); }
+  .table-wrap { overflow-x: auto; margin: 0 -1.5rem; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  thead tr { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+  thead th {
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mute);
+    background: var(--fore);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--rule); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 0.5rem 1rem; color: var(--ink); }
+  tbody tr:hover { background: var(--ink-3); }
+  .col-num { text-align: center; width: 3rem; color: var(--mute) !important; }
+  .col-date { }
+  .col-amt { text-align: right; font-variant-numeric: tabular-nums; }
+  .col-status { text-align: center; width: 7rem; }
+
+  .summary-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-top: 1px solid var(--rule);
+    margin-top: 0;
+    padding: 1rem 1.5rem;
+  }
+  .summary-item { text-align: center; }
+  .summary-label { display: block; font-size: 0.7rem; color: var(--mute); margin-bottom: 0.25rem; }
+  .summary-value { font-size: 1rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .paid-color { color: var(--ok); }
 </style>
