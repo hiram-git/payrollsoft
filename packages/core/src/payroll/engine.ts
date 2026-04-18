@@ -9,6 +9,8 @@ export type ConceptInput = {
   name: string
   type: 'income' | 'deduction'
   formula: string | null
+  /** When false, skip this concept from the line if its evaluated amount is zero. */
+  allowZero?: boolean
 }
 
 export type AttendanceInput = {
@@ -114,8 +116,11 @@ export async function processLine(input: ProcessLineInput): Promise<ProcessLineR
       }
     }
 
-    // Make this concept's value available to later concepts
+    // Make this concept's value available to later concepts regardless of zero filtering
     resolvedConcepts[concept.code] = amount
+
+    // Skip zero-amount concepts when the concept explicitly disallows zeros
+    if (amount === 0 && concept.allowZero === false) continue
 
     entries.push({
       code: concept.code,

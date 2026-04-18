@@ -353,6 +353,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
           name: c.name,
           type: c.type as 'income' | 'deduction',
           formula: c.formula,
+          allowZero: c.allowZero,
         })),
         loanInstallments,
         loadAccumulated: (code, periods) => memoAccumulated(emp.id, code, periods),
