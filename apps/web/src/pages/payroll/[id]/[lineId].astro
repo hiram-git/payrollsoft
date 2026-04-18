@@ -104,10 +104,17 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
         {isGenerated && (
-          <form method="POST" action={`/api/payroll/${id}/line/${lineId}`}>
+          <form id="form-regenerate" method="POST" action={`/api/payroll/${id}/line/${lineId}`}>
             <input type="hidden" name="_method" value="REGENERATE" />
             <button
-              type="submit"
+              type="button"
+              data-confirm
+              data-form="form-regenerate"
+              data-title="Regenerar empleado"
+              data-body={`¿Recalcular los conceptos de ${employeeName}? Los valores actuales serán reemplazados.`}
+              data-confirm-label="Regenerar"
+              data-confirm-style="warning"
+              data-show-loading="true"
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -262,4 +269,118 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     )}
 
   </div>
+
+  <!-- Confirmation modal -->
+  <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+    <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+      <div id="modal-icon" class="w-10 h-10 rounded-full flex items-center justify-center mb-4"></div>
+      <h3 id="modal-title" class="text-base font-semibold text-gray-900 mb-1.5"></h3>
+      <p id="modal-body" class="text-sm text-gray-500 leading-relaxed mb-4"></p>
+      <div id="modal-loading" class="hidden mb-5">
+        <div class="flex items-center gap-2 mb-2">
+          <svg class="w-4 h-4 text-amber-500 animate-spin flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+          <span class="text-xs text-gray-500">Procesando… esto puede tomar unos segundos.</span>
+        </div>
+        <div class="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+          <div class="h-1.5 rounded-full bg-amber-400 animate-[indeterminate_1.5s_ease-in-out_infinite]" style="width:40%"></div>
+        </div>
+      </div>
+      <div id="modal-actions" class="flex justify-end gap-2.5">
+        <button id="modal-cancel" type="button" class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">Cancelar</button>
+        <button id="modal-confirm" type="button" class="px-4 py-2 text-sm font-medium rounded-lg transition-colors">Confirmar</button>
+      </div>
+    </div>
+  </div>
 </AppLayout>
+
+<style>
+  @keyframes indeterminate {
+    0%   { transform: translateX(-100%); width: 40%; }
+    50%  { width: 70%; }
+    100% { transform: translateX(300%); width: 40%; }
+  }
+</style>
+
+<script>
+  const modal = document.getElementById('confirm-modal') as HTMLElement
+  const modalBackdrop = document.getElementById('modal-backdrop') as HTMLElement
+  const modalIcon = document.getElementById('modal-icon') as HTMLElement
+  const modalTitle = document.getElementById('modal-title') as HTMLElement
+  const modalBody = document.getElementById('modal-body') as HTMLElement
+  const modalLoading = document.getElementById('modal-loading') as HTMLElement
+  const modalActions = document.getElementById('modal-actions') as HTMLElement
+  const modalConfirm = document.getElementById('modal-confirm') as HTMLButtonElement
+  const modalCancel = document.getElementById('modal-cancel') as HTMLButtonElement
+
+  const styleMap: Record<string, { btn: string; icon: string; svg: string }> = {
+    warning: {
+      btn: 'bg-amber-500 hover:bg-amber-600 text-white',
+      icon: 'bg-amber-100',
+      svg: '<svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    },
+  }
+
+  let pendingFormId: string | null = null
+  let pendingShowLoading = false
+
+  function openModal(btn: HTMLElement) {
+    pendingFormId = btn.getAttribute('data-form')
+    pendingShowLoading = btn.getAttribute('data-show-loading') === 'true'
+    const title = btn.getAttribute('data-title') ?? ''
+    const body = btn.getAttribute('data-body') ?? ''
+    const label = btn.getAttribute('data-confirm-label') ?? 'Confirmar'
+    const style = btn.getAttribute('data-confirm-style') ?? 'warning'
+    const s = styleMap[style] ?? styleMap.warning
+
+    modalTitle.textContent = title
+    modalBody.textContent = body
+    modalLoading.classList.add('hidden')
+    modalActions.classList.remove('hidden')
+    modalConfirm.textContent = label
+    modalConfirm.className = `px-4 py-2 text-sm font-medium rounded-lg transition-colors ${s.btn}`
+    modalIcon.className = `w-10 h-10 rounded-full flex items-center justify-center mb-4 ${s.icon}`
+    modalIcon.innerHTML = s.svg
+
+    modal.classList.remove('hidden')
+    modalConfirm.focus()
+  }
+
+  function showLoadingState() {
+    modalLoading.classList.remove('hidden')
+    modalActions.classList.add('hidden')
+    modalBackdrop.removeEventListener('click', closeModal)
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden')
+    pendingFormId = null
+    pendingShowLoading = false
+    modalLoading.classList.add('hidden')
+    modalActions.classList.remove('hidden')
+    modalBackdrop.addEventListener('click', closeModal)
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-confirm]').forEach((btn) => {
+    btn.addEventListener('click', () => openModal(btn))
+  })
+
+  modalCancel.addEventListener('click', closeModal)
+  modalBackdrop.addEventListener('click', closeModal)
+
+  modalConfirm.addEventListener('click', () => {
+    if (pendingFormId) {
+      const form = document.getElementById(pendingFormId) as HTMLFormElement | null
+      if (form) {
+        if (pendingShowLoading) showLoadingState()
+        form.submit()
+      }
+    } else {
+      closeModal()
+    }
+  })
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden') && modalLoading.classList.contains('hidden')) closeModal()
+  })
+</script>
