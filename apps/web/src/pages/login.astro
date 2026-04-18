@@ -1,6 +1,4 @@
 ---
-import BaseLayout from '@/layouts/BaseLayout.astro'
-
 const errorMessages: Record<string, string> = {
   'missing-fields': 'Completa todos los campos.',
   'invalid-credentials': 'Correo, contraseña o empresa incorrectos.',
@@ -11,73 +9,618 @@ const errorKey = Astro.url.searchParams.get('error') ?? ''
 const errorMessage = errorMessages[errorKey] ?? ''
 ---
 
-<BaseLayout title="Iniciar sesión">
-  <div class="min-h-screen flex items-center justify-center bg-gray-50">
-    <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-md">
-      <div class="mb-8 text-center">
-        <h1 class="text-2xl font-bold text-gray-900">Payroll Panamá</h1>
-        <p class="text-gray-500 mt-1 text-sm">Ingresa a tu cuenta</p>
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar sesión — Payroll Panamá</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script is:inline>
+    try { document.documentElement.dataset.theme = localStorage.getItem('payroll.theme') || 'dark'; } catch(e) {}
+  </script>
+  <style>
+    :root, [data-theme="dark"] {
+      --ink:      #07101F;
+      --ink-2:    #0A1628;
+      --ink-3:    #101E33;
+      --ink-4:    #16263F;
+      --navy:     #003087;
+      --navy-hi:  #1E4BA8;
+      --navy-lo:  #00205A;
+      --rule:     #1A2740;
+      --rule-hi:  #243555;
+      --mute:     #6A7690;
+      --mute-2:   #8B97AE;
+      --fore:     #EDEEF2;
+      --fore-dim: #C9CEDB;
+      --warn:     #E3B25A;
+      --err:      #E06B5C;
+      --ok:       #6FB58C;
+      --f-display:'Fraunces','Times New Roman',serif;
+      --f-sans:   'Inter Tight',-apple-system,system-ui,sans-serif;
+      --f-mono:   'JetBrains Mono',ui-monospace,monospace;
+    }
+    [data-theme="light"] {
+      --ink:      #F4F5F7;
+      --ink-2:    #FFFFFF;
+      --ink-3:    #FFFFFF;
+      --ink-4:    #EFF1F5;
+      --navy:     #003087;
+      --navy-hi:  #1E4BA8;
+      --navy-lo:  #00205A;
+      --rule:     #E4E7EE;
+      --rule-hi:  #D2D7E0;
+      --mute:     #7A8499;
+      --mute-2:   #5B6478;
+      --fore:     #0C1424;
+      --fore-dim: #2A3346;
+      --warn:     #B07A17;
+      --err:      #B53A2B;
+      --ok:       #2E7A56;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--ink);
+      color: var(--fore);
+      font-family: var(--f-sans);
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.005em;
+      overflow: hidden;
+      transition: background 180ms ease, color 180ms ease;
+    }
+    ::selection { background: var(--navy); color: #fff; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .left-panel { display: none; }
+    }
+
+    /* ── Left panel ──────────────────────────────────────── */
+    .left-panel {
+      position: relative;
+      background: var(--ink-2);
+      border-right: 1px solid var(--rule);
+      padding: 40px 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .motif {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.55;
+      width: 100%;
+      height: 100%;
+    }
+    .left-top {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      z-index: 2;
+    }
+    .mark-box {
+      width: 36px; height: 36px;
+      border-radius: 4px;
+      background: var(--navy);
+      display: grid;
+      place-items: center;
+      font-family: var(--f-display);
+      font-weight: 400;
+      font-size: 20px;
+      color: #fff;
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+    .wordmark {
+      font-family: var(--f-sans);
+      font-weight: 500;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      color: var(--fore);
+    }
+    .wordmark-sub {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .left-center {
+      position: relative;
+      z-index: 2;
+      max-width: 520px;
+    }
+    .display-h {
+      font-family: var(--f-display);
+      font-weight: 300;
+      font-size: clamp(44px, 5.2vw, 76px);
+      line-height: 1.02;
+      letter-spacing: -0.025em;
+      margin: 0 0 28px 0;
+      color: var(--fore);
+    }
+    .display-em {
+      font-style: italic;
+      font-weight: 300;
+      color: var(--fore-dim);
+    }
+    .display-rule {
+      width: 64px; height: 1px;
+      background: var(--rule-hi);
+      margin: 0 0 28px 0;
+    }
+    .display-p {
+      font-family: var(--f-sans);
+      font-weight: 400;
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--mute-2);
+      max-width: 420px;
+      margin: 0;
+    }
+    .left-bottom {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 24px;
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .stat-block { display: flex; flex-direction: column; gap: 4px; }
+    .stat-val {
+      font-family: var(--f-mono);
+      font-size: 13px;
+      color: var(--fore-dim);
+      letter-spacing: 0.04em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Right panel ─────────────────────────────────────── */
+    .right-panel {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 40px 48px;
+      background: var(--ink);
+      min-width: 0;
+    }
+    .right-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .form-wrap {
+      align-self: center;
+      width: 100%;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+    .eyebrow {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .eyebrow-dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--navy);
+      display: inline-block;
+    }
+    .form-h1 {
+      font-family: var(--f-display);
+      font-weight: 300;
+      font-size: 40px;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      margin: 0 0 10px 0;
+      color: var(--fore);
+    }
+    .form-sub {
+      font-family: var(--f-sans);
+      font-size: 14px;
+      color: var(--mute-2);
+      margin: 0 0 36px 0;
+    }
+    .field { margin-bottom: 20px; }
+    .label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 8px;
+    }
+    .field-label {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute-2);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .input-wrap {
+      position: relative;
+      border-bottom: 1px solid var(--rule);
+      transition: border-color 160ms ease;
+    }
+    .input-wrap:focus-within { border-bottom-color: var(--fore); }
+    .field-input {
+      width: 100%;
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 12px 0;
+      padding-right: 36px;
+      color: var(--fore);
+      font-family: var(--f-sans);
+      font-size: 16px;
+      letter-spacing: -0.005em;
+      caret-color: var(--fore);
+    }
+    .field-input::placeholder { color: var(--mute); }
+    .eye-btn {
+      position: absolute;
+      right: 0; top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--mute);
+      padding: 6px;
+      display: grid;
+      place-items: center;
+      transition: color 140ms ease;
+    }
+    .eye-btn:hover { color: var(--fore-dim); }
+    .err-banner {
+      font-family: var(--f-mono);
+      font-size: 11.5px;
+      color: var(--err);
+      border: 1px solid rgba(224,107,92,0.35);
+      background: rgba(224,107,92,0.06);
+      padding: 10px 12px;
+      border-radius: 3px;
+      margin-bottom: 22px;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .submit-btn {
+      width: 100%;
+      height: 52px;
+      background: var(--navy);
+      color: #fff;
+      border: none;
+      border-radius: 3px;
+      font-family: var(--f-sans);
+      font-weight: 500;
+      font-size: 14.5px;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 160ms ease;
+      margin-bottom: 28px;
+    }
+    .submit-btn:hover { background: var(--navy-hi); }
+    .submit-btn:active { background: var(--navy-lo); }
+    .right-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ── Theme switch ────────────────────────────────────── */
+    .theme-switch {
+      position: fixed;
+      top: 24px; right: 24px;
+      z-index: 40;
+      display: inline-flex;
+      padding: 3px;
+      background: var(--ink-3);
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+    .ts-knob {
+      position: absolute;
+      top: 3px;
+      width: 36px; height: 28px;
+      background: var(--ink-2);
+      border: 1px solid var(--rule-hi);
+      border-radius: 999px;
+      transition: transform 220ms cubic-bezier(.2,.7,.2,1);
+      pointer-events: none;
+    }
+    .ts-btn {
+      position: relative;
+      z-index: 2;
+      width: 36px; height: 28px;
+      display: grid;
+      place-items: center;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 999px;
+      transition: color 160ms ease;
+    }
+    .ts-btn[data-active="true"]  { color: var(--fore); }
+    .ts-btn[data-active="false"] { color: var(--mute); }
+  </style>
+</head>
+<body>
+
+<!-- Theme switch -->
+<div class="theme-switch" role="group" aria-label="Cambiar tema" id="theme-switch">
+  <span class="ts-knob" id="ts-knob"></span>
+  <button class="ts-btn" id="ts-light" data-active="false" aria-label="Tema claro" title="Tema claro">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+      <circle cx="7" cy="7" r="2.6"/>
+      <path d="M7 1.5v1.3M7 11.2v1.3M1.5 7h1.3M11.2 7h1.3M3 3l.9.9M10.1 10.1l.9.9M3 11l.9-.9M10.1 3.9l.9-.9"/>
+    </svg>
+  </button>
+  <button class="ts-btn" id="ts-dark" data-active="true" aria-label="Tema oscuro" title="Tema oscuro">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11.5 8.5A4.8 4.8 0 0 1 5.5 2.5a5 5 0 1 0 6 6Z"/>
+    </svg>
+  </button>
+</div>
+
+<!-- Two-panel shell -->
+<div class="shell">
+
+  <!-- Left identity panel -->
+  <aside class="left-panel">
+    <!-- Blueprint motif -->
+    <svg class="motif" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" viewBox="0 0 800 1000">
+      <defs>
+        <pattern id="gridp" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M40 0H0V40" fill="none" stroke="#1A2740" stroke-width="0.5"/>
+        </pattern>
+        <radialGradient id="vign" cx="30%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#0A1628" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#07101F" stop-opacity="1"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="1000" fill="url(#gridp)"/>
+      <polyline fill="none" stroke="#1E4BA8" stroke-width="1" stroke-opacity="0.55"
+        points="40,780 120,740 200,760 280,700 360,680 440,640 520,600 600,560 680,520 760,460"/>
+      <line x1="40" y1="820" x2="40" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="120" y1="820" x2="120" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="200" y1="820" x2="200" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="280" y1="820" x2="280" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="360" y1="820" x2="360" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="440" y1="820" x2="440" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="520" y1="820" x2="520" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="600" y1="820" x2="600" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="680" y1="820" x2="680" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="760" y1="820" x2="760" y2="828" stroke="#243555" stroke-width="0.8"/>
+      <line x1="40" y1="820" x2="760" y2="820" stroke="#243555" stroke-width="0.8"/>
+      <circle cx="40" cy="780" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="200" cy="760" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="360" cy="680" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="520" cy="600" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="680" cy="520" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <rect width="800" height="1000" fill="url(#vign)"/>
+    </svg>
+
+    <!-- Brand -->
+    <div class="left-top">
+      <div class="mark-box">P</div>
+      <div>
+        <div class="wordmark">PayrollSoft</div>
+        <div class="wordmark-sub">Payroll Panamá · Sistema de nómina</div>
       </div>
+    </div>
+
+    <!-- Headline -->
+    <div class="left-center">
+      <h1 class="display-h">
+        Tu equipo,<br/>
+        <span class="display-em">siempre al día.</span>
+      </h1>
+      <div class="display-rule"></div>
+      <p class="display-p">
+        Gestiona planillas, préstamos y asistencia con precisión. Un sistema ágil para el control total de tu nómina.
+      </p>
+    </div>
+
+    <!-- Footer stats -->
+    <div class="left-bottom">
+      <div class="stat-block">
+        <span>Módulos</span>
+        <span class="stat-val">Planillas · Préstamos · Asistencia</span>
+      </div>
+      <div class="stat-block" style="text-align:right">
+        <span>Versión</span>
+        <span class="stat-val">v2.0 · Estable</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Right form panel -->
+  <div class="right-panel">
+    <div class="right-top">
+      <span>Acceso seguro</span>
+      <span>TLS 1.3</span>
+    </div>
+
+    <form class="form-wrap" method="POST" action="/api/auth/login" novalidate>
+      <div class="eyebrow">
+        <span class="eyebrow-dot"></span>
+        Portal de empresa · Inicio de sesión
+      </div>
+      <h1 class="form-h1">Bienvenido.</h1>
+      <p class="form-sub">Ingresa con las credenciales de tu empresa.</p>
 
       {errorMessage && (
-        <div class="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div class="err-banner">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3">
+            <circle cx="5.5" cy="5.5" r="4.5"/>
+            <path d="M5.5 3v3M5.5 7.8v.2"/>
+          </svg>
           {errorMessage}
         </div>
       )}
 
-      <form method="POST" action="/api/auth/login" class="space-y-5">
-        <div>
-          <label for="tenant" class="block text-sm font-medium text-gray-700 mb-1">
-            Código de empresa
-          </label>
+      <!-- Tenant -->
+      <div class="field">
+        <div class="label-row">
+          <span class="field-label">Código de empresa</span>
+        </div>
+        <div class="input-wrap">
           <input
             id="tenant"
             name="tenant"
             type="text"
             required
             autocomplete="organization"
-            class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="demo"
+            class="field-input"
           />
         </div>
+      </div>
 
-        <div>
-          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">
-            Correo electrónico
-          </label>
+      <!-- Email -->
+      <div class="field">
+        <div class="label-row">
+          <span class="field-label">Correo electrónico</span>
+        </div>
+        <div class="input-wrap">
           <input
             id="email"
             name="email"
             type="email"
             required
             autocomplete="email"
-            class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="usuario@empresa.com"
+            class="field-input"
           />
         </div>
+      </div>
 
-        <div>
-          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña
-          </label>
+      <!-- Password -->
+      <div class="field" style="margin-bottom:28px">
+        <div class="label-row">
+          <span class="field-label">Contraseña</span>
+        </div>
+        <div class="input-wrap">
           <input
             id="password"
             name="password"
             type="password"
             required
             autocomplete="current-password"
-            class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="••••••••"
+            class="field-input"
           />
+          <button type="button" class="eye-btn" id="eye-btn" aria-label="Mostrar contraseña">
+            <svg id="eye-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
+              <path d="M1.5 8C3 4.5 5.4 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.9 5-6.5 5S3 11.5 1.5 8Z"/>
+              <circle cx="8" cy="8" r="2"/>
+            </svg>
+          </button>
         </div>
+      </div>
 
-        <button
-          type="submit"
-          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg transition-colors text-sm"
-        >
-          Entrar
-        </button>
-      </form>
+      <!-- Submit -->
+      <button type="submit" class="submit-btn">
+        Entrar
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="square">
+          <path d="M2 7h10M8.5 3.5L12 7l-3.5 3.5"/>
+        </svg>
+      </button>
+    </form>
+
+    <div class="right-bottom">
+      <span>Payroll Panamá © {new Date().getFullYear()}</span>
+      <span>Seguro · Confiable</span>
     </div>
   </div>
-</BaseLayout>
+
+</div>
+
+<script is:inline>
+  (function () {
+    // Theme switch
+    const html = document.documentElement;
+    const knob = document.getElementById('ts-knob');
+    const btnLight = document.getElementById('ts-light');
+    const btnDark = document.getElementById('ts-dark');
+
+    function applyTheme(t) {
+      html.dataset.theme = t;
+      try { localStorage.setItem('payroll.theme', t); } catch(e) {}
+      const isDark = t === 'dark';
+      btnLight.dataset.active = (!isDark).toString();
+      btnDark.dataset.active  = isDark.toString();
+      knob.style.transform = isDark ? 'translateX(36px)' : 'translateX(0)';
+    }
+
+    // Init knob position
+    const current = html.dataset.theme || 'dark';
+    applyTheme(current);
+
+    btnLight.addEventListener('click', () => applyTheme('light'));
+    btnDark.addEventListener('click',  () => applyTheme('dark'));
+
+    // Password eye toggle
+    const pwInput = document.getElementById('password');
+    const eyeBtn  = document.getElementById('eye-btn');
+    const eyeIcon = document.getElementById('eye-icon');
+    const eyeOn  = '<path d="M1.5 8C3 4.5 5.4 3 8 3s5 1.5 6.5 5c-1.5 3.5-3.9 5-6.5 5S3 11.5 1.5 8Z"/><circle cx="8" cy="8" r="2"/>';
+    const eyeOff = '<path d="M2 8C3.5 5 5.6 3.5 8 3.5M14 8c-.5 1.1-1.1 2-1.8 2.7M9.5 12.3c-.5.1-1 .2-1.5.2-2.4 0-4.5-1.5-6-4.5"/><path d="M2 2l12 12"/>';
+    let shown = false;
+    eyeBtn.addEventListener('click', () => {
+      shown = !shown;
+      pwInput.type = shown ? 'text' : 'password';
+      eyeIcon.innerHTML = shown ? eyeOff : eyeOn;
+      eyeBtn.setAttribute('aria-label', shown ? 'Ocultar contraseña' : 'Mostrar contraseña');
+    });
+  })();
+</script>
+
+</body>
+</html>
