@@ -7,10 +7,18 @@ type EvalValue = number | string
  * Evaluate an AST node recursively, resolving variables and function calls
  * against the provided FormulaContext.
  *
+ * `localVars` carries user-defined variables from assignment statements and is
+ * threaded through all recursive calls within the same program scope.
+ * It is created fresh by the `Program` case and is undefined for single-line formulas.
+ *
  * All built-in functions that touch the DB (ACUMULADOS, SALDO) are async;
  * the evaluator is therefore fully async even for simple arithmetic.
  */
-export async function evaluate(node: ASTNode, ctx: FormulaContext): Promise<EvalValue> {
+export async function evaluate(
+  node: ASTNode,
+  ctx: FormulaContext,
+  localVars?: Map<string, number>
+): Promise<EvalValue> {
   switch (node.type) {
     case 'Number':
       return node.value
@@ -19,6 +27,8 @@ export async function evaluate(node: ASTNode, ctx: FormulaContext): Promise<Eval
       return node.value
 
     case 'Variable': {
+      // User-defined variables shadow all context variables
+      if (localVars?.has(node.name)) return localVars.get(node.name) ?? 0
       const val = resolveVariable(node.name, ctx)
       if (val === undefined) {
         throw new Error(`Unknown variable: '${node.name}'`)
@@ -30,20 +40,37 @@ export async function evaluate(node: ASTNode, ctx: FormulaContext): Promise<Eval
       const fn = FUNCTIONS[node.name]
       if (!fn) throw new Error(`Unknown function: '${node.name}()'`)
       // Evaluate all arguments first, then invoke the function
-      const args = await Promise.all(node.args.map((arg) => evaluate(arg, ctx)))
+      const args = await Promise.all(node.args.map((arg) => evaluate(arg, ctx, localVars)))
       return fn(args, ctx)
     }
 
     case 'UnaryOp': {
-      const val = await evaluate(node.operand, ctx)
+      const val = await evaluate(node.operand, ctx, localVars)
       if (typeof val !== 'number') throw new Error('Unary operator requires a number')
       return node.op === '-' ? -val : val
     }
 
     case 'BinaryOp': {
-      const left = await evaluate(node.left, ctx)
-      const right = await evaluate(node.right, ctx)
+      const left = await evaluate(node.left, ctx, localVars)
+      const right = await evaluate(node.right, ctx, localVars)
       return applyBinaryOp(node.op, left, right)
+    }
+
+    case 'Assignment': {
+      const val = await evaluate(node.value, ctx, localVars)
+      const num = typeof val === 'number' ? val : Number(val)
+      localVars?.set(node.name, num)
+      return num
+    }
+
+    case 'Program': {
+      // Fresh scope isolated to this formula execution
+      const scope = new Map<string, number>()
+      let last: EvalValue = 0
+      for (const stmt of node.body) {
+        last = await evaluate(stmt, ctx, scope)
+      }
+      return last
     }
   }
 }

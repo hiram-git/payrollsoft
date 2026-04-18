@@ -61,8 +61,30 @@ describe('Lexer', () => {
     expect(() => tokenize('"unclosed')).toThrow('Unterminated string')
   })
 
-  it('skips whitespace', () => {
+  it('skips spaces and tabs', () => {
     const tokens = tokenize('  1  +  2  ')
     expect(tokens.map((t) => t.type)).toEqual(['NUMBER', 'PLUS', 'NUMBER', 'EOF'])
+  })
+
+  it('emits NEWLINE for line breaks', () => {
+    const tokens = tokenize('a\nb')
+    expect(tokens.map((t) => t.type)).toEqual(['IDENTIFIER', 'NEWLINE', 'IDENTIFIER', 'EOF'])
+  })
+
+  it('collapses consecutive newlines into one NEWLINE token', () => {
+    const tokens = tokenize('a\n\n\nb')
+    expect(tokens.map((t) => t.type)).toEqual(['IDENTIFIER', 'NEWLINE', 'IDENTIFIER', 'EOF'])
+  })
+
+  it('handles CRLF line endings', () => {
+    const tokens = tokenize('a\r\nb')
+    expect(tokens.map((t) => t.type)).toEqual(['IDENTIFIER', 'NEWLINE', 'IDENTIFIER', 'EOF'])
+  })
+
+  it('does not emit leading NEWLINE at start of input', () => {
+    const tokens = tokenize('\na + b')
+    // leading newline produces a NEWLINE before the first real token only if
+    // there is already a token — since there is none, no NEWLINE is emitted
+    expect(tokens[0].type).not.toBe('NEWLINE')
   })
 })
