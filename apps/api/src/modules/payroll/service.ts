@@ -428,6 +428,13 @@ export async function closePayrollService(db: AnyDb, id: string) {
   const existing = await getPayroll(db, id)
   if (!existing)
     return { success: false as const, error: 'not_found', message: 'Payroll not found' }
+
+  // Idempotent: if already closed (e.g. a previous request completed but the HTTP response was
+  // lost), treat as success so the user isn't stuck.
+  if (existing.status === 'closed') {
+    return { success: true as const, data: existing }
+  }
+
   if (!ALLOWED_FOR_REGENERATE.has(existing.status)) {
     return {
       success: false as const,
@@ -436,56 +443,86 @@ export async function closePayrollService(db: AnyDb, id: string) {
     }
   }
 
-  const lines = await getPayrollLines(db, id)
+  try {
+    await updatePayroll(db, id, { status: 'processing' })
 
-  // Build acumulados from payroll lines' concepts
-  type ConceptEntry = { code: string; name: string; type: string; amount: number }
-  const acumuladoItems: Array<{
-    payrollId: string
-    employeeId: string
-    conceptCode: string
-    conceptName: string
-    conceptType: string
-    amount: string
-  }> = []
+    const lines = await getPayrollLines(db, id)
 
-  for (const l of lines) {
-    const concepts = ((l.line.concepts ?? []) as ConceptEntry[]).filter((e) => e.amount !== 0)
-    for (const entry of concepts) {
-      acumuladoItems.push({
-        payrollId: id,
-        employeeId: l.line.employeeId,
-        conceptCode: entry.code,
-        conceptName: entry.name,
-        conceptType: entry.type,
-        amount: String(entry.amount),
-      })
-    }
-  }
+    // Build acumulados from payroll lines' concepts
+    type ConceptEntry = { code: string; name: string; type: string; amount: number }
+    const acumuladoItems: Array<{
+      payrollId: string
+      employeeId: string
+      conceptCode: string
+      conceptName: string
+      conceptType: string
+      amount: string
+    }> = []
 
-  if (acumuladoItems.length > 0) {
-    await insertPayrollAcumulados(db, acumuladoItems)
-  }
-
-  // Mark one pending installment as paid per active loan per employee
-  const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
-  for (const empId of employeeIds) {
-    const pendingInstallments = await getPendingInstallmentsByEmployee(
-      db,
-      empId,
-      existing.periodEnd
-    )
-    for (const inst of pendingInstallments) {
-      await markInstallmentPaid(db, inst.id, id)
-      const remaining = await countPendingInstallments(db, inst.loanId)
-      if (remaining === 0) {
-        await updateLoan(db, inst.loanId, { isActive: false })
+    for (const l of lines) {
+      const concepts = ((l.line.concepts ?? []) as ConceptEntry[]).filter((e) => e.amount !== 0)
+      for (const entry of concepts) {
+        acumuladoItems.push({
+          payrollId: id,
+          employeeId: l.line.employeeId,
+          conceptCode: entry.code,
+          conceptName: entry.name,
+          conceptType: entry.type,
+          amount: String(entry.amount),
+        })
       }
     }
-  }
 
-  const row = await updatePayroll(db, id, { status: 'closed' })
-  return { success: true as const, data: row }
+    if (acumuladoItems.length > 0) {
+      await insertPayrollAcumulados(db, acumuladoItems)
+    }
+
+    // Mark one pending installment as paid per active loan per employee
+    const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
+    for (const empId of employeeIds) {
+      const pendingInstallments = await getPendingInstallmentsByEmployee(
+        db,
+        empId,
+        existing.periodEnd
+      )
+      for (const inst of pendingInstallments) {
+        await markInstallmentPaid(db, inst.id, id)
+        const remaining = await countPendingInstallments(db, inst.loanId)
+        if (remaining === 0) {
+          await updateLoan(db, inst.loanId, { isActive: false })
+        }
+      }
+    }
+
+    const row = await updatePayroll(db, id, { status: 'closed' })
+    return { success: true as const, data: row }
+  } catch (err) {
+    // Roll back partial changes: remove any inserted acumulados, revert installments,
+    // reactivate loans that lost their last pending installment, restore status.
+    try {
+      await deletePayrollAcumulados(db, id)
+      await revertPayrollInstallments(db, id)
+      const lines = await getPayrollLines(db, id)
+      const empIds = [...new Set(lines.map((l) => l.line.employeeId))]
+      for (const empId of empIds) {
+        const empLoans = await listLoansByEmployee(db, empId)
+        for (const loan of empLoans) {
+          if (!loan.isActive) {
+            const pending = await countPendingInstallments(db, loan.id)
+            if (pending > 0) await updateLoan(db, loan.id, { isActive: true })
+          }
+        }
+      }
+      await updatePayroll(db, id, { status: 'generated' })
+    } catch {
+      // ignore rollback failure — status may be stuck in 'processing'
+    }
+    return {
+      success: false as const,
+      error: 'processing_error',
+      message: err instanceof Error ? err.message : 'Error al cerrar la planilla',
+    }
+  }
 }
 
 /** closed → generated (deletes acumulados so they can be recalculated on re-close) */
