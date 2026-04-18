@@ -26,8 +26,21 @@ export function tokenize(input: string): Token[] {
   let pos = 0
 
   while (pos < input.length) {
-    // Whitespace
-    if (/\s/.test(input[pos])) {
+    // Newlines are statement separators — emit a single NEWLINE token per run
+    if (input[pos] === '\r') {
+      pos++
+      continue
+    } // strip CR from CRLF
+    if (input[pos] === '\n') {
+      // Collapse consecutive newlines into one token
+      if (tokens.length > 0 && tokens[tokens.length - 1].type !== 'NEWLINE') {
+        tokens.push({ type: 'NEWLINE', value: '\n', pos })
+      }
+      pos++
+      continue
+    }
+    // Other whitespace (spaces, tabs)
+    if (input[pos] === ' ' || input[pos] === '\t') {
       pos++
       continue
     }

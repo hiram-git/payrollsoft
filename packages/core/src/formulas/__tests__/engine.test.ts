@@ -255,4 +255,119 @@ describe('FormulaEngine', () => {
     const r = await engine.evaluate('SI(MESPERIODO() >= 7, ACUMULADOS("IB", 6) / 12, 0)', ctx)
     expect(r.value).toBe(0)
   })
+
+  // ── Multi-line formulas with user-defined variables ──────────────────────
+
+  it('evaluates a multi-line formula returning last statement value', async () => {
+    const formula = 'base = SALARIO * 2\nmonto = base'
+    // SALARIO = 1200 → base = 2400, monto = 2400
+    const r = await engine.evaluate(formula, ctx)
+    expect(r.value).toBe(2400)
+  })
+
+  it('user variable shadows context variable within formula scope', async () => {
+    // Override SALARIO locally; should not affect the real ctx
+    const formula = 'SALARIO = 9999\nmonto = SALARIO'
+    const r = await engine.evaluate(formula, ctx)
+    expect(r.value).toBe(9999)
+    // Real context is unchanged
+    expect((await engine.evaluate('SALARIO', ctx)).value).toBe(1200)
+  })
+
+  it('each formula evaluation gets an isolated scope', async () => {
+    const f1 = 'x = 100\nmonto = x'
+    // f2 references x which was only defined in f1's scope — must not leak
+    const f2 = 'y = SALARIO\nmonto = x'
+    await engine.evaluate(f1, ctx)
+    const r2 = await engine.evaluate(f2, ctx)
+    expect(r2.error).toContain("Unknown variable: 'X'")
+  })
+
+  it('multi-line formula supports SI() on user variable', async () => {
+    const formula = [
+      'base = SALARIO',
+      'bonus = SI(base > 1000, base * 0.1, 0)',
+      'monto = bonus',
+    ].join('\n')
+    // SALARIO = 1200 > 1000 → bonus = 120, monto = 120
+    const r = await engine.evaluate(formula, ctx)
+    expect(r.value).toBeCloseTo(120, 5)
+  })
+
+  it('evaluates the ISR formula correctly', async () => {
+    // Payroll for an employee earning 3000/month (biweekly salary = 1500)
+    const isrCtx = makeCtx({
+      employee: {
+        id: 'emp-isr',
+        code: 'E001',
+        baseSalary: 3000,
+        hireDate: new Date('2020-01-01'),
+        customFields: { gastos_rep: 0 },
+      },
+    })
+    const formula = [
+      'salario_anual = SALARIO*13',
+      'gr_anual = GASTOS_REPRESENTACION*13',
+      'neto_gravable = salario_anual',
+      'saldo_gravable = neto_gravable-11000',
+      'isr_anual = saldo_gravable * 0.15',
+      'isr_mensual = isr_anual/13',
+      'isr_quincenal = isr_mensual/2',
+      'saldo_excedente = SI(salario_anual>50000, salario_anual-50000, 0)',
+      'excendente_gravable = SI(saldo_excedente>0, saldo_excedente*0.25, 0)',
+      'exceso_adicional = SI(excendente_gravable>0, excendente_gravable+5850, 0)',
+      'exceso_anual = SI(exceso_adicional>0, exceso_adicional/13, 0)',
+      'exceso_quincenal = SI(exceso_anual>0, exceso_anual/2, 0)',
+      'monto = SI(saldo_excedente>0, exceso_quincenal, isr_quincenal)',
+    ].join('\n')
+
+    const r = await engine.evaluate(formula, isrCtx)
+    // salario_anual = 3000*13 = 39000
+    // saldo_gravable = 39000-11000 = 28000
+    // isr_anual = 28000*0.15 = 4200
+    // isr_mensual = 4200/13 ≈ 323.077
+    // isr_quincenal ≈ 161.538
+    // saldo_excedente = 0 (39000 < 50000)
+    // monto = isr_quincenal ≈ 161.538
+    expect(r.error).toBeUndefined()
+    expect(r.value).toBeCloseTo(4200 / 13 / 2, 4)
+  })
+
+  it('evaluates ISR formula for high-income employee (exceso path)', async () => {
+    const highCtx = makeCtx({
+      employee: {
+        id: 'emp-high',
+        code: 'E002',
+        baseSalary: 5000,
+        hireDate: new Date('2020-01-01'),
+        customFields: { gastos_rep: 0 },
+      },
+    })
+    const formula = [
+      'salario_anual = SALARIO*13',
+      'gr_anual = GASTOS_REPRESENTACION*13',
+      'neto_gravable = salario_anual',
+      'saldo_gravable = neto_gravable-11000',
+      'isr_anual = saldo_gravable * 0.15',
+      'isr_mensual = isr_anual/13',
+      'isr_quincenal = isr_mensual/2',
+      'saldo_excedente = SI(salario_anual>50000, salario_anual-50000, 0)',
+      'excendente_gravable = SI(saldo_excedente>0, saldo_excedente*0.25, 0)',
+      'exceso_adicional = SI(excendente_gravable>0, excendente_gravable+5850, 0)',
+      'exceso_anual = SI(exceso_adicional>0, exceso_adicional/13, 0)',
+      'exceso_quincenal = SI(exceso_anual>0, exceso_anual/2, 0)',
+      'monto = SI(saldo_excedente>0, exceso_quincenal, isr_quincenal)',
+    ].join('\n')
+
+    const r = await engine.evaluate(formula, highCtx)
+    // salario_anual = 5000*13 = 65000
+    // saldo_excedente = 65000-50000 = 15000
+    // excendente_gravable = 15000*0.25 = 3750
+    // exceso_adicional = 3750+5850 = 9600
+    // exceso_anual = 9600/13 ≈ 738.46
+    // exceso_quincenal ≈ 369.23
+    // monto = exceso_quincenal (excedente path)
+    expect(r.error).toBeUndefined()
+    expect(r.value).toBeCloseTo((15000 * 0.25 + 5850) / 13 / 2, 4)
+  })
 })

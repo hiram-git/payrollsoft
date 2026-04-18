@@ -17,6 +17,7 @@ export type TokenType =
   | 'LTE'
   | 'EQ'
   | 'NEQ'
+  | 'NEWLINE'
   | 'EOF'
 
 export type Token = {
@@ -34,7 +35,24 @@ export type CallNode = { type: 'Call'; name: string; args: ASTNode[] }
 export type BinaryOpNode = { type: 'BinaryOp'; op: string; left: ASTNode; right: ASTNode }
 export type UnaryOpNode = { type: 'UnaryOp'; op: string; operand: ASTNode }
 
-export type ASTNode = NumberNode | StringNode | VariableNode | CallNode | BinaryOpNode | UnaryOpNode
+/** User-defined variable assignment: `name = expression` (multi-line formulas only) */
+export type AssignmentNode = { type: 'Assignment'; name: string; value: ASTNode }
+
+/**
+ * A multi-statement formula program. Each item in `body` is either an
+ * AssignmentNode or any expression node. The result is the last statement's value.
+ */
+export type ProgramNode = { type: 'Program'; body: ASTNode[] }
+
+export type ASTNode =
+  | NumberNode
+  | StringNode
+  | VariableNode
+  | CallNode
+  | BinaryOpNode
+  | UnaryOpNode
+  | AssignmentNode
+  | ProgramNode
 
 // ─── Formula Context ──────────────────────────────────────────────────────────
 

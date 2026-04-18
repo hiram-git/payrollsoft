@@ -4,7 +4,7 @@ import type { ASTNode, Token, TokenType } from './types'
 /**
  * Recursive-descent parser for payroll formula expressions.
  *
- * Grammar (precedence, lowest → highest):
+ * Single-line mode (no newlines in input) — backwards-compatible:
  *   expr         → comparison
  *   comparison   → addition  (('>' | '<' | '>=' | '<=' | '=' | '<>') addition)*
  *   addition     → multiply  (('+' | '-') multiply)*
@@ -12,6 +12,14 @@ import type { ASTNode, Token, TokenType } from './types'
  *   unary        → '-' unary | primary
  *   primary      → NUMBER | STRING | IDENTIFIER ['(' args ')'] | '(' expr ')'
  *   args         → (expr (',' expr)*)?
+ *
+ * Multi-line mode (input contains '\n') — user-defined variables:
+ *   program      → statement (NEWLINE+ statement)* NEWLINE* EOF
+ *   statement    → IDENTIFIER '=' expr   (assignment)
+ *                | expr                  (expression — last one is the result)
+ *
+ * In multi-line mode '=' at the start of a statement is assignment, not comparison.
+ * Inside any expression (including assignment RHS) '=' remains equality comparison.
  */
 class Parser {
   private readonly tokens: Token[]
@@ -25,6 +33,10 @@ class Parser {
 
   private peek(): Token {
     return this.tokens[this.pos]
+  }
+
+  private peekAt(offset: number): Token {
+    return this.tokens[Math.min(this.pos + offset, this.tokens.length - 1)]
   }
 
   private consume(expected?: TokenType): Token {
@@ -42,15 +54,57 @@ class Parser {
     return types.includes(this.peek().type)
   }
 
-  // ── Grammar rules ────────────────────────────────────────────────────────
+  private skipNewlines(): void {
+    while (this.peek().type === 'NEWLINE') this.pos++
+  }
+
+  // ── Top-level entry ──────────────────────────────────────────────────────
 
   parse(): ASTNode {
+    const hasNewlines = this.tokens.some((t) => t.type === 'NEWLINE')
+    if (hasNewlines) return this.parseProgram()
+
     const node = this.parseComparison()
     if (this.peek().type !== 'EOF') {
       throw new Error(`Unexpected token '${this.peek().value}' at position ${this.peek().pos}`)
     }
     return node
   }
+
+  // ── Multi-line program ───────────────────────────────────────────────────
+
+  private parseProgram(): ASTNode {
+    const body: ASTNode[] = []
+
+    this.skipNewlines()
+    while (this.peek().type !== 'EOF') {
+      body.push(this.parseStatement())
+      if (this.peek().type !== 'EOF' && this.peek().type !== 'NEWLINE') {
+        throw new Error(
+          `Expected newline after statement, found '${this.peek().value}' at position ${this.peek().pos}`
+        )
+      }
+      this.skipNewlines()
+    }
+
+    if (body.length === 0) throw new Error('Empty formula')
+    return { type: 'Program', body }
+  }
+
+  /** Parse one statement: assignment (`name = expr`) or bare expression. */
+  private parseStatement(): ASTNode {
+    // Assignment: IDENTIFIER immediately followed by '=' (but not '>=', '<=', '<>')
+    // peekAt(1) is the token AFTER the identifier — only EQ (single '=') qualifies.
+    if (this.peek().type === 'IDENTIFIER' && this.peekAt(1).type === 'EQ') {
+      const name = this.consume('IDENTIFIER').value
+      this.consume('EQ')
+      const value = this.parseComparison()
+      return { type: 'Assignment', name, value }
+    }
+    return this.parseComparison()
+  }
+
+  // ── Grammar rules (expression level) ────────────────────────────────────
 
   private parseComparison(): ASTNode {
     let left = this.parseAddition()

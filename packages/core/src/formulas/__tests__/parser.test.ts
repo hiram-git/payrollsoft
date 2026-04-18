@@ -101,4 +101,60 @@ describe('Parser', () => {
   it('throws on unknown token after expression', () => {
     expect(() => parse('1 2')).toThrow("Unexpected token '2'")
   })
+
+  // ── Multi-line / assignment mode ─────────────────────────────────────────
+
+  it('parses a single assignment as a Program', () => {
+    const ast = parse('x = 5\nmonto = x')
+    expect(ast).toMatchObject({
+      type: 'Program',
+      body: [
+        { type: 'Assignment', name: 'X', value: { type: 'Number', value: 5 } },
+        { type: 'Assignment', name: 'MONTO', value: { type: 'Variable', name: 'X' } },
+      ],
+    })
+  })
+
+  it('parses an expression statement in a program', () => {
+    const ast = parse('x = 10\nx + 5')
+    expect(ast).toMatchObject({
+      type: 'Program',
+      body: [
+        { type: 'Assignment', name: 'X' },
+        { type: 'BinaryOp', op: '+' },
+      ],
+    })
+  })
+
+  it('does NOT treat "A = B" as assignment in single-line mode', () => {
+    // Single line: '=' is equality comparison, not assignment
+    expect(parse('A = B')).toMatchObject({ type: 'BinaryOp', op: '=' })
+  })
+
+  it('parses multi-line formula with function calls', () => {
+    const formula = 'base = SALARIO * 2\nmonto = SI(base > 1000, base, 0)'
+    const ast = parse(formula)
+    expect(ast).toMatchObject({
+      type: 'Program',
+      body: [
+        { type: 'Assignment', name: 'BASE' },
+        {
+          type: 'Assignment',
+          name: 'MONTO',
+          value: { type: 'Call', name: 'SI' },
+        },
+      ],
+    })
+  })
+
+  it('handles blank lines between statements', () => {
+    const ast = parse('x = 1\n\ny = 2')
+    expect(ast).toMatchObject({
+      type: 'Program',
+      body: [
+        { type: 'Assignment', name: 'X' },
+        { type: 'Assignment', name: 'Y' },
+      ],
+    })
+  })
 })
