@@ -1,4 +1,6 @@
 import {
+  type LoanListFilter,
+  type PaginationOptions,
   closeLoan,
   createLoan,
   createLoanInstallments,
@@ -30,8 +32,12 @@ export function listLoansService(db: AnyDb, employeeId: string) {
   return listLoansByEmployee(db, employeeId)
 }
 
-export function listAllLoansService(db: AnyDb, filter: { isActive?: boolean }) {
-  return listAllLoans(db, filter)
+export function listAllLoansService(
+  db: AnyDb,
+  filter: LoanListFilter,
+  options: PaginationOptions = {}
+) {
+  return listAllLoans(db, filter, options)
 }
 
 export function getLoanService(db: AnyDb, id: string) {

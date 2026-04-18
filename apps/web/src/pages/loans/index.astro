@@ -7,6 +7,13 @@ if (!authCookie) return Astro.redirect('/login')
 
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
 
+const LIMIT = 50
+
+// Read query params
+const search = Astro.url.searchParams.get('q') ?? ''
+const pageParam = Number(Astro.url.searchParams.get('page') ?? '1')
+const page = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam
+
 type LoanRow = {
   id: string
   employeeId: string
@@ -19,6 +26,7 @@ type LoanRow = {
   loanType: string | null
   frequency: string | null
   creditor: string | null
+  creditorId: string | null
   allowDecember: boolean
   createdAt: string
   employeeCode: string
@@ -26,28 +34,55 @@ type LoanRow = {
   employeeLastName: string
 }
 
-let loans: LoanRow[] = []
-
-try {
-  const res = await fetch(`${API_URL}/loans`, { headers })
-  if (res.status === 401) return Astro.redirect('/login')
-  if (res.ok) loans = ((await res.json()) as { data: LoanRow[] }).data ?? []
-} catch {
-  // show empty list on error
+type PagedResponse = {
+  data: LoanRow[]
+  total: number
+  page: number
+  limit: number
+  totalPages: number
 }
 
+let result: PagedResponse = { data: [], total: 0, page: 1, limit: LIMIT, totalPages: 0 }
+
+try {
+  const qs = new URLSearchParams({ page: String(page), limit: String(LIMIT) })
+  if (search) qs.set('search', search)
+  const res = await fetch(`${API_URL}/loans?${qs}`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) result = (await res.json()) as PagedResponse
+} catch {
+  // show empty on error
+}
+
+const { data: loans, total, totalPages } = result
+
 const success = Astro.url.searchParams.get('success') === '1'
+
+function pageUrl(p: number) {
+  const u = new URL(Astro.url)
+  u.searchParams.set('page', String(p))
+  if (search) u.searchParams.set('q', search)
+  else u.searchParams.delete('q')
+  return u.pathname + u.search
+}
 
 const freqLabel: Record<string, string> = {
   semanal: 'Semanal',
   quincenal: 'Quincenal',
   mensual: 'Mensual',
+  monthly: 'Mensual',
+  weekly: 'Semanal',
+  biweekly: 'Quincenal',
 }
 
 const loanTypeLabel: Record<string, string> = {
   PERSONAL: 'Personal',
+  personal: 'Personal',
   VEHICULAR: 'Vehicular',
+  auto: 'Vehicular',
   HIPOTECARIO: 'Hipotecario',
+  hipotecario: 'Hipotecario',
+  educacion: 'Educación',
   EMBARGO: 'Embargo',
   JUDICIAL: 'Judicial',
   PENSION: 'Pensión',
@@ -55,99 +90,324 @@ const loanTypeLabel: Record<string, string> = {
   COOPERATIVA: 'Cooperativa',
   OTRO: 'Otro',
 }
+
+// Page window (show up to 7 page buttons)
+function pageWindow(cur: number, total: number) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  if (cur <= 4) return [1, 2, 3, 4, 5, '...', total]
+  if (cur >= total - 3) return [1, '...', total - 4, total - 3, total - 2, total - 1, total]
+  return [1, '...', cur - 1, cur, cur + 1, '...', total]
+}
 ---
 
 <AppLayout title="Préstamos">
-  <div class="p-8">
-    <div class="flex items-center justify-between mb-6">
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900">Préstamos</h1>
-        <p class="text-sm text-gray-500 mt-0.5">{loans.length} registro{loans.length !== 1 ? 's' : ''}</p>
+  <style>
+    .page-wrap { padding: 28px; max-width: 1300px; }
+
+    /* Header */
+    .page-hdr { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .page-hdr-left h1 { font-size: 17px; font-weight: 500; color: var(--fore); letter-spacing: -0.02em; margin: 0; }
+    .page-hdr-left p  { font-family: var(--f-mono); font-size: 10.5px; color: var(--mute); letter-spacing: 0.08em; text-transform: uppercase; margin: 4px 0 0; }
+    .new-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; background: var(--navy); color: #fff;
+      border-radius: 4px; font-size: 13px; font-weight: 500;
+      text-decoration: none; white-space: nowrap;
+      transition: background 140ms ease;
+    }
+    .new-btn:hover { background: var(--navy-hi); }
+
+    /* Search bar */
+    .search-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .search-wrap {
+      position: relative; flex: 1; max-width: 420px;
+    }
+    .search-icon {
+      position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+      color: var(--mute); pointer-events: none;
+    }
+    .search-input {
+      width: 100%; height: 36px;
+      background: var(--ink-3); border: 1px solid var(--rule);
+      border-radius: 4px; padding: 0 12px 0 34px;
+      color: var(--fore); font-family: var(--f-sans); font-size: 13.5px;
+      outline: none; transition: border-color 140ms ease;
+    }
+    .search-input::placeholder { color: var(--mute); }
+    .search-input:focus { border-color: var(--navy-hi); }
+    .search-clear {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: var(--mute); cursor: pointer;
+      display: grid; place-items: center; padding: 2px;
+      transition: color 140ms ease;
+    }
+    .search-clear:hover { color: var(--fore); }
+    .result-count { font-family: var(--f-mono); font-size: 11px; color: var(--mute); letter-spacing: 0.06em; white-space: nowrap; }
+
+    /* Alert */
+    .alert-ok {
+      padding: 10px 14px; margin-bottom: 16px;
+      border-radius: 4px; border: 1px solid rgba(111,181,140,0.3);
+      background: rgba(111,181,140,0.08);
+      font-size: 13px; color: var(--ok);
+    }
+
+    /* Table card */
+    .table-card {
+      background: var(--ink-3); border: 1px solid var(--rule);
+      border-radius: 6px; overflow: hidden; box-shadow: var(--shadow);
+    }
+    .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .data-table th {
+      text-align: left; padding: 10px 14px;
+      font-family: var(--f-mono); font-size: 10px; font-weight: 400;
+      color: var(--mute); letter-spacing: 0.12em; text-transform: uppercase;
+      border-bottom: 1px solid var(--rule); white-space: nowrap;
+    }
+    .data-table th.right { text-align: right; }
+    .data-table td {
+      padding: 11px 14px; border-bottom: 1px solid var(--rule);
+      vertical-align: middle; color: var(--fore-dim);
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--ink-4); }
+    .emp-name { font-weight: 500; color: var(--fore); text-decoration: none; transition: color 140ms ease; }
+    .emp-name:hover { color: var(--navy-hi); }
+    .emp-code { font-family: var(--f-mono); font-size: 10.5px; color: var(--mute); margin-top: 2px; }
+    .mono-val { font-family: var(--f-mono); font-size: 12.5px; color: var(--fore); font-variant-numeric: tabular-nums; }
+    .pill {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 99px;
+      font-family: var(--f-mono); font-size: 10px; letter-spacing: 0.06em; font-weight: 500;
+      white-space: nowrap;
+    }
+    .pill-active { color: var(--ok); background: rgba(111,181,140,0.12); }
+    .pill-closed { color: var(--mute-2); background: rgba(106,118,144,0.12); }
+    .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+    .row-btn {
+      width: 30px; height: 30px; display: grid; place-items: center;
+      border: none; border-radius: 4px; background: transparent;
+      color: var(--mute); cursor: pointer; transition: background 140ms ease, color 140ms ease;
+      text-decoration: none;
+    }
+    .row-btn:hover { background: var(--ink-4); color: var(--fore-dim); }
+    .row-btn-danger:hover { background: rgba(224,107,92,0.12); color: var(--err); }
+
+    /* Empty */
+    .empty-state { padding: 56px 20px; text-align: center; color: var(--mute); font-size: 13.5px; }
+
+    /* Pagination */
+    .pagination {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px; border-top: 1px solid var(--rule);
+      gap: 12px; flex-wrap: wrap;
+    }
+    .pag-info { font-family: var(--f-mono); font-size: 11px; color: var(--mute); letter-spacing: 0.06em; white-space: nowrap; }
+    .pag-pages { display: flex; align-items: center; gap: 3px; }
+    .pag-btn {
+      min-width: 32px; height: 32px; padding: 0 6px;
+      display: grid; place-items: center;
+      border: 1px solid transparent; border-radius: 4px;
+      background: transparent; color: var(--fore-dim);
+      font-size: 13px; font-family: var(--f-sans);
+      cursor: pointer; text-decoration: none;
+      transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+      white-space: nowrap;
+    }
+    .pag-btn:hover { background: var(--ink-4); color: var(--fore); }
+    .pag-btn-active { background: var(--navy-soft); border-color: var(--navy-hi); color: var(--fore); font-weight: 500; }
+    .pag-btn-disabled { opacity: 0.35; pointer-events: none; }
+    .pag-ellipsis { padding: 0 4px; color: var(--mute); font-size: 13px; }
+  </style>
+
+  <div class="page-wrap">
+
+    <!-- Header -->
+    <div class="page-hdr">
+      <div class="page-hdr-left">
+        <h1>Préstamos</h1>
+        <p>{total.toLocaleString('es-PA')} registro{total !== 1 ? 's' : ''}</p>
       </div>
-      <a href="/loans/new" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-        + Nuevo préstamo
+      <a href="/loans/new" class="new-btn">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+          <path d="M6 2v8M2 6h8"/>
+        </svg>
+        Nuevo préstamo
       </a>
     </div>
 
     {success && (
-      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-        Préstamo registrado correctamente.
-      </div>
+      <div class="alert-ok">Préstamo registrado correctamente.</div>
     )}
 
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {loans.length === 0 ? (
-        <div class="p-16 text-center text-gray-400 text-sm">
-          No hay préstamos registrados.
-        </div>
-      ) : (
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Empleado</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Acreedor</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Monto</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Saldo</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Cuota</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Frecuencia</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Inicio</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-              <th class="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {loans.map((loan) => (
-              <tr class="hover:bg-gray-50 transition-colors">
-                <td class="px-4 py-3">
-                  <a href={`/employees/${loan.employeeId}?tab=prestamos`} class="font-medium text-gray-900 hover:text-blue-600">
-                    {loan.employeeFirstName} {loan.employeeLastName}
-                  </a>
-                  <div class="text-xs text-gray-400">{loan.employeeCode}</div>
-                </td>
-                <td class="px-4 py-3 text-gray-600">
-                  {loan.loanType ? (loanTypeLabel[loan.loanType] ?? loan.loanType) : '—'}
-                </td>
-                <td class="px-4 py-3 text-gray-600">{loan.creditor ?? '—'}</td>
-                <td class="px-4 py-3 text-gray-900">${loan.amount}</td>
-                <td class="px-4 py-3 text-gray-700">${loan.balance}</td>
-                <td class="px-4 py-3 text-gray-700">${loan.installment}</td>
-                <td class="px-4 py-3 text-gray-600">
-                  {loan.frequency ? (freqLabel[loan.frequency] ?? loan.frequency) : '—'}
-                </td>
-                <td class="px-4 py-3 text-gray-600">{loan.startDate}</td>
-                <td class="px-4 py-3">
-                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${loan.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {loan.isActive ? 'Activo' : 'Cerrado'}
-                  </span>
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1">
-                    <a href={`/employees/${loan.employeeId}/loans/${loan.id}`} title="Editar" class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </a>
-                    {loan.isActive && (
-                      <form method="POST" action={`/api/employees/${loan.employeeId}/loans/${loan.id}`}
-                        onsubmit="return confirm('¿Cerrar este préstamo?')"
-                      >
-                        <input type="hidden" name="_method" value="DELETE" />
-                        <button type="submit" title="Cerrar préstamo" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
-                          </svg>
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <!-- Search -->
+    <div class="search-row">
+      <form method="GET" action="/loans" class="search-wrap" id="search-form">
+        <span class="search-icon">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3">
+            <circle cx="6" cy="6" r="4"/><path d="M9.2 9.2 12 12"/>
+          </svg>
+        </span>
+        <input
+          id="q"
+          name="q"
+          type="text"
+          value={search}
+          placeholder="Buscar por empleado o acreedor…"
+          class="search-input"
+          autocomplete="off"
+        />
+        {search && (
+          <button type="button" class="search-clear" id="clear-btn" aria-label="Limpiar búsqueda">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M2 2l8 8M10 2l-8 8"/>
+            </svg>
+          </button>
+        )}
+      </form>
+      {search && (
+        <span class="result-count">"{search}" · {total} resultado{total !== 1 ? 's' : ''}</span>
       )}
     </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      {loans.length === 0 ? (
+        <div class="empty-state">
+          {search ? `Sin resultados para "${search}".` : 'No hay préstamos registrados.'}
+        </div>
+      ) : (
+        <>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Acreedor</th>
+                <th>Tipo</th>
+                <th class="right">Monto</th>
+                <th class="right">Saldo</th>
+                <th class="right">Cuota</th>
+                <th>Frecuencia</th>
+                <th>Inicio</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {loans.map((loan) => (
+                <tr>
+                  <td>
+                    <a href={`/employees/${loan.employeeId}?tab=prestamos`} class="emp-name">
+                      {loan.employeeFirstName} {loan.employeeLastName}
+                    </a>
+                    <div class="emp-code">{loan.employeeCode}</div>
+                  </td>
+                  <td>{loan.creditor ?? '—'}</td>
+                  <td>{loan.loanType ? (loanTypeLabel[loan.loanType] ?? loan.loanType) : '—'}</td>
+                  <td style="text-align:right"><span class="mono-val">${loan.amount}</span></td>
+                  <td style="text-align:right"><span class="mono-val">${loan.balance}</span></td>
+                  <td style="text-align:right"><span class="mono-val">${loan.installment}</span></td>
+                  <td>{loan.frequency ? (freqLabel[loan.frequency] ?? loan.frequency) : '—'}</td>
+                  <td><span style="font-family:var(--f-mono);font-size:12px">{loan.startDate}</span></td>
+                  <td>
+                    <span class={`pill ${loan.isActive ? 'pill-active' : 'pill-closed'}`}>
+                      {loan.isActive ? 'Activo' : 'Cerrado'}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="row-actions">
+                      <a href={`/employees/${loan.employeeId}/loans/${loan.id}`} title="Editar" class="row-btn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </a>
+                      {loan.isActive && (
+                        <form method="POST" action={`/api/employees/${loan.employeeId}/loans/${loan.id}`}>
+                          <input type="hidden" name="_method" value="DELETE" />
+                          <button type="submit" title="Cerrar préstamo" class="row-btn row-btn-danger"
+                            onclick="return confirm('¿Cerrar este préstamo?')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+                            </svg>
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <!-- Pagination -->
+          {totalPages > 1 && (
+            <div class="pagination">
+              <span class="pag-info">
+                {((page - 1) * result.limit + 1).toLocaleString('es-PA')}–{Math.min(page * result.limit, total).toLocaleString('es-PA')} de {total.toLocaleString('es-PA')}
+              </span>
+              <div class="pag-pages">
+                <!-- Previous -->
+                {page > 1 ? (
+                  <a href={pageUrl(page - 1)} class="pag-btn">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                      <path d="M7.5 2 4 6l3.5 4"/>
+                    </svg>
+                  </a>
+                ) : (
+                  <span class="pag-btn pag-btn-disabled">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                      <path d="M7.5 2 4 6l3.5 4"/>
+                    </svg>
+                  </span>
+                )}
+
+                <!-- Page numbers -->
+                {pageWindow(page, totalPages).map((p) =>
+                  p === '...'
+                    ? <span class="pag-ellipsis">…</span>
+                    : <a href={pageUrl(Number(p))} class={`pag-btn${Number(p) === page ? ' pag-btn-active' : ''}`}>{p}</a>
+                )}
+
+                <!-- Next -->
+                {page < totalPages ? (
+                  <a href={pageUrl(page + 1)} class="pag-btn">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                      <path d="M4.5 2 8 6l-3.5 4"/>
+                    </svg>
+                  </a>
+                ) : (
+                  <span class="pag-btn pag-btn-disabled">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square">
+                      <path d="M4.5 2 8 6l-3.5 4"/>
+                    </svg>
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+
   </div>
+
+  <script is:inline>
+    // Submit search on Enter / debounce on input
+    const form = document.getElementById('search-form')
+    const input = document.getElementById('q')
+    const clearBtn = document.getElementById('clear-btn')
+
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        window.location.href = '/loans'
+      })
+    }
+
+    let timer
+    input?.addEventListener('input', () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => form?.submit(), 500)
+    })
+  </script>
 </AppLayout>

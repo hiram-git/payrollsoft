@@ -1531,35 +1531,96 @@ export async function listLoansByEmployee(db: Db, employeeId: string) {
     .orderBy(desc(loans.createdAt))
 }
 
-export async function listAllLoans(db: Db, filter: { isActive?: boolean } = {}) {
+export type LoanListFilter = {
+  isActive?: boolean
+  /** Free-text: matches employee name, employee code, or creditor name */
+  search?: string
+}
+
+export async function listAllLoans(
+  db: Db,
+  filter: LoanListFilter = {},
+  options: PaginationOptions = {}
+): Promise<
+  PaginatedResult<{
+    id: string
+    employeeId: string
+    amount: string
+    balance: string
+    installment: string
+    startDate: string
+    endDate: string | null
+    isActive: boolean
+    loanType: string | null
+    frequency: string | null
+    creditor: string | null
+    creditorId: string | null
+    allowDecember: boolean
+    createdAt: Date
+    employeeCode: string
+    employeeFirstName: string
+    employeeLastName: string
+  }>
+> {
+  const page = Math.max(1, options.page ?? 1)
+  const limit = Math.min(100, Math.max(1, options.limit ?? 50))
+  const offset = (page - 1) * limit
+
   const conditions = []
-  if (filter.isActive !== undefined) {
-    conditions.push(eq(loans.isActive, filter.isActive))
+  if (filter.isActive !== undefined) conditions.push(eq(loans.isActive, filter.isActive))
+  if (filter.search) {
+    const s = `%${filter.search}%`
+    conditions.push(
+      or(
+        ilike(employees.firstName, s),
+        ilike(employees.lastName, s),
+        ilike(employees.code, s),
+        ilike(loans.creditor, s),
+        sql`(${employees.firstName} || ' ' || ${employees.lastName}) ilike ${s}`
+      )
+    )
   }
-  return db
-    .select({
-      id: loans.id,
-      employeeId: loans.employeeId,
-      amount: loans.amount,
-      balance: loans.balance,
-      installment: loans.installment,
-      startDate: loans.startDate,
-      endDate: loans.endDate,
-      isActive: loans.isActive,
-      loanType: loans.loanType,
-      frequency: loans.frequency,
-      creditor: loans.creditor,
-      allowDecember: loans.allowDecember,
-      createdAt: loans.createdAt,
-      employeeCode: employees.code,
-      employeeFirstName: employees.firstName,
-      employeeLastName: employees.lastName,
-    })
-    .from(loans)
-    .innerJoin(employees, eq(loans.employeeId, employees.id))
-    .where(conditions.length ? and(...conditions) : undefined)
-    .orderBy(desc(loans.createdAt))
-    .limit(200)
+
+  const where = conditions.length ? and(...conditions) : undefined
+
+  const cols = {
+    id: loans.id,
+    employeeId: loans.employeeId,
+    amount: loans.amount,
+    balance: loans.balance,
+    installment: loans.installment,
+    startDate: loans.startDate,
+    endDate: loans.endDate,
+    isActive: loans.isActive,
+    loanType: loans.loanType,
+    frequency: loans.frequency,
+    creditor: loans.creditor,
+    creditorId: loans.creditorId,
+    allowDecember: loans.allowDecember,
+    createdAt: loans.createdAt,
+    employeeCode: employees.code,
+    employeeFirstName: employees.firstName,
+    employeeLastName: employees.lastName,
+  }
+
+  const [totalResult, data] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(loans)
+      .innerJoin(employees, eq(loans.employeeId, employees.id))
+      .where(where),
+    db
+      .select(cols)
+      .from(loans)
+      .innerJoin(employees, eq(loans.employeeId, employees.id))
+      .where(where)
+      .orderBy(desc(loans.createdAt))
+      .limit(limit)
+      .offset(offset),
+  ])
+
+  const total = Number(totalResult[0]?.total ?? 0)
+  return { data, total, page, limit, totalPages: Math.ceil(total / limit) }
 }
 
 export async function getLoanById(db: Db, id: string) {
