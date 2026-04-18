@@ -72,7 +72,8 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       const linesPage = query.linesPage ? Number(query.linesPage) : 1
       const linesLimit = query.linesLimit ? Number(query.linesLimit) : 50
-      const data = await getPayrollService(db, params.id, linesPage, linesLimit)
+      const search = query.search || undefined
+      const data = await getPayrollService(db, params.id, linesPage, linesLimit, search)
       if (!data) {
         set.status = 404
         return { success: false, error: 'Payroll not found' }
@@ -85,6 +86,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       query: t.Object({
         linesPage: t.Optional(t.String()),
         linesLimit: t.Optional(t.String()),
+        search: t.Optional(t.String()),
       }),
     }
   )
