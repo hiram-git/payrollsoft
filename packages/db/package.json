@@ -18,6 +18,8 @@
     "seed:prod": "bun src/seed.ts",
     "db:seed-stress": "bun --env-file=../../.env src/seed-stress.ts",
     "seed-stress:prod": "bun src/seed-stress.ts",
+    "db:seed-loans": "bun --env-file=../../.env src/seed-loans.ts",
+    "seed-loans:prod": "bun src/seed-loans.ts",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"
   },
