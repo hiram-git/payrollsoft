@@ -285,11 +285,25 @@ export async function getPayrollLines(db: Db, payrollId: string) {
 export async function getPayrollLinesPaged(
   db: Db,
   payrollId: string,
-  options: { page?: number; limit?: number } = {}
+  options: { page?: number; limit?: number; search?: string } = {}
 ) {
   const page = Math.max(1, options.page ?? 1)
   const limit = Math.min(200, Math.max(1, options.limit ?? 50))
   const offset = (page - 1) * limit
+  const search = options.search?.trim()
+
+  const baseWhere = eq(payrollLines.payrollId, payrollId)
+  const searchWhere =
+    search && search.length > 0
+      ? and(
+          baseWhere,
+          or(
+            ilike(employees.firstName, `%${search}%`),
+            ilike(employees.lastName, `%${search}%`),
+            ilike(employees.code, `%${search}%`)
+          )
+        )
+      : baseWhere
 
   const [data, totalResult] = await Promise.all([
     db
@@ -306,11 +320,15 @@ export async function getPayrollLinesPaged(
       })
       .from(payrollLines)
       .innerJoin(employees, eq(payrollLines.employeeId, employees.id))
-      .where(eq(payrollLines.payrollId, payrollId))
+      .where(searchWhere)
       .orderBy(asc(employees.lastName))
       .limit(limit)
       .offset(offset),
-    db.select({ total: count() }).from(payrollLines).where(eq(payrollLines.payrollId, payrollId)),
+    db
+      .select({ total: count() })
+      .from(payrollLines)
+      .innerJoin(employees, eq(payrollLines.employeeId, employees.id))
+      .where(searchWhere),
   ])
 
   const total = Number(totalResult[0]?.total ?? 0)
@@ -364,7 +382,10 @@ export type PayrollAcumuladoInsert = {
 
 export async function insertPayrollAcumulados(db: Db, items: PayrollAcumuladoInsert[]) {
   if (items.length === 0) return
-  await db.insert(payrollAcumulados).values(items)
+  const CHUNK = 500
+  for (let i = 0; i < items.length; i += CHUNK) {
+    await db.insert(payrollAcumulados).values(items.slice(i, i + CHUNK))
+  }
 }
 
 export async function deletePayrollAcumulados(db: Db, payrollId: string) {

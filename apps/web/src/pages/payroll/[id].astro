@@ -47,6 +47,7 @@ type Payroll = {
 
 const LINES_PER_PAGE = 50
 const linesPage = Math.max(1, Number(Astro.url.searchParams.get('linesPage') ?? '1'))
+const linesSearch = Astro.url.searchParams.get('search') ?? ''
 
 let payroll: Payroll | null = null
 let lines: PayrollLine[] = []
@@ -58,6 +59,7 @@ try {
     linesPage: String(linesPage),
     linesLimit: String(LINES_PER_PAGE),
   })
+  if (linesSearch) params.set('search', linesSearch)
   const res = await fetch(`${API_URL}/payroll/${id}?${params}`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
   })
@@ -349,9 +351,19 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 
     <!-- Lines table -->
     <div class="border border-gray-200 rounded-lg bg-white overflow-hidden">
-      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-gray-800">Detalle por empleado</h2>
-        <span class="text-xs text-gray-400">{linesTotal} {linesTotal === 1 ? 'empleado' : 'empleados'}</span>
+      <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-4">
+        <h2 class="text-sm font-semibold text-gray-800 shrink-0">Detalle por empleado</h2>
+        <form method="GET" action="" class="flex items-center gap-2 flex-1 max-w-xs ml-auto">
+          <input
+            type="search"
+            name="search"
+            value={linesSearch}
+            placeholder="Buscar empleado…"
+            class="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+          <button type="submit" class="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors shrink-0">Buscar</button>
+        </form>
+        <span class="text-xs text-gray-400 shrink-0">{linesTotal} {linesTotal === 1 ? 'empleado' : 'empleados'}</span>
       </div>
 
       {lines.length === 0 ? (
@@ -391,9 +403,19 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                 <td class="px-4 py-3.5">
                   <div class="flex items-center gap-1 justify-end">
                     {isGenerated && (
-                      <form method="POST" action={`/api/payroll/${id}/line/${l.line.id}`}>
+                      <form id={`form-regen-line-${l.line.id}`} method="POST" action={`/api/payroll/${id}/line/${l.line.id}`}>
                         <input type="hidden" name="_method" value="REGENERATE" />
-                        <button type="submit" class="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors" title="Regenerar empleado">
+                        <button
+                          type="button"
+                          data-confirm
+                          data-form={`form-regen-line-${l.line.id}`}
+                          data-title="Regenerar empleado"
+                          data-body={`¿Recalcular la línea de ${l.employee.firstName} ${l.employee.lastName}? Los valores actuales serán reemplazados.`}
+                          data-confirm-label="Regenerar"
+                          data-confirm-style="warning"
+                          class="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                          title="Regenerar empleado"
+                        >
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                         </button>
                       </form>

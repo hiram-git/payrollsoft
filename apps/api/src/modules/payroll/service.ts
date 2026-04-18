@@ -56,10 +56,16 @@ export function listPayrollsService(
   return listPayrolls(db, filter, { limit: 25, page })
 }
 
-export async function getPayrollService(db: AnyDb, id: string, linesPage = 1, linesLimit = 50) {
+export async function getPayrollService(
+  db: AnyDb,
+  id: string,
+  linesPage = 1,
+  linesLimit = 50,
+  search?: string
+) {
   const [payroll, linesResult] = await Promise.all([
     getPayroll(db, id),
-    getPayrollLinesPaged(db, id, { page: linesPage, limit: linesLimit }),
+    getPayrollLinesPaged(db, id, { page: linesPage, limit: linesLimit, search }),
   ])
   if (!payroll) return null
   return {
@@ -531,7 +537,12 @@ export async function revertPayrollService(db: AnyDb, id: string) {
   }
   await deletePayrollAcumulados(db, id)
   await deletePayrollLines(db, id)
-  const row = await updatePayroll(db, id, { status: 'created' })
+  const row = await updatePayroll(db, id, {
+    status: 'created',
+    totalGross: '0',
+    totalDeductions: '0',
+    totalNet: '0',
+  })
   return { success: true as const, data: row }
 }
 
