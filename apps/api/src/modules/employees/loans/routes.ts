@@ -41,6 +41,7 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
   .use(tenantPlugin)
 
   // List loans: GET /loans?employeeId=xxx  (omit employeeId to list all)
+  // Paginated: GET /loans?page=1&limit=50&search=juan&isActive=true
   .get(
     '/',
     async ({ db, query, set }) => {
@@ -52,12 +53,29 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
         const data = await listLoansService(db, query.employeeId)
         return { success: true, data }
       }
-      const data = await listAllLoansService(db, {})
-      return { success: true, data }
+      const result = await listAllLoansService(
+        db,
+        {
+          isActive:
+            query.isActive === 'true' ? true : query.isActive === 'false' ? false : undefined,
+          search: query.search || undefined,
+        },
+        {
+          page: query.page ? Number(query.page) : 1,
+          limit: query.limit ? Number(query.limit) : 50,
+        }
+      )
+      return { success: true, ...result }
     },
     {
       beforeHandle: [guardAuth, guardRole('VIEWER')],
-      query: t.Object({ employeeId: t.Optional(t.String()) }),
+      query: t.Object({
+        employeeId: t.Optional(t.String()),
+        search: t.Optional(t.String()),
+        isActive: t.Optional(t.String()),
+        page: t.Optional(t.String()),
+        limit: t.Optional(t.String()),
+      }),
     }
   )
 
