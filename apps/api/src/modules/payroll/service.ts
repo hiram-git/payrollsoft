@@ -194,6 +194,11 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
     const payrollTypeId = conceptCatalogs.payrollTypes.find((t) => t.code === payroll.type)?.id
     const activoSituationId = conceptCatalogs.situations.find((s) => s.code === 'activo')?.id
 
+    // Build sets of valid catalog IDs so stale link references are ignored
+    const validPayrollTypeIds = new Set(conceptCatalogs.payrollTypes.map((t) => t.id))
+    const validFrequencyIds = new Set(conceptCatalogs.frequencies.map((f) => f.id))
+    const validSituationIds = new Set(conceptCatalogs.situations.map((s) => s.id))
+
     const activeConcepts = allConceptsWithLinks
       .filter((c) => c.isActive)
       .sort((a, b) => {
@@ -201,22 +206,27 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         return a.code.localeCompare(b.code)
       })
       .filter((c) => {
+        // Filter out stale link IDs (references to catalog items that no longer exist)
+        const effectiveTypeIds = c.payrollTypeIds.filter((id) => validPayrollTypeIds.has(id))
+        const effectiveFreqIds = c.frequencyIds.filter((id) => validFrequencyIds.has(id))
+        const effectiveSitIds = c.situationIds.filter((id) => validSituationIds.has(id))
+
         if (
-          c.payrollTypeIds.length > 0 &&
+          effectiveTypeIds.length > 0 &&
           payrollTypeId &&
-          !c.payrollTypeIds.includes(payrollTypeId)
+          !effectiveTypeIds.includes(payrollTypeId)
         )
           return false
         if (
-          c.frequencyIds.length > 0 &&
+          effectiveFreqIds.length > 0 &&
           payrollFrequencyId &&
-          !c.frequencyIds.includes(payrollFrequencyId)
+          !effectiveFreqIds.includes(payrollFrequencyId)
         )
           return false
         if (
-          c.situationIds.length > 0 &&
+          effectiveSitIds.length > 0 &&
           activoSituationId &&
-          !c.situationIds.includes(activoSituationId)
+          !effectiveSitIds.includes(activoSituationId)
         )
           return false
         return true
@@ -577,6 +587,10 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
   const payrollTypeIdSingle = catalogsSingle.payrollTypes.find((t) => t.code === payroll.type)?.id
   const activoSituationIdSingle = catalogsSingle.situations.find((s) => s.code === 'activo')?.id
 
+  const validPayrollTypeIdsSingle = new Set(catalogsSingle.payrollTypes.map((t) => t.id))
+  const validFrequencyIdsSingle = new Set(catalogsSingle.frequencies.map((f) => f.id))
+  const validSituationIdsSingle = new Set(catalogsSingle.situations.map((s) => s.id))
+
   const activeConcepts = allConceptsWithLinksSingle
     .filter((c) => c.isActive)
     .sort((a, b) => {
@@ -584,22 +598,26 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
       return a.code.localeCompare(b.code)
     })
     .filter((c) => {
+      const effectiveTypeIds = c.payrollTypeIds.filter((id) => validPayrollTypeIdsSingle.has(id))
+      const effectiveFreqIds = c.frequencyIds.filter((id) => validFrequencyIdsSingle.has(id))
+      const effectiveSitIds = c.situationIds.filter((id) => validSituationIdsSingle.has(id))
+
       if (
-        c.payrollTypeIds.length > 0 &&
+        effectiveTypeIds.length > 0 &&
         payrollTypeIdSingle &&
-        !c.payrollTypeIds.includes(payrollTypeIdSingle)
+        !effectiveTypeIds.includes(payrollTypeIdSingle)
       )
         return false
       if (
-        c.frequencyIds.length > 0 &&
+        effectiveFreqIds.length > 0 &&
         payrollFrequencyIdSingle &&
-        !c.frequencyIds.includes(payrollFrequencyIdSingle)
+        !effectiveFreqIds.includes(payrollFrequencyIdSingle)
       )
         return false
       if (
-        c.situationIds.length > 0 &&
+        effectiveSitIds.length > 0 &&
         activoSituationIdSingle &&
-        !c.situationIds.includes(activoSituationIdSingle)
+        !effectiveSitIds.includes(activoSituationIdSingle)
       )
         return false
       return true
