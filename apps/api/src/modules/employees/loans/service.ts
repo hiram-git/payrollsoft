@@ -6,6 +6,7 @@ import {
   createLoanInstallments,
   getEmployee,
   getLoanById,
+  getLoanInstallments,
   listAllLoans,
   listLoansByEmployee,
   updateLoan,
@@ -42,6 +43,10 @@ export function listAllLoansService(
 
 export function getLoanService(db: AnyDb, id: string) {
   return getLoanById(db, id)
+}
+
+export function getLoanInstallmentsService(db: AnyDb, loanId: string) {
+  return getLoanInstallments(db, loanId)
 }
 
 export async function createLoanService(db: AnyDb, input: LoanInput) {
