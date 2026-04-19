@@ -5,6 +5,7 @@ import { tenantPlugin } from '../../middleware/tenant'
 import {
   closePayrollService,
   createPayrollService,
+  createThirteenthPayrollService,
   deletePayrollService,
   generatePayrollService,
   getPayrollService,
@@ -262,6 +263,31 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     {
       beforeHandle: [guardAuth, guardRole('VIEWER')],
       query: t.Object({ year: t.Optional(t.String()) }),
+    }
+  )
+
+  // POST /payroll/thirteenth — create XIII mes payroll auto-detecting the trimestral period
+  .post(
+    '/thirteenth',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await createThirteenthPayrollService(
+        db,
+        body.date ?? undefined,
+        body.name ?? undefined
+      )
+      set.status = 201
+      return { success: true, data: result.data, period: result.period }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('HR')],
+      body: t.Object({
+        date: t.Optional(t.String()),
+        name: t.Optional(t.String()),
+      }),
     }
   )
 

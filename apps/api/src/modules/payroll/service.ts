@@ -1,4 +1,10 @@
-import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core'
+import {
+  countBusinessDays,
+  countCalendarDays,
+  determinarPeriodoTrimestral,
+  processLine,
+  round2,
+} from '@payroll/core'
 import {
   batchUpsertPayrollLines,
   bulkDeactivateCompletedLoans,
@@ -84,7 +90,7 @@ export async function getPayrollService(
 
 export async function createPayrollService(db: AnyDb, input: CreatePayrollInput) {
   const validTypes = ['regular', 'thirteenth', 'special']
-  const validFreqs = ['biweekly', 'monthly', 'weekly']
+  const validFreqs = ['biweekly', 'monthly', 'weekly', 'thirteenth', 'liquidation']
 
   if (!validTypes.includes(input.type)) {
     return { success: false as const, error: 'invalid_type', message: 'Invalid payroll type' }
@@ -149,6 +155,22 @@ export async function deletePayrollService(db: AnyDb, id: string) {
   return { success: true as const }
 }
 
+export async function createThirteenthPayrollService(db: AnyDb, date?: string, name?: string) {
+  const refDate = date ?? new Date().toISOString().slice(0, 10)
+  const period = determinarPeriodoTrimestral(refDate)
+  const payrollName = name?.trim() || `XIII Mes — ${period.descripcion}`
+  const row = await createPayroll(db, {
+    name: payrollName,
+    type: 'thirteenth',
+    frequency: 'thirteenth',
+    periodStart: period.fechaInicio,
+    periodEnd: period.fechaFin,
+    paymentDate: null,
+    status: 'created',
+  })
+  return { success: true as const, data: row, period }
+}
+
 // ─── Payroll Generation (shared logic) ───────────────────────────────────────
 
 // Accept both new and legacy status names for backward compatibility
@@ -196,6 +218,8 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       weekly: 'semanal',
       biweekly: 'quincenal',
       monthly: 'mensual',
+      thirteenth: 'thirteenth',
+      liquidation: 'liquidacion',
     }
     const payrollFreqCode = freqCodeMap[payroll.frequency] ?? payroll.frequency
     const payrollFrequencyId = conceptCatalogs.frequencies.find(
