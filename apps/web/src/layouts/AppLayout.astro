@@ -10,53 +10,105 @@ function isActive(href: string) {
   return path === href || (href !== '/dashboard' && path.startsWith(href))
 }
 
-const navWork = [
-  { href: '/dashboard', label: 'Panel', icon: 'dashboard' },
-  { href: '/employees', label: 'Empleados', icon: 'team' },
-  { href: '/loans', label: 'Préstamos', icon: 'loans' },
-  { href: '/payroll', label: 'Planillas', icon: 'payroll' },
-  { href: '/acumulados', label: 'Acumulados', icon: 'chart' },
+type NavChild = { href: string; label: string }
+type NavEntry =
+  | { kind: 'item'; href: string; label: string; icon: IconKey }
+  | { kind: 'group'; label: string; icon: IconKey; children: NavChild[] }
+
+const nav: NavEntry[] = [
+  { kind: 'item', href: '/dashboard', label: 'Panel', icon: 'dashboard' },
+  {
+    kind: 'group',
+    label: 'Estructura',
+    icon: 'building',
+    children: [
+      { href: '/config/estructura', label: 'Posición' },
+      { href: '/config/cargos', label: 'Cargos' },
+      { href: '/config/funciones', label: 'Funciones' },
+      { href: '/config/departamentos', label: 'Departamentos' },
+    ],
+  },
+  {
+    kind: 'group',
+    label: 'Préstamos',
+    icon: 'loans',
+    children: [
+      { href: '/config/acreedores', label: 'Acreedores' },
+      { href: '/loans', label: 'Gestión' },
+    ],
+  },
+  {
+    kind: 'group',
+    label: 'Asistencia',
+    icon: 'clock',
+    children: [
+      { href: '/attendance', label: 'Marcaciones' },
+      { href: '/attendance/shifts', label: 'Horarios' },
+    ],
+  },
+  {
+    kind: 'group',
+    label: 'Nómina',
+    icon: 'payroll',
+    children: [
+      { href: '/payroll', label: 'Cálculo' },
+      { href: '/config/conceptos', label: 'Conceptos' },
+    ],
+  },
+  {
+    kind: 'group',
+    label: 'Reportes',
+    icon: 'chart',
+    children: [
+      { href: '/reports/personal', label: 'Personal' },
+      { href: '/reports/payroll', label: 'Planilla' },
+      { href: '/reports/movements', label: 'Movimientos' },
+    ],
+  },
+  { kind: 'item', href: '/vacations', label: 'Vacaciones', icon: 'calendar' },
+  { kind: 'item', href: '/liquidations', label: 'Liquidaciones', icon: 'scale' },
+  {
+    kind: 'group',
+    label: 'Configuración',
+    icon: 'gear',
+    children: [
+      { href: '/config/company', label: 'Empresa' },
+      { href: '/config/users', label: 'Usuarios' },
+      { href: '/config/roles', label: 'Roles y permisos' },
+      { href: '/config/calendars', label: 'Calendarios' },
+    ],
+  },
 ]
 
-const navOrg = [
-  { href: '/attendance', label: 'Asistencia', icon: 'clock' },
-  { href: '/vacations', label: 'Vacaciones', icon: 'calendar' },
-  { href: '/reports', label: 'Reportes', icon: 'reports' },
-]
-
-const configItems = [
-  { href: '/config/company', label: 'Empresa' },
-  { href: '/config/estructura', label: 'Estructura' },
-  { href: '/config/cargos', label: 'Cargos' },
-  { href: '/config/funciones', label: 'Funciones' },
-  { href: '/config/departamentos', label: 'Departamentos' },
-  { href: '/config/conceptos', label: 'Conceptos' },
-  { href: '/config/catalogo-conceptos', label: 'Catálogos' },
-  { href: '/config/acreedores', label: 'Acreedores' },
-]
-
-const isConfigActive = configItems.some(({ href }) => path.startsWith(href))
+function groupActive(children: NavChild[]) {
+  return children.some((c) => isActive(c.href))
+}
 
 type IconKey =
   | 'dashboard'
-  | 'team'
+  | 'building'
   | 'loans'
+  | 'clock'
   | 'payroll'
   | 'chart'
-  | 'clock'
   | 'calendar'
-  | 'reports'
+  | 'scale'
+  | 'gear'
+
 const icons: Record<IconKey, string> = {
   dashboard:
-    '<rect x="2" y="2" width="5" height="6"/><rect x="9" y="2" width="5" height="3"/><rect x="9" y="7" width="5" height="7"/><rect x="2" y="10" width="5" height="4"/>',
-  team: '<circle cx="8" cy="5" r="2.2"/><path d="M3 13c.6-2.4 2.5-3.5 5-3.5s4.4 1.1 5 3.5"/>',
+    '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
+  building:
+    '<rect x="2" y="8" width="12" height="6" rx="1"/><rect x="5" y="4" width="6" height="4"/><rect x="7" y="1.5" width="2" height="2.5"/><rect x="4" y="10" width="2" height="4"/><rect x="10" y="10" width="2" height="4"/>',
   loans: '<circle cx="5" cy="7" r="2"/><path d="M7 7h5.5M10 7v2M12 7v1.5"/>',
+  clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.5l2 2"/>',
   payroll: '<rect x="2" y="3" width="12" height="11" rx="1"/><path d="M2 7h12M6 3v4M10 3v4"/>',
   chart:
     '<path d="M2 13V3M13 13H2"/><rect x="4" y="8" width="2" height="4"/><rect x="7" y="5" width="2" height="7"/><rect x="10" y="9" width="2" height="3"/>',
-  clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.5l2 2"/>',
   calendar: '<rect x="2" y="3" width="12" height="11" rx="1"/><path d="M2 7h12M6 1v4M10 1v4"/>',
-  reports: '<path d="M3 2h7l3 3v9H3V2Z"/><path d="M10 2v3h3M5 8h6M5 11h6"/>',
+  scale:
+    '<path d="M8 2v11M4 13h8"/><path d="M3 5l2.5 4H.5L3 5Z"/><path d="M13 5l2.5 4h-5L13 5Z"/><path d="M3 5h10"/>',
+  gear: '<circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>',
 }
 ---
 
@@ -224,8 +276,8 @@ const icons: Record<IconKey, string> = {
         color: inherit;
         opacity: 0.85;
       }
-      /* Config sub-items */
-      .config-summary {
+      /* Group toggle (parent row) */
+      .group-summary {
         display: flex;
         align-items: center;
         gap: 12px;
@@ -239,26 +291,55 @@ const icons: Record<IconKey, string> = {
         transition: background 140ms ease, color 140ms ease;
         user-select: none;
       }
-      .config-summary:hover { background: var(--ink-4); color: var(--fore); }
-      .config-summary-active { color: var(--fore); font-weight: 500; }
-      .config-chevron { margin-left: auto; transition: transform 200ms ease; opacity: 0.6; }
-      details[open] .config-chevron { transform: rotate(180deg); }
-      .config-sub {
-        margin-top: 2px;
-        padding-left: 24px;
+      .group-summary:hover { background: var(--ink-4); color: var(--fore); }
+      .group-summary-active { color: var(--fore); font-weight: 500; }
+      .group-chevron { margin-left: auto; transition: transform 200ms ease; opacity: 0.5; }
+      details[open] .group-chevron { transform: rotate(180deg); }
+
+      /* Children rail */
+      .group-children {
+        position: relative;
+        margin: 2px 0 4px 24px;
+        padding-left: 12px;
       }
-      .config-sub-item {
+      .group-children::before {
+        content: '';
+        position: absolute;
+        left: 0;
+        top: 4px;
+        bottom: 4px;
+        width: 1px;
+        background: var(--rule);
+        border-radius: 1px;
+      }
+      .child-item {
         display: flex;
         align-items: center;
-        padding: 7px 12px;
+        padding: 6px 10px;
         border-radius: 3px;
         font-size: 13px;
         color: var(--mute-2);
         text-decoration: none;
         transition: background 140ms ease, color 140ms ease;
+        position: relative;
       }
-      .config-sub-item:hover { background: var(--ink-4); color: var(--fore); }
-      .config-sub-active { color: var(--fore); font-weight: 500; background: var(--navy-soft); }
+      .child-item:hover { background: var(--ink-4); color: var(--fore); }
+      .child-active {
+        color: var(--fore);
+        font-weight: 500;
+        background: var(--navy-soft);
+      }
+      .child-active::before {
+        content: '';
+        position: absolute;
+        left: -12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 1px;
+        height: 60%;
+        background: var(--navy-hi);
+        border-radius: 1px;
+      }
       .sidebar-footer {
         margin-top: auto;
         padding-top: 12px;
@@ -422,53 +503,35 @@ const icons: Record<IconKey, string> = {
           </div>
         </div>
 
-        <span class="nav-section">Trabajo</span>
-
-        {navWork.map(({ href, label, icon }) => (
-          <a
-            href={href}
-            class={`nav-item${isActive(href) ? ' nav-active' : ''}`}
-          >
-            <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" set:html={icons[icon as IconKey]} />
-            {label}
-          </a>
-        ))}
-
-        <span class="nav-section">Organización</span>
-
-        {navOrg.map(({ href, label, icon }) => (
-          <a
-            href={href}
-            class={`nav-item${isActive(href) ? ' nav-active' : ''}`}
-          >
-            <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" set:html={icons[icon as IconKey]} />
-            {label}
-          </a>
-        ))}
-
-        <span class="nav-section">Config.</span>
-
-        <details open={isConfigActive || undefined}>
-          <summary class={`config-summary${isConfigActive ? ' config-summary-active' : ''}`}>
-            <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3">
-              <circle cx="8" cy="8" r="2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/>
-            </svg>
-            Configuración
-            <svg class="config-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square">
-              <path d="M2.5 4l2.5 2.5L7.5 4"/>
-            </svg>
-          </summary>
-          <div class="config-sub">
-            {configItems.map(({ href, label }) => (
-              <a
-                href={href}
-                class={`config-sub-item${isActive(href) ? ' config-sub-active' : ''}`}
-              >
-                {label}
+        {nav.map((entry) => {
+          if (entry.kind === 'item') {
+            return (
+              <a href={entry.href} class={`nav-item${isActive(entry.href) ? ' nav-active' : ''}`}>
+                <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" set:html={icons[entry.icon]} />
+                {entry.label}
               </a>
-            ))}
-          </div>
-        </details>
+            )
+          }
+          const active = groupActive(entry.children)
+          return (
+            <details open={active || undefined}>
+              <summary class={`group-summary${active ? ' group-summary-active' : ''}`}>
+                <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" set:html={icons[entry.icon]} />
+                {entry.label}
+                <svg class="group-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square">
+                  <path d="M2.5 4l2.5 2.5L7.5 4"/>
+                </svg>
+              </summary>
+              <div class="group-children">
+                {entry.children.map((child) => (
+                  <a href={child.href} class={`child-item${isActive(child.href) ? ' child-active' : ''}`}>
+                    {child.label}
+                  </a>
+                ))}
+              </div>
+            </details>
+          )
+        })}
 
         <div class="sidebar-footer">
           <form method="POST" action="/api/auth/logout">

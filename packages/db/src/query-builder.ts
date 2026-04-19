@@ -1835,6 +1835,105 @@ export async function revertPayrollInstallments(db: Db, payrollId: string) {
     .where(eq(loanInstallments.payrollId, payrollId))
 }
 
+/**
+ * Bulk-fetch the oldest pending installment per active loan for a set of employees.
+ * Replaces the per-employee getPendingInstallmentsByEmployee loop on payroll close.
+ * Returns one row per qualifying loan (the installment with the lowest installment_number).
+ */
+export async function bulkGetPendingInstallments(
+  db: Db,
+  employeeIds: string[],
+  periodEnd: string
+): Promise<(typeof loanInstallments.$inferSelect)[]> {
+  if (employeeIds.length === 0) return []
+
+  // 1. Active loans for these employees that started on or before the period end
+  const activeLoans = await db
+    .select({ id: loans.id })
+    .from(loans)
+    .where(
+      and(
+        inArray(loans.employeeId, employeeIds),
+        eq(loans.isActive, true),
+        lte(loans.startDate, periodEnd)
+      )
+    )
+  if (activeLoans.length === 0) return []
+  const loanIds = activeLoans.map((l) => l.id)
+
+  // 2. Lowest pending installment_number per loan
+  const minNums = await db
+    .select({
+      loanId: loanInstallments.loanId,
+      minNum: sql<number>`min(${loanInstallments.installmentNumber})`,
+    })
+    .from(loanInstallments)
+    .where(and(inArray(loanInstallments.loanId, loanIds), eq(loanInstallments.status, 'pending')))
+    .groupBy(loanInstallments.loanId)
+  if (minNums.length === 0) return []
+
+  // 3. Fetch all pending for those loans, keep only the first per loan
+  const pendingLoanIds = minNums.map((m) => m.loanId)
+  const allPending = await db
+    .select()
+    .from(loanInstallments)
+    .where(
+      and(inArray(loanInstallments.loanId, pendingLoanIds), eq(loanInstallments.status, 'pending'))
+    )
+  const minMap = new Map(minNums.map((m) => [m.loanId, Number(m.minNum)]))
+  return allPending.filter((r) => r.installmentNumber === minMap.get(r.loanId))
+}
+
+/** Mark a list of installments as paid in a single UPDATE. */
+export async function bulkMarkInstallmentsPaid(
+  db: Db,
+  installmentIds: string[],
+  payrollId: string
+): Promise<void> {
+  if (installmentIds.length === 0) return
+  await db
+    .update(loanInstallments)
+    .set({ status: 'paid', payrollId, paidAt: new Date() })
+    .where(inArray(loanInstallments.id, installmentIds))
+}
+
+/**
+ * Deactivate loans (from the provided list) that have no remaining pending installments.
+ * Used after marking installments paid on payroll close.
+ */
+export async function bulkDeactivateCompletedLoans(db: Db, loanIds: string[]): Promise<void> {
+  if (loanIds.length === 0) return
+  const withPending = await db
+    .selectDistinct({ loanId: loanInstallments.loanId })
+    .from(loanInstallments)
+    .where(and(inArray(loanInstallments.loanId, loanIds), eq(loanInstallments.status, 'pending')))
+  const withPendingSet = new Set(withPending.map((r) => r.loanId))
+  const completedIds = loanIds.filter((id) => !withPendingSet.has(id))
+  if (completedIds.length > 0) {
+    await db.update(loans).set({ isActive: false }).where(inArray(loans.id, completedIds))
+  }
+}
+
+/**
+ * Reactivate inactive loans that now have pending installments.
+ * Used after reverting installment payments on payroll reopen.
+ */
+export async function bulkReactivateLoansWithPending(db: Db, employeeIds: string[]): Promise<void> {
+  if (employeeIds.length === 0) return
+  const toReactivate = await db
+    .selectDistinct({ id: loans.id })
+    .from(loans)
+    .innerJoin(
+      loanInstallments,
+      and(eq(loanInstallments.loanId, loans.id), eq(loanInstallments.status, 'pending'))
+    )
+    .where(and(inArray(loans.employeeId, employeeIds), eq(loans.isActive, false)))
+  const ids = toReactivate.map((r) => r.id)
+  if (ids.length > 0) {
+    await db.update(loans).set({ isActive: true }).where(inArray(loans.id, ids))
+  }
+}
+
 // ─── Company Config ───────────────────────────────────────────────────────────
 
 export async function getCompanyConfig(db: Db) {
