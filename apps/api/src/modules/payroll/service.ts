@@ -1,10 +1,13 @@
 import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core'
 import {
   batchUpsertPayrollLines,
+  bulkDeactivateCompletedLoans,
   bulkGetAttendanceSummary,
   bulkGetLoansByEmployees,
+  bulkGetPendingInstallments,
   bulkLoadCreditorInstallments,
-  countPendingInstallments,
+  bulkMarkInstallmentsPaid,
+  bulkReactivateLoansWithPending,
   createPayroll,
   deleteCreatedPayroll,
   deletePayrollAcumulados,
@@ -18,7 +21,6 @@ import {
   getPayrollLineById,
   getPayrollLines,
   getPayrollLinesPaged,
-  getPendingInstallmentsByEmployee,
   getPosition,
   insertPayrollAcumulados,
   listConceptsWithLinks,
@@ -28,7 +30,6 @@ import {
   loadAccumulated,
   loadAccumulatedByDateRange,
   loadInstallmentsByCreditor,
-  markInstallmentPaid,
   revertPayrollInstallments,
   updateLoan,
   updatePayroll,
@@ -484,42 +485,28 @@ export async function closePayrollService(db: AnyDb, id: string) {
       await insertPayrollAcumulados(db, acumuladoItems)
     }
 
-    // Mark one pending installment as paid per active loan per employee
+    // Mark one pending installment as paid per active loan — bulk (3 queries instead of N×M)
     const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
-    for (const empId of employeeIds) {
-      const pendingInstallments = await getPendingInstallmentsByEmployee(
-        db,
-        empId,
-        existing.periodEnd
-      )
-      for (const inst of pendingInstallments) {
-        await markInstallmentPaid(db, inst.id, id)
-        const remaining = await countPendingInstallments(db, inst.loanId)
-        if (remaining === 0) {
-          await updateLoan(db, inst.loanId, { isActive: false })
-        }
-      }
-    }
+    const pendingInstallments = await bulkGetPendingInstallments(
+      db,
+      employeeIds,
+      existing.periodEnd
+    )
+    const instIds = pendingInstallments.map((i) => i.id)
+    const loanIdsToCheck = [...new Set(pendingInstallments.map((i) => i.loanId))]
+    await bulkMarkInstallmentsPaid(db, instIds, id)
+    await bulkDeactivateCompletedLoans(db, loanIdsToCheck)
 
     const row = await updatePayroll(db, id, { status: 'closed' })
     return { success: true as const, data: row }
   } catch (err) {
-    // Roll back partial changes: remove any inserted acumulados, revert installments,
-    // reactivate loans that lost their last pending installment, restore status.
+    // Roll back partial changes on failure
     try {
       await deletePayrollAcumulados(db, id)
       await revertPayrollInstallments(db, id)
-      const lines = await getPayrollLines(db, id)
-      const empIds = [...new Set(lines.map((l) => l.line.employeeId))]
-      for (const empId of empIds) {
-        const empLoans = await listLoansByEmployee(db, empId)
-        for (const loan of empLoans) {
-          if (!loan.isActive) {
-            const pending = await countPendingInstallments(db, loan.id)
-            if (pending > 0) await updateLoan(db, loan.id, { isActive: true })
-          }
-        }
-      }
+      const rbLines = await getPayrollLines(db, id)
+      const rbEmpIds = [...new Set(rbLines.map((l) => l.line.employeeId))]
+      await bulkReactivateLoansWithPending(db, rbEmpIds)
       await updatePayroll(db, id, { status: 'generated' })
     } catch {
       // ignore rollback failure — status may be stuck in 'processing'
@@ -548,20 +535,10 @@ export async function reopenPayrollService(db: AnyDb, id: string) {
   await deletePayrollAcumulados(db, id)
   await revertPayrollInstallments(db, id)
 
-  // Reactivate loans that now have pending installments after the revert
+  // Reactivate loans that now have pending installments — bulk (2 queries instead of N×M)
   const lines = await getPayrollLines(db, id)
   const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
-  for (const empId of employeeIds) {
-    const empLoans = await listLoansByEmployee(db, empId)
-    for (const loan of empLoans) {
-      if (!loan.isActive) {
-        const pending = await countPendingInstallments(db, loan.id)
-        if (pending > 0) {
-          await updateLoan(db, loan.id, { isActive: true })
-        }
-      }
-    }
-  }
+  await bulkReactivateLoansWithPending(db, employeeIds)
 
   const row = await updatePayroll(db, id, { status: 'generated' })
   return { success: true as const, data: row }
