@@ -138,6 +138,9 @@ Funciones nativas soportadas: `ACUMULADOS`, `CONCEPTO`, `SALDO`, `DIAS`, `INIPER
 - [x] `payroll_acumulados` — historial desnormalizado por empleado+concepto
 - [x] Variables: SALARIO, SUELDO, FICHA, FECHAINICIO/FIN/PAGO, ANTIGUEDAD, GASTOS_REP, DIAS_TRABAJADOS, etc.
 - [x] Rollback automático en caso de error durante generación o cierre
+- [x] **Operaciones bulk** — eliminados todos los loops N+1 en generación, cierre y reapertura (sesión 2)
+- [x] **`allowZero` en conceptos** — conceptos con monto cero se omiten del output cuando `allowZero=false` (sesión 2)
+- [x] **Status `processing` recuperable** — regenerar funciona aunque la planilla quedó en estado `processing` (sesión 2)
 
 ### 🔲 3d — XIII Mes Panameño (PENDIENTE)
 
@@ -176,17 +179,19 @@ Funciones nativas soportadas: `ACUMULADOS`, `CONCEPTO`, `SALDO`, `DIAS`, `INIPER
 ---
 
 ## Fase 4 — Frontend Astro
-**Estado: 🔄 EN PROGRESO (~90%)**
+**Estado: 🔄 EN PROGRESO (~92%)**
 
 ### Completado
 
-- [x] UI moderna y responsiva (Tailwind CSS puro, sin librerías de componentes)
-- [x] Sidebar con secciones: Dashboard, Empleados, Préstamos, Planillas, Asistencia, Configuración
+- [x] **Sistema de diseño con CSS custom properties** — variables semánticas de color con soporte de tema claro/oscuro. Toggle de tema en header persistido en `localStorage`. Tipografías: Fraunces (display), Inter Tight (sans), JetBrains Mono (mono).
+- [x] **Sidebar jerárquico con `<details>/<summary>`** — grupos padre-hijo auto-colapsables. Auto-abierto cuando algún hijo está activo. 9 secciones: Panel / Estructura / Préstamos / Asistencia / Nómina / Reportes / Vacaciones / Liquidaciones / Configuración.
+- [x] **Módulo Posiciones** (`/config/estructura`) — CRUD completo de posiciones (cargo + función + departamento + salario).
+- [x] UI moderna y responsiva (CSS puro con custom properties, sin librerías de componentes)
 - [x] Empleados: lista con búsqueda, nuevo, editar con tabs (Personal, Laboral, Préstamos)
 - [x] Catálogos: Cargos, Funciones, Departamentos (árbol), Conceptos (toggle activo/inactivo)
 - [x] Planillas: lista, nuevo, detalle con stepper + tabla + desglose colapsable por empleado
 - [x] Acciones de planilla con modal de confirmación (Generar, Regenerar, Revertir, Cerrar, Reabrir)
-- [x] Módulo Préstamos: lista global, nuevo con calculadora de cuotas, editar/cerrar
+- [x] Módulo Préstamos: lista global con búsqueda/paginación, nuevo con calculadora de cuotas, editar con tabla de cuotas
 - [x] Módulo Acreedores: lista, nuevo, editar
 - [x] Módulo Asistencia: lista, nuevo, editar registro
 - [x] Horarios: lista con tolerancias, nuevo, editar
@@ -197,7 +202,7 @@ Funciones nativas soportadas: `ACUMULADOS`, `CONCEPTO`, `SALDO`, `DIAS`, `INIPER
 - [ ] PDF de planilla (descarga de recibo individual + reporte general)
 - [ ] Exportación Excel de planilla generada
 
-### Páginas implementadas (37 rutas Astro)
+### Páginas implementadas (40 rutas Astro)
 
 ```
 apps/web/src/pages/
@@ -208,18 +213,18 @@ apps/web/src/pages/
 ├── employees/new.astro
 ├── employees/[id].astro
 ├── employees/[id]/loans/new.astro
-├── employees/[id]/loans/[loanId].astro
-├── loans/index.astro
+├── employees/[id]/loans/[loanId].astro  ← tabla de cuotas con estado
+├── loans/index.astro                    ← búsqueda + paginación
 ├── loans/new.astro
 ├── payroll/index.astro
 ├── payroll/new.astro
 ├── payroll/[id].astro
-├── attendance/index.astro              ← lista con filtros fecha/empleado
-├── attendance/new.astro                ← crear registro
-├── attendance/[id].astro               ← editar/eliminar registro
-├── attendance/shifts/index.astro       ← lista de horarios
-├── attendance/shifts/new.astro         ← nuevo horario
-├── attendance/shifts/[id].astro        ← editar/eliminar horario
+├── attendance/index.astro
+├── attendance/new.astro
+├── attendance/[id].astro
+├── attendance/shifts/index.astro
+├── attendance/shifts/new.astro
+├── attendance/shifts/[id].astro
 ├── config/conceptos/index.astro
 ├── config/conceptos/new.astro
 ├── config/conceptos/[id].astro
@@ -232,9 +237,12 @@ apps/web/src/pages/
 ├── config/departamentos/index.astro
 ├── config/departamentos/new.astro
 ├── config/departamentos/[id].astro
-├── config/acreedores/index.astro       ← lista con concepto vinculado
-├── config/acreedores/new.astro         ← crea acreedor + concepto automático
-└── config/acreedores/[id].astro        ← editar acreedor
+├── config/acreedores/index.astro
+├── config/acreedores/new.astro
+├── config/acreedores/[id].astro
+├── config/estructura/index.astro        ← listado de posiciones
+├── config/estructura/new.astro          ← nueva posición
+└── config/estructura/[id].astro         ← editar posición
 ```
 
 ---
@@ -296,10 +304,17 @@ apps/web/src/pages/
 - Sin `.references()` en FK tenant (bug drizzle-kit con `"public"."table"`)
 - Aislamiento total de datos; backups por cliente triviales
 
-### Frontend 100% Tailwind sin librerías de componentes
+### Sistema de diseño con CSS custom properties
+- Variables semánticas: `--ink` (bg base), `--fore` (texto), `--navy` (acento), `--ok`/`--err`/`--warn`, `--rule` (bordes), `--mute` (texto secundario)
+- Soporte de temas claro/oscuro via `data-theme` en `<html>`; toggle en header persistido en `localStorage`
+- Script síncrono en `<head>` para evitar FOIT (flash of incorrect theme)
+- Sin librerías de iconos: SVG inline desde `Record<IconKey, string>`
+
+### Frontend 100% CSS sin librerías de componentes
 - No se usa TanStack Table, FullCalendar ni @react-pdf/renderer
 - Lógica interactiva client-side como `<script is:inline>` en las propias páginas Astro
 - Modales de confirmación con patrón `data-confirm` propio (sin librerías)
+- Sidebar jerárquico con `<details>/<summary>` nativo (sin JS)
 
 ### Motor de fórmulas sin `eval`
 - El paquete `core` no tiene dependencias de framework

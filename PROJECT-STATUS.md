@@ -1,6 +1,6 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** Abril 2026  
+**Última actualización:** Abril 2026 (sesión 2)  
 **Branch activo:** `claude/refactor-loans-astro-YT615`
 
 ---
@@ -103,7 +103,7 @@ isDefault, createdAt, updatedAt
 **Custom Query Builder** (`packages/db/src/query-builder.ts`):
 - Empleados: `listEmployees`, `getEmployee`, `createEmployee`, `updateEmployee`, `deactivateEmployee`
 - Planillas: `listPayrolls`, `getPayroll`, `getPayrollLines`, `getPayrollLineById`, `createPayroll`, `updatePayroll`, `upsertPayrollLine`, `deletePayrollLines`, `deleteCreatedPayroll`, `loadAccumulated`, `loadAccumulatedByDateRange`, `insertPayrollAcumulados`, `deletePayrollAcumulados`
-- Préstamos: `listLoansByEmployee`, `listAllLoans`, `getLoanById`, `createLoan`, `updateLoan`, `closeLoan`, `getPendingInstallmentsByEmployee`, `countPendingInstallments`, `loadInstallmentsByCreditor`, `markInstallmentPaid`, `revertPayrollInstallments`
+- Préstamos: `listLoansByEmployee`, `listAllLoans`, `getLoanById`, `createLoan`, `updateLoan`, `closeLoan`, `getLoanInstallments`, `revertPayrollInstallments`, `bulkLoadCreditorInstallments`, `bulkGetPendingInstallments`, `bulkMarkInstallmentsPaid`, `bulkDeactivateCompletedLoans`, `bulkReactivateLoansWithPending`
 - Acreedores: `listCreditors`, `getCreditor`, `createCreditor`, `updateCreditor`, `deleteCreditor`
 - Catálogos: `listCargos`, `getCargoById`, `createCargo`, `updateCargo`, `deactivateCargo` (+ funciones y departamentos)
 - Conceptos: `listConcepts`, `getConceptById`, `createConcept`, `updateConcept`, `deactivateConcept`
@@ -189,6 +189,19 @@ apps/api/src/modules/payroll/
 - `payroll_acumulados` — registro por empleado+concepto para consultas históricas
 - Variables de fórmula: SALARIO, SUELDO, FICHA, FECHAINICIO/FIN/PAGO, ANTIGUEDAD, etc.
 
+**Correcciones de rendimiento (sesión 2):**
+
+- **`CUOTA_ACREEDOR()` N×M queries** — reemplazado por `bulkLoadCreditorInstallments`: pre-carga todos los montos de cuota por empleado y acreedor en 1 query antes de la generación. Reducción: ~10,000 queries → ~8.
+- **`closePayrollService` loop per-employee** — reemplazado por `bulkGetPendingInstallments` (3 queries) + `bulkMarkInstallmentsPaid` + `bulkDeactivateCompletedLoans`. Reducción: ~5,000 queries → ~8.
+- **`reopenPayrollService` loop per-employee** — reemplazado por `bulkReactivateLoansWithPending`. Reducción: ~3,000 queries → ~5.
+- **Status `processing` stuck** — `ALLOWED_FOR_REGENERATE` ampliado para incluir `'processing'`; al regenerar desde ese estado se trata como si fuera `'generated'`.
+
+**Corrección `allowZero` (sesión 2):**
+
+- `ConceptInput` extendido con `allowZero?: boolean`
+- En `processLine()`: si `amount === 0 && concept.allowZero === false`, se omite la entrada del output pero se registra el valor en `resolvedConcepts` para que otras fórmulas puedan referenciarlo con `CONCEPTO()`
+- Ambas llamadas a `activeConcepts.map()` en `service.ts` ahora pasan `allowZero: c.allowZero`
+
 ---
 
 ### 🔲 Fase 3d — XIII Mes Panameño (PENDIENTE)
@@ -246,29 +259,31 @@ apps/api/src/modules/payroll/
 
 ---
 
-## 🔄 Fase 4 — Frontend Astro (En Progreso — 90%)
+## 🔄 Fase 4 — Frontend Astro (En Progreso — 92%)
 
 ### Completado
 
-- [x] UI moderna (Tailwind CSS puro, sidebar, layout base)
+- [x] **Sistema de diseño CSS custom properties** — variables semánticas (`--ink`, `--navy-hi`, `--rule`, `--fore`, `--ok`, `--err`, etc.) con soporte de tema claro/oscuro via `data-theme` en `<html>`. Toggle persistido en `localStorage`. Tipografías: Fraunces (display), Inter Tight (sans), JetBrains Mono (mono).
+- [x] **Sidebar jerárquico** — reemplazado de lista plana a grupos padre-hijo con `<details>/<summary>`. Auto-abierto cuando algún hijo está activo. Grupos: Panel, Estructura, Préstamos, Asistencia, Nómina, Reportes, Vacaciones, Liquidaciones, Configuración.
+- [x] **Módulo Posiciones** (`/config/estructura`) — CRUD completo: lista con badge activo/inactivo, nuevo, editar. Vincula cargo, función, departamento y salario.
 - [x] Empleados: lista con búsqueda, nuevo, editar con tabs (Personal, Laboral, Préstamos)
 - [x] Catálogos: Cargos, Funciones, Departamentos, Conceptos
 - [x] Planillas: lista, nuevo, detalle con stepper + tabla por empleado + desglose de conceptos
 - [x] Acciones de planilla con modal de confirmación (Generar, Regenerar, Revertir, Cerrar, Reabrir)
 - [x] **Módulo de Préstamos standalone:**
-  - Lista global `/loans` — todos los préstamos con nombre de empleado, tipo, acreedor, frecuencia, estado
-  - Formulario `/loans/new` con selector de empleado, tipo, acreedor (selector del catálogo), frecuencia
-  - Calculadora de cuotas client-side: genera tabla de amortización completa
-  - Soporte de frecuencias: semanal / quincenal / mensual
-  - Toggle "Descontar en diciembre" (mueve cuotas dic → ene si desactivado)
+  - Lista global `/loans` — búsqueda, paginación, filtro por estado
+  - Formulario `/loans/new` con selector de empleado, tipo, acreedor, frecuencia
+  - Calculadora de cuotas client-side: tabla de amortización completa
+  - `/employees/[id]/loans/[loanId]` — editar + tabla de cuotas con estado paid/pending
 - [x] **Módulo Acreedores:** `/config/acreedores` — lista, nuevo, editar
 - [x] **Módulo Asistencia:**
   - `/attendance` — lista ordenada por fecha, filtros por fecha y empleado
-  - `/attendance/new` — formulario con selector de empleado + 4 campos de hora
-  - `/attendance/[id]` — editar marcaciones individuales + eliminar
-  - `/attendance/shifts` — lista de horarios con tolerancias por punto
-  - `/attendance/shifts/new` — formulario 4 secciones (Entrada/Sal.Alm./Ent.Alm./Salida) con tolerancias
-  - `/attendance/shifts/[id]` — editar horario
+  - `/attendance/new`, `/attendance/[id]` — crear/editar marcaciones
+  - `/attendance/shifts` — lista, nuevo, editar horarios con tolerancias
+
+### Nuevo endpoint (sesión 2)
+
+- `GET /loans/:id/installments` — retorna tabla de cuotas de un préstamo; usado en la página de edición
 
 ### Pendiente
 
@@ -291,8 +306,9 @@ apps/api/src/
     ├── employees/routes.ts + service.ts
     ├── employees/loans/routes.ts + service.ts
     ├── payroll/routes.ts + service.ts
-    ├── attendance/routes.ts + service.ts       ← NUEVO
-    ├── creditors/routes.ts + service.ts        ← NUEVO
+    ├── attendance/routes.ts + service.ts
+    ├── creditors/routes.ts + service.ts
+    ├── positions/routes.ts + service.ts        ← CRUD posiciones
     └── catalogs/
         ├── cargos/, funciones/, departamentos/
         └── concepts/routes.ts + service.ts
@@ -321,17 +337,18 @@ apps/web/src/
 │   ├── attendance/shifts/ (index, new, [id])   ← NUEVO
 │   ├── config/
 │   │   ├── cargos/, funciones/, departamentos/, conceptos/
-│   │   └── acreedores/ (index, new, [id])      ← NUEVO
+│   │   ├── acreedores/ (index, new, [id])
+│   │   └── estructura/ (index, new, [id])       ← posiciones CRUD
 │   └── api/
 │       ├── auth/
 │       ├── employees/ ([id].ts, index.ts)
 │       ├── employees/[id]/loans/ (index.ts, [loanId].ts)
 │       ├── loans/index.ts
-│       ├── attendance/ (index.ts, [id].ts)     ← NUEVO
-│       ├── attendance/shifts/ (index.ts, [id].ts) ← NUEVO
+│       ├── attendance/ (index.ts, [id].ts)
+│       ├── attendance/shifts/ (index.ts, [id].ts)
 │       └── config/
 │           ├── cargos/, funciones/, departamentos/, conceptos/
-│           └── acreedores/ (index.ts, [id].ts) ← NUEVO
+│           └── acreedores/ (index.ts, [id].ts)
 ```
 
 ---
@@ -357,3 +374,9 @@ apps/web/src/
 9. **Timestamps de asistencia** — La DB almacena columnas `timestamp` en PostgreSQL. El API acepta strings `HH:MM` y construye objetos `Date`. El frontend usa `toLocaleTimeString('es-PA', { hour12: false, timeZone: 'America/Panama' })`. Las columnas `time` de `shifts` retornan `HH:MM:SS`; se recortan con `.slice(0, 5)`.
 
 10. **`getPendingInstallmentsByEmployee`** — Requiere 3 argumentos: `(db, employeeId, periodEnd)`. El `periodEnd` filtra préstamos por `lte(loans.startDate, periodEnd)`. Pasar `undefined` genera SQL inválido → HTTP 500.
+
+11. **Operaciones bulk en planillas** — Las funciones `bulkGetPendingInstallments`, `bulkMarkInstallmentsPaid`, `bulkDeactivateCompletedLoans` y `bulkReactivateLoansWithPending` reemplazan loops N+1 en cierre/reapertura de planilla. `bulkGetPendingInstallments` usa un patrón de 3 queries: préstamos activos → `min(installmentNumber)` por préstamo → fetch de pendientes + filtro JS, evitando `DISTINCT ON` (no soportado en Drizzle ORM de forma portable).
+
+12. **Sidebar con `<details>/<summary>`** — Los grupos se auto-abren cuando algún hijo coincide con la ruta actual (`groupActive()`). El tipo `NavEntry` es una unión discriminada `{ kind: 'item' } | { kind: 'group' }`. Los íconos son inline SVG generados desde un `Record<IconKey, string>` para evitar dependencias de librerías de íconos.
+
+13. **Sistema de diseño CSS custom properties** — Todas las variables de color son semánticas (`--ink`, `--fore`, `--navy`, `--ok`, `--err`, etc.) y se sobrescriben en `[data-theme="light"]`. El tema se persiste en `localStorage` y se lee con un `<script is:inline>` síncrono en `<head>` para evitar flash de tema incorrecto (FOIT).

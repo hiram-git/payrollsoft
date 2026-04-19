@@ -30,8 +30,14 @@ Registro de marcaciones con 4 puntos: entrada, salida almuerzo, entrada almuerzo
 ### Roles y autenticación
 JWT en cookie httpOnly. Roles jerárquicos: `VIEWER → HR → ADMIN → SUPER_ADMIN`. CSRF activo en endpoints mutantes. Rate limiting global y estricto en login.
 
+### Módulo de posiciones
+Catálogo de posiciones que combina cargo, función, departamento y salario en una entidad reutilizable. Se asigna a empleados desde el módulo de estructura organizativa.
+
 ### Catálogos configurables
 Cargos, funciones, departamentos (árbol padre-hijo), conceptos de nómina. Los catálogos se gestionan desde `/config/` con activación/desactivación sin borrado físico.
+
+### Sistema de diseño con CSS custom properties
+La interfaz usa variables CSS semánticas (`--ink`, `--fore`, `--navy`, `--ok`, `--err`, `--rule`, `--mute`, etc.) en lugar de clases utilitarias de color. El tema claro/oscuro se controla con `data-theme` en el elemento `<html>` y se persiste en `localStorage`. Las tipografías son Fraunces (encabezados display), Inter Tight (interfaz) y JetBrains Mono (código). El cambio de tema no produce destello visual gracias a un script síncrono en `<head>`.
 
 ---
 
@@ -42,7 +48,7 @@ Cargos, funciones, departamentos (árbol padre-hijo), conceptos de nómina. Los 
 | Runtime | Bun |
 | Monorepo | Turborepo |
 | Backend | Elysia.js |
-| Frontend | Astro 6 (SSR) + Tailwind CSS |
+| Frontend | Astro 6 (SSR) + CSS custom properties |
 | ORM | Drizzle ORM |
 | Base de datos | PostgreSQL 16 |
 | Validación | Zod |
