@@ -16,6 +16,7 @@ type NavEntry =
   | { kind: 'group'; label: string; icon: IconKey; children: NavChild[] }
 
 const nav: NavEntry[] = [
+  { kind: 'item', href: '/dashboard', label: 'Panel', icon: 'dashboard' },
   {
     kind: 'group',
     label: 'Estructura',
@@ -83,9 +84,20 @@ function groupActive(children: NavChild[]) {
   return children.some((c) => isActive(c.href))
 }
 
-type IconKey = 'building' | 'loans' | 'clock' | 'payroll' | 'chart' | 'calendar' | 'scale' | 'gear'
+type IconKey =
+  | 'dashboard'
+  | 'building'
+  | 'loans'
+  | 'clock'
+  | 'payroll'
+  | 'chart'
+  | 'calendar'
+  | 'scale'
+  | 'gear'
 
 const icons: Record<IconKey, string> = {
+  dashboard:
+    '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
   building:
     '<rect x="2" y="8" width="12" height="6" rx="1"/><rect x="5" y="4" width="6" height="4"/><rect x="7" y="1.5" width="2" height="2.5"/><rect x="4" y="10" width="2" height="4"/><rect x="10" y="10" width="2" height="4"/>',
   loans: '<circle cx="5" cy="7" r="2"/><path d="M7 7h5.5M10 7v2M12 7v1.5"/>',
