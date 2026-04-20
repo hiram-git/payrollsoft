@@ -15,6 +15,23 @@ import {
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
 
+function computeInstallmentDueDate(
+  startDate: string,
+  frequency: string | null,
+  installmentNumber: number
+): string {
+  const date = new Date(`${startDate}T00:00:00`)
+  const n = installmentNumber - 1
+  if (frequency === 'semanal') {
+    date.setDate(date.getDate() + n * 7)
+  } else if (frequency === 'quincenal') {
+    date.setDate(date.getDate() + n * 15)
+  } else {
+    date.setMonth(date.getMonth() + n)
+  }
+  return date.toISOString().slice(0, 10)
+}
+
 export type LoanInput = {
   employeeId: string
   amount: string
@@ -80,6 +97,7 @@ export async function createLoanService(db: AnyDb, input: LoanInput) {
         loanId: row.id,
         installmentNumber: i + 1,
         amount: String(isLast ? Math.min(installmentAmount, remainder) : installmentAmount),
+        dueDate: computeInstallmentDueDate(input.startDate, input.frequency ?? null, i + 1),
       }
     })
     await createLoanInstallments(db, installments)

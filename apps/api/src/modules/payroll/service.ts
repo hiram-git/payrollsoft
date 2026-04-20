@@ -509,11 +509,12 @@ export async function closePayrollService(db: AnyDb, id: string) {
       await insertPayrollAcumulados(db, acumuladoItems)
     }
 
-    // Mark one pending installment as paid per active loan — bulk (3 queries instead of N×M)
+    // Mark pending installments due in this payroll period as paid — bulk
     const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
     const pendingInstallments = await bulkGetPendingInstallments(
       db,
       employeeIds,
+      existing.periodStart,
       existing.periodEnd
     )
     const instIds = pendingInstallments.map((i) => i.id)
