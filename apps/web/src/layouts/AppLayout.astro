@@ -30,6 +30,16 @@ const nav: NavEntry[] = [
   },
   {
     kind: 'group',
+    label: 'Personal',
+    icon: 'personal',
+    children: [
+      { href: '/employees', label: 'Empleados' },
+      { href: '/personal/baja', label: 'De Baja' },
+      { href: '/personal/documentos', label: 'Documentos' },
+    ],
+  },
+  {
+    kind: 'group',
     label: 'Préstamos',
     icon: 'loans',
     children: [
@@ -88,6 +98,7 @@ function groupActive(children: NavChild[]) {
 type IconKey =
   | 'dashboard'
   | 'building'
+  | 'personal'
   | 'loans'
   | 'clock'
   | 'payroll'
@@ -101,6 +112,7 @@ const icons: Record<IconKey, string> = {
     '<rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/>',
   building:
     '<rect x="2" y="8" width="12" height="6" rx="1"/><rect x="5" y="4" width="6" height="4"/><rect x="7" y="1.5" width="2" height="2.5"/><rect x="4" y="10" width="2" height="4"/><rect x="10" y="10" width="2" height="4"/>',
+  personal: '<circle cx="5.5" cy="4.5" r="2"/><path d="M1.5 12c0-2.21 1.79-4 4-4s4 1.79 4 4"/><circle cx="11" cy="5.5" r="1.5"/><path d="M14.5 12c0-1.66-1.12-3-2.5-3"/>',
   loans: '<circle cx="5" cy="7" r="2"/><path d="M7 7h5.5M10 7v2M12 7v1.5"/>',
   clock: '<circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.5l2 2"/>',
   payroll: '<rect x="2" y="3" width="12" height="11" rx="1"/><path d="M2 7h12M6 3v4M10 3v4"/>',
@@ -488,6 +500,46 @@ const icons: Record<IconKey, string> = {
         overflow-y: auto;
         overflow-x: hidden;
         background: var(--ink);
+      }
+
+      /* ── Dark-mode theming for page content cards/tables ── */
+      [data-theme="dark"] .page-content .bg-white       { background-color: var(--ink-2); }
+      [data-theme="dark"] .page-content .bg-gray-50     { background-color: var(--ink-3); }
+      [data-theme="dark"] .page-content .bg-gray-100    { background-color: var(--ink-4); }
+
+      [data-theme="dark"] .page-content .border-gray-200,
+      [data-theme="dark"] .page-content .border-gray-100 { border-color: var(--rule); }
+      [data-theme="dark"] .page-content .border-gray-300  { border-color: var(--rule-hi); }
+
+      [data-theme="dark"] .page-content .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--rule); }
+
+      [data-theme="dark"] .page-content .text-gray-900,
+      [data-theme="dark"] .page-content .text-gray-800  { color: var(--fore); }
+      [data-theme="dark"] .page-content .text-gray-700  { color: var(--fore-dim); }
+      [data-theme="dark"] .page-content .text-gray-600  { color: var(--mute-2); }
+      [data-theme="dark"] .page-content .text-gray-500,
+      [data-theme="dark"] .page-content .text-gray-400,
+      [data-theme="dark"] .page-content .text-gray-300  { color: var(--mute); }
+
+      [data-theme="dark"] .page-content .hover\:bg-gray-50:hover,
+      [data-theme="dark"] .page-content .hover\:bg-gray-100:hover { background-color: var(--ink-4); }
+      [data-theme="dark"] .page-content .hover\:text-gray-700:hover { color: var(--fore); }
+
+      /* ── Inputs / selects / textareas ────────────────────── */
+      [data-theme="dark"] .page-content input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+      [data-theme="dark"] .page-content select,
+      [data-theme="dark"] .page-content textarea {
+        background-color: var(--ink-3);
+        border-color: var(--rule);
+        color: var(--fore);
+      }
+      [data-theme="dark"] .page-content input::placeholder,
+      [data-theme="dark"] .page-content textarea::placeholder { color: var(--mute); }
+      [data-theme="dark"] .page-content input:focus,
+      [data-theme="dark"] .page-content select:focus,
+      [data-theme="dark"] .page-content textarea:focus {
+        border-color: var(--navy-hi);
+        box-shadow: 0 0 0 2px var(--navy-soft);
       }
     </style>
   </head>
