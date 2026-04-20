@@ -54,7 +54,17 @@ export type CreatePayrollInput = {
   paymentDate?: string | null
 }
 
-// ─── Queries ──────────────────────────────────────────────────────────────────
+// ─── Queries ─────────────────────────────────────────────────────────────────
+
+export async function getPayrollLineService(db: AnyDb, payrollId: string, lineId: string) {
+  const [payroll, line] = await Promise.all([
+    getPayroll(db, payrollId),
+    getPayrollLineById(db, lineId),
+  ])
+  if (!payroll || !line) return null
+  if (line.line.payrollId !== payrollId) return null
+  return { payroll, line }
+}
 
 export function listPayrollsService(
   db: AnyDb,

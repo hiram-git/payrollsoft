@@ -46,17 +46,20 @@ type Payroll = {
   totalNet: string
 }
 
+const fromPage = Astro.url.searchParams.get('fromPage') ?? '1'
+const fromSearch = Astro.url.searchParams.get('fromSearch') ?? ''
+
 let payroll: Payroll | null = null
 let currentLine: PayrollLine | null = null
 
 try {
-  const res = await fetch(`${API_URL}/payroll/${id}`, { headers })
+  const res = await fetch(`${API_URL}/payroll/${id}/line/${lineId}`, { headers })
   if (res.status === 401) return Astro.redirect('/login')
   if (res.status === 404) return Astro.redirect('/payroll')
   if (res.ok) {
-    const json = (await res.json()) as { data: { payroll: Payroll; lines: PayrollLine[] } }
+    const json = (await res.json()) as { data: { payroll: Payroll; line: PayrollLine } }
     payroll = json.data.payroll
-    currentLine = json.data.lines.find((l) => l.line.id === lineId) ?? null
+    currentLine = json.data.line
   }
 } catch {
   return Astro.redirect(`/payroll/${id}`)
@@ -87,7 +90,7 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     <div class="flex items-center gap-2 text-sm text-gray-500 mb-6">
       <a href="/payroll" class="hover:text-gray-700 transition-colors">Planillas</a>
       <span class="text-gray-300">/</span>
-      <a href={`/payroll/${id}`} class="hover:text-gray-700 transition-colors">{payroll.name}</a>
+      <a href={`/payroll/${id}?linesPage=${fromPage}${fromSearch ? `&search=${encodeURIComponent(fromSearch)}` : ''}`} class="hover:text-gray-700 transition-colors">{payroll.name}</a>
       <span class="text-gray-300">/</span>
       <span class="text-gray-900 font-medium">{employeeName}</span>
     </div>
