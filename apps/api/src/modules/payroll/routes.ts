@@ -8,6 +8,7 @@ import {
   createThirteenthPayrollService,
   deletePayrollService,
   generatePayrollService,
+  getPayrollLineService,
   getPayrollService,
   listPayrollsService,
   regenerateEmployeeService,
@@ -89,6 +90,26 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         linesLimit: t.Optional(t.String()),
         search: t.Optional(t.String()),
       }),
+    }
+  )
+
+  .get(
+    '/:id/line/:lineId',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await getPayrollLineService(db, params.id, params.lineId)
+      if (!data) {
+        set.status = 404
+        return { success: false, error: 'Line not found' }
+      }
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      params: t.Object({ id: t.String(), lineId: t.String() }),
     }
   )
 

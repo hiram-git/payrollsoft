@@ -428,7 +428,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </button>
                       </form>
                     )}
-                    <a href={`/payroll/${id}/${l.line.id}`} class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ver detalle del empleado">
+                    <a href={`/payroll/${id}/${l.line.id}?fromPage=${linesPage}${linesSearch ? `&fromSearch=${encodeURIComponent(linesSearch)}` : ''}`} class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ver detalle del empleado">
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </a>
                   </div>
