@@ -60,7 +60,6 @@ const errorMessages: Record<string, string> = {
   'server-error': 'Error del servidor. Intenta de nuevo.',
 }
 
-// Compute due dates from startDate + frequency
 function computeDueDate(
   startDate: string,
   frequency: string | null,
@@ -73,7 +72,6 @@ function computeDueDate(
   } else if (frequency === 'quincenal') {
     date.setDate(date.getDate() + n * 15)
   } else {
-    // monthly (default)
     date.setMonth(date.getMonth() + n)
   }
   return date.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -98,22 +96,31 @@ const frequencyLabels: Record<string, string> = {
 
 <AppLayout title="Editar Préstamo">
   <div class="p-8 max-w-4xl">
-    <div class="flex items-center gap-3 mb-6">
-      <a href={`/employees/${id}?tab=prestamos`} class="text-sm" style="color:var(--mute)">
+
+    <!-- Header -->
+    <div class="flex items-center gap-2 mb-6">
+      <a
+        href={`/employees/${id}?tab=prestamos`}
+        class="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+      >
         ← {emp.firstName} {emp.lastName}
       </a>
-      <span style="color:var(--rule)">/</span>
-      <h1 class="text-xl font-semibold" style="color:var(--ink)">Préstamo</h1>
+      <span class="text-gray-300">/</span>
+      <h1 class="text-2xl font-bold text-gray-900">Préstamo</h1>
       {!loan.isActive && (
-        <span class="pill-closed">Cerrado</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+          Cerrado
+        </span>
       )}
     </div>
 
     {success && (
-      <div class="banner banner-ok mb-5">Préstamo actualizado correctamente.</div>
+      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Préstamo actualizado correctamente.
+      </div>
     )}
     {error && (
-      <div class="banner banner-err mb-5">
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
       </div>
     )}
@@ -121,37 +128,48 @@ const frequencyLabels: Record<string, string> = {
     <form method="POST" action={`/api/employees/${id}/loans/${loanId}`}>
       <input type="hidden" name="_method" value="PUT" />
 
-      <div class="card mb-4">
-        <h2 class="section-title mb-4">Datos del Préstamo</h2>
+      <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+        <h2 class="font-semibold text-gray-800 mb-4">Datos del Préstamo</h2>
 
-        <!-- Context info (read-only) -->
         {(loan.creditor || loan.loanType || loan.frequency) && (
-          <div class="context-row mb-4">
-            {loan.creditor && <span class="context-chip">{loan.creditor}</span>}
-            {loan.loanType && <span class="context-chip">{loan.loanType}</span>}
-            {loan.frequency && <span class="context-chip">{frequencyLabels[loan.frequency] ?? loan.frequency}</span>}
+          <div class="flex flex-wrap gap-2 mb-4">
+            {loan.creditor && (
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                {loan.creditor}
+              </span>
+            )}
+            {loan.loanType && (
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                {loan.loanType}
+              </span>
+            )}
+            {loan.frequency && (
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                {frequencyLabels[loan.frequency] ?? loan.frequency}
+              </span>
+            )}
           </div>
         )}
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="field-label">Monto total (USD) *</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Monto total (USD) *</label>
             <input type="text" name="amount" class="input" required value={loan.amount} />
           </div>
           <div>
-            <label class="field-label">Saldo actual (USD) *</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Saldo actual (USD) *</label>
             <input type="text" name="balance" class="input" required value={loan.balance} />
           </div>
           <div>
-            <label class="field-label">Cuota por período (USD) *</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Cuota por período (USD) *</label>
             <input type="text" name="installment" class="input" required value={loan.installment} />
           </div>
           <div>
-            <label class="field-label">Fecha de inicio *</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Fecha de inicio *</label>
             <input type="date" name="startDate" class="input" required value={loan.startDate} />
           </div>
           <div>
-            <label class="field-label">Fecha estimada de fin</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Fecha estimada de fin</label>
             <input type="date" name="endDate" class="input" value={loan.endDate ?? ''} />
           </div>
           <div class="flex items-center gap-2 pt-5">
@@ -159,10 +177,12 @@ const frequencyLabels: Record<string, string> = {
               type="checkbox"
               name="allowDecember"
               id="allowDecember"
-              class="w-4 h-4"
+              class="w-4 h-4 accent-blue-600"
               checked={loan.allowDecember}
             />
-            <label for="allowDecember" class="field-label mb-0">Descontar en diciembre</label>
+            <label for="allowDecember" class="text-xs font-medium text-gray-600">
+              Descontar en diciembre
+            </label>
           </div>
         </div>
       </div>
@@ -175,69 +195,96 @@ const frequencyLabels: Record<string, string> = {
             onsubmit="return confirm('¿Cerrar este préstamo? Ya no se descontará de la nómina.')"
           >
             <input type="hidden" name="_method" value="DELETE" />
-            <button type="submit" class="btn-danger">Cerrar préstamo</button>
+            <button
+              type="submit"
+              class="px-4 py-2 text-sm font-medium rounded-lg border border-red-300 text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Cerrar préstamo
+            </button>
           </form>
         )}
         <div class="flex gap-3 ml-auto">
-          <a href={`/employees/${id}?tab=prestamos`} class="btn-ghost">Cancelar</a>
-          <button type="submit" class="btn-primary">Guardar cambios</button>
+          <a
+            href={`/employees/${id}?tab=prestamos`}
+            class="inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Cancelar
+          </a>
+          <button
+            type="submit"
+            class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+          >
+            Guardar cambios
+          </button>
         </div>
       </div>
     </form>
 
     <!-- Installments table -->
     {installments.length > 0 && (
-      <div class="card mt-6">
-        <div class="table-header">
-          <h2 class="section-title">Tabla de Cuotas</h2>
-          <div class="table-stats">
-            <span><strong>{paid}</strong> pagadas</span>
-            <span class="sep">·</span>
-            <span><strong>{pending}</strong> pendientes</span>
-            <span class="sep">·</span>
-            <span>Total <strong>${totalAmount.toLocaleString('es-PA', { minimumFractionDigits: 2 })}</strong></span>
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mt-6">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <h2 class="font-semibold text-gray-800">Tabla de Cuotas</h2>
+          <div class="flex items-center gap-1.5 text-xs text-gray-500">
+            <span><strong class="text-gray-700">{paid}</strong> pagadas</span>
+            <span class="text-gray-300">·</span>
+            <span><strong class="text-gray-700">{pending}</strong> pendientes</span>
+            <span class="text-gray-300">·</span>
+            <span>Total <strong class="text-gray-700">${totalAmount.toLocaleString('es-PA', { minimumFractionDigits: 2 })}</strong></span>
           </div>
         </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th class="col-num">#</th>
-                <th class="col-date">Fecha estimada</th>
-                <th class="col-amt">Cuota</th>
-                <th class="col-status">Estado</th>
+
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-center px-4 py-3 font-medium text-gray-600 w-12">#</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Fecha estimada</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Cuota</th>
+              <th class="text-center px-4 py-3 font-medium text-gray-600 w-28">Estado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {installments.map((inst) => (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 text-center font-mono text-xs text-gray-400">
+                  {inst.installmentNumber}
+                </td>
+                <td class="px-4 py-3 text-gray-600">
+                  {computeDueDate(loan!.startDate, loan!.frequency, inst.installmentNumber)}
+                </td>
+                <td class="px-4 py-3 text-right font-medium text-gray-700 tabular-nums">
+                  ${Number(inst.amount).toLocaleString('es-PA', { minimumFractionDigits: 2 })}
+                </td>
+                <td class="px-4 py-3 text-center">
+                  {inst.status === 'paid'
+                    ? <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Pagada</span>
+                    : <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">Pendiente</span>
+                  }
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {installments.map((inst) => (
-                <tr>
-                  <td class="col-num">{inst.installmentNumber}</td>
-                  <td class="col-date">{computeDueDate(loan!.startDate, loan!.frequency, inst.installmentNumber)}</td>
-                  <td class="col-amt">${Number(inst.amount).toLocaleString('es-PA', { minimumFractionDigits: 2 })}</td>
-                  <td class="col-status">
-                    {inst.status === 'paid'
-                      ? <span class="pill-paid">Pagada</span>
-                      : <span class="pill-pending">Pendiente</span>
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <!-- Summary bar -->
-        <div class="summary-bar">
-          <div class="summary-item">
-            <span class="summary-label">Cuota fija</span>
-            <span class="summary-value">${Number(loan.installment).toLocaleString('es-PA', { minimumFractionDigits: 2 })}</span>
+            ))}
+          </tbody>
+        </table>
+
+        <!-- Summary -->
+        <div class="grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100">
+          <div class="px-6 py-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Cuota fija</p>
+            <p class="text-base font-bold text-gray-900 tabular-nums">
+              ${Number(loan.installment).toLocaleString('es-PA', { minimumFractionDigits: 2 })}
+            </p>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Total amortizado</span>
-            <span class="summary-value paid-color">${paidAmount.toLocaleString('es-PA', { minimumFractionDigits: 2 })}</span>
+          <div class="px-6 py-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Total amortizado</p>
+            <p class="text-base font-bold text-green-600 tabular-nums">
+              ${paidAmount.toLocaleString('es-PA', { minimumFractionDigits: 2 })}
+            </p>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Saldo pendiente</span>
-            <span class="summary-value">${Number(loan.balance).toLocaleString('es-PA', { minimumFractionDigits: 2 })}</span>
+          <div class="px-6 py-4 text-center">
+            <p class="text-xs text-gray-500 mb-1">Saldo pendiente</p>
+            <p class="text-base font-bold text-gray-900 tabular-nums">
+              ${Number(loan.balance).toLocaleString('es-PA', { minimumFractionDigits: 2 })}
+            </p>
           </div>
         </div>
       </div>
@@ -246,163 +293,7 @@ const frequencyLabels: Record<string, string> = {
 </AppLayout>
 
 <style>
-  .card {
-    background: var(--ink-3);
-    border: 1px solid var(--rule);
-    border-radius: 0.75rem;
-    padding: 1.5rem;
-  }
-  .section-title {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--ink);
-  }
-  .field-label {
-    display: block;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--mute);
-    margin-bottom: 0.25rem;
-  }
   .input {
-    width: 100%;
-    border-radius: 0.5rem;
-    border: 1px solid var(--rule);
-    background: var(--fore);
-    color: var(--ink);
-    padding: 0.5rem 0.75rem;
-    font-size: 0.875rem;
-    outline: none;
-    transition: border-color 0.15s;
+    @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
-  .input:focus {
-    border-color: var(--navy-hi);
-  }
-  .context-row { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .context-chip {
-    font-size: 0.7rem;
-    font-weight: 500;
-    padding: 0.2rem 0.6rem;
-    border-radius: 9999px;
-    background: var(--ink-3);
-    border: 1px solid var(--rule);
-    color: var(--mute);
-  }
-  .pill-closed {
-    font-size: 0.7rem;
-    font-weight: 500;
-    padding: 0.2rem 0.6rem;
-    border-radius: 9999px;
-    background: rgba(156,163,175,0.15);
-    color: var(--mute);
-  }
-  .pill-paid {
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 0.2rem 0.55rem;
-    border-radius: 9999px;
-    background: rgba(16,185,129,0.12);
-    color: var(--ok);
-  }
-  .pill-pending {
-    font-size: 0.7rem;
-    font-weight: 500;
-    padding: 0.2rem 0.55rem;
-    border-radius: 9999px;
-    background: rgba(245,158,11,0.12);
-    color: var(--warn);
-  }
-  .banner {
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    font-size: 0.875rem;
-  }
-  .banner-ok { background: rgba(16,185,129,0.1); color: var(--ok); border: 1px solid rgba(16,185,129,0.25); }
-  .banner-err { background: rgba(239,68,68,0.08); color: #ef4444; border: 1px solid rgba(239,68,68,0.2); }
-  .btn-primary {
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 600;
-    border-radius: 0.5rem;
-    background: var(--navy-hi);
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    transition: opacity 0.15s;
-  }
-  .btn-primary:hover { opacity: 0.88; }
-  .btn-ghost {
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--rule);
-    background: transparent;
-    color: var(--mute);
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    transition: background 0.15s;
-  }
-  .btn-ghost:hover { background: var(--ink-3); }
-  .btn-danger {
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    border-radius: 0.5rem;
-    border: 1px solid rgba(239,68,68,0.4);
-    background: transparent;
-    color: #ef4444;
-    cursor: pointer;
-    transition: background 0.15s;
-  }
-  .btn-danger:hover { background: rgba(239,68,68,0.06); }
-
-  /* Installments table */
-  .table-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 1rem;
-  }
-  .table-stats {
-    font-size: 0.75rem;
-    color: var(--mute);
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-  }
-  .table-stats strong { color: var(--ink); }
-  .sep { color: var(--rule); }
-  .table-wrap { overflow-x: auto; margin: 0 -1.5rem; }
-  table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-  thead tr { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
-  thead th {
-    padding: 0.5rem 1rem;
-    font-weight: 600;
-    font-size: 0.7rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--mute);
-    background: var(--fore);
-    white-space: nowrap;
-  }
-  tbody tr { border-bottom: 1px solid var(--rule); }
-  tbody tr:last-child { border-bottom: none; }
-  tbody td { padding: 0.5rem 1rem; color: var(--ink); }
-  tbody tr:hover { background: var(--ink-3); }
-  .col-num { text-align: center; width: 3rem; color: var(--mute) !important; }
-  .col-date { }
-  .col-amt { text-align: right; font-variant-numeric: tabular-nums; }
-  .col-status { text-align: center; width: 7rem; }
-
-  .summary-bar {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    border-top: 1px solid var(--rule);
-    margin-top: 0;
-    padding: 1rem 1.5rem;
-  }
-  .summary-item { text-align: center; }
-  .summary-label { display: block; font-size: 0.7rem; color: var(--mute); margin-bottom: 0.25rem; }
-  .summary-value { font-size: 1rem; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .paid-color { color: var(--ok); }
 </style>
