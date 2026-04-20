@@ -1836,13 +1836,14 @@ export async function revertPayrollInstallments(db: Db, payrollId: string) {
 }
 
 /**
- * Bulk-fetch the oldest pending installment per active loan for a set of employees.
- * Replaces the per-employee getPendingInstallmentsByEmployee loop on payroll close.
- * Returns one row per qualifying loan (the installment with the lowest installment_number).
+ * Bulk-fetch pending installments due within the payroll period for a set of employees.
+ * For installments with a due_date: includes those where due_date falls in [periodStart, periodEnd].
+ * For legacy installments (due_date IS NULL): falls back to oldest pending per loan.
  */
 export async function bulkGetPendingInstallments(
   db: Db,
   employeeIds: string[],
+  periodStart: string,
   periodEnd: string
 ): Promise<(typeof loanInstallments.$inferSelect)[]> {
   if (employeeIds.length === 0) return []
@@ -1861,27 +1862,37 @@ export async function bulkGetPendingInstallments(
   if (activeLoans.length === 0) return []
   const loanIds = activeLoans.map((l) => l.id)
 
-  // 2. Lowest pending installment_number per loan
-  const minNums = await db
-    .select({
-      loanId: loanInstallments.loanId,
-      minNum: sql<number>`min(${loanInstallments.installmentNumber})`,
-    })
-    .from(loanInstallments)
-    .where(and(inArray(loanInstallments.loanId, loanIds), eq(loanInstallments.status, 'pending')))
-    .groupBy(loanInstallments.loanId)
-  if (minNums.length === 0) return []
-
-  // 3. Fetch all pending for those loans, keep only the first per loan
-  const pendingLoanIds = minNums.map((m) => m.loanId)
+  // 2. Load all pending installments, ordered by number (ascending) for legacy fallback
   const allPending = await db
     .select()
     .from(loanInstallments)
-    .where(
-      and(inArray(loanInstallments.loanId, pendingLoanIds), eq(loanInstallments.status, 'pending'))
-    )
-  const minMap = new Map(minNums.map((m) => [m.loanId, Number(m.minNum)]))
-  return allPending.filter((r) => r.installmentNumber === minMap.get(r.loanId))
+    .where(and(inArray(loanInstallments.loanId, loanIds), eq(loanInstallments.status, 'pending')))
+    .orderBy(asc(loanInstallments.installmentNumber))
+
+  // 3. Group by loan and select the appropriate installment(s)
+  const byLoan = new Map<string, (typeof loanInstallments.$inferSelect)[]>()
+  for (const inst of allPending) {
+    const arr = byLoan.get(inst.loanId) ?? []
+    arr.push(inst)
+    byLoan.set(inst.loanId, arr)
+  }
+
+  const result: (typeof loanInstallments.$inferSelect)[] = []
+  for (const [, insts] of byLoan) {
+    const hasDueDate = insts.some((i) => i.dueDate !== null)
+    if (hasDueDate) {
+      // Date-based: pick installments whose due date falls within the payroll period
+      const inPeriod = insts.filter(
+        (i) => i.dueDate !== null && i.dueDate >= periodStart && i.dueDate <= periodEnd
+      )
+      result.push(...inPeriod)
+    } else {
+      // Legacy (no due_date): take the oldest pending installment
+      if (insts.length > 0) result.push(insts[0])
+    }
+  }
+
+  return result
 }
 
 /** Mark a list of installments as paid in a single UPDATE. */

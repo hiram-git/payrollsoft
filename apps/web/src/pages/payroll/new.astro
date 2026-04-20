@@ -66,6 +66,8 @@ const defaultName = `Planilla Quincenal ${defaultStart}`
               <option value="biweekly" selected>Quincenal</option>
               <option value="monthly">Mensual</option>
               <option value="weekly">Semanal</option>
+              <option value="thirteenth">XIII Mes</option>
+              <option value="liquidation">Liquidación</option>
             </select>
           </div>
         </div>
@@ -134,6 +136,7 @@ const defaultName = `Planilla Quincenal ${defaultStart}`
   }
 
   const typeSelect = document.querySelector<HTMLSelectElement>('[name="type"]')
+  const freqSelect = document.querySelector<HTMLSelectElement>('[name="frequency"]')
   const startInput = document.querySelector<HTMLInputElement>('[name="periodStart"]')
   const endInput = document.querySelector<HTMLInputElement>('[name="periodEnd"]')
   const nameInput = document.querySelector<HTMLInputElement>('[name="name"]')
@@ -145,12 +148,14 @@ const defaultName = `Planilla Quincenal ${defaultStart}`
   typeSelect?.addEventListener('change', () => {
     if (typeSelect.value !== 'thirteenth') {
       xiiiBanner?.classList.add('hidden')
+      if (freqSelect && freqSelect.value === 'thirteenth') freqSelect.value = 'biweekly'
       return
     }
     const { fechaInicio, fechaFin, descripcion } = getThirteenthPeriod(new Date())
     if (startInput) startInput.value = fechaInicio
     if (endInput) endInput.value = fechaFin
     if (!userEditedName && nameInput) nameInput.value = descripcion
+    if (freqSelect) freqSelect.value = 'thirteenth'
 
     if (xiiiBanner) {
       const descEl = xiiiBanner.querySelector<HTMLElement>('.xiii-desc')

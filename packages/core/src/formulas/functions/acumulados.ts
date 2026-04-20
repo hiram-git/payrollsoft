@@ -22,25 +22,34 @@ import type { FormulaContext } from '../types'
 export async function ACUMULADOS(args: (number | string)[], ctx: FormulaContext): Promise<number> {
   if (args.length < 2) throw new Error('ACUMULADOS() requires at least 2 arguments: code, periods')
 
-  const code = String(args[0]).toUpperCase()
+  // Support comma-separated codes: "SALARIO_BASE,HORAS_EXTRAS,COMISIONES"
+  const codes = String(args[0])
+    .toUpperCase()
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)
 
-  // 4-arg PHP-compat: ACUMULADOS("CODE", FICHA, FROM, TO) — FICHA ignored
+  // 4-arg PHP-compat: ACUMULADOS("CODE[,CODE2]", FICHA, FROM, TO) — FICHA ignored
   if (args.length >= 4) {
     const from = toDateStr(args[2])
     const to = toDateStr(args[3])
-    return ctx.loadAccumulatedByDateRange(code, from, to)
+    const totals = await Promise.all(codes.map((c) => ctx.loadAccumulatedByDateRange(c, from, to)))
+    return totals.reduce((a, b) => a + b, 0)
   }
 
-  // 3-arg date range: ACUMULADOS("CODE", FROM, TO)
+  // 3-arg date range: ACUMULADOS("CODE[,CODE2]", FROM, TO)
   if (args.length === 3) {
     const from = toDateStr(args[1])
     const to = toDateStr(args[2])
-    return ctx.loadAccumulatedByDateRange(code, from, to)
+    const totals = await Promise.all(codes.map((c) => ctx.loadAccumulatedByDateRange(c, from, to)))
+    return totals.reduce((a, b) => a + b, 0)
   }
 
-  // 2-arg last-N form: ACUMULADOS("CODE", N)
+  // 2-arg last-N form: ACUMULADOS("CODE", N) — single code only
+  if (codes.length > 1)
+    throw new Error('ACUMULADOS() with multiple codes requires a date range (3 or 4 arguments)')
   const periods = Math.max(1, Math.floor(Number(args[1])))
-  return ctx.loadAccumulated(code, periods)
+  return ctx.loadAccumulated(codes[0], periods)
 }
 
 /**

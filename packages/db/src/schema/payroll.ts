@@ -102,6 +102,7 @@ export const loanInstallments = pgTable('loan_installments', {
   loanId: uuid('loan_id').notNull(),
   installmentNumber: integer('installment_number').notNull(),
   amount: varchar('amount', { length: 20 }).notNull(),
+  dueDate: date('due_date'),
   status: varchar('status', { length: 20 }).notNull().default('pending'), // pending | paid
   payrollId: uuid('payroll_id'), // filled when paid on payroll close
   paidAt: timestamp('paid_at'),

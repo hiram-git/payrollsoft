@@ -52,125 +52,106 @@ const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
 ---
 
 <AppLayout title="Catálogos de Conceptos">
-  <div class="p-8">
-    <div class="flex items-center justify-between mb-6">
+  <div class="page">
+    <div class="page-header">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Catálogos de Conceptos</h1>
-        <p class="text-sm text-gray-500 mt-0.5">Gestión de tipos, frecuencias, situaciones y acumulados</p>
+        <h1 class="page-title">Catálogos de Conceptos</h1>
+        <p class="page-sub">Gestión de tipos, frecuencias, situaciones y acumulados vinculables a conceptos</p>
       </div>
     </div>
 
-    {loadError && (
-      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{loadError}</div>
-    )}
+    {loadError && <div class="alert alert-err">{loadError}</div>}
+    {success && <div class="alert alert-ok">Guardado correctamente.</div>}
+    {error && <div class="alert alert-err">{errorMessages[error] ?? 'Ocurrió un error inesperado.'}</div>}
 
     <!-- Tab Navigation -->
-    <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
+    <div class="tabs-bar">
       {tabs.map((tab) => (
         <a
           href={`/config/catalogo-conceptos?tab=${tab.key}`}
-          class={`px-5 py-2.5 text-sm font-medium border-b-2 -mb-[2px] transition-colors ${
-            tab.key === activeTab
-              ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
+          class={`tab-link${tab.key === activeTab ? ' tab-active' : ''}`}
         >
           {tab.label}
+          <span class="tab-count">{tab.items.length}</span>
         </a>
       ))}
     </div>
 
-    {success && (
-      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-        Guardado correctamente.
-      </div>
-    )}
-    {error && (
-      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
-      </div>
-    )}
-
-    <!-- Current Tab Content -->
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-        <h2 class="font-semibold text-gray-800">{currentTab.label}</h2>
-        <button
-          type="button"
-          onclick="document.getElementById('newItemForm').classList.toggle('hidden')"
-          class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
-        >
-          + Nuevo
-        </button>
+    <!-- Card -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">{currentTab.label}</span>
+        <button type="button" id="btnNew" class="btn-primary">+ Nuevo</button>
       </div>
 
       <!-- New item form (hidden by default) -->
-      <div id="newItemForm" class="hidden border-b border-gray-100 px-6 py-4 bg-gray-50">
-        <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}`} class="flex gap-3 items-end">
+      <div id="newItemForm" class="new-form hidden">
+        <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}`} class="new-form-row">
           <input type="hidden" name="_tab" value={activeTab} />
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Código *</label>
-            <input type="text" name="code" class="input" required maxlength="50" placeholder="ej: quincenal" />
+          <div class="field">
+            <label class="label">Código *</label>
+            <input type="text" name="code" class="inp" required maxlength="50" placeholder="ej: quincenal" />
           </div>
-          <div class="flex-1">
-            <label class="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
-            <input type="text" name="name" class="input" required maxlength="100" placeholder="ej: Quincenal" />
+          <div class="field flex-1">
+            <label class="label">Nombre *</label>
+            <input type="text" name="name" class="inp" required maxlength="100" placeholder="ej: Quincenal" />
           </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Orden</label>
-            <input type="number" name="sortOrder" class="input w-20" value="0" min="0" />
+          <div class="field w-24">
+            <label class="label">Orden</label>
+            <input type="number" name="sortOrder" class="inp" value="0" min="0" />
           </div>
-          <button type="submit" class="px-4 py-2.5 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors">
-            Guardar
-          </button>
-          <button type="button" onclick="document.getElementById('newItemForm').classList.add('hidden')" class="px-4 py-2.5 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
-            Cancelar
-          </button>
+          <div class="form-actions">
+            <button type="submit" class="btn-ok">Guardar</button>
+            <button type="button" id="btnCancelNew" class="btn-ghost">Cancelar</button>
+          </div>
         </form>
       </div>
 
       <!-- Items table -->
       {currentTab.items.length === 0 ? (
-        <div class="p-12 text-center text-gray-400 text-sm">
-          No hay registros en este catálogo.
-        </div>
+        <div class="empty-state">No hay registros en este catálogo.</div>
       ) : (
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
+        <table class="tbl">
+          <thead>
             <tr>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Orden</th>
-              <th class="px-4 py-3"></th>
+              <th class="th">Código</th>
+              <th class="th">Nombre</th>
+              <th class="th w-20 text-center">Orden</th>
+              <th class="th w-28"></th>
             </tr>
           </thead>
-          <tbody class="divide-y divide-gray-100">
+          <tbody>
             {currentTab.items.map((item) => (
-              <tr class="hover:bg-gray-50 transition-colors" id={`row-${item.id}`}>
-                <td class="px-4 py-3 font-mono text-xs text-gray-500">{item.code}</td>
-                <!-- View mode -->
-                <td class="px-4 py-3 font-medium text-gray-900 view-name">{item.name}</td>
-                <td class="px-4 py-3 text-gray-600 view-order">{item.sortOrder}</td>
-                <!-- Edit mode (hidden) -->
-                <td class="px-4 py-3 edit-fields hidden">
-                  <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`} class="flex gap-2 items-center">
+              <tr class="tr" id={`row-${item.id}`}>
+                <td class="td td-code">{item.code}</td>
+                <td class="td view-name">{item.name}</td>
+                <td class="td text-center view-order">{item.sortOrder}</td>
+
+                <!-- Edit inline form (hidden, spans name+order+actions cols via JS) -->
+                <td class="td hidden edit-cell" colspan="3">
+                  <form
+                    method="POST"
+                    action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
+                    class="edit-row"
+                  >
                     <input type="hidden" name="_method" value="PUT" />
                     <input type="hidden" name="_tab" value={activeTab} />
-                    <input type="text" name="name" value={item.name} class="input" required maxlength="100" />
-                    <input type="number" name="sortOrder" value={item.sortOrder} class="input w-20" min="0" />
-                    <button type="submit" class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 rounded-lg">Guardar</button>
-                    <button type="button" onclick={`cancelEdit('${item.id}')`} class="px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-300 rounded-lg">Cancelar</button>
+                    <input type="text" name="name" value={item.name} class="inp flex-1" required maxlength="100" />
+                    <input type="number" name="sortOrder" value={item.sortOrder} class="inp w-20" min="0" />
+                    <button type="submit" class="btn-ok-sm">Guardar</button>
+                    <button type="button" onclick={`cancelEdit('${item.id}')`} class="btn-ghost-sm">Cancelar</button>
                   </form>
                 </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1 view-actions">
+
+                <td class="td view-actions">
+                  <div class="row-actions">
                     <button
                       type="button"
                       onclick={`startEdit('${item.id}')`}
                       title="Editar"
-                      class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                      class="action-btn"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                         <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                       </svg>
@@ -182,8 +163,8 @@ const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
                     >
                       <input type="hidden" name="_method" value="DELETE" />
                       <input type="hidden" name="_tab" value={activeTab} />
-                      <button type="submit" title="Eliminar" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <button type="submit" title="Eliminar" class="action-btn action-del">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                         </svg>
                       </button>
@@ -200,20 +181,98 @@ const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
 </AppLayout>
 
 <style>
-  .input {
-    @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
-  }
+  .page        { padding: 2rem; max-width: 860px; }
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; }
+  .page-title  { font-size: 1.25rem; font-weight: 600; color: var(--fore); margin: 0 0 .25rem; font-family: var(--f-display); }
+  .page-sub    { font-size: .8125rem; color: var(--mute); margin: 0; }
+
+  .alert        { padding: .75rem 1rem; border-radius: 6px; font-size: .8125rem; margin-bottom: 1rem; border: 1px solid; }
+  .alert-ok     { background: color-mix(in srgb, var(--ok) 10%, var(--ink-2)); border-color: var(--ok); color: var(--ok); }
+  .alert-err    { background: color-mix(in srgb, var(--err) 10%, var(--ink-2)); border-color: var(--err); color: var(--err); }
+
+  /* Tabs */
+  .tabs-bar   { display: flex; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: 1.25rem; }
+  .tab-link   { display: flex; align-items: center; gap: .5rem; padding: .625rem 1.25rem; font-size: .8125rem; font-weight: 500; color: var(--mute); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s; }
+  .tab-link:hover  { color: var(--fore); }
+  .tab-active { color: var(--navy-hi); border-bottom-color: var(--navy-hi); }
+  .tab-count  { background: var(--ink-4); color: var(--mute-2); font-size: .7rem; font-weight: 600; padding: .1rem .4rem; border-radius: 20px; min-width: 1.4rem; text-align: center; }
+  .tab-active .tab-count { background: var(--navy-soft); color: var(--navy-hi); }
+
+  /* Card */
+  .card        { background: var(--ink-2); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; padding: .875rem 1.25rem; border-bottom: 1px solid var(--rule); }
+  .card-title  { font-size: .875rem; font-weight: 600; color: var(--fore); }
+
+  /* New form */
+  .new-form     { padding: 1rem 1.25rem; border-bottom: 1px solid var(--rule); background: var(--ink-3); }
+  .new-form-row { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; }
+  .field        { display: flex; flex-direction: column; gap: .25rem; }
+  .flex-1       { flex: 1; }
+  .w-24         { width: 6rem; }
+  .label        { font-size: .75rem; font-weight: 500; color: var(--mute-2); }
+  .form-actions { display: flex; gap: .5rem; align-items: flex-end; }
+
+  /* Table */
+  .tbl { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+  .th  { padding: .625rem 1rem; text-align: left; font-size: .75rem; font-weight: 600; color: var(--mute); text-transform: uppercase; letter-spacing: .04em; background: var(--ink-3); border-bottom: 1px solid var(--rule); }
+  .td  { padding: .75rem 1rem; color: var(--fore); border-bottom: 1px solid var(--rule); vertical-align: middle; }
+  .tr:last-child .td { border-bottom: none; }
+  .tr:hover .td { background: var(--ink-3); }
+  .td-code { font-family: var(--f-mono); font-size: .75rem; color: var(--mute-2); }
+  .w-20 { width: 5rem; }
+  .w-28 { width: 7rem; }
+  .text-center { text-align: center; }
+
+  /* Edit inline */
+  .edit-cell { padding: .5rem 1rem; }
+  .edit-row  { display: flex; gap: .625rem; align-items: center; }
+
+  /* Row actions */
+  .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
+  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--mute); cursor: pointer; transition: background .15s, color .15s; }
+  .action-btn:hover { background: var(--navy-soft); color: var(--navy-hi); }
+  .action-del:hover { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+
+  /* Buttons */
+  .btn-primary { background: var(--navy); color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+  .btn-primary:hover { background: var(--navy-hi); }
+  .btn-ok      { background: var(--ok); color: #fff; border: none; padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+  .btn-ok:hover { opacity: .88; }
+  .btn-ok-sm   { background: var(--navy); color: #fff; border: none; padding: .375rem .75rem; border-radius: 5px; font-size: .75rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .btn-ok-sm:hover { background: var(--navy-hi); }
+  .btn-ghost   { background: transparent; color: var(--mute-2); border: 1px solid var(--rule); padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; cursor: pointer; transition: background .15s; white-space: nowrap; }
+  .btn-ghost:hover { background: var(--ink-4); }
+  .btn-ghost-sm { background: transparent; color: var(--mute-2); border: 1px solid var(--rule); padding: .375rem .625rem; border-radius: 5px; font-size: .75rem; cursor: pointer; white-space: nowrap; }
+  .btn-ghost-sm:hover { background: var(--ink-4); }
+
+  /* Input */
+  .inp { background: var(--ink); color: var(--fore); border: 1px solid var(--rule); border-radius: 5px; padding: .4375rem .625rem; font-size: .8125rem; outline: none; font-family: inherit; width: 100%; }
+  .inp:focus { border-color: var(--navy-hi); box-shadow: 0 0 0 2px var(--navy-soft); }
+
+  /* Empty */
+  .empty-state { padding: 3rem; text-align: center; color: var(--mute); font-size: .875rem; }
+
+  .hidden { display: none !important; }
 </style>
 
 <script is:inline>
+  // Toggle new item form
+  document.getElementById('btnNew')?.addEventListener('click', () => {
+    document.getElementById('newItemForm')?.classList.toggle('hidden')
+  })
+  document.getElementById('btnCancelNew')?.addEventListener('click', () => {
+    document.getElementById('newItemForm')?.classList.add('hidden')
+  })
+
   function startEdit(id) {
     const row = document.getElementById('row-' + id)
     row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.add('hidden'))
-    row.querySelectorAll('.edit-fields').forEach(el => el.classList.remove('hidden'))
+    row.querySelectorAll('.edit-cell').forEach(el => el.classList.remove('hidden'))
   }
+
   function cancelEdit(id) {
     const row = document.getElementById('row-' + id)
     row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.remove('hidden'))
-    row.querySelectorAll('.edit-fields').forEach(el => el.classList.add('hidden'))
+    row.querySelectorAll('.edit-cell').forEach(el => el.classList.add('hidden'))
   }
 </script>
