@@ -500,6 +500,46 @@ const icons: Record<IconKey, string> = {
         overflow-x: hidden;
         background: var(--ink);
       }
+
+      /* ── Dark-mode theming for page content cards/tables ── */
+      [data-theme="dark"] .page-content .bg-white       { background-color: var(--ink-2); }
+      [data-theme="dark"] .page-content .bg-gray-50     { background-color: var(--ink-3); }
+      [data-theme="dark"] .page-content .bg-gray-100    { background-color: var(--ink-4); }
+
+      [data-theme="dark"] .page-content .border-gray-200,
+      [data-theme="dark"] .page-content .border-gray-100 { border-color: var(--rule); }
+      [data-theme="dark"] .page-content .border-gray-300  { border-color: var(--rule-hi); }
+
+      [data-theme="dark"] .page-content .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: var(--rule); }
+
+      [data-theme="dark"] .page-content .text-gray-900,
+      [data-theme="dark"] .page-content .text-gray-800  { color: var(--fore); }
+      [data-theme="dark"] .page-content .text-gray-700  { color: var(--fore-dim); }
+      [data-theme="dark"] .page-content .text-gray-600  { color: var(--mute-2); }
+      [data-theme="dark"] .page-content .text-gray-500,
+      [data-theme="dark"] .page-content .text-gray-400,
+      [data-theme="dark"] .page-content .text-gray-300  { color: var(--mute); }
+
+      [data-theme="dark"] .page-content .hover\:bg-gray-50:hover,
+      [data-theme="dark"] .page-content .hover\:bg-gray-100:hover { background-color: var(--ink-4); }
+      [data-theme="dark"] .page-content .hover\:text-gray-700:hover { color: var(--fore); }
+
+      /* ── Inputs / selects / textareas ────────────────────── */
+      [data-theme="dark"] .page-content input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+      [data-theme="dark"] .page-content select,
+      [data-theme="dark"] .page-content textarea {
+        background-color: var(--ink-3);
+        border-color: var(--rule);
+        color: var(--fore);
+      }
+      [data-theme="dark"] .page-content input::placeholder,
+      [data-theme="dark"] .page-content textarea::placeholder { color: var(--mute); }
+      [data-theme="dark"] .page-content input:focus,
+      [data-theme="dark"] .page-content select:focus,
+      [data-theme="dark"] .page-content textarea:focus {
+        border-color: var(--navy-hi);
+        box-shadow: 0 0 0 2px var(--navy-soft);
+      }
     </style>
   </head>
   <body>
