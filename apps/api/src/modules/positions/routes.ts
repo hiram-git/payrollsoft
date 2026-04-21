@@ -16,6 +16,7 @@ const PositionBody = t.Object({
   cargoId: t.Optional(t.Nullable(t.String())),
   departamentoId: t.Optional(t.Nullable(t.String())),
   funcionId: t.Optional(t.Nullable(t.String())),
+  partidaId: t.Optional(t.Nullable(t.String())),
 })
 
 const PositionUpdateBody = t.Object({
@@ -25,6 +26,7 @@ const PositionUpdateBody = t.Object({
   cargoId: t.Optional(t.Nullable(t.String())),
   departamentoId: t.Optional(t.Nullable(t.String())),
   funcionId: t.Optional(t.Nullable(t.String())),
+  partidaId: t.Optional(t.Nullable(t.String())),
 })
 
 export const positionsRoutes = new Elysia({ prefix: '/positions' })

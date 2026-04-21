@@ -8,6 +8,7 @@ export const positions = pgTable('positions', {
   cargoId: uuid('cargo_id'),
   departamentoId: uuid('departamento_id'),
   funcionId: uuid('funcion_id'),
+  partidaId: uuid('partida_id'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
