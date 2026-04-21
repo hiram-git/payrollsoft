@@ -123,6 +123,14 @@ const grandTotalDeductions = summaryRows
   .filter((r) => r.conceptType === 'deduction')
   .reduce((s, r) => s + Number(r.total), 0)
 
+// Summary pagination
+const SUMMARY_PAGE_SIZE = 50
+const summaryTotal = summaryRows.length
+const summaryTotalPages = Math.max(1, Math.ceil(summaryTotal / SUMMARY_PAGE_SIZE))
+const pagedSummaryRows = filterView === 'summary'
+  ? summaryRows.slice((page - 1) * SUMMARY_PAGE_SIZE, page * SUMMARY_PAGE_SIZE)
+  : []
+
 // Build URL helpers
 function buildUrl(extra: Record<string, string>) {
   const params = new URLSearchParams({
@@ -152,17 +160,36 @@ function buildUrl(extra: Record<string, string>) {
       <input type="hidden" name="view" value={filterView} />
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
 
-        <!-- Employee -->
+        <!-- Employee combobox -->
         <div class="lg:col-span-2">
           <label class="block text-xs font-medium text-gray-500 mb-1">Empleado</label>
-          <select name="employeeId" class="filter-input">
-            <option value="">— Todos —</option>
-            {employees.map((e) => (
-              <option value={e.id} selected={filterEmployeeId === e.id}>
-                {e.lastName}, {e.firstName} ({e.code})
-              </option>
-            ))}
-          </select>
+          <input type="hidden" name="employeeId" id="emp-id" value={filterEmployeeId} />
+          <div class="relative">
+            <input
+              type="text"
+              id="emp-text"
+              placeholder="Buscar por nombre o código…"
+              value={selectedEmp ? `${selectedEmp.lastName}, ${selectedEmp.firstName} (${selectedEmp.code})` : ''}
+              autocomplete="off"
+              class="filter-input pr-7"
+            />
+            <button
+              type="button"
+              id="emp-clear"
+              class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              style={selectedEmp ? '' : 'display:none'}
+              aria-label="Limpiar selección"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M2 2l8 8M10 2l-8 8"/>
+              </svg>
+            </button>
+            <ul
+              id="emp-dropdown"
+              class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto text-sm"
+              role="listbox"
+            ></ul>
+          </div>
         </div>
 
         <!-- Concept code -->
@@ -272,45 +299,65 @@ function buildUrl(extra: Record<string, string>) {
               <p class="text-xs text-gray-400 mt-1">Genera y cierra una planilla para ver acumulados</p>
             </div>
           ) : (
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-gray-200 bg-gray-50">
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
-                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
-                  <th class="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planillas</th>
-                  <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total acumulado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summaryRows.map((r, i) => (
-                  <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
-                    <td class="px-4 py-3">
-                      <a
-                        href={buildUrl({ view: 'detail', employeeId: r.employeeId })}
-                        class="font-medium text-gray-900 hover:text-blue-600 transition-colors"
-                      >
-                        {r.lastName ?? '—'}, {r.firstName ?? '—'}
-                      </a>
-                      <p class="text-xs text-gray-400 font-mono">{r.employeeCode ?? '—'}</p>
-                    </td>
-                    <td class="px-4 py-3">
-                      <span class="font-mono text-xs font-semibold text-gray-700">{r.conceptCode}</span>
-                      <p class="text-xs text-gray-400 mt-0.5">{r.conceptName}</p>
-                    </td>
-                    <td class="px-4 py-3">
-                      <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typePill[r.conceptType] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {typeLabel[r.conceptType] ?? r.conceptType}
-                      </span>
-                    </td>
-                    <td class="px-4 py-3 text-center text-gray-500 tabular-nums">{r.occurrences}</td>
-                    <td class={`px-4 py-3 text-right font-semibold tabular-nums ${r.conceptType === 'income' ? 'text-gray-900' : 'text-red-600'}`}>
-                      {r.conceptType === 'deduction' && '−'}{fmt(r.total)}
-                    </td>
+            <>
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-200 bg-gray-50">
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                    <th class="text-center px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planillas</th>
+                    <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Total acumulado</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {pagedSummaryRows.map((r, i) => (
+                    <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                      <td class="px-4 py-3">
+                        <a
+                          href={buildUrl({ view: 'detail', employeeId: r.employeeId, page: '1' })}
+                          class="font-medium text-gray-900 hover:text-blue-600 transition-colors"
+                        >
+                          {r.lastName ?? '—'}, {r.firstName ?? '—'}
+                        </a>
+                        <p class="text-xs text-gray-400 font-mono">{r.employeeCode ?? '—'}</p>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class="font-mono text-xs font-semibold text-gray-700">{r.conceptCode}</span>
+                        <p class="text-xs text-gray-400 mt-0.5">{r.conceptName}</p>
+                      </td>
+                      <td class="px-4 py-3">
+                        <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${typePill[r.conceptType] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {typeLabel[r.conceptType] ?? r.conceptType}
+                        </span>
+                      </td>
+                      <td class="px-4 py-3 text-center text-gray-500 tabular-nums">{r.occurrences}</td>
+                      <td class={`px-4 py-3 text-right font-semibold tabular-nums ${r.conceptType === 'income' ? 'text-gray-900' : 'text-red-600'}`}>
+                        {r.conceptType === 'deduction' && '−'}{fmt(r.total)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {summaryTotalPages > 1 && (
+                <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between">
+                  <p class="text-xs text-gray-500">{summaryTotal} conceptos · página {page} de {summaryTotalPages}</p>
+                  <div class="flex gap-2">
+                    {page > 1 && (
+                      <a href={buildUrl({ page: String(page - 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                        ← Anterior
+                      </a>
+                    )}
+                    {page < summaryTotalPages && (
+                      <a href={buildUrl({ page: String(page + 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                        Siguiente →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </>
@@ -396,6 +443,86 @@ function buildUrl(extra: Record<string, string>) {
 
   </div>
 </AppLayout>
+
+<script type="application/json" id="emp-data" set:text={JSON.stringify(employees.map((e) => ({ id: e.id, code: e.code, firstName: e.firstName, lastName: e.lastName })))} />
+
+<script>
+  type EmpEntry = { id: string; code: string; firstName: string; lastName: string }
+
+  const empData: EmpEntry[] = JSON.parse(
+    (document.getElementById('emp-data') as HTMLScriptElement)?.textContent ?? '[]'
+  )
+
+  const empIdInput = document.getElementById('emp-id') as HTMLInputElement | null
+  const empTextInput = document.getElementById('emp-text') as HTMLInputElement | null
+  const empDropdown = document.getElementById('emp-dropdown') as HTMLUListElement | null
+  const empClear = document.getElementById('emp-clear') as HTMLButtonElement | null
+
+  function filterEmps(q: string) {
+    const lq = q.toLowerCase()
+    return empData
+      .filter(
+        (e) =>
+          e.firstName.toLowerCase().includes(lq) ||
+          e.lastName.toLowerCase().includes(lq) ||
+          e.code.toLowerCase().includes(lq)
+      )
+      .slice(0, 25)
+  }
+
+  function renderDropdown(items: EmpEntry[]) {
+    if (!empDropdown) return
+    if (items.length === 0) { empDropdown.classList.add('hidden'); return }
+    empDropdown.innerHTML = items
+      .map(
+        (e) =>
+          `<li class="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors" role="option" data-id="${e.id}" data-label="${e.lastName}, ${e.firstName} (${e.code})">
+            <span class="font-medium text-gray-800">${e.lastName}, ${e.firstName}</span>
+            <span class="ml-2 text-xs font-mono text-gray-400">${e.code}</span>
+          </li>`
+      )
+      .join('')
+    empDropdown.classList.remove('hidden')
+  }
+
+  empDropdown?.addEventListener('mousedown', (e) => e.preventDefault())
+
+  empDropdown?.addEventListener('click', (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-id]')
+    if (!li || !empIdInput || !empTextInput || !empDropdown || !empClear) return
+    empIdInput.value = li.dataset.id!
+    empTextInput.value = li.dataset.label!
+    empDropdown.classList.add('hidden')
+    empClear.style.display = ''
+  })
+
+  empTextInput?.addEventListener('input', () => {
+    if (!empIdInput || !empClear) return
+    empIdInput.value = ''
+    empClear.style.display = 'none'
+    const q = empTextInput!.value.trim()
+    if (q.length === 0) { empDropdown?.classList.add('hidden'); return }
+    renderDropdown(filterEmps(q))
+  })
+
+  empTextInput?.addEventListener('focus', () => {
+    const q = empTextInput!.value.trim()
+    if (q.length > 0 && !empIdInput?.value) renderDropdown(filterEmps(q))
+  })
+
+  empTextInput?.addEventListener('blur', () => {
+    setTimeout(() => empDropdown?.classList.add('hidden'), 100)
+  })
+
+  empClear?.addEventListener('click', () => {
+    if (!empIdInput || !empTextInput || !empDropdown || !empClear) return
+    empIdInput.value = ''
+    empTextInput.value = ''
+    empDropdown.classList.add('hidden')
+    empClear.style.display = 'none'
+    empTextInput.focus()
+  })
+</script>
 
 <style>
   .filter-input {
