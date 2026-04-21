@@ -45,6 +45,20 @@ export const departamentos = pgTable('departamentos', {
 export type Departamento = typeof departamentos.$inferSelect
 export type NewDepartamento = typeof departamentos.$inferInsert
 
+// ── Partidas Presupuestarias (Budget Items) ───────────────────────────────────
+
+export const partidasPresupuestarias = pgTable('partidas_presupuestarias', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  code: varchar('code', { length: 20 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export type PartidaPresupuestaria = typeof partidasPresupuestarias.$inferSelect
+export type NewPartidaPresupuestaria = typeof partidasPresupuestarias.$inferInsert
+
 // ── Department tree node (built in-memory) ────────────────────────────────────
 
 export type DepartamentoNode = Departamento & { children: DepartamentoNode[] }

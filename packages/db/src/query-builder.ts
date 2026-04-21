@@ -4,6 +4,7 @@ import {
   attendanceRecords,
   cargos,
   companyConfig,
+  partidasPresupuestarias,
   conceptAccumulatorLinks,
   conceptAccumulators,
   conceptFrequencies,
@@ -1072,7 +1073,7 @@ export async function loadAccumulatedByDateRange(
 
 // ─── Catalog Helpers ──────────────────────────────────────────────────────────
 
-type CatalogTable = typeof cargos | typeof funciones
+type CatalogTable = typeof cargos | typeof funciones | typeof partidasPresupuestarias
 
 async function listCatalog(db: Db, table: CatalogTable, search?: string) {
   const conditions = search
@@ -2025,6 +2026,45 @@ export async function loadInstallmentsByCreditor(
   return rows.reduce((sum, r) => sum + Number(r.installment), 0)
 }
 
+// ─── Partidas Presupuestarias ─────────────────────────────────────────────────
+
+export function listPartidas(db: Db, search?: string) {
+  return listCatalog(db, partidasPresupuestarias, search)
+}
+
+export function getPartidaById(db: Db, id: string) {
+  return getCatalogById(db, partidasPresupuestarias, id)
+}
+
+export function getPartidaByCode(db: Db, code: string) {
+  return getCatalogByCode(db, partidasPresupuestarias, code)
+}
+
+export type CreatePartidaData = typeof partidasPresupuestarias.$inferInsert
+
+export async function createPartida(db: Db, data: CreatePartidaData) {
+  const [row] = await db.insert(partidasPresupuestarias).values(data).returning()
+  return row
+}
+
+export async function updatePartida(db: Db, id: string, data: Partial<CreatePartidaData>) {
+  const [row] = await db
+    .update(partidasPresupuestarias)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(partidasPresupuestarias.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function deactivatePartida(db: Db, id: string) {
+  const [row] = await db
+    .update(partidasPresupuestarias)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(partidasPresupuestarias.id, id))
+    .returning()
+  return row ?? null
+}
+
 // ─── Positions ────────────────────────────────────────────────────────────────
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
@@ -2051,6 +2091,7 @@ export type CreatePositionData = {
   cargoId?: string | null
   departamentoId?: string | null
   funcionId?: string | null
+  partidaId?: string | null
 }
 
 export async function createPosition(db: AnyDb, data: CreatePositionData) {
