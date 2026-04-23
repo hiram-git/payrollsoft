@@ -4,8 +4,6 @@ import {
   attendanceRecords,
   cargos,
   companyConfig,
-  partidasPresupuestarias,
-  cuentasContables,
   conceptAccumulatorLinks,
   conceptAccumulators,
   conceptFrequencies,
@@ -16,12 +14,14 @@ import {
   conceptSituations,
   concepts,
   creditors,
+  cuentasContables,
   departamentos,
   employeePayrollTypes,
   employees,
   funciones,
   loanInstallments,
   loans,
+  partidasPresupuestarias,
   payrollAcumulados,
   payrollLines,
   payrolls,
@@ -189,10 +189,7 @@ export async function getEmployeePayrollTypesList(db: Db, employeeId: string) {
       sortOrder: conceptPayrollTypes.sortOrder,
     })
     .from(employeePayrollTypes)
-    .innerJoin(
-      conceptPayrollTypes,
-      eq(employeePayrollTypes.payrollTypeId, conceptPayrollTypes.id)
-    )
+    .innerJoin(conceptPayrollTypes, eq(employeePayrollTypes.payrollTypeId, conceptPayrollTypes.id))
     .where(eq(employeePayrollTypes.employeeId, employeeId))
     .orderBy(asc(conceptPayrollTypes.sortOrder))
 }
@@ -216,7 +213,11 @@ export async function setEmployeePayrollTypes(
  */
 export async function getDefaultPayrollType(db: Db) {
   const [row] = await db
-    .select({ id: conceptPayrollTypes.id, code: conceptPayrollTypes.code, name: conceptPayrollTypes.name })
+    .select({
+      id: conceptPayrollTypes.id,
+      code: conceptPayrollTypes.code,
+      name: conceptPayrollTypes.name,
+    })
     .from(conceptPayrollTypes)
     .orderBy(asc(conceptPayrollTypes.sortOrder))
     .limit(1)
@@ -1157,7 +1158,11 @@ export async function loadAccumulatedByDateRange(
 
 // ─── Catalog Helpers ──────────────────────────────────────────────────────────
 
-type CatalogTable = typeof cargos | typeof funciones | typeof partidasPresupuestarias | typeof cuentasContables
+type CatalogTable =
+  | typeof cargos
+  | typeof funciones
+  | typeof partidasPresupuestarias
+  | typeof cuentasContables
 
 async function listCatalog(db: Db, table: CatalogTable, search?: string) {
   const conditions = search
@@ -2170,7 +2175,11 @@ export async function createCuentaContable(db: Db, data: CreateCuentaContableDat
   return row
 }
 
-export async function updateCuentaContable(db: Db, id: string, data: Partial<CreateCuentaContableData>) {
+export async function updateCuentaContable(
+  db: Db,
+  id: string,
+  data: Partial<CreateCuentaContableData>
+) {
   const [row] = await db
     .update(cuentasContables)
     .set({ ...data, updatedAt: new Date() })

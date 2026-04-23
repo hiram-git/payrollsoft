@@ -202,6 +202,51 @@ Funciones nativas soportadas: `ACUMULADOS`, `CONCEPTO`, `SALDO`, `DIAS`, `INIPER
 - [ ] PDF de planilla (descarga de recibo individual + reporte general)
 - [ ] Exportación Excel de planilla generada
 
+---
+
+## Fase 4b — Módulo de Reportes de Planilla
+
+**Estado: 🔄 EN PROGRESO**
+
+Refactorización del flujo de generación de reportes a una capa reutilizable
+(`apps/web/src/lib/reports/`) compuesta por:
+
+- `payroll-data.ts` — fetcher único con manejo de auth / 404 / 5xx.
+- `payroll-pdf-renderer.ts` — envuelve `renderToBuffer()` y produce la
+  `Response` con los headers de descarga correctos.
+- `registry.ts` — catálogo declarativo de tipos de reporte. Añadir un reporte
+  nuevo = agregar una entrada y cambiar `status` a `'available'`.
+
+Rutas:
+
+- `/reports/payroll` — listado filtrado a planillas `generated` o `closed`
+  con dropdown de reportes por fila.
+- `/api/reports/payroll/:id/pdf` — ruta canónica del PDF horizontal.
+- `/api/payroll/:id/pdf` — ruta legacy mantenida; delega al renderer
+  compartido para no romper enlaces existentes.
+
+### Completado
+
+- [x] **Planilla PDF (formato horizontal)** — reporte consolidado por planilla,
+  con encabezado, totales, tabla por empleado y chips de conceptos.
+  Orientación `landscape` forzada en el componente `PayrollPdf`.
+- [x] Botón primario "Planilla PDF" en la vista de detalle (`/payroll/[id]`).
+- [x] Enlace "Más reportes" desde la vista de detalle hacia `/reports/payroll`.
+
+### Pendiente (por implementar en futuras iteraciones)
+
+- [ ] **Planilla en Excel** — exportación completa `.xlsx` con hojas de
+  resumen, detalle por empleado y totales por concepto.
+- [ ] **Resumen de Planilla** — reporte PDF agregado por departamento,
+  tipo de concepto y comparativo mes a mes.
+- [ ] **Comprobantes de pago** — PDF individual por empleado (reutilizar
+  `StubPdf`), opción de zip masivo con todos los comprobantes de la planilla.
+- [ ] **Enviar comprobantes de pago por email** — job asíncrono que genere
+  cada comprobante y lo envíe al correo del empleado. Requiere integración
+  con un proveedor SMTP/API (Resend, SES, etc.).
+- [ ] **Anexo 09** — reporte oficial para la CSS (Caja de Seguro Social) con
+  formato exigido por la autoridad panameña.
+
 ### Páginas implementadas (40 rutas Astro)
 
 ```
@@ -248,10 +293,14 @@ apps/web/src/pages/
 ---
 
 ## Fase 5 — Módulos Avanzados
-**Estado: 🔲 PENDIENTE**
+**Estado: 🔄 EN PROGRESO (reportes iniciados)**
 
-- [ ] Reportes PDF (planilla general, comprobantes individuales)
-- [ ] Exportación Excel
+- [x] Reporte PDF general de planilla (horizontal) — ver Fase 4b
+- [ ] Exportación Excel de planilla (pendiente)
+- [ ] Resumen de Planilla (pendiente)
+- [ ] Comprobantes de pago PDF por empleado (pendiente)
+- [ ] Envío de comprobantes por email (pendiente)
+- [ ] Anexo 09 para la CSS (pendiente)
 - [ ] XIII Mes — endpoint dedicado + UI
 - [ ] Vacaciones — API y UI completa
 - [ ] Webhook de asistencia + procesamiento de marcaciones con tolerancias

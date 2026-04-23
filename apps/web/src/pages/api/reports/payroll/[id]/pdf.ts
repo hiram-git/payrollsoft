@@ -1,11 +1,10 @@
 import type { APIRoute } from 'astro'
-import { fetchPayrollReportData } from '../../../../lib/reports/payroll-data'
-import { renderPayrollPdfResponse } from '../../../../lib/reports/payroll-pdf-renderer'
+import { fetchPayrollReportData } from '../../../../../lib/reports/payroll-data'
+import { renderPayrollPdfResponse } from '../../../../../lib/reports/payroll-pdf-renderer'
 
 /**
- * Legacy route kept for backward compatibility with existing links in the
- * payroll detail page. Delegates to the shared reports layer so there is a
- * single code path for generating the landscape PDF.
+ * Canonical "reports" route for the landscape payroll PDF. The `/reports/payroll`
+ * page and the payroll detail dropdown both link here.
  */
 export const GET: APIRoute = async ({ params, cookies, redirect }) => {
   const authCookie = cookies.get('auth')?.value

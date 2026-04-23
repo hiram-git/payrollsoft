@@ -39,7 +39,11 @@ export async function createCuentaContableService(db: AnyDb, input: CuentaContab
   return { success: true as const, data: row }
 }
 
-export async function updateCuentaContableService(db: AnyDb, id: string, input: Partial<CuentaContableInput>) {
+export async function updateCuentaContableService(
+  db: AnyDb,
+  id: string,
+  input: Partial<CuentaContableInput>
+) {
   const existing = await getCuentaContableById(db, id)
   if (!existing) {
     return { success: false as const, error: 'not_found', message: 'Cuenta contable no encontrada' }

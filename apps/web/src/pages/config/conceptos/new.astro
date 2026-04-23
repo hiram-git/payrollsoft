@@ -27,7 +27,8 @@ try {
   ])
   if (configRes.status === 401) return Astro.redirect('/login')
   if (configRes.ok) config = ((await configRes.json()) as { data: ConceptConfig }).data
-  if (cuentasRes.ok) cuentasContables = ((await cuentasRes.json()) as { data: CuentaContable[] }).data ?? []
+  if (cuentasRes.ok)
+    cuentasContables = ((await cuentasRes.json()) as { data: CuentaContable[] }).data ?? []
 } catch {
   // show empty catalogs — user can still save
 }
