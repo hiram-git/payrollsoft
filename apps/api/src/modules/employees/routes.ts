@@ -28,6 +28,7 @@ const EmployeeBody = t.Object({
   payFrequency: t.Optional(
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
+  payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
 })
 
@@ -48,6 +49,7 @@ const EmployeeUpdateBody = t.Object({
   payFrequency: t.Optional(
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
+  payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
 })
 
@@ -56,6 +58,7 @@ const ListQuery = t.Object({
   department: t.Optional(t.String()),
   isActive: t.Optional(t.String()), // 'true' | 'false'
   payFrequency: t.Optional(t.String()),
+  payrollTypeId: t.Optional(t.String()),
   page: t.Optional(t.Numeric()),
   limit: t.Optional(t.Numeric()),
   sortOrder: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')])),
@@ -93,6 +96,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           department: query.department,
           isActive,
           payFrequency: query.payFrequency,
+          payrollTypeId: query.payrollTypeId,
         },
         { page: query.page, limit: query.limit, sortOrder: query.sortOrder }
       )

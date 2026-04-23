@@ -5,7 +5,9 @@ interface Props {
 
 const { title } = Astro.props
 const path = Astro.url.pathname
+const returnTo = Astro.url.pathname + Astro.url.search
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value ?? ''
 let userName = 'Mi cuenta'
 let userEmail = ''
@@ -42,6 +44,23 @@ const roleLabels: Record<string, string> = {
   VIEWER: 'Visor',
 }
 const userRoleLabel = roleLabels[userRole] ?? ''
+
+// ── Payroll type selector ──────────────────────────────────────────────────────
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+type PayrollType = { id: string; code: string; name: string; sortOrder: number }
+let payrollTypes: PayrollType[] = []
+if (authCookie) {
+  try {
+    const res = await fetch(`${API_URL}/concepts/config`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+    })
+    if (res.ok) {
+      const json = (await res.json()) as { data?: { payrollTypes?: PayrollType[] } }
+      payrollTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
+    }
+  } catch (_) {}
+}
+const activeType = payrollTypes.find((t) => t.id === activeTypeId) ?? null
 
 function isActive(href: string) {
   return path === href || (href !== '/dashboard' && path.startsWith(href))
@@ -96,7 +115,7 @@ const nav: NavEntry[] = [
   },
   {
     kind: 'group',
-    label: 'Nómina',
+    label: 'Planilla',
     icon: 'payroll',
     children: [
       { href: '/payroll', label: 'Cálculo' },
@@ -481,6 +500,33 @@ const icons: Record<IconKey, string> = {
       .ts-btn[data-active="true"]  { color: var(--fore); }
       .ts-btn[data-active="false"] { color: var(--mute); }
 
+      /* Payroll type selector */
+      .type-selector-form { display: contents; }
+      .type-selector-wrap {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 10px 4px 8px;
+        border: 1px solid var(--rule);
+        border-radius: 999px;
+        background: var(--ink-3);
+        color: var(--mute);
+        transition: border-color 140ms ease;
+      }
+      .type-selector-wrap:focus-within { border-color: var(--rule-hi); }
+      .type-selector {
+        background: transparent;
+        border: none;
+        color: var(--fore-dim);
+        font-size: 12px;
+        font-family: var(--f-sans);
+        cursor: pointer;
+        outline: none;
+        padding: 0;
+        max-width: 150px;
+      }
+      .type-selector option { background: var(--ink-2); color: var(--fore); }
+
       /* Avatar */
       .avatar-wrap { position: relative; }
       .avatar-pill {
@@ -743,6 +789,29 @@ const icons: Record<IconKey, string> = {
                 <path d="M6 12.5c.2.6.8 1 1.5 1s1.3-.4 1.5-1"/>
               </svg>
             </button>
+
+            <!-- Payroll type filter -->
+            {payrollTypes.length > 0 && (
+              <form method="POST" action="/api/config/select-payroll-type" class="type-selector-form">
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <div class="type-selector-wrap" title="Filtrar por tipo de planilla">
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+                    <path d="M1 2.5h10M3 6h6M5 9.5h2"/>
+                  </svg>
+                  <select
+                    name="payrollTypeId"
+                    class="type-selector"
+                    onchange="this.closest('form').submit()"
+                    aria-label="Tipo de planilla activo"
+                  >
+                    <option value="">Todos los tipos</option>
+                    {payrollTypes.map((t) => (
+                      <option value={t.id} selected={t.id === activeTypeId}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </form>
+            )}
 
             <!-- User avatar + dropdown -->
             <div class="avatar-wrap">

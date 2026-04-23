@@ -1,4 +1,13 @@
-import { boolean, date, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import {
+  boolean,
+  date,
+  jsonb,
+  pgTable,
+  primaryKey,
+  timestamp,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core'
 
 export const employees = pgTable('employees', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -37,6 +46,18 @@ export const employeeDocuments = pgTable('employee_documents', {
   uploadedAt: timestamp('uploaded_at').notNull().defaultNow(),
 })
 
+// ─── Many-to-Many: Employee ↔ Payroll Type ────────────────────────────────────
+
+export const employeePayrollTypes = pgTable(
+  'employee_payroll_types',
+  {
+    employeeId: uuid('employee_id').notNull(),
+    payrollTypeId: uuid('payroll_type_id').notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.employeeId, t.payrollTypeId] }) })
+)
+
 export type Employee = typeof employees.$inferSelect
 export type NewEmployee = typeof employees.$inferInsert
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect
+export type EmployeePayrollTypeLink = typeof employeePayrollTypes.$inferSelect

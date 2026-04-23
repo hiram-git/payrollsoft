@@ -27,6 +27,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   // ── PUT (update) ──────────────────────────────────────────────────────────────
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
+  const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
   const body: Record<string, unknown> = {
     code: g('code'),
@@ -43,6 +44,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     hireDate: g('hireDate'),
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
+    payrollTypeIds,
   }
 
   if (

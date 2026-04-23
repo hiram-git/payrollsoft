@@ -27,7 +27,9 @@ type Employee = {
   baseSalary: string
   payFrequency: string
   isActive: boolean
+  payrollTypeIds?: string[]
 }
+type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 
 type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
 type Departamento = CatalogItem & { parentId: string | null }
@@ -60,16 +62,18 @@ let funciones: CatalogItem[] = []
 let departamentos: Departamento[] = []
 let positions: Position[] = []
 let loans: Loan[] = []
+let payrollTypes: PayrollType[] = []
 let tipoInstitucion = 'privada'
 
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
-  const [empRes, cRes, fRes, dRes, compRes] = await Promise.all([
+  const [empRes, cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
     fetch(`${API_URL}/employees/${id}`, { headers }),
     fetch(`${API_URL}/cargos`, { headers }),
     fetch(`${API_URL}/funciones`, { headers }),
     fetch(`${API_URL}/departamentos`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
+    fetch(`${API_URL}/concepts/config`, { headers }),
   ])
 
   if (empRes.status === 401) return Astro.redirect('/login')
@@ -82,6 +86,10 @@ try {
   if (compRes.ok) {
     const cfg = ((await compRes.json()) as { data: CompanyConfig }).data
     tipoInstitucion = cfg?.tipoInstitucion ?? 'privada'
+  }
+  if (cfgRes.ok) {
+    const cfgData = (await cfgRes.json()) as { data?: { payrollTypes?: PayrollType[] } }
+    payrollTypes = (cfgData.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
   }
 
   if (tipoInstitucion === 'publica') {
@@ -177,6 +185,11 @@ const freqLabel: Record<string, string> = {
         <button type="button" class="tab-btn" data-tab="prestamos" onclick="switchTab('prestamos', this)">
           Préstamos
         </button>
+        {payrollTypes.length > 0 && (
+          <button type="button" class="tab-btn" data-tab="nomina" onclick="switchTab('nomina', this)">
+            Tipos de Planilla
+          </button>
+        )}
       </div>
 
       <!-- TAB: Datos Personales -->
@@ -389,6 +402,30 @@ const freqLabel: Record<string, string> = {
           )}
         </div>
       </div>
+
+      <!-- TAB: Tipos de Planilla -->
+      {payrollTypes.length > 0 && (
+        <div id="tab-nomina" style="display:none">
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-1">Tipos de Planilla</h3>
+            <p class="text-xs text-gray-500 mb-4">El empleado debe pertenecer a al menos un tipo de planilla.</p>
+            <div class="grid grid-cols-2 gap-3">
+              {payrollTypes.map((pt) => (
+                <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="payrollTypeIds[]"
+                    value={pt.id}
+                    class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={emp!.payrollTypeIds?.includes(pt.id) ?? false}
+                  />
+                  <span class="text-sm text-gray-700">{pt.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       <!-- Actions -->
       <div class="flex justify-between mt-2">

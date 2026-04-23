@@ -17,6 +17,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     periodStart: g('periodStart'),
     periodEnd: g('periodEnd'),
     paymentDate: g('paymentDate') || null,
+    payrollTypeId: g('payrollTypeId') || null,
   }
 
   if (!body.name || !body.type || !body.frequency || !body.periodStart || !body.periodEnd) {

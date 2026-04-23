@@ -25,6 +25,7 @@ const PayrollBody = t.Object({
   periodStart: t.String({ minLength: 1 }),
   periodEnd: t.String({ minLength: 1 }),
   paymentDate: t.Optional(t.Nullable(t.String())),
+  payrollTypeId: t.Optional(t.Nullable(t.String())),
 })
 
 const PayrollUpdateBody = t.Object({
@@ -49,6 +50,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
           status: query.status,
           type: query.type,
           year: query.year ? Number(query.year) : undefined,
+          payrollTypeId: query.payrollTypeId,
         },
         query.page ? Number(query.page) : 1
       )
@@ -60,6 +62,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         status: t.Optional(t.String()),
         type: t.Optional(t.String()),
         year: t.Optional(t.String()),
+        payrollTypeId: t.Optional(t.String()),
         page: t.Optional(t.String()),
       }),
     }

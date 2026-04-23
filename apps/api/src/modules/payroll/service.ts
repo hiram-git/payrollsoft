@@ -18,6 +18,7 @@ import {
   deleteCreatedPayroll,
   deletePayrollAcumulados,
   deletePayrollLines,
+  getActiveEmployeesByPayrollType,
   getAllActiveEmployees,
   getAttendanceSummaryForPeriod,
   getCompanyConfig,
@@ -52,6 +53,7 @@ export type CreatePayrollInput = {
   periodStart: string
   periodEnd: string
   paymentDate?: string | null
+  payrollTypeId?: string | null
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -123,6 +125,7 @@ export async function createPayrollService(db: AnyDb, input: CreatePayrollInput)
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     paymentDate: input.paymentDate ?? null,
+    payrollTypeId: input.payrollTypeId ?? null,
     status: 'created',
   })
   return { success: true as const, data: row }
@@ -211,12 +214,25 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
 
     const [allEmployees, allConceptsWithLinks, companyConfig, conceptCatalogs, allCreditors] =
       await Promise.all([
-        getAllActiveEmployees(db),
+        payroll.payrollTypeId
+          ? getActiveEmployeesByPayrollType(db, payroll.payrollTypeId)
+          : getAllActiveEmployees(db),
         listConceptsWithLinks(db),
         getCompanyConfig(db),
         getConceptCatalogs(db),
         listCreditors(db, true),
       ])
+
+    if (allEmployees.length === 0) {
+      await updatePayroll(db, id, { status: originalStatus })
+      return {
+        success: false as const,
+        error: 'no_employees',
+        message: payroll.payrollTypeId
+          ? 'No hay empleados asignados al tipo de nómina seleccionado'
+          : 'No hay empleados activos para generar la planilla',
+      }
+    }
 
     const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
 

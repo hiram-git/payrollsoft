@@ -50,6 +50,7 @@ export const payrolls = pgTable('payrolls', {
   periodEnd: date('period_end').notNull(),
   paymentDate: date('payment_date'),
   status: varchar('status', { length: 20 }).notNull().default('created'),
+  payrollTypeId: uuid('payroll_type_id'), // organizational type — FK to concept_payroll_types
   totalGross: varchar('total_gross', { length: 20 }).notNull().default('0'),
   totalDeductions: varchar('total_deductions', { length: 20 }).notNull().default('0'),
   totalNet: varchar('total_net', { length: 20 }).notNull().default('0'),
