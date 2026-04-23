@@ -139,28 +139,98 @@ const icons: Record<IconKey, string> = {
     </script>
     <style is:global>
       :root, [data-theme="dark"] {
+        /* ── Surfaces ───────────────────────────────────────── */
         --ink:       #07101F;
         --ink-2:     #0A1628;
         --ink-3:     #101E33;
         --ink-4:     #16263F;
+
+        /* ── Brand accent ───────────────────────────────────── */
         --navy:      #003087;
         --navy-hi:   #1E4BA8;
+        --navy-lo:   #00205A;
         --navy-soft: rgba(0,48,135,0.18);
+
+        /* ── Hairlines ──────────────────────────────────────── */
         --rule:      #1A2740;
         --rule-hi:   #243555;
-        --mute:      #6A7690;
-        --mute-2:    #8B97AE;
+
+        /* ── Text ───────────────────────────────────────────── */
         --fore:      #EDEEF2;
         --fore-dim:  #C9CEDB;
+        --mute-2:    #8B97AE;
+        --mute:      #6A7690;
+
+        /* ── Semantic ───────────────────────────────────────── */
         --warn:      #E3B25A;
         --err:       #E06B5C;
         --ok:        #6FB58C;
         --pos:       #6FB58C;
         --neg:       #E06B5C;
+
+        /* ── Elevation ──────────────────────────────────────── */
         --shadow:    none;
+        --scrim:     rgba(0,0,0,0.50);
+
+        /* ── Typefaces ──────────────────────────────────────── */
         --f-display: 'Fraunces','Times New Roman',serif;
         --f-sans:    'Inter Tight',-apple-system,system-ui,sans-serif;
         --f-mono:    'JetBrains Mono',ui-monospace,monospace;
+
+        /* ── Type scale ─────────────────────────────────────── */
+        --fs-display: 76px;
+        --fs-h1:      42px;
+        --fs-h2:      34px;
+        --fs-h3:      22px;
+        --fs-body:    14px;
+        --fs-body-lg: 15px;
+        --fs-small:   12.5px;
+        --fs-meta:    11px;
+
+        /* ── Line heights ───────────────────────────────────── */
+        --lh-tight:  1.05;
+        --lh-snug:   1.2;
+        --lh-body:   1.5;
+        --lh-loose:  1.6;
+
+        /* ── Tracking ───────────────────────────────────────── */
+        --tracking-display:  -0.025em;
+        --tracking-heading:  -0.02em;
+        --tracking-body:     -0.005em;
+        --tracking-eyebrow:   0.14em;
+        --tracking-label:     0.10em;
+        --tracking-meta:      0.08em;
+
+        /* ── Spacing (4 px base) ────────────────────────────── */
+        --s-1:   4px;
+        --s-2:   8px;
+        --s-3:   12px;
+        --s-4:   16px;
+        --s-5:   20px;
+        --s-6:   24px;
+        --s-7:   28px;
+        --s-8:   32px;
+        --s-10:  40px;
+        --s-12:  48px;
+        --s-14:  56px;
+
+        /* ── Radii (sharp) ──────────────────────────────────── */
+        --r-xs:   2px;
+        --r-sm:   3px;
+        --r-md:   4px;
+        --r-pill: 999px;
+
+        /* ── Borders ────────────────────────────────────────── */
+        --bw:        1px;
+        --bw-strong: 1.5px;
+
+        /* ── Motion ─────────────────────────────────────────── */
+        --ease-std: cubic-bezier(.2,.7,.2,1);
+        --ease-in:  cubic-bezier(.4,0,1,1);
+        --d-fast:   120ms;
+        --d-std:    160ms;
+        --d-slow:   220ms;
+        --d-theme:  180ms;
       }
       [data-theme="light"] {
         --ink:       #F4F5F7;
@@ -169,19 +239,21 @@ const icons: Record<IconKey, string> = {
         --ink-4:     #EFF1F5;
         --navy:      #003087;
         --navy-hi:   #1E4BA8;
+        --navy-lo:   #00205A;
         --navy-soft: rgba(0,48,135,0.08);
         --rule:      #E4E7EE;
         --rule-hi:   #D2D7E0;
-        --mute:      #7A8499;
-        --mute-2:    #5B6478;
         --fore:      #0C1424;
         --fore-dim:  #2A3346;
+        --mute-2:    #5B6478;
+        --mute:      #7A8499;
         --warn:      #B07A17;
         --err:       #B53A2B;
         --ok:        #2E7A56;
         --pos:       #2E7A56;
         --neg:       #B53A2B;
         --shadow:    0 1px 2px rgba(12,20,36,0.04), 0 1px 1px rgba(12,20,36,0.03);
+        --scrim:     rgba(12,20,36,0.18);
       }
 
       *, *::before, *::after { box-sizing: border-box; }
@@ -540,6 +612,88 @@ const icons: Record<IconKey, string> = {
       [data-theme="dark"] .page-content textarea:focus {
         border-color: var(--navy-hi);
         box-shadow: 0 0 0 2px var(--navy-soft);
+      }
+
+      /* ── Design-system semantic elements & utilities ──────── */
+      /* Display — Fraunces Light, brand signature voice */
+      .display {
+        font-family: var(--f-display);
+        font-weight: 300;
+        font-size: var(--fs-display);
+        line-height: var(--lh-tight);
+        letter-spacing: var(--tracking-display);
+        color: var(--fore);
+        margin: 0;
+      }
+      .display em, .display .em {
+        font-style: italic;
+        font-weight: 300;
+        color: var(--fore-dim);
+      }
+
+      h1 {
+        font-family: var(--f-display);
+        font-weight: 300;
+        font-size: var(--fs-h1);
+        line-height: var(--lh-tight);
+        letter-spacing: var(--tracking-heading);
+        color: var(--fore);
+        margin: 0;
+      }
+      h2 {
+        font-family: var(--f-display);
+        font-weight: 300;
+        font-size: var(--fs-h2);
+        line-height: var(--lh-snug);
+        letter-spacing: var(--tracking-heading);
+        color: var(--fore);
+        margin: 0;
+      }
+      h3 {
+        font-family: var(--f-display);
+        font-weight: 300;
+        font-size: var(--fs-h3);
+        line-height: var(--lh-snug);
+        letter-spacing: -0.015em;
+        color: var(--fore);
+        margin: 0;
+      }
+
+      .body    { font-family: var(--f-sans); font-size: var(--fs-body); line-height: var(--lh-body); color: var(--fore-dim); }
+      .body-lg { font-size: var(--fs-body-lg); line-height: var(--lh-loose); color: var(--mute-2); }
+
+      /* Eyebrow — mono, spaced ALL-CAPS lockup */
+      .eyebrow {
+        font-family: var(--f-mono);
+        font-size: var(--fs-meta);
+        color: var(--mute-2);
+        letter-spacing: var(--tracking-eyebrow);
+        text-transform: uppercase;
+      }
+
+      /* Field label */
+      .label {
+        font-family: var(--f-mono);
+        font-size: var(--fs-meta);
+        color: var(--mute-2);
+        letter-spacing: var(--tracking-label);
+        text-transform: uppercase;
+      }
+
+      /* Meta row / stat sub-line */
+      .meta {
+        font-family: var(--f-mono);
+        font-size: var(--fs-meta);
+        color: var(--mute);
+        letter-spacing: var(--tracking-meta);
+        text-transform: uppercase;
+      }
+
+      /* Monospace numerics */
+      .num, .mono {
+        font-family: var(--f-mono);
+        font-variant-numeric: tabular-nums;
+        letter-spacing: 0.02em;
       }
     </style>
   </head>
