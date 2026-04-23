@@ -127,6 +127,13 @@
       "when": 1745700000000,
       "tag": "0018_assign_default_payroll_type",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1745800000000,
+      "tag": "0019_payroll_reports",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,51 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** 23 de abril de 2026 (sesión 3 — módulo de reportes, segunda iteración)
+**Última actualización:** 23 de abril de 2026 (sesión 3 — state machine del reporte)
 **Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
 
-## Avance de la sesión 3 (23/04/2026) — Planilla PDF oficial
+## Avance de la sesión 3 (23/04/2026) — State machine de Planilla PDF
+
+El reporte PDF ahora vive como un recurso persistente con máquina de estados
+mínima de dos estados (`not_generated` / `generated`):
+
+- **Nueva tabla `payroll_reports`** en el schema tenant — migración
+  `0019_payroll_reports.sql`. Campos: `id`, `payroll_id` (UNIQUE),
+  `status`, `pdf_path`, `generated_at`, `updated_at`, `generated_by`.
+- **Query helpers** (`packages/db/src/query-builder.ts`):
+  `getPayrollReport`, `markPayrollReportGenerated` (upsert),
+  `markPayrollReportNotGenerated`.
+- **Rutas Elysia** en `payrollRoutes`:
+  - `GET /payroll/:id/report` — devuelve `{ status, pdfPath, generatedAt, ... }`
+    (lazy: `not_generated` si no existe fila).
+  - `POST /payroll/:id/report` — marca como `generated`, recibe `{ pdfPath }`
+    en el body; grabado por el proceso web que acaba de escribir el archivo.
+  - `POST /payroll/:id/report/regenerate` — flip atómico a `not_generated`.
+- **Storage en disco** (`apps/web/src/lib/reports/payroll-report-storage.ts`):
+  el layout sugerido por el spec — `{STORAGE_DIR}/{tenant}_storage/reports/
+  payroll/{payrollId}/report.pdf`. `STORAGE_DIR` es configurable por env.
+- **Endpoints Astro**:
+  - `POST /api/reports/payroll/:id/generate` — renderiza PDF, escribe a
+    disco, persiste el estado vía API. Único camino que escribe archivos.
+  - `POST /api/reports/payroll/:id/regenerate` — flip a `not_generated` en
+    API y re-despacha a `/generate` para mantener una sola vía de render.
+  - `GET /api/reports/payroll/:id/download` — lee estado, lee archivo de
+    disco, devuelve el PDF con filename amable.
+  - `GET /api/reports/payroll/:id/state` — proxy del estado para el cliente.
+  - Las rutas legacy `/api/payroll/:id/pdf` y `/api/reports/payroll/:id/pdf`
+    redirigen (307) a `/download` para no romper bookmarks.
+- **UI en `/payroll/[id]`**:
+  - Server-side fetch del estado. Si `not_generated`: botón "Generar PDF";
+    si `generated`: "Descargar" (primario) + "Regenerar" (secundario).
+  - Modal bloqueante con spinner — "Generando reporte de planilla, por
+    favor espere…" — con `body.overflow` bloqueado durante la operación.
+    Los botones se deshabilitan; errores se muestran en el mismo modal.
+- **Renderer consolidado** (`payroll-pdf-renderer.ts`): único punto de
+  entrada (`renderPayrollPdfBuffer`) que devuelve bytes. Elimina la
+  duplicación entre legacy pdf.ts y la nueva generate.ts.
+- Se mantiene sólo la versión más reciente del PDF en disco — cada
+  regeneración sobreescribe el mismo archivo.
+
+## Avance previo de la sesión 3 — Planilla PDF oficial
 
 Segunda iteración sobre el módulo de reportes. El componente `PayrollPdf`
 se reescribió para cumplir el formato oficial de "Planilla de Sueldos":

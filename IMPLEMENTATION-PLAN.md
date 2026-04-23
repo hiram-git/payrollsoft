@@ -227,6 +227,12 @@ Rutas:
 
 ### Completado
 
+- [x] **State machine de generación** — tabla `payroll_reports`
+  (migración `0019`), estados `not_generated` / `generated`, persistencia
+  del PDF en disco (`{STORAGE_DIR}/{tenant}_storage/reports/payroll/
+  {payrollId}/report.pdf`) y UI con botones Descargar / Regenerar + modal
+  bloqueante "Generando reporte de planilla, por favor espere…". Sólo se
+  conserva la última versión (regenerar sobreescribe).
 - [x] **Planilla PDF (A4 horizontal, sin límite de empleados)** — reporte
   oficial con:
   - Encabezado: logo de la empresa (placeholder "LOGO" cuando no hay),

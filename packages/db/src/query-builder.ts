@@ -24,6 +24,7 @@ import {
   partidasPresupuestarias,
   payrollAcumulados,
   payrollLines,
+  payrollReports,
   payrolls,
   positions,
   shifts,
@@ -2253,4 +2254,77 @@ export async function deactivatePosition(db: AnyDb, id: string) {
     .where(eq(positions.id, id))
     .returning()
   return rows[0] ?? null
+}
+
+// ─── Payroll reports (generation state machine) ──────────────────────────────
+
+/**
+ * Returns the latest report row for the payroll. A missing row is treated as
+ * the initial `not_generated` state by every caller — we don't eagerly insert
+ * a placeholder row until the first successful generation.
+ */
+export async function getPayrollReport(db: AnyDb, payrollId: string) {
+  const [row] = await db
+    .select()
+    .from(payrollReports)
+    .where(eq(payrollReports.payrollId, payrollId))
+    .limit(1)
+  return row ?? null
+}
+
+export type MarkGeneratedInput = {
+  payrollId: string
+  pdfPath: string
+  generatedBy?: string | null
+}
+
+/**
+ * Upsert the report row to `generated`. Insert on first run, update on
+ * regeneration — preserving the original row id while refreshing timestamps.
+ */
+export async function markPayrollReportGenerated(db: AnyDb, input: MarkGeneratedInput) {
+  const now = new Date()
+  const existing = await getPayrollReport(db, input.payrollId)
+  if (existing) {
+    const [row] = await db
+      .update(payrollReports)
+      .set({
+        status: 'generated',
+        pdfPath: input.pdfPath,
+        generatedAt: now,
+        updatedAt: now,
+        generatedBy: input.generatedBy ?? null,
+      })
+      .where(eq(payrollReports.id, existing.id))
+      .returning()
+    return row
+  }
+  const [row] = await db
+    .insert(payrollReports)
+    .values({
+      payrollId: input.payrollId,
+      status: 'generated',
+      pdfPath: input.pdfPath,
+      generatedAt: now,
+      updatedAt: now,
+      generatedBy: input.generatedBy ?? null,
+    })
+    .returning()
+  return row
+}
+
+/**
+ * Flip an existing row back to `not_generated`. Leaves the PDF file on disk
+ * untouched — regeneration overwrites it atomically. Returns null if no row
+ * exists (nothing to regenerate from).
+ */
+export async function markPayrollReportNotGenerated(db: AnyDb, payrollId: string) {
+  const existing = await getPayrollReport(db, payrollId)
+  if (!existing) return null
+  const [row] = await db
+    .update(payrollReports)
+    .set({ status: 'not_generated', updatedAt: new Date() })
+    .where(eq(payrollReports.id, existing.id))
+    .returning()
+  return row
 }

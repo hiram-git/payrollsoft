@@ -70,6 +70,21 @@ export const payrollLines = pgTable('payroll_lines', {
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
+/**
+ * Latest-version tracking for generated PDF reports. Only the most recent
+ * file is kept on disk; regenerating overwrites both `pdfPath` contents and
+ * this row's timestamps.
+ */
+export const payrollReports = pgTable('payroll_reports', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  payrollId: uuid('payroll_id').notNull().unique(),
+  status: varchar('status', { length: 20 }).notNull().default('not_generated'), // not_generated | generated
+  pdfPath: text('pdf_path'),
+  generatedAt: timestamp('generated_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  generatedBy: uuid('generated_by'),
+})
+
 export const creditors = pgTable('creditors', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
@@ -116,6 +131,8 @@ export type NewConcept = typeof concepts.$inferInsert
 export type Payroll = typeof payrolls.$inferSelect
 export type NewPayroll = typeof payrolls.$inferInsert
 export type PayrollLine = typeof payrollLines.$inferSelect
+export type PayrollReport = typeof payrollReports.$inferSelect
+export type NewPayrollReport = typeof payrollReports.$inferInsert
 export type Loan = typeof loans.$inferSelect
 export type NewLoan = typeof loans.$inferInsert
 export type PayrollAcumulado = typeof payrollAcumulados.$inferSelect
