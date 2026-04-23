@@ -43,6 +43,7 @@ export type ConceptInput = {
   isReferenceValue?: boolean
   useAmountCalc?: boolean
   allowZero?: boolean
+  cuentaContableId?: string | null
   // Junction links
   links?: ConceptLinks
 }
@@ -90,6 +91,7 @@ export async function createConceptService(db: AnyDb, input: ConceptInput) {
     isReferenceValue: input.isReferenceValue ?? false,
     useAmountCalc: input.useAmountCalc ?? false,
     allowZero: input.allowZero ?? false,
+    cuentaContableId: input.cuentaContableId ?? null,
   })
 
   if (input.links) {
@@ -136,6 +138,7 @@ export async function updateConceptService(db: AnyDb, id: string, input: Partial
   if (input.isReferenceValue !== undefined) patch.isReferenceValue = input.isReferenceValue
   if (input.useAmountCalc !== undefined) patch.useAmountCalc = input.useAmountCalc
   if (input.allowZero !== undefined) patch.allowZero = input.allowZero
+  if (input.cuentaContableId !== undefined) patch.cuentaContableId = input.cuentaContableId
 
   const row = await updateConcept(db, id, patch)
 

@@ -29,6 +29,7 @@ export type PositionInput = {
   cargoId?: string | null
   departamentoId?: string | null
   funcionId?: string | null
+  partidaId?: string | null
 }
 
 export async function createPositionService(db: AnyDb, input: PositionInput) {

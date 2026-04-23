@@ -3,10 +3,12 @@ import {
   deactivateEmployee,
   getCargoById,
   getDepartamentoById,
+  getDefaultPayrollType,
   getEmployee,
   getEmployeeByCode,
   getFuncionById,
   listEmployees,
+  setEmployeePayrollTypes,
   updateEmployee,
 } from '@payroll/db'
 import type { PaginationOptions } from '@payroll/db'
@@ -29,6 +31,7 @@ export type EmployeeCreateInput = {
   hireDate: string
   baseSalary: string
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
+  payrollTypeIds?: string[]
   customFields?: Record<string, unknown>
 }
 
@@ -62,7 +65,13 @@ async function resolveCatalogNames(
 
 export function listEmployeesService(
   db: AnyDb,
-  filter: { search?: string; department?: string; isActive?: boolean; payFrequency?: string },
+  filter: {
+    search?: string
+    department?: string
+    isActive?: boolean
+    payFrequency?: string
+    payrollTypeId?: string
+  },
   pagination: PaginationOptions
 ) {
   return listEmployees(db, filter, pagination)
@@ -107,6 +116,16 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
     payFrequency: input.payFrequency ?? 'biweekly',
     customFields: input.customFields ?? {},
   })
+
+  if (input.payrollTypeIds && input.payrollTypeIds.length > 0) {
+    await setEmployeePayrollTypes(db, employee.id, input.payrollTypeIds)
+  } else {
+    // Auto-assign to the default (first by sortOrder) payroll type when none specified
+    const defaultType = await getDefaultPayrollType(db).catch(() => null)
+    if (defaultType) {
+      await setEmployeePayrollTypes(db, employee.id, [defaultType.id])
+    }
+  }
 
   return { success: true as const, data: employee }
 }
@@ -168,6 +187,18 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
   }
 
   const updated = await updateEmployee(db, id, patch)
+
+  if (input.payrollTypeIds !== undefined) {
+    if (input.payrollTypeIds.length === 0) {
+      return {
+        success: false as const,
+        error: 'no_payroll_type',
+        message: 'El empleado debe tener al menos un tipo de planilla',
+      }
+    }
+    await setEmployeePayrollTypes(db, id, input.payrollTypeIds)
+  }
+
   return { success: true as const, data: updated }
 }
 

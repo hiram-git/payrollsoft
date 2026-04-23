@@ -10,6 +10,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
 
+  const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
+
   const body = {
     code: g('code'),
     firstName: g('firstName'),
@@ -25,6 +27,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     hireDate: g('hireDate'),
     baseSalary: g('baseSalary'),
     payFrequency: (g('payFrequency') || 'biweekly') as 'biweekly' | 'monthly' | 'weekly',
+    payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
   }
 
   // Basic required-field check

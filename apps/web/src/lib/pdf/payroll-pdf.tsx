@@ -214,7 +214,7 @@ export function PayrollPdf({
   })
 
   return (
-    <Document title={payroll.name} author="PayrollSoft" subject="Planilla de nómina">
+    <Document title={payroll.name} author="PayrollSoft" subject="Planilla">
       <Page size="LETTER" style={s.page} orientation="landscape">
         {/* ── Header ── */}
         <View style={s.header}>

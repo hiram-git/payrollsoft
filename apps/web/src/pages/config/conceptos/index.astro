@@ -10,133 +10,291 @@ type Concept = {
   code: string
   name: string
   type: string
+  unit: string
   formula: string | null
   isActive: boolean
 }
 
 let conceptos: Concept[] = []
-let error = ''
+let loadError = ''
 
 try {
   const res = await fetch(`${API_URL}/concepts`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
   })
-  if (res.ok) {
-    const json = (await res.json()) as { data: Concept[] }
-    conceptos = json.data ?? []
-  } else if (res.status === 401) {
-    return Astro.redirect('/login')
-  } else {
-    error = 'Error al cargar los conceptos'
-  }
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) conceptos = ((await res.json()) as { data: Concept[] }).data ?? []
+  else loadError = 'Error al cargar los conceptos'
 } catch {
-  error = 'No se pudo conectar con el servidor'
+  loadError = 'No se pudo conectar con el servidor'
 }
 
 const success = Astro.url.searchParams.get('success') === '1'
-
-const typeLabel: Record<string, string> = {
-  income: 'Ingreso',
-  deduction: 'Deducción',
-}
+const activeCount = conceptos.filter((c) => c.isActive).length
+const inactiveCount = conceptos.length - activeCount
 ---
 
-<AppLayout title="Conceptos">
-  <div class="p-8">
-    <div class="flex items-center justify-between mb-6">
+<AppLayout title="Conceptos de Planilla">
+  <div class="page">
+
+    <!-- Header -->
+    <div class="hdr">
       <div>
-        <h1 class="text-2xl font-bold text-gray-900">Conceptos de Nómina</h1>
-        <p class="text-sm text-gray-500 mt-0.5">{conceptos.length} registros</p>
+        <h1 class="hdr-title">Conceptos de Planilla</h1>
+        <p class="hdr-sub">
+          {activeCount} activos{inactiveCount > 0 && <span> · {inactiveCount} inactivos</span>}
+        </p>
       </div>
-      <a href="/config/conceptos/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-        + Nuevo concepto
-      </a>
+      <a href="/config/conceptos/new" class="btn-new">+ Nuevo concepto</a>
     </div>
 
-    {success && (
-      <div class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-        Concepto guardado correctamente.
-      </div>
-    )}
-    {error && (
-      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        {error}
+    {success    && <div class="alert alert-ok">Concepto guardado correctamente.</div>}
+    {loadError  && <div class="alert alert-err">{loadError}</div>}
+
+    <!-- Filters (only when there are rows to filter) -->
+    {conceptos.length > 0 && (
+      <div class="filter-bar">
+        <input
+          id="q"
+          type="search"
+          placeholder="Buscar por código o nombre…"
+          autocomplete="off"
+          class="search-inp"
+        />
+        <div class="pills" role="group" aria-label="Filtrar por tipo">
+          <button class="pill pill-on" data-type="">Todos</button>
+          <button class="pill" data-type="income">Asignación</button>
+          <button class="pill" data-type="deduction">Deducción</button>
+          <button class="pill" data-type="patronal">Patronal</button>
+        </div>
+        <label class="show-inactive">
+          <input type="checkbox" id="showInactive" />
+          Mostrar inactivos
+        </label>
       </div>
     )}
 
-    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <!-- Table card -->
+    <div class="card">
       {conceptos.length === 0 ? (
-        <div class="p-12 text-center text-gray-400 text-sm">
+        <div class="empty">
           No hay conceptos registrados.{' '}
-          <a href="/config/conceptos/new" class="text-blue-600 hover:underline">Agregar el primero</a>.
+          <a href="/config/conceptos/new" class="link">Agregar el primero</a>.
         </div>
       ) : (
-        <table class="w-full text-sm">
-          <thead class="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Código</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Nombre</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Fórmula</th>
-              <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-              <th class="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-gray-100">
-            {conceptos.map((c) => (
-              <tr class="hover:bg-gray-50 transition-colors">
-                <td class="px-4 py-3 font-mono text-xs text-gray-500">{c.code}</td>
-                <td class="px-4 py-3 font-medium text-gray-900">{c.name}</td>
-                <td class="px-4 py-3">
-                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.type === 'income' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'}`}>
-                    {typeLabel[c.type] ?? c.type}
-                  </span>
-                </td>
-                <td class="px-4 py-3 font-mono text-xs text-gray-500 max-w-xs truncate">
-                  {c.formula ?? '—'}
-                </td>
-                <td class="px-4 py-3">
-                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                    {c.isActive ? 'Activo' : 'Inactivo'}
-                  </span>
-                </td>
-                <td class="px-4 py-3">
-                  <div class="flex items-center justify-end gap-1">
-                    <a
-                      href={`/config/conceptos/${c.id}`}
-                      title="Editar"
-                      class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </a>
-                    {c.isActive && (
-                      <form
-                        method="POST"
-                        action={`/api/config/conceptos/${c.id}`}
-                        onsubmit="return confirm('¿Dar de baja este concepto?')"
-                      >
-                        <input type="hidden" name="_method" value="DELETE" />
-                        <button
-                          type="submit"
-                          title="Dar de baja"
-                          class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+        <>
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th class="th">Código</th>
+                  <th class="th">Nombre</th>
+                  <th class="th">Tipo</th>
+                  <th class="th">Unidad</th>
+                  <th class="th th-c">Fórmula</th>
+                  <th class="th">Estado</th>
+                  <th class="th"></th>
+                </tr>
+              </thead>
+              <tbody id="tbody">
+                {conceptos.map((c) => (
+                  <tr
+                    class="tr"
+                    data-q={`${c.code} ${c.name}`.toLowerCase()}
+                    data-type={c.type}
+                    data-active={c.isActive ? '1' : '0'}
+                  >
+                    <td class="td">
+                      <span class="code">{c.code}</span>
+                    </td>
+                    <td class="td td-name">{c.name}</td>
+                    <td class="td">
+                      {c.type === 'income'    && <span class="badge badge-in">Asignación</span>}
+                      {c.type === 'deduction' && <span class="badge badge-de">Deducción</span>}
+                      {c.type === 'patronal'  && <span class="badge badge-pa">Patronal</span>}
+                    </td>
+                    <td class="td">
+                      <span class="unit-lbl">
+                        {c.unit === 'amount'     ? '$ Monto'
+                       : c.unit === 'hours'      ? 'h Horas'
+                       : c.unit === 'percentage' ? '% Porcentaje'
+                       : c.unit === 'days'       ? 'd Días'
+                       : '—'}
+                      </span>
+                    </td>
+                    <td class="td th-c">
+                      {c.formula
+                        ? <span class="fx-yes" title={c.formula ?? undefined}>✓</span>
+                        : <span class="fx-no">—</span>}
+                    </td>
+                    <td class="td">
+                      <span class={`badge ${c.isActive ? 'badge-ok' : 'badge-off'}`}>
+                        {c.isActive ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </td>
+                    <td class="td">
+                      <div class="row-acts">
+                        <a
+                          href={`/config/conceptos/${c.id}`}
+                          title="Editar"
+                          class="act-btn"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                           </svg>
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                        </a>
+                        {c.isActive && (
+                          <form
+                            method="POST"
+                            action={`/api/config/conceptos/${c.id}`}
+                            onsubmit="return confirm('¿Dar de baja este concepto?')"
+                          >
+                            <input type="hidden" name="_method" value="DELETE" />
+                            <button type="submit" title="Dar de baja" class="act-btn act-del">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                              </svg>
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div id="empty-filter" class="empty hidden">Sin conceptos para el filtro actual.</div>
+          <div class="tbl-foot">
+            <span id="count"></span>
+          </div>
+        </>
       )}
     </div>
+
   </div>
 </AppLayout>
+
+<style>
+  .page      { padding: 2rem; max-width: 1000px; }
+
+  /* Header */
+  .hdr       { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.5rem; }
+  .hdr-title { font-size: 1.25rem; font-weight: 700; color: var(--fore); font-family: var(--f-display); margin: 0 0 .25rem; }
+  .hdr-sub   { font-size: .8125rem; color: var(--mute); margin: 0; }
+
+  .btn-new {
+    display: inline-block;
+    background: var(--navy);
+    color: #fff;
+    text-decoration: none;
+    font-size: .8125rem;
+    font-weight: 600;
+    padding: .5rem 1rem;
+    border-radius: 6px;
+    white-space: nowrap;
+    transition: background .15s;
+  }
+  .btn-new:hover { background: var(--navy-hi); }
+
+  /* Alerts */
+  .alert     { padding: .75rem 1rem; border-radius: 6px; font-size: .8125rem; margin-bottom: 1rem; border: 1px solid; }
+  .alert-ok  { background: color-mix(in srgb, var(--ok)  10%, var(--ink-2)); border-color: var(--ok);  color: var(--ok);  }
+  .alert-err { background: color-mix(in srgb, var(--err) 10%, var(--ink-2)); border-color: var(--err); color: var(--err); }
+
+  /* Filter bar */
+  .filter-bar   { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .search-inp   { flex: 1; min-width: 200px; background: var(--ink-2); color: var(--fore); border: 1px solid var(--rule); border-radius: 6px; padding: .4375rem .75rem; font-size: .8125rem; font-family: inherit; outline: none; }
+  .search-inp:focus { border-color: var(--navy-hi); box-shadow: 0 0 0 2px var(--navy-soft); }
+  .search-inp::placeholder { color: var(--mute); }
+
+  .pills     { display: flex; gap: .25rem; flex-wrap: wrap; }
+  .pill      { background: transparent; color: var(--mute-2); border: 1px solid var(--rule); border-radius: 20px; padding: .25rem .75rem; font-size: .75rem; font-weight: 500; cursor: pointer; font-family: inherit; transition: all .15s; }
+  .pill:hover { background: var(--ink-4); color: var(--fore); }
+  .pill-on   { background: var(--navy-soft); color: var(--navy-hi); border-color: var(--navy-hi); }
+
+  .show-inactive { display: flex; align-items: center; gap: .375rem; font-size: .8125rem; color: var(--mute-2); cursor: pointer; white-space: nowrap; }
+  .show-inactive input { accent-color: var(--navy-hi); }
+
+  /* Card */
+  .card      { background: var(--ink-2); border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+  .tbl-wrap  { overflow-x: auto; }
+
+  /* Table */
+  .tbl       { width: 100%; border-collapse: collapse; font-size: .8125rem; min-width: 580px; }
+  .th        { padding: .625rem 1rem; text-align: left; font-size: .75rem; font-weight: 600; color: var(--mute); text-transform: uppercase; letter-spacing: .04em; background: var(--ink-3); border-bottom: 1px solid var(--rule); white-space: nowrap; }
+  .th-c      { text-align: center; }
+  .td        { padding: .75rem 1rem; color: var(--fore); border-bottom: 1px solid var(--rule); vertical-align: middle; }
+  .tr:last-child .td { border-bottom: none; }
+  .tr:hover .td      { background: var(--ink-3); }
+
+  .code      { font-family: var(--f-mono); font-size: .75rem; color: var(--mute-2); }
+  .td-name   { font-weight: 500; }
+  .unit-lbl  { font-family: var(--f-mono); font-size: .7rem; color: var(--mute-2); white-space: nowrap; }
+  .fx-yes    { color: var(--ok); font-size: .8125rem; font-weight: 600; }
+  .fx-no     { color: var(--mute); }
+
+  /* Badges */
+  .badge     { display: inline-flex; align-items: center; padding: .125rem .5rem; border-radius: 20px; font-size: .7rem; font-weight: 600; white-space: nowrap; }
+  .badge-in  { background: color-mix(in srgb, #60a5fa 15%, transparent); color: #60a5fa; }
+  .badge-de  { background: color-mix(in srgb, #fb923c 15%, transparent); color: #fb923c; }
+  .badge-pa  { background: color-mix(in srgb, #fbbf24 15%, transparent); color: #fbbf24; }
+  .badge-ok  { background: color-mix(in srgb, var(--ok)  15%, transparent); color: var(--ok); }
+  .badge-off { background: var(--ink-4); color: var(--mute); }
+
+  /* Row actions */
+  .row-acts  { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
+  .act-btn   { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--mute); cursor: pointer; text-decoration: none; transition: background .15s, color .15s; }
+  .act-btn:hover { background: var(--navy-soft); color: var(--navy-hi); }
+  .act-del:hover { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+
+  /* Empty / footer */
+  .empty     { padding: 3rem; text-align: center; color: var(--mute); font-size: .875rem; }
+  .link      { color: var(--navy-hi); text-decoration: underline; }
+  .tbl-foot  { padding: .625rem 1rem; border-top: 1px solid var(--rule); font-size: .75rem; color: var(--mute); }
+  .hidden    { display: none !important; }
+</style>
+
+<script is:inline>
+  const qEl          = document.getElementById('q')
+  const showInactive = document.getElementById('showInactive')
+  const pills        = document.querySelectorAll('.pill')
+  const tbody        = document.getElementById('tbody')
+  const emptyFilter  = document.getElementById('empty-filter')
+  const countEl      = document.getElementById('count')
+
+  let activeType = ''
+  const total = tbody ? tbody.querySelectorAll('tr').length : 0
+
+  function applyFilter() {
+    const text = qEl?.value.trim().toLowerCase() ?? ''
+    const showOff = showInactive?.checked ?? false
+    let shown = 0
+    tbody?.querySelectorAll('tr').forEach(function(row) {
+      const matchQ = !text || (row.dataset.q ?? '').includes(text)
+      const matchT = !activeType || row.dataset.type === activeType
+      const matchS = showOff || row.dataset.active === '1'
+      const visible = matchQ && matchT && matchS
+      row.style.display = visible ? '' : 'none'
+      if (visible) shown++
+    })
+    emptyFilter?.classList.toggle('hidden', shown > 0)
+    if (countEl) countEl.textContent = shown === total
+      ? total + ' concepto' + (total !== 1 ? 's' : '')
+      : shown + ' de ' + total + ' mostrados'
+  }
+
+  qEl?.addEventListener('input', applyFilter)
+  showInactive?.addEventListener('change', applyFilter)
+  pills.forEach(function(p) {
+    p.addEventListener('click', function() {
+      activeType = p.dataset.type ?? ''
+      pills.forEach(function(x) { x.classList.remove('pill-on') })
+      p.classList.add('pill-on')
+      applyFilter()
+    })
+  })
+
+  applyFilter()
+</script>

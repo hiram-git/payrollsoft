@@ -1,4 +1,10 @@
-import { countBusinessDays, countCalendarDays, processLine, round2 } from '@payroll/core'
+import {
+  countBusinessDays,
+  countCalendarDays,
+  determinarPeriodoTrimestral,
+  processLine,
+  round2,
+} from '@payroll/core'
 import {
   batchUpsertPayrollLines,
   bulkDeactivateCompletedLoans,
@@ -12,6 +18,7 @@ import {
   deleteCreatedPayroll,
   deletePayrollAcumulados,
   deletePayrollLines,
+  getActiveEmployeesByPayrollType,
   getAllActiveEmployees,
   getAttendanceSummaryForPeriod,
   getCompanyConfig,
@@ -46,9 +53,20 @@ export type CreatePayrollInput = {
   periodStart: string
   periodEnd: string
   paymentDate?: string | null
+  payrollTypeId?: string | null
 }
 
-// ─── Queries ──────────────────────────────────────────────────────────────────
+// ─── Queries ─────────────────────────────────────────────────────────────────
+
+export async function getPayrollLineService(db: AnyDb, payrollId: string, lineId: string) {
+  const [payroll, line] = await Promise.all([
+    getPayroll(db, payrollId),
+    getPayrollLineById(db, lineId),
+  ])
+  if (!payroll || !line) return null
+  if (line.line.payrollId !== payrollId) return null
+  return { payroll, line }
+}
 
 export function listPayrollsService(
   db: AnyDb,
@@ -84,7 +102,7 @@ export async function getPayrollService(
 
 export async function createPayrollService(db: AnyDb, input: CreatePayrollInput) {
   const validTypes = ['regular', 'thirteenth', 'special']
-  const validFreqs = ['biweekly', 'monthly', 'weekly']
+  const validFreqs = ['biweekly', 'monthly', 'weekly', 'thirteenth', 'liquidation']
 
   if (!validTypes.includes(input.type)) {
     return { success: false as const, error: 'invalid_type', message: 'Invalid payroll type' }
@@ -107,6 +125,7 @@ export async function createPayrollService(db: AnyDb, input: CreatePayrollInput)
     periodStart: input.periodStart,
     periodEnd: input.periodEnd,
     paymentDate: input.paymentDate ?? null,
+    payrollTypeId: input.payrollTypeId ?? null,
     status: 'created',
   })
   return { success: true as const, data: row }
@@ -149,6 +168,22 @@ export async function deletePayrollService(db: AnyDb, id: string) {
   return { success: true as const }
 }
 
+export async function createThirteenthPayrollService(db: AnyDb, date?: string, name?: string) {
+  const refDate = date ?? new Date().toISOString().slice(0, 10)
+  const period = determinarPeriodoTrimestral(refDate)
+  const payrollName = name?.trim() || `XIII Mes — ${period.descripcion}`
+  const row = await createPayroll(db, {
+    name: payrollName,
+    type: 'thirteenth',
+    frequency: 'thirteenth',
+    periodStart: period.fechaInicio,
+    periodEnd: period.fechaFin,
+    paymentDate: null,
+    status: 'created',
+  })
+  return { success: true as const, data: row, period }
+}
+
 // ─── Payroll Generation (shared logic) ───────────────────────────────────────
 
 // Accept both new and legacy status names for backward compatibility
@@ -179,12 +214,25 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
 
     const [allEmployees, allConceptsWithLinks, companyConfig, conceptCatalogs, allCreditors] =
       await Promise.all([
-        getAllActiveEmployees(db),
+        payroll.payrollTypeId
+          ? getActiveEmployeesByPayrollType(db, payroll.payrollTypeId)
+          : getAllActiveEmployees(db),
         listConceptsWithLinks(db),
         getCompanyConfig(db),
         getConceptCatalogs(db),
         listCreditors(db, true),
       ])
+
+    if (allEmployees.length === 0) {
+      await updatePayroll(db, id, { status: originalStatus })
+      return {
+        success: false as const,
+        error: 'no_employees',
+        message: payroll.payrollTypeId
+          ? 'No hay empleados asignados al tipo de nómina seleccionado'
+          : 'No hay empleados activos para generar la planilla',
+      }
+    }
 
     const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
 
@@ -196,6 +244,8 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       weekly: 'semanal',
       biweekly: 'quincenal',
       monthly: 'mensual',
+      thirteenth: 'thirteenth',
+      liquidation: 'liquidacion',
     }
     const payrollFreqCode = freqCodeMap[payroll.frequency] ?? payroll.frequency
     const payrollFrequencyId = conceptCatalogs.frequencies.find(
@@ -485,11 +535,12 @@ export async function closePayrollService(db: AnyDb, id: string) {
       await insertPayrollAcumulados(db, acumuladoItems)
     }
 
-    // Mark one pending installment as paid per active loan — bulk (3 queries instead of N×M)
+    // Mark pending installments due in this payroll period as paid — bulk
     const employeeIds = [...new Set(lines.map((l) => l.line.employeeId))]
     const pendingInstallments = await bulkGetPendingInstallments(
       db,
       employeeIds,
+      existing.periodStart,
       existing.periodEnd
     )
     const instIds = pendingInstallments.map((i) => i.id)

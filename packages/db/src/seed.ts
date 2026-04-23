@@ -194,6 +194,66 @@ try {
     console.log(`✓ Concepto    : ${c.code} - ${c.name}`)
   }
 
+  // ── Catálogos de conceptos ────────────────────────────────────────────────────
+
+  // Tipos de planilla
+  for (const item of [
+    { code: 'regular', name: 'Regular', sortOrder: 1 },
+    { code: 'thirteenth', name: 'Décimo Tercer Mes', sortOrder: 2 },
+    { code: 'special', name: 'Especial', sortOrder: 3 },
+  ]) {
+    await tenantSql`
+      INSERT INTO concept_payroll_types (code, name, sort_order)
+      VALUES (${item.code}, ${item.name}, ${item.sortOrder})
+      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order
+    `
+  }
+  console.log('✓ Tipos planilla: regular, thirteenth, special')
+
+  // Frecuencias (codes must match freqCodeMap in payroll service)
+  for (const item of [
+    { code: 'semanal', name: 'Semanal', sortOrder: 1 },
+    { code: 'quincenal', name: 'Quincenal', sortOrder: 2 },
+    { code: 'mensual', name: 'Mensual', sortOrder: 3 },
+    { code: 'thirteenth', name: 'Décimo Tercer Mes', sortOrder: 4 },
+    { code: 'liquidacion', name: 'Liquidación', sortOrder: 5 },
+  ]) {
+    await tenantSql`
+      INSERT INTO concept_frequencies (code, name, sort_order)
+      VALUES (${item.code}, ${item.name}, ${item.sortOrder})
+      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order
+    `
+  }
+  console.log('✓ Frecuencias   : semanal, quincenal, mensual, thirteenth, liquidacion')
+
+  // Situaciones (codes must match service lookup: 'activo')
+  for (const item of [
+    { code: 'activo', name: 'Activo', sortOrder: 1 },
+    { code: 'inactivo', name: 'Inactivo', sortOrder: 2 },
+  ]) {
+    await tenantSql`
+      INSERT INTO concept_situations (code, name, sort_order)
+      VALUES (${item.code}, ${item.name}, ${item.sortOrder})
+      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order
+    `
+  }
+  console.log('✓ Situaciones   : activo, inactivo')
+
+  // Acumulados (para XIII mes)
+  for (const item of [
+    { code: 'SALARIO_BASE', name: 'Salario Base', sortOrder: 1 },
+    { code: 'HORAS_EXTRAS', name: 'Horas Extras', sortOrder: 2 },
+    { code: 'COMISIONES', name: 'Comisiones', sortOrder: 3 },
+    { code: 'BONIFICACIONES', name: 'Bonificaciones', sortOrder: 4 },
+  ]) {
+    await tenantSql`
+      INSERT INTO concept_accumulators (code, name, sort_order)
+      VALUES (${item.code}, ${item.name}, ${item.sortOrder})
+      ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, sort_order = EXCLUDED.sort_order
+    `
+  }
+  console.log('✓ Acumulados    : SALARIO_BASE, HORAS_EXTRAS, COMISIONES, BONIFICACIONES')
+
   console.log('\n✅  Seed completo!')
   console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
   console.log(`  Tenant user  : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)

@@ -171,6 +171,7 @@ try {
     loan_id: string
     installment_number: number
     amount: string
+    due_date: string
     status: string
   }[] = []
 
@@ -223,6 +224,7 @@ try {
           loan_id: loan.id,
           installment_number: i,
           amount: String(i === months ? remainder : installmentAmt),
+          due_date: toDateStr(addMonths(startDate, i - 1)),
           status: 'pending',
         })
       }

@@ -5,8 +5,10 @@ import { tenantPlugin } from '../../middleware/tenant'
 import {
   closePayrollService,
   createPayrollService,
+  createThirteenthPayrollService,
   deletePayrollService,
   generatePayrollService,
+  getPayrollLineService,
   getPayrollService,
   listPayrollsService,
   regenerateEmployeeService,
@@ -23,6 +25,7 @@ const PayrollBody = t.Object({
   periodStart: t.String({ minLength: 1 }),
   periodEnd: t.String({ minLength: 1 }),
   paymentDate: t.Optional(t.Nullable(t.String())),
+  payrollTypeId: t.Optional(t.Nullable(t.String())),
 })
 
 const PayrollUpdateBody = t.Object({
@@ -47,6 +50,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
           status: query.status,
           type: query.type,
           year: query.year ? Number(query.year) : undefined,
+          payrollTypeId: query.payrollTypeId,
         },
         query.page ? Number(query.page) : 1
       )
@@ -58,6 +62,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         status: t.Optional(t.String()),
         type: t.Optional(t.String()),
         year: t.Optional(t.String()),
+        payrollTypeId: t.Optional(t.String()),
         page: t.Optional(t.String()),
       }),
     }
@@ -88,6 +93,26 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
         linesLimit: t.Optional(t.String()),
         search: t.Optional(t.String()),
       }),
+    }
+  )
+
+  .get(
+    '/:id/line/:lineId',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await getPayrollLineService(db, params.id, params.lineId)
+      if (!data) {
+        set.status = 404
+        return { success: false, error: 'Line not found' }
+      }
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      params: t.Object({ id: t.String(), lineId: t.String() }),
     }
   )
 
@@ -262,6 +287,31 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     {
       beforeHandle: [guardAuth, guardRole('VIEWER')],
       query: t.Object({ year: t.Optional(t.String()) }),
+    }
+  )
+
+  // POST /payroll/thirteenth — create XIII mes payroll auto-detecting the trimestral period
+  .post(
+    '/thirteenth',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await createThirteenthPayrollService(
+        db,
+        body.date ?? undefined,
+        body.name ?? undefined
+      )
+      set.status = 201
+      return { success: true, data: result.data, period: result.period }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('HR')],
+      body: t.Object({
+        date: t.Optional(t.String()),
+        name: t.Optional(t.String()),
+      }),
     }
   )
 

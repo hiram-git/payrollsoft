@@ -74,7 +74,9 @@ function computeDueDate(
   } else {
     date.setMonth(date.getMonth() + n)
   }
-  return date.toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const d = String(date.getDate()).padStart(2, '0')
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  return `${d}/${m}/${date.getFullYear()}`
 }
 
 const paid = installments.filter((i) => i.status === 'paid').length
@@ -192,7 +194,7 @@ const frequencyLabels: Record<string, string> = {
           <form
             method="POST"
             action={`/api/employees/${id}/loans/${loanId}`}
-            onsubmit="return confirm('¿Cerrar este préstamo? Ya no se descontará de la nómina.')"
+            onsubmit="return confirm('¿Cerrar este préstamo? Ya no se descontará de la planilla.')"
           >
             <input type="hidden" name="_method" value="DELETE" />
             <button

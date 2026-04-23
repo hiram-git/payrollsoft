@@ -17,6 +17,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     cargoId: g('cargoId') || null,
     departamentoId: g('departamentoId') || null,
     funcionId: g('funcionId') || null,
+    partidaId: g('partidaId') || null,
   }
 
   if (!body.code || !body.name || !body.salary) {

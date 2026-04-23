@@ -37,6 +37,7 @@ export const concepts = pgTable('concepts', {
   isReferenceValue: boolean('is_reference_value').notNull().default(false),
   useAmountCalc: boolean('use_amount_calc').notNull().default(false),
   allowZero: boolean('allow_zero').notNull().default(false),
+  cuentaContableId: uuid('cuenta_contable_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -49,6 +50,7 @@ export const payrolls = pgTable('payrolls', {
   periodEnd: date('period_end').notNull(),
   paymentDate: date('payment_date'),
   status: varchar('status', { length: 20 }).notNull().default('created'),
+  payrollTypeId: uuid('payroll_type_id'), // organizational type — FK to concept_payroll_types
   totalGross: varchar('total_gross', { length: 20 }).notNull().default('0'),
   totalDeductions: varchar('total_deductions', { length: 20 }).notNull().default('0'),
   totalNet: varchar('total_net', { length: 20 }).notNull().default('0'),
@@ -102,6 +104,7 @@ export const loanInstallments = pgTable('loan_installments', {
   loanId: uuid('loan_id').notNull(),
   installmentNumber: integer('installment_number').notNull(),
   amount: varchar('amount', { length: 20 }).notNull(),
+  dueDate: date('due_date'),
   status: varchar('status', { length: 20 }).notNull().default('pending'), // pending | paid
   payrollId: uuid('payroll_id'), // filled when paid on payroll close
   paidAt: timestamp('paid_at'),
