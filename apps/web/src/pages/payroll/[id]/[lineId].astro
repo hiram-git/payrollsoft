@@ -7,6 +7,7 @@ if (!authCookie) return Astro.redirect('/login')
 const { id, lineId } = Astro.params
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+const fromPage = Astro.url.searchParams.get('fromPage')
 
 type LineConceptEntry = {
   code: string
@@ -84,13 +85,13 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
 ---
 
 <AppLayout title={employeeName}>
-  <div class="px-6 py-8 max-w-4xl mx-auto">
+  <div class="p-8">
 
     <!-- Breadcrumb -->
     <div class="flex items-center gap-2 text-sm text-gray-500 mb-6">
       <a href="/payroll" class="hover:text-gray-700 transition-colors">Planillas</a>
       <span class="text-gray-300">/</span>
-      <a href={`/payroll/${id}?linesPage=${fromPage}${fromSearch ? `&search=${encodeURIComponent(fromSearch)}` : ''}`} class="hover:text-gray-700 transition-colors">{payroll.name}</a>
+      <a href={`/payroll/${id}${fromPage ? `?linesPage=${fromPage}` : ''}`} class="hover:text-gray-700 transition-colors">{payroll.name}</a>
       <span class="text-gray-300">/</span>
       <span class="text-gray-900 font-medium">{employeeName}</span>
     </div>
@@ -137,12 +138,12 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     </div>
 
     {msgSuccess === '1' && (
-      <div class="mb-5 rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
+      <div class="mb-5 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
         Línea regenerada correctamente.
       </div>
     )}
     {msgError && (
-      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div class="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         Error: {decodeURIComponent(msgError)}
       </div>
     )}
@@ -166,20 +167,20 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     <!-- ── Asignaciones ─────────────────────────────────────────────────────── -->
     {asignaciones.length > 0 && (
       <div class="border border-gray-200 rounded-lg bg-white overflow-hidden mb-4">
-        <div class="px-4 py-3 border-b border-gray-100 bg-blue-50">
-          <h3 class="text-sm font-semibold text-blue-800">Asignaciones</h3>
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 class="text-sm font-semibold text-blue-700">Asignaciones</h3>
         </div>
         <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-gray-100">
-              <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 w-32">Código</th>
-              <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Concepto</th>
-              <th class="text-right px-4 py-2 text-xs font-medium text-gray-500">Monto</th>
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-2 font-medium text-gray-600 w-32">Código</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-600">Concepto</th>
+              <th class="text-right px-4 py-2 font-medium text-gray-600">Monto</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="divide-y divide-gray-100">
             {asignaciones.map((c) => (
-              <tr class="border-b border-gray-50 last:border-0">
+              <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-2.5 font-mono text-xs text-gray-500">{c.code}</td>
                 <td class="px-4 py-2.5 text-gray-800">
                   {c.name}
@@ -188,9 +189,9 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
                 <td class="px-4 py-2.5 text-right tabular-nums text-gray-900 font-medium">{fmt(c.amount)}</td>
               </tr>
             ))}
-            <tr class="border-t border-blue-100 bg-blue-50/50">
-              <td colspan="2" class="px-4 py-2 text-xs font-semibold text-blue-700 text-right">Subtotal Asignaciones</td>
-              <td class="px-4 py-2 text-right tabular-nums font-semibold text-blue-700">
+            <tr class="bg-gray-50 border-t border-gray-100">
+              <td colspan="2" class="px-4 py-2 text-xs font-medium text-gray-500 text-right">Subtotal Asignaciones</td>
+              <td class="px-4 py-2 text-right tabular-nums font-semibold text-gray-900">
                 {fmt(asignaciones.reduce((s, c) => s + Number(c.amount), 0))}
               </td>
             </tr>
@@ -202,20 +203,20 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     <!-- ── Deducciones ──────────────────────────────────────────────────────── -->
     {deducciones.length > 0 && (
       <div class="border border-gray-200 rounded-lg bg-white overflow-hidden mb-4">
-        <div class="px-4 py-3 border-b border-gray-100 bg-red-50">
-          <h3 class="text-sm font-semibold text-red-800">Deducciones</h3>
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 class="text-sm font-semibold text-red-700">Deducciones</h3>
         </div>
         <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-gray-100">
-              <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 w-32">Código</th>
-              <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Concepto</th>
-              <th class="text-right px-4 py-2 text-xs font-medium text-gray-500">Monto</th>
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-2 font-medium text-gray-600 w-32">Código</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-600">Concepto</th>
+              <th class="text-right px-4 py-2 font-medium text-gray-600">Monto</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="divide-y divide-gray-100">
             {deducciones.map((c) => (
-              <tr class="border-b border-gray-50 last:border-0">
+              <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-2.5 font-mono text-xs text-gray-500">{c.code}</td>
                 <td class="px-4 py-2.5 text-gray-800">
                   {c.name}
@@ -224,9 +225,9 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
                 <td class="px-4 py-2.5 text-right tabular-nums text-red-600">{fmt(c.amount)}</td>
               </tr>
             ))}
-            <tr class="border-t border-red-100 bg-red-50/50">
-              <td colspan="2" class="px-4 py-2 text-xs font-semibold text-red-700 text-right">Subtotal Deducciones</td>
-              <td class="px-4 py-2 text-right tabular-nums font-semibold text-red-700">
+            <tr class="bg-gray-50 border-t border-gray-100">
+              <td colspan="2" class="px-4 py-2 text-xs font-medium text-gray-500 text-right">Subtotal Deducciones</td>
+              <td class="px-4 py-2 text-right tabular-nums font-semibold text-red-600">
                 {fmt(deducciones.reduce((s, c) => s + Number(c.amount), 0))}
               </td>
             </tr>
@@ -238,20 +239,20 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     <!-- ── Patronales ───────────────────────────────────────────────────────── -->
     {patronales.length > 0 && (
       <div class="border border-gray-200 rounded-lg bg-white overflow-hidden mb-4">
-        <div class="px-4 py-3 border-b border-gray-100 bg-amber-50">
-          <h3 class="text-sm font-semibold text-amber-800">Patronales</h3>
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+          <h3 class="text-sm font-semibold text-amber-700">Patronales</h3>
         </div>
         <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-gray-100">
-              <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 w-32">Código</th>
-              <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">Concepto</th>
-              <th class="text-right px-4 py-2 text-xs font-medium text-gray-500">Monto</th>
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-2 font-medium text-gray-600 w-32">Código</th>
+              <th class="text-left px-4 py-2 font-medium text-gray-600">Concepto</th>
+              <th class="text-right px-4 py-2 font-medium text-gray-600">Monto</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="divide-y divide-gray-100">
             {patronales.map((c) => (
-              <tr class="border-b border-gray-50 last:border-0">
+              <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-2.5 font-mono text-xs text-gray-500">{c.code}</td>
                 <td class="px-4 py-2.5 text-gray-800">
                   {c.name}
@@ -260,8 +261,8 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
                 <td class="px-4 py-2.5 text-right tabular-nums text-amber-700">{fmt(c.amount)}</td>
               </tr>
             ))}
-            <tr class="border-t border-amber-100 bg-amber-50/50">
-              <td colspan="2" class="px-4 py-2 text-xs font-semibold text-amber-700 text-right">Subtotal Patronales</td>
+            <tr class="bg-gray-50 border-t border-gray-100">
+              <td colspan="2" class="px-4 py-2 text-xs font-medium text-gray-500 text-right">Subtotal Patronales</td>
               <td class="px-4 py-2 text-right tabular-nums font-semibold text-amber-700">
                 {fmt(patronales.reduce((s, c) => s + Number(c.amount), 0))}
               </td>

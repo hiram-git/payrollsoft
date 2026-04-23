@@ -144,7 +144,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 ---
 
 <AppLayout title={payroll.name}>
-  <div class="px-6 py-8 max-w-6xl mx-auto">
+  <div class="p-8">
 
     <!-- Back + Title -->
     <div class="mb-6">
@@ -201,7 +201,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                 data-confirm-label="Generar"
                 data-confirm-style="primary"
                 data-show-loading="true"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-gray-900 text-white text-sm font-medium hover:bg-gray-700 transition-colors"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                 Generar planilla
@@ -309,20 +309,29 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     <div class="mb-6 flex items-center gap-0">
       {steps.map((step, i) => (
         <div class="flex items-center">
-          <div class={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-            i === stepIndex
-              ? 'bg-gray-900 text-white'
+          <div
+            class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
+            style={i === stepIndex
+              ? 'background: var(--navy); color: #fff'
               : i < stepIndex
-                ? 'bg-gray-200 text-gray-700'
-                : 'bg-transparent text-gray-400'
-          }`}>
-            <span class={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold ${
-              i === stepIndex ? 'bg-white text-gray-900' : i < stepIndex ? 'bg-gray-500 text-white' : 'border border-gray-300 text-gray-400'
-            }`}>{i + 1}</span>
+                ? 'background: var(--rule-hi); color: var(--fore-dim)'
+                : 'color: var(--mute)'}
+          >
+            <span
+              class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold"
+              style={i === stepIndex
+                ? 'background: rgba(255,255,255,0.2); color: #fff'
+                : i < stepIndex
+                  ? 'background: var(--mute); color: var(--ink-2)'
+                  : 'border: 1px solid var(--rule-hi); color: var(--mute)'}
+            >{i + 1}</span>
             {step.label}
           </div>
           {i < steps.length - 1 && (
-            <div class={`w-8 h-px mx-1 ${i < stepIndex ? 'bg-gray-400' : 'bg-gray-200'}`} />
+            <div
+              class="w-8 h-px mx-1"
+              style={i < stepIndex ? 'background: var(--rule-hi)' : 'background: var(--rule)'}
+            />
           )}
         </div>
       ))}
@@ -330,13 +339,12 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 
     <!-- Alerts -->
     {msgSuccess === '1' && (
-      <div class="mb-5 flex items-center gap-2 rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-800">
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <div class="mb-5 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
         Planilla procesada correctamente.
       </div>
     )}
     {msgError && (
-      <div class="mb-5 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div class="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         Error: {decodeURIComponent(msgError)}
       </div>
     )}
@@ -384,19 +392,19 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         </div>
       ) : (
         <table class="w-full text-sm">
-          <thead>
-            <tr class="border-b border-gray-100 bg-gray-50">
-              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
-              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Dpto / Puesto</th>
-              <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Bruto</th>
-              <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Deduc.</th>
-              <th class="text-right px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Neto</th>
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Empleado</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Dpto / Puesto</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Bruto</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Deduc.</th>
+              <th class="text-right px-4 py-3 font-medium text-gray-600">Neto</th>
               <th class="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody>
+          <tbody class="divide-y divide-gray-100">
             {lines.map((l) => (
-              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+              <tr class="hover:bg-gray-50 transition-colors">
                 <td class="px-4 py-3.5">
                   <p class="font-medium text-gray-900">{l.employee.firstName} {l.employee.lastName}</p>
                   <p class="text-xs text-gray-400 font-mono mt-0.5">{l.employee.code}</p>
@@ -421,14 +429,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                           data-body={`¿Recalcular la línea de ${l.employee.firstName} ${l.employee.lastName}? Los valores actuales serán reemplazados.`}
                           data-confirm-label="Regenerar"
                           data-confirm-style="warning"
-                          class="p-1.5 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                          class="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
                           title="Regenerar empleado"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                         </button>
                       </form>
                     )}
-                    <a href={`/payroll/${id}/${l.line.id}?fromPage=${linesPage}${linesSearch ? `&fromSearch=${encodeURIComponent(linesSearch)}` : ''}`} class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ver detalle del empleado">
+                    <a href={`/payroll/${id}/${l.line.id}${linesPage > 1 ? `?fromPage=${linesPage}` : ''}`} class="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ver detalle del empleado">
                       <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </a>
                   </div>
