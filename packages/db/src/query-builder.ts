@@ -5,6 +5,7 @@ import {
   cargos,
   companyConfig,
   partidasPresupuestarias,
+  cuentasContables,
   conceptAccumulatorLinks,
   conceptAccumulators,
   conceptFrequencies,
@@ -1073,7 +1074,7 @@ export async function loadAccumulatedByDateRange(
 
 // ─── Catalog Helpers ──────────────────────────────────────────────────────────
 
-type CatalogTable = typeof cargos | typeof funciones | typeof partidasPresupuestarias
+type CatalogTable = typeof cargos | typeof funciones | typeof partidasPresupuestarias | typeof cuentasContables
 
 async function listCatalog(db: Db, table: CatalogTable, search?: string) {
   const conditions = search
@@ -2061,6 +2062,45 @@ export async function deactivatePartida(db: Db, id: string) {
     .update(partidasPresupuestarias)
     .set({ isActive: false, updatedAt: new Date() })
     .where(eq(partidasPresupuestarias.id, id))
+    .returning()
+  return row ?? null
+}
+
+// ─── Cuentas Contables ────────────────────────────────────────────────────────
+
+export function listCuentasContables(db: Db, search?: string) {
+  return listCatalog(db, cuentasContables, search)
+}
+
+export function getCuentaContableById(db: Db, id: string) {
+  return getCatalogById(db, cuentasContables, id)
+}
+
+export function getCuentaContableByCode(db: Db, code: string) {
+  return getCatalogByCode(db, cuentasContables, code)
+}
+
+export type CreateCuentaContableData = typeof cuentasContables.$inferInsert
+
+export async function createCuentaContable(db: Db, data: CreateCuentaContableData) {
+  const [row] = await db.insert(cuentasContables).values(data).returning()
+  return row
+}
+
+export async function updateCuentaContable(db: Db, id: string, data: Partial<CreateCuentaContableData>) {
+  const [row] = await db
+    .update(cuentasContables)
+    .set({ ...data, updatedAt: new Date() })
+    .where(eq(cuentasContables.id, id))
+    .returning()
+  return row ?? null
+}
+
+export async function deactivateCuentaContable(db: Db, id: string) {
+  const [row] = await db
+    .update(cuentasContables)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(cuentasContables.id, id))
     .returning()
   return row ?? null
 }

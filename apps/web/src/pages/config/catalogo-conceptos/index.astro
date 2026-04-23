@@ -12,16 +12,21 @@ type Catalogs = {
   situations: CatalogItem[]
   accumulators: CatalogItem[]
 }
+type CuentaContable = { id: string; code: string; name: string; isActive: boolean }
 
 let catalogs: Catalogs = { payrollTypes: [], frequencies: [], situations: [], accumulators: [] }
+let cuentasContables: CuentaContable[] = []
 let loadError = ''
 
 try {
-  const res = await fetch(`${API_URL}/concepts/config`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
-  })
-  if (res.status === 401) return Astro.redirect('/login')
-  if (res.ok) catalogs = ((await res.json()) as { data: Catalogs }).data
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [configRes, cuentasRes] = await Promise.all([
+    fetch(`${API_URL}/concepts/config`, { headers }),
+    fetch(`${API_URL}/cuentas-contables`, { headers }),
+  ])
+  if (configRes.status === 401) return Astro.redirect('/login')
+  if (configRes.ok) catalogs = ((await configRes.json()) as { data: Catalogs }).data
+  if (cuentasRes.ok) cuentasContables = ((await cuentasRes.json()) as { data: CuentaContable[] }).data ?? []
 } catch {
   loadError = 'No se pudo conectar con el servidor'
 }
@@ -49,6 +54,7 @@ const tabs = [
   { key: 'accumulators', label: 'Acumulados', kind: 'accumulators', items: catalogs.accumulators },
 ]
 const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
+const isCuentasTab = activeTab === 'cuentas'
 ---
 
 <AppLayout title="Catálogos de Conceptos">
@@ -75,106 +81,200 @@ const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
           <span class="tab-count">{tab.items.length}</span>
         </a>
       ))}
+      <a
+        href="/config/catalogo-conceptos?tab=cuentas"
+        class={`tab-link${isCuentasTab ? ' tab-active' : ''}`}
+      >
+        Cuentas Contables
+        <span class="tab-count">{cuentasContables.length}</span>
+      </a>
     </div>
 
     <!-- Card -->
     <div class="card">
       <div class="card-header">
-        <span class="card-title">{currentTab.label}</span>
+        <span class="card-title">{isCuentasTab ? 'Cuentas Contables' : currentTab.label}</span>
         <button type="button" id="btnNew" class="btn-primary">+ Nuevo</button>
       </div>
 
-      <!-- New item form (hidden by default) -->
-      <div id="newItemForm" class="new-form hidden">
-        <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}`} class="new-form-row">
-          <input type="hidden" name="_tab" value={activeTab} />
-          <div class="field">
-            <label class="label">Código *</label>
-            <input type="text" name="code" class="inp" required maxlength="50" placeholder="ej: quincenal" />
+      {isCuentasTab ? (
+        <>
+          <!-- New cuenta contable form -->
+          <div id="newItemForm" class="new-form hidden">
+            <form method="POST" action="/api/config/cuentas-contables" class="new-form-row">
+              <div class="field">
+                <label class="label">Código *</label>
+                <input type="text" name="code" class="inp" required maxlength="20" placeholder="ej: 1001" />
+              </div>
+              <div class="field flex-1">
+                <label class="label">Nombre *</label>
+                <input type="text" name="name" class="inp" required maxlength="255" placeholder="ej: Caja General" />
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn-ok">Guardar</button>
+                <button type="button" id="btnCancelNew" class="btn-ghost">Cancelar</button>
+              </div>
+            </form>
           </div>
-          <div class="field flex-1">
-            <label class="label">Nombre *</label>
-            <input type="text" name="name" class="inp" required maxlength="100" placeholder="ej: Quincenal" />
-          </div>
-          <div class="field w-24">
-            <label class="label">Orden</label>
-            <input type="number" name="sortOrder" class="inp" value="0" min="0" />
-          </div>
-          <div class="form-actions">
-            <button type="submit" class="btn-ok">Guardar</button>
-            <button type="button" id="btnCancelNew" class="btn-ghost">Cancelar</button>
-          </div>
-        </form>
-      </div>
 
-      <!-- Items table -->
-      {currentTab.items.length === 0 ? (
-        <div class="empty-state">No hay registros en este catálogo.</div>
+          {cuentasContables.length === 0 ? (
+            <div class="empty-state">No hay cuentas contables registradas.</div>
+          ) : (
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th class="th">Código</th>
+                  <th class="th">Nombre</th>
+                  <th class="th w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cuentasContables.map((item) => (
+                  <tr class="tr" id={`row-${item.id}`}>
+                    <td class="td td-code">{item.code}</td>
+                    <td class="td view-name">{item.name}</td>
+
+                    <td class="td hidden edit-cell" colspan="2">
+                      <form
+                        method="POST"
+                        action={`/api/config/cuentas-contables/${item.id}`}
+                        class="edit-row"
+                      >
+                        <input type="hidden" name="_method" value="PUT" />
+                        <input type="text" name="name" value={item.name} class="inp flex-1" required maxlength="255" />
+                        <button type="submit" class="btn-ok-sm">Guardar</button>
+                        <button type="button" onclick={`cancelEdit('${item.id}')`} class="btn-ghost-sm">Cancelar</button>
+                      </form>
+                    </td>
+
+                    <td class="td view-actions">
+                      <div class="row-actions">
+                        <button
+                          type="button"
+                          onclick={`startEditCuenta('${item.id}')`}
+                          title="Editar"
+                          class="action-btn"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                        <form
+                          method="POST"
+                          action={`/api/config/cuentas-contables/${item.id}`}
+                          onsubmit="return confirm('¿Dar de baja esta cuenta contable?')"
+                        >
+                          <input type="hidden" name="_method" value="DELETE" />
+                          <button type="submit" title="Dar de baja" class="action-btn action-del">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       ) : (
-        <table class="tbl">
-          <thead>
-            <tr>
-              <th class="th">Código</th>
-              <th class="th">Nombre</th>
-              <th class="th w-20 text-center">Orden</th>
-              <th class="th w-28"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentTab.items.map((item) => (
-              <tr class="tr" id={`row-${item.id}`}>
-                <td class="td td-code">{item.code}</td>
-                <td class="td view-name">{item.name}</td>
-                <td class="td text-center view-order">{item.sortOrder}</td>
+        <>
+          <!-- New item form (hidden by default) -->
+          <div id="newItemForm" class="new-form hidden">
+            <form method="POST" action={`/api/config/catalogo-conceptos/${currentTab.kind}`} class="new-form-row">
+              <input type="hidden" name="_tab" value={activeTab} />
+              <div class="field">
+                <label class="label">Código *</label>
+                <input type="text" name="code" class="inp" required maxlength="50" placeholder="ej: quincenal" />
+              </div>
+              <div class="field flex-1">
+                <label class="label">Nombre *</label>
+                <input type="text" name="name" class="inp" required maxlength="100" placeholder="ej: Quincenal" />
+              </div>
+              <div class="field w-24">
+                <label class="label">Orden</label>
+                <input type="number" name="sortOrder" class="inp" value="0" min="0" />
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn-ok">Guardar</button>
+                <button type="button" id="btnCancelNew" class="btn-ghost">Cancelar</button>
+              </div>
+            </form>
+          </div>
 
-                <!-- Edit inline form (hidden, spans name+order+actions cols via JS) -->
-                <td class="td hidden edit-cell" colspan="3">
-                  <form
-                    method="POST"
-                    action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
-                    class="edit-row"
-                  >
-                    <input type="hidden" name="_method" value="PUT" />
-                    <input type="hidden" name="_tab" value={activeTab} />
-                    <input type="text" name="name" value={item.name} class="inp flex-1" required maxlength="100" />
-                    <input type="number" name="sortOrder" value={item.sortOrder} class="inp w-20" min="0" />
-                    <button type="submit" class="btn-ok-sm">Guardar</button>
-                    <button type="button" onclick={`cancelEdit('${item.id}')`} class="btn-ghost-sm">Cancelar</button>
-                  </form>
-                </td>
+          <!-- Items table -->
+          {currentTab.items.length === 0 ? (
+            <div class="empty-state">No hay registros en este catálogo.</div>
+          ) : (
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th class="th">Código</th>
+                  <th class="th">Nombre</th>
+                  <th class="th w-20 text-center">Orden</th>
+                  <th class="th w-28"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentTab.items.map((item) => (
+                  <tr class="tr" id={`row-${item.id}`}>
+                    <td class="td td-code">{item.code}</td>
+                    <td class="td view-name">{item.name}</td>
+                    <td class="td text-center view-order">{item.sortOrder}</td>
 
-                <td class="td view-actions">
-                  <div class="row-actions">
-                    <button
-                      type="button"
-                      onclick={`startEdit('${item.id}')`}
-                      title="Editar"
-                      class="action-btn"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </button>
-                    <form
-                      method="POST"
-                      action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
-                      onsubmit="return confirm('¿Eliminar este registro?')"
-                    >
-                      <input type="hidden" name="_method" value="DELETE" />
-                      <input type="hidden" name="_tab" value={activeTab} />
-                      <button type="submit" title="Eliminar" class="action-btn action-del">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-                        </svg>
-                      </button>
-                    </form>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                    <!-- Edit inline form (hidden, spans name+order+actions cols via JS) -->
+                    <td class="td hidden edit-cell" colspan="3">
+                      <form
+                        method="POST"
+                        action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
+                        class="edit-row"
+                      >
+                        <input type="hidden" name="_method" value="PUT" />
+                        <input type="hidden" name="_tab" value={activeTab} />
+                        <input type="text" name="name" value={item.name} class="inp flex-1" required maxlength="100" />
+                        <input type="number" name="sortOrder" value={item.sortOrder} class="inp w-20" min="0" />
+                        <button type="submit" class="btn-ok-sm">Guardar</button>
+                        <button type="button" onclick={`cancelEdit('${item.id}')`} class="btn-ghost-sm">Cancelar</button>
+                      </form>
+                    </td>
+
+                    <td class="td view-actions">
+                      <div class="row-actions">
+                        <button
+                          type="button"
+                          onclick={`startEdit('${item.id}')`}
+                          title="Editar"
+                          class="action-btn"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                        <form
+                          method="POST"
+                          action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
+                          onsubmit="return confirm('¿Eliminar este registro?')"
+                        >
+                          <input type="hidden" name="_method" value="DELETE" />
+                          <input type="hidden" name="_tab" value={activeTab} />
+                          <button type="submit" title="Eliminar" class="action-btn action-del">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                            </svg>
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </>
       )}
     </div>
   </div>
@@ -267,6 +367,12 @@ const currentTab = tabs.find((t) => t.key === activeTab) ?? tabs[0]
   function startEdit(id) {
     const row = document.getElementById('row-' + id)
     row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.add('hidden'))
+    row.querySelectorAll('.edit-cell').forEach(el => el.classList.remove('hidden'))
+  }
+
+  function startEditCuenta(id) {
+    const row = document.getElementById('row-' + id)
+    row.querySelectorAll('.view-name, .view-actions').forEach(el => el.classList.add('hidden'))
     row.querySelectorAll('.edit-cell').forEach(el => el.classList.remove('hidden'))
   }
 
