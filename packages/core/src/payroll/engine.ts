@@ -49,12 +49,26 @@ export type ProcessLineInput = {
   loadInstallmentsByCreditor: (creditorCode: string, from: string, to: string) => Promise<number>
 }
 
+/**
+ * Denormalised reference stamped on creditor-linked deduction entries. Lets
+ * report readers find the underlying loan(s) and creditor without joining
+ * loans / creditors back in at query time.
+ */
+export type OtherDiscountRef = {
+  loan_ids: string[]
+  creditor_id: string
+  creditor_code: string
+  creditor_name: string
+}
+
 export type LineConceptEntry = {
   code: string
   name: string
   type: 'income' | 'deduction'
   amount: number
   formulaError?: string
+  /** Populated for `ACR_*` (creditor) deductions by the payroll service. */
+  other_discounts?: OtherDiscountRef
 }
 
 export type ProcessLineResult = {

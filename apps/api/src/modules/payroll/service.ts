@@ -1,3 +1,4 @@
+import type { LineConceptEntry } from '@payroll/core'
 import {
   countBusinessDays,
   countCalendarDays,
@@ -5,6 +6,7 @@ import {
   processLine,
   round2,
 } from '@payroll/core'
+import type { CreditorInstallmentAggregate } from '@payroll/db'
 import {
   batchUpsertPayrollLines,
   bulkDeactivateCompletedLoans,
@@ -45,6 +47,33 @@ import {
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
+
+/**
+ * Stamp `other_discounts` metadata on any creditor-linked deduction entry
+ * (code `ACR_<CREDITOR_CODE>`). Lets report readers find the underlying loan
+ * + creditor directly from `payroll_lines.concepts`, skipping any JOINs back
+ * to `loans` / `creditors`.
+ */
+function stampOtherDiscounts(
+  entries: LineConceptEntry[],
+  aggregatesByCreditorCode: Map<string, CreditorInstallmentAggregate> | undefined
+): LineConceptEntry[] {
+  if (!aggregatesByCreditorCode || aggregatesByCreditorCode.size === 0) return entries
+  return entries.map((entry) => {
+    if (entry.type !== 'deduction' || !entry.code.startsWith('ACR_')) return entry
+    const aggregate = aggregatesByCreditorCode.get(entry.code.slice(4))
+    if (!aggregate) return entry
+    return {
+      ...entry,
+      other_discounts: {
+        loan_ids: aggregate.loanIds,
+        creditor_id: aggregate.creditorId,
+        creditor_code: aggregate.creditorCode,
+        creditor_name: aggregate.creditorName,
+      },
+    }
+  })
+}
 
 export type CreatePayrollInput = {
   name: string
@@ -412,8 +441,8 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
           memoAccumulatedByRange(emp.id, code, from, to),
         loadBalance: async () => 0,
         loadInstallmentsByCreditor: (creditorCode) => {
-          const byEmp = creditorInstallmentsMap.get(emp.id)
-          return Promise.resolve(byEmp?.get(creditorCode) ?? 0)
+          const byEmp = creditorInstallmentsMap.byEmployee.get(emp.id)
+          return Promise.resolve(byEmp?.get(creditorCode)?.installment ?? 0)
         },
       })
 
@@ -421,12 +450,17 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         allWarnings.push(...result.warnings.map((w) => `${emp.code}: ${w}`))
       }
 
+      const enrichedConcepts = stampOtherDiscounts(
+        result.concepts,
+        creditorInstallmentsMap.byEmployee.get(emp.id)
+      )
+
       pendingLines.push({
         employeeId: emp.id,
         grossAmount: String(result.grossAmount),
         deductions: String(result.deductions),
         netAmount: String(result.netAmount),
-        concepts: result.concepts,
+        concepts: enrichedConcepts,
       })
 
       totalGross += result.grossAmount
@@ -769,13 +803,26 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
         loadInstallmentsByCreditor(db, emp.id, creditorCode, from, to),
     })
 
+    // Single-employee regen path: rebuild the aggregate map so we can stamp
+    // other_discounts the same way the bulk generation does.
+    const empCreditorAggregates = await bulkLoadCreditorInstallments(
+      db,
+      [emp.id],
+      payroll.periodStart,
+      payroll.periodEnd
+    )
+    const enrichedConcepts = stampOtherDiscounts(
+      result.concepts,
+      empCreditorAggregates.byEmployee.get(emp.id)
+    )
+
     await upsertPayrollLine(db, {
       payrollId,
       employeeId: emp.id,
       grossAmount: String(result.grossAmount),
       deductions: String(result.deductions),
       netAmount: String(result.netAmount),
-      concepts: result.concepts,
+      concepts: enrichedConcepts,
     })
 
     // Recalculate payroll totals from all remaining lines

@@ -7,6 +7,17 @@ export type PdfLineConceptEntry = {
   name: string
   type: string
   amount: number
+  /**
+   * Denormalised loan/creditor reference. Present on `ACR_*` entries from
+   * payrolls generated after the "optimización de préstamos" refactor —
+   * removes the need for a JOIN back to loans + creditors at report time.
+   */
+  other_discounts?: {
+    loan_ids: string[]
+    creditor_id: string
+    creditor_code: string
+    creditor_name: string
+  }
 }
 
 export type PdfPayrollLine = {
@@ -321,7 +332,10 @@ export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
         siacap += amount
       } else if (CODE.isr.has(code)) {
         isr += amount
-      } else if (code.startsWith(CREDITOR_CODE_PREFIX)) {
+      } else if (c.other_discounts || code.startsWith(CREDITOR_CODE_PREFIX)) {
+        // Primary signal: the optimised `other_discounts` metadata written
+        // by the engine. Fallback to the ACR_ code prefix so lines generated
+        // before the refactor still land in this column.
         otrasDeducciones += amount
       }
       // Any other deduction (tenant-specific, non-creditor, non-legal) is
