@@ -6,6 +6,43 @@ interface Props {
 const { title } = Astro.props
 const path = Astro.url.pathname
 
+const authCookie = Astro.cookies.get('auth')?.value ?? ''
+let userName = 'Mi cuenta'
+let userEmail = ''
+let userInitials = 'U'
+let userRole = ''
+
+if (authCookie) {
+  try {
+    const jwtParts = authCookie.split('.')
+    if (jwtParts.length === 3) {
+      const payload = JSON.parse(
+        Buffer.from(jwtParts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')
+      )
+      if (payload.name) userName = payload.name
+      if (payload.email) userEmail = payload.email
+      if (payload.role) userRole = payload.role
+      if (payload.name) {
+        const np = (payload.name as string).trim().split(/\s+/)
+        userInitials = np.length >= 2
+          ? (np[0][0] + np[np.length - 1][0]).toUpperCase()
+          : (payload.name as string)[0].toUpperCase()
+      } else if (payload.email) {
+        userInitials = (payload.email as string)[0].toUpperCase()
+      }
+    }
+  } catch (_) {}
+}
+
+const roleLabels: Record<string, string> = {
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN: 'Administrador',
+  HR: 'Recursos Humanos',
+  ACCOUNTANT: 'Contabilidad',
+  VIEWER: 'Visor',
+}
+const userRoleLabel = roleLabels[userRole] ?? ''
+
 function isActive(href: string) {
   return path === href || (href !== '/dashboard' && path.startsWith(href))
 }
@@ -358,29 +395,6 @@ const icons: Record<IconKey, string> = {
         background: var(--navy-hi);
         border-radius: 1px;
       }
-      .sidebar-footer {
-        margin-top: auto;
-        padding-top: 12px;
-        border-top: 1px solid var(--rule);
-      }
-      .logout-btn {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        width: 100%;
-        padding: 9px 12px;
-        border-radius: 3px;
-        border: none;
-        background: transparent;
-        color: var(--mute);
-        font-size: 13.5px;
-        font-family: var(--f-sans);
-        cursor: pointer;
-        transition: background 140ms ease, color 140ms ease;
-        text-align: left;
-      }
-      .logout-btn:hover { background: var(--ink-4); color: var(--fore); }
-
       /* ── Main column ────────────────────────────────────── */
       .main-col {
         flex: 1;
@@ -468,6 +482,7 @@ const icons: Record<IconKey, string> = {
       .ts-btn[data-active="false"] { color: var(--mute); }
 
       /* Avatar */
+      .avatar-wrap { position: relative; }
       .avatar-pill {
         display: flex;
         align-items: center;
@@ -478,6 +493,7 @@ const icons: Record<IconKey, string> = {
         background: var(--ink-3);
         cursor: pointer;
         transition: border-color 140ms ease;
+        font-family: var(--f-sans);
       }
       .avatar-pill:hover { border-color: var(--rule-hi); }
       .avatar-circle {
@@ -498,6 +514,104 @@ const icons: Record<IconKey, string> = {
         color: var(--fore-dim);
         white-space: nowrap;
       }
+      .avatar-chevron {
+        color: var(--mute);
+        flex-shrink: 0;
+        transition: transform 200ms ease;
+        margin-left: 2px;
+      }
+
+      /* User dropdown */
+      .user-dropdown {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        width: 224px;
+        background: var(--ink-2);
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+        z-index: 200;
+        opacity: 0;
+        transform: translateY(-6px);
+        pointer-events: none;
+        transition: opacity 160ms ease, transform 160ms ease;
+        overflow: hidden;
+      }
+      .user-dropdown.open {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .user-dropdown-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 12px 14px;
+      }
+      .user-dropdown-avatar {
+        width: 36px; height: 36px;
+        border-radius: 50%;
+        background: var(--navy);
+        display: grid;
+        place-items: center;
+        font-size: 13px;
+        font-weight: 600;
+        color: #fff;
+        flex-shrink: 0;
+      }
+      .user-dropdown-info {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .user-dropdown-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--fore);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .user-dropdown-email {
+        font-size: 11px;
+        color: var(--mute);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-top: 1px;
+      }
+      .user-dropdown-role {
+        font-size: 10px;
+        font-family: var(--f-mono);
+        color: var(--navy-hi);
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        margin-top: 3px;
+      }
+      .user-dropdown-divider {
+        height: 1px;
+        background: var(--rule);
+      }
+      .user-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 9px 14px;
+        border: none;
+        background: transparent;
+        color: var(--fore-dim);
+        font-size: 13px;
+        font-family: var(--f-sans);
+        text-decoration: none;
+        cursor: pointer;
+        transition: background 140ms ease, color 140ms ease;
+        text-align: left;
+      }
+      .user-dropdown-item:hover { background: var(--ink-4); color: var(--fore); }
+      .user-dropdown-danger { color: var(--err); }
+      .user-dropdown-danger:hover { background: rgba(224,107,92,0.08); color: var(--err); }
 
       /* ── Page content ───────────────────────────────────── */
       .page-content {
@@ -591,16 +705,6 @@ const icons: Record<IconKey, string> = {
           )
         })}
 
-        <div class="sidebar-footer">
-          <form method="POST" action="/api/auth/logout">
-            <button type="submit" class="logout-btn">
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
-                <path d="M8 2H2.5v9H8M5.5 6.5h6M9 4.5l2 2-2 2"/>
-              </svg>
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
       </aside>
 
       <!-- Main column: topbar + content -->
@@ -640,10 +744,51 @@ const icons: Record<IconKey, string> = {
               </svg>
             </button>
 
-            <!-- User avatar -->
-            <div class="avatar-pill">
-              <div class="avatar-circle">U</div>
-              <span class="avatar-name">Mi cuenta</span>
+            <!-- User avatar + dropdown -->
+            <div class="avatar-wrap">
+              <button class="avatar-pill" id="user-menu-btn" aria-haspopup="menu" aria-expanded="false">
+                <div class="avatar-circle">{userInitials}</div>
+                <span class="avatar-name">{userName}</span>
+                <svg class="avatar-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square">
+                  <path d="M2.5 4l2.5 2.5L7.5 4"/>
+                </svg>
+              </button>
+              <div class="user-dropdown" id="user-dropdown" role="menu" aria-hidden="true">
+                <div class="user-dropdown-header">
+                  <div class="user-dropdown-avatar">{userInitials}</div>
+                  <div class="user-dropdown-info">
+                    <span class="user-dropdown-name">{userName}</span>
+                    {userEmail && <span class="user-dropdown-email">{userEmail}</span>}
+                    {userRoleLabel && <span class="user-dropdown-role">{userRoleLabel}</span>}
+                  </div>
+                </div>
+                <div class="user-dropdown-divider"></div>
+                <a href="/config/company" class="user-dropdown-item" role="menuitem">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+                    <rect x="1.5" y="4" width="10" height="8" rx="1"/>
+                    <path d="M4.5 4V2.5a2 2 0 0 1 4 0V4"/>
+                  </svg>
+                  Empresa
+                </a>
+                <a href="/config/users" class="user-dropdown-item" role="menuitem">
+                  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+                    <circle cx="4" cy="4" r="2"/>
+                    <path d="M1 11c0-1.66 1.34-3 3-3s3 1.34 3 3"/>
+                    <circle cx="10" cy="5" r="1.5"/>
+                    <path d="M12.5 11c0-1.38-.9-2.5-2-2.5"/>
+                  </svg>
+                  Usuarios
+                </a>
+                <div class="user-dropdown-divider"></div>
+                <form method="POST" action="/api/auth/logout">
+                  <button type="submit" class="user-dropdown-item user-dropdown-danger" role="menuitem">
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" stroke-width="1.3">
+                      <path d="M8 2H2.5v9H8M5.5 6.5h6M9 4.5l2 2-2 2"/>
+                    </svg>
+                    Cerrar sesión
+                  </button>
+                </form>
+              </div>
             </div>
           </div>
         </header>
@@ -675,6 +820,38 @@ const icons: Record<IconKey, string> = {
         applyTheme(html.dataset.theme || 'dark');
         btnL.addEventListener('click', () => applyTheme('light'));
         btnD.addEventListener('click', () => applyTheme('dark'));
+      })();
+
+      // ── User dropdown ──────────────────────────────────────────────────────
+      (function () {
+        var btn      = document.getElementById('user-menu-btn');
+        var dropdown = document.getElementById('user-dropdown');
+        if (!btn || !dropdown) return;
+
+        function openMenu() {
+          dropdown.classList.add('open');
+          btn.setAttribute('aria-expanded', 'true');
+          dropdown.setAttribute('aria-hidden', 'false');
+          var chevron = btn.querySelector('.avatar-chevron');
+          if (chevron) chevron.style.transform = 'rotate(180deg)';
+        }
+
+        function closeMenu() {
+          dropdown.classList.remove('open');
+          btn.setAttribute('aria-expanded', 'false');
+          dropdown.setAttribute('aria-hidden', 'true');
+          var chevron = btn.querySelector('.avatar-chevron');
+          if (chevron) chevron.style.transform = '';
+        }
+
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          dropdown.classList.contains('open') ? closeMenu() : openMenu();
+        });
+
+        document.addEventListener('click', function () { closeMenu(); });
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenu(); });
+        dropdown.addEventListener('click', function (e) { e.stopPropagation(); });
       })();
     </script>
   </body>
