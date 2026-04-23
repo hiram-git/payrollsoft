@@ -7,7 +7,7 @@ if (!authCookie) return Astro.redirect('/login')
 const { id, lineId } = Astro.params
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
-const fromPage = Astro.url.searchParams.get('fromPage')
+const backPage = Astro.url.searchParams.get('fromPage')
 
 type LineConceptEntry = {
   code: string
@@ -91,7 +91,7 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     <div class="flex items-center gap-2 text-sm text-gray-500 mb-6">
       <a href="/payroll" class="hover:text-gray-700 transition-colors">Planillas</a>
       <span class="text-gray-300">/</span>
-      <a href={`/payroll/${id}${fromPage ? `?linesPage=${fromPage}` : ''}`} class="hover:text-gray-700 transition-colors">{payroll.name}</a>
+      <a href={`/payroll/${id}${backPage ? `?linesPage=${backPage}` : ''}`} class="hover:text-gray-700 transition-colors">{payroll.name}</a>
       <span class="text-gray-300">/</span>
       <span class="text-gray-900 font-medium">{employeeName}</span>
     </div>
