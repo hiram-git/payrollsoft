@@ -5,14 +5,18 @@ import type { PayrollReportData } from './payroll-data'
 import { payrollFileSlug } from './payroll-data'
 
 /**
- * Renders the landscape payroll PDF and wraps it in an HTTP Response with the
- * proper download headers. Keeping this separate from the Astro route means
- * the same renderer can be reused by the `/reports/payroll` page, the payroll
- * detail page and (eventually) a background job that mails the PDF.
+ * Renders the landscape A4 payroll PDF and wraps it in an HTTP Response with
+ * the proper download headers. Keeping this separate from the Astro route
+ * means the same renderer can be reused by the `/reports/payroll` page, the
+ * payroll detail page and (eventually) a background job that mails the PDF.
  */
 export async function renderPayrollPdfResponse(data: PayrollReportData): Promise<Response> {
   const buffer = await renderToBuffer(
-    React.createElement(PayrollPdf, { payroll: data.payroll, lines: data.lines })
+    React.createElement(PayrollPdf, {
+      payroll: data.payroll,
+      lines: data.lines,
+      company: data.company,
+    })
   )
 
   const filename = `planilla-${payrollFileSlug(data.payroll.name)}.pdf`

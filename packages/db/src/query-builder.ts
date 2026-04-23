@@ -353,6 +353,7 @@ export async function getPayrollLines(db: Db, payrollId: string) {
       employee: {
         id: employees.id,
         code: employees.code,
+        idNumber: employees.idNumber,
         firstName: employees.firstName,
         lastName: employees.lastName,
         department: employees.department,
@@ -398,6 +399,7 @@ export async function getPayrollLinesPaged(
         employee: {
           id: employees.id,
           code: employees.code,
+          idNumber: employees.idNumber,
           firstName: employees.firstName,
           lastName: employees.lastName,
           department: employees.department,
