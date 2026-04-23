@@ -1,7 +1,27 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** Abril 2026 (sesión 2)  
-**Branch activo:** `claude/refactor-loans-astro-YT615`
+**Última actualización:** 23 de abril de 2026 (sesión 3 — módulo de reportes)
+**Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
+
+## Avance de la sesión 3 (23/04/2026) — Módulo de Reportes de Planilla
+
+- ✅ **Refactorización de la generación de PDF** a una capa de reportes
+  reutilizable (`apps/web/src/lib/reports/`): data-fetcher único
+  (`payroll-data.ts`), renderer compartido (`payroll-pdf-renderer.ts`) y
+  catálogo declarativo de reportes (`registry.ts`).
+- ✅ **Nueva vista `/reports/payroll`** que lista sólo planillas con estado
+  `generated` o `closed`, con búsqueda, paginación y un dropdown "Reportes"
+  por fila que expone las 6 opciones acordadas.
+- ✅ **Planilla PDF en formato horizontal** queda disponible desde:
+  (a) botón primario "Planilla PDF" en `/payroll/[id]`;
+  (b) dropdown de la vista `/reports/payroll`.
+- ✅ **Nuevo endpoint canónico** `/api/reports/payroll/:id/pdf`; la ruta
+  previa `/api/payroll/:id/pdf` se conserva y delega al mismo renderer
+  para no romper enlaces existentes.
+- 🔲 Pendientes declarados en `IMPLEMENTATION-PLAN.md` — Fase 4b: Planilla en
+  Excel, Resumen de Planilla, Comprobantes de pago, Envío de comprobantes por
+  email, Anexo 09. Cada una aparece en el dropdown como **"Próximamente"**
+  (botón deshabilitado) hasta que sea implementada.
 
 ---
 
@@ -19,8 +39,9 @@
 | 3e | API — Asistencia (CRUD + UI completo) | 🔄 Parcial | 70% |
 | 3f | API — Vacaciones | 🔲 Pendiente | 0% |
 | 3g | API — Acreedores (+ auto-concepto) | ✅ Completo | 100% |
-| 4 | Frontend — Empleados, Catálogos, Planillas, Préstamos, Asistencia, Acreedores | 🔄 En progreso | 90% |
-| 5 | Módulos Avanzados (Excel, PDF, Importación) | 🔲 Pendiente | 0% |
+| 4 | Frontend — Empleados, Catálogos, Planillas, Préstamos, Asistencia, Acreedores | 🔄 En progreso | 92% |
+| 4b | **Módulo de Reportes de Planilla (Planilla PDF ✅, resto pendiente)** | 🔄 En progreso | 20% |
+| 5 | Módulos Avanzados (Excel, PDF, Importación) | 🔄 En progreso | 15% |
 | 6 | Testing, Docker, Deploy | 🔲 Pendiente | 0% |
 
 ---
@@ -288,8 +309,78 @@ apps/api/src/modules/payroll/
 ### Pendiente
 
 - [ ] **Dashboard** — métricas reales (empleados activos, última planilla, acumulados del mes)
-- [ ] **PDF planilla** — descarga de planilla generada
-- [ ] **Exportación Excel** — planilla a `.xlsx`
+- [x] **PDF planilla** — descarga del PDF consolidado en formato horizontal (ver Fase 4b)
+- [ ] **Exportación Excel** — planilla a `.xlsx` (pendiente de refactor a la capa de reportes)
+
+---
+
+## 🔄 Fase 4b — Módulo de Reportes de Planilla (En Progreso — 20%)
+
+**Objetivo:** centralizar la generación de reportes asociados a una planilla
+en una capa extensible, de modo que agregar un nuevo formato (Excel, Anexo 09,
+comprobantes, etc.) requiera el mínimo de cambios cruzados.
+
+### Arquitectura
+
+```
+apps/web/src/lib/reports/
+├── payroll-data.ts            — fetcher único (auth + tenant + errores)
+├── payroll-pdf-renderer.ts    — envuelve renderToBuffer() + headers HTTP
+└── registry.ts                — catálogo declarativo de reportes
+
+apps/web/src/pages/
+├── reports/payroll.astro      — listado + dropdown "Reportes"
+└── api/reports/payroll/[id]/
+    └── pdf.ts                 — GET: descarga el PDF landscape
+```
+
+**Flujo de un reporte:**
+
+1. El usuario abre `/reports/payroll`.
+2. La página carga planillas con estado `generated|closed` y renderiza, por
+   fila, un dropdown construido a partir de `PAYROLL_REPORTS` (registry).
+3. Cada entrada del registry declara `href(payrollId)`. Las entradas con
+   `status: 'coming-soon'` se renderizan deshabilitadas + badge
+   "Próximamente"; las `'available'` se renderizan como `<a>` que llama al
+   endpoint de descarga.
+4. El endpoint delega a `fetchPayrollReportData` + el renderer específico
+   (p. ej. `renderPayrollPdfResponse`).
+
+### Librerías
+
+| Librería | Uso |
+|----------|-----|
+| `@react-pdf/renderer` | Generación del PDF (ya estaba instalado) |
+| `react` + `react-dom` | Necesarios para `@react-pdf/renderer` |
+
+No se introdujeron nuevas dependencias. La orientación horizontal se logra
+mediante `orientation="landscape"` en el componente `PayrollPdf`
+(`apps/web/src/lib/pdf/payroll-pdf.tsx`).
+
+### Completado
+
+- [x] **Planilla PDF (landscape)** — disponible como botón primario en
+  `/payroll/[id]` y desde el dropdown de `/reports/payroll`.
+- [x] Nuevo endpoint canónico `GET /api/reports/payroll/:id/pdf`.
+- [x] Ruta legacy `GET /api/payroll/:id/pdf` mantenida (delega al renderer
+  compartido).
+- [x] Vista `/reports/payroll` con búsqueda, paginación y filtrado de
+  estados.
+- [x] Enlace "Más reportes" desde la vista de detalle hacia `/reports/payroll`.
+
+### Pendiente
+
+- [ ] **Planilla en Excel** (`xlsx`) — refactor del endpoint actual
+  `/api/payroll/:id/xlsx` para consumir `fetchPayrollReportData` y montarlo
+  bajo `/api/reports/payroll/:id/xlsx`.
+- [ ] **Resumen de Planilla** (`summary`) — reporte PDF con totales
+  agregados por departamento y tipo de concepto.
+- [ ] **Comprobantes de pago** (`payslips`) — PDF por empleado
+  (reutilizar `StubPdf` existente); generar un archivo por línea o un zip
+  con todos los comprobantes de la planilla.
+- [ ] **Enviar comprobantes por email** (`payslips-email`) — job asíncrono
+  que genere y envíe cada comprobante; requiere proveedor SMTP/API.
+- [ ] **Anexo 09** (`anexo-09`) — reporte exigido por la CSS.
 
 ---
 
@@ -380,3 +471,10 @@ apps/web/src/
 12. **Sidebar con `<details>/<summary>`** — Los grupos se auto-abren cuando algún hijo coincide con la ruta actual (`groupActive()`). El tipo `NavEntry` es una unión discriminada `{ kind: 'item' } | { kind: 'group' }`. Los íconos son inline SVG generados desde un `Record<IconKey, string>` para evitar dependencias de librerías de íconos.
 
 13. **Sistema de diseño CSS custom properties** — Todas las variables de color son semánticas (`--ink`, `--fore`, `--navy`, `--ok`, `--err`, etc.) y se sobrescriben en `[data-theme="light"]`. El tema se persiste en `localStorage` y se lee con un `<script is:inline>` síncrono en `<head>` para evitar flash de tema incorrecto (FOIT).
+
+14. **Capa de reportes de planilla** — Para agregar un nuevo reporte sólo se
+    modifica `apps/web/src/lib/reports/registry.ts` (descriptor) y se añade el
+    endpoint correspondiente en `apps/web/src/pages/api/reports/payroll/[id]/<nombre>.ts`,
+    reutilizando `fetchPayrollReportData` para el I/O. El dropdown de
+    `/reports/payroll` y el detalle de planilla se actualizan automáticamente
+    a partir del registry — no hay duplicación de listas de reportes.
