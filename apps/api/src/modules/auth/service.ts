@@ -26,6 +26,8 @@ export async function verifyTenantLogin(
     tenantId,
     role: user.role as AuthUser['role'],
     type: 'user',
+    name: user.name ?? undefined,
+    email: user.email ?? undefined,
   }
 }
 
@@ -48,6 +50,8 @@ export async function verifySuperAdminLogin(
     tenantId: '*',
     role: 'SUPER_ADMIN' as AuthUser['role'],
     type: 'super_admin',
+    name: admin.name ?? undefined,
+    email: admin.email ?? undefined,
   }
 }
 

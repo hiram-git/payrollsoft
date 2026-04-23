@@ -10,6 +10,8 @@ export type AuthUser = {
   tenantId: string
   role: UserRole
   type: 'user' | 'super_admin'
+  name?: string
+  email?: string
 }
 
 // ─── JWT plugin (singleton, prevents re-registration) ────────────────────────
