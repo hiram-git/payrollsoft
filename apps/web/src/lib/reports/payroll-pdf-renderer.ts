@@ -2,31 +2,22 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import { PayrollPdf } from '../pdf/payroll-pdf'
 import type { PayrollReportData } from './payroll-data'
-import { payrollFileSlug } from './payroll-data'
 
 /**
- * Renders the landscape A4 payroll PDF and wraps it in an HTTP Response with
- * the proper download headers. Keeping this separate from the Astro route
- * means the same renderer can be reused by the `/reports/payroll` page, the
- * payroll detail page and (eventually) a background job that mails the PDF.
+ * Render the landscape A4 payroll PDF to raw bytes. Centralising this lets
+ * the generate endpoint and any future background job share a single code
+ * path for producing the buffer that eventually lands on disk.
  */
-export async function renderPayrollPdfResponse(data: PayrollReportData): Promise<Response> {
-  const buffer = await renderToBuffer(
-    React.createElement(PayrollPdf, {
-      payroll: data.payroll,
-      lines: data.lines,
-      company: data.company,
-    })
-  )
-
-  const filename = `planilla-${payrollFileSlug(data.payroll.name)}.pdf`
-
-  return new Response(buffer, {
-    status: 200,
-    headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="${filename}"`,
-      'Content-Length': String(buffer.byteLength),
-    },
+export async function renderPayrollPdfBuffer(data: PayrollReportData): Promise<Uint8Array> {
+  const element = React.createElement(PayrollPdf, {
+    payroll: data.payroll,
+    lines: data.lines,
+    company: data.company,
   })
+  // @react-pdf/renderer's `renderToBuffer` signature doesn't match React 19's
+  // `FunctionComponentElement`; runtime is fine, the cast silences the
+  // mismatch without disabling the rest of the file's type checking.
+  // biome-ignore lint/suspicious/noExplicitAny: library typing gap
+  const buffer = await renderToBuffer(element as any)
+  return new Uint8Array(buffer)
 }

@@ -3,6 +3,11 @@ import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
+  getPayrollReportService,
+  markPayrollReportGeneratedService,
+  markPayrollReportNotGeneratedService,
+} from './report-service'
+import {
   closePayrollService,
   createPayrollService,
   createThirteenthPayrollService,
@@ -352,4 +357,78 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
+  )
+
+  // ── Report state machine ─────────────────────────────────────────────────
+  // GET /payroll/:id/report — current generation state (lazy: returns
+  // `not_generated` if no row exists yet).
+  .get(
+    '/:id/report',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await getPayrollReportService(db, params.id)
+      if (!result.success) {
+        set.status = 404
+        return { success: false, error: 'Payroll not found' }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      params: t.Object({ id: t.String() }),
+    }
+  )
+
+  // POST /payroll/:id/report — record a successful generation. Body carries
+  // the absolute file path the web process wrote to; the API only owns the
+  // row state and trusts the path passed by an authenticated writer.
+  .post(
+    '/:id/report',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await markPayrollReportGeneratedService(db, {
+        payrollId: params.id,
+        pdfPath: body.pdfPath,
+        generatedBy: user?.userId ?? null,
+      })
+      if (!result.success) {
+        set.status = 404
+        return { success: false, error: 'Payroll not found' }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('HR')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({ pdfPath: t.String({ minLength: 1 }) }),
+    }
+  )
+
+  // POST /payroll/:id/report/regenerate — flip the row to not_generated.
+  // Does not touch the PDF file; the caller immediately triggers a new
+  // generation which overwrites it atomically.
+  .post(
+    '/:id/report/regenerate',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await markPayrollReportNotGeneratedService(db, params.id)
+      if (!result.success) {
+        set.status = 404
+        return { success: false, error: 'Payroll not found' }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('HR')],
+      params: t.Object({ id: t.String() }),
+    }
   )

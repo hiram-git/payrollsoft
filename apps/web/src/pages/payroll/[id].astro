@@ -108,9 +108,33 @@ for (const key of pdfFilterKeys) {
   if (value) pdfFilterParams.set(key, value)
 }
 const pdfQuery = pdfFilterParams.toString()
-const pdfHref = pdfQuery
-  ? `/api/reports/payroll/${id}/pdf?${pdfQuery}`
-  : `/api/reports/payroll/${id}/pdf`
+const generateHref = pdfQuery
+  ? `/api/reports/payroll/${id}/generate?${pdfQuery}`
+  : `/api/reports/payroll/${id}/generate`
+const regenerateHref = pdfQuery
+  ? `/api/reports/payroll/${id}/regenerate?${pdfQuery}`
+  : `/api/reports/payroll/${id}/regenerate`
+const downloadHref = `/api/reports/payroll/${id}/download`
+
+// Fetch the current report state so we know whether to show
+// Generar vs. Descargar/Regenerar.
+type ReportState = {
+  status: 'generated' | 'not_generated'
+  pdfPath: string | null
+  generatedAt: string | null
+}
+let reportState: ReportState = { status: 'not_generated', pdfPath: null, generatedAt: null }
+try {
+  const res = await fetch(`${API_URL}/payroll/${id}/report`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data: ReportState }
+    reportState = json.data
+  }
+} catch {
+  // Leave default state — buttons will offer "Generar"
+}
 
 const statusLabel: Record<string, string> = {
   created: 'Creada',
@@ -185,16 +209,47 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         <!-- Action buttons -->
         <div class="flex items-center gap-2 flex-shrink-0">
           {(isGenerated || isClosed) && (
-            <a
-              href={pdfHref}
-              target="_blank"
-              rel="noopener"
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-              title="Descargar Planilla PDF (A4 horizontal) con los filtros aplicados"
+            <div
+              id="report-controls"
+              class="inline-flex items-center gap-2"
+              data-state={reportState.status}
+              data-generate-url={generateHref}
+              data-regenerate-url={regenerateHref}
+              data-download-url={downloadHref}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Planilla PDF
-            </a>
+              {reportState.status === 'generated' ? (
+                <>
+                  <a
+                    id="btn-report-download"
+                    href={downloadHref}
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                    title="Descargar la última versión del PDF"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Descargar
+                  </a>
+                  <button
+                    id="btn-report-regenerate"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                    title="Volver a generar el PDF con los datos actuales"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    Regenerar
+                  </button>
+                </>
+              ) : (
+                <button
+                  id="btn-report-generate"
+                  type="button"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                  title="Generar el PDF de la planilla"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+                  Generar PDF
+                </button>
+              )}
+            </div>
             <a
               href={`/api/payroll/${id}/xlsx`}
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
@@ -496,6 +551,27 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     )}
   </div>
 
+  <!-- Report generation blocking modal -->
+  <div
+    id="report-modal"
+    class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-live="polite"
+  >
+    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
+    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
+      <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center">
+        <svg class="w-6 h-6 text-blue-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+      </div>
+      <h3 class="text-base font-semibold text-gray-900 mb-1.5">Generando reporte</h3>
+      <p id="report-modal-body" class="text-sm text-gray-500 leading-relaxed">
+        Generando reporte de planilla, por favor espere…
+      </p>
+      <p id="report-modal-error" class="hidden mt-3 text-sm text-red-600"></p>
+    </div>
+  </div>
+
   <!-- Confirmation modal -->
   <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
     <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
@@ -647,5 +723,74 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden') && modalLoading.classList.contains('hidden')) closeModal()
   })
+</script>
+
+<script>
+  // Report generation state machine — wires the Generar / Descargar /
+  // Regenerar buttons to the Astro endpoints and blocks the UI with a
+  // loading modal while the server renders + persists the PDF.
+  const controls = document.getElementById('report-controls') as HTMLElement | null
+  if (controls) {
+    const reportModal = document.getElementById('report-modal') as HTMLElement
+    const reportError = document.getElementById('report-modal-error') as HTMLElement
+    const btnGenerate = document.getElementById('btn-report-generate') as HTMLButtonElement | null
+    const btnRegenerate = document.getElementById('btn-report-regenerate') as HTMLButtonElement | null
+    const btnDownload = document.getElementById('btn-report-download') as HTMLAnchorElement | null
+
+    const generateUrl = controls.dataset.generateUrl ?? ''
+    const regenerateUrl = controls.dataset.regenerateUrl ?? ''
+    const downloadUrl = controls.dataset.downloadUrl ?? ''
+
+    function showModal() {
+      reportError.classList.add('hidden')
+      reportError.textContent = ''
+      reportModal.classList.remove('hidden')
+      document.body.style.overflow = 'hidden'
+    }
+    function hideModal() {
+      reportModal.classList.add('hidden')
+      document.body.style.overflow = ''
+    }
+    function showError(message: string) {
+      reportError.textContent = message
+      reportError.classList.remove('hidden')
+    }
+    function disableAll(disabled: boolean) {
+      for (const b of [btnGenerate, btnRegenerate]) {
+        if (b) b.disabled = disabled
+      }
+      if (btnDownload) {
+        btnDownload.style.pointerEvents = disabled ? 'none' : ''
+        btnDownload.style.opacity = disabled ? '0.6' : ''
+      }
+    }
+
+    async function runGeneration(endpoint: string) {
+      disableAll(true)
+      showModal()
+      try {
+        const res = await fetch(endpoint, { method: 'POST' })
+        if (!res.ok) {
+          const text = await res.text().catch(() => '')
+          showError(text || `Falló la generación (HTTP ${res.status})`)
+          disableAll(false)
+          setTimeout(hideModal, 2500)
+          return
+        }
+        // Drop the user straight into the download, then refresh the page so
+        // the button pair (Descargar / Regenerar) reflects the new state.
+        hideModal()
+        window.location.href = downloadUrl
+        setTimeout(() => window.location.reload(), 800)
+      } catch (err) {
+        showError('Error de red al generar el reporte')
+        disableAll(false)
+        setTimeout(hideModal, 2500)
+      }
+    }
+
+    btnGenerate?.addEventListener('click', () => runGeneration(generateUrl))
+    btnRegenerate?.addEventListener('click', () => runGeneration(regenerateUrl))
+  }
 </script>
 
