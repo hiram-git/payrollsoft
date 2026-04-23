@@ -37,6 +37,7 @@ export const concepts = pgTable('concepts', {
   isReferenceValue: boolean('is_reference_value').notNull().default(false),
   useAmountCalc: boolean('use_amount_calc').notNull().default(false),
   allowZero: boolean('allow_zero').notNull().default(false),
+  cuentaContableId: uuid('cuenta_contable_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 

@@ -11,6 +11,7 @@ import { cargosRoutes } from './modules/catalogs/cargos/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
 import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
 import { funcionesRoutes } from './modules/catalogs/funciones/routes'
+import { cuentasContablesRoutes } from './modules/catalogs/cuentas-contables/routes'
 import { partidasRoutes } from './modules/catalogs/partidas/routes'
 import { companyRoutes } from './modules/company/routes'
 import { creditorRoutes } from './modules/creditors/routes'
@@ -48,6 +49,7 @@ const app = new Elysia()
   .use(funcionesRoutes)
   .use(departamentosRoutes)
   .use(partidasRoutes)
+  .use(cuentasContablesRoutes)
   .use(conceptsRoutes)
   .use(dashboardRoutes)
   .use(acumuladosRoutes)

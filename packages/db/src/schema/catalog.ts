@@ -59,6 +59,20 @@ export const partidasPresupuestarias = pgTable('partidas_presupuestarias', {
 export type PartidaPresupuestaria = typeof partidasPresupuestarias.$inferSelect
 export type NewPartidaPresupuestaria = typeof partidasPresupuestarias.$inferInsert
 
+// ── Cuentas Contables (Chart of Accounts) ─────────────────────────────────────
+
+export const cuentasContables = pgTable('cuentas_contables', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  code: varchar('code', { length: 20 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export type CuentaContable = typeof cuentasContables.$inferSelect
+export type NewCuentaContable = typeof cuentasContables.$inferInsert
+
 // ── Department tree node (built in-memory) ────────────────────────────────────
 
 export type DepartamentoNode = Departamento & { children: DepartamentoNode[] }
