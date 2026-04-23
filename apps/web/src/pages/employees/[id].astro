@@ -131,6 +131,7 @@ const success = Astro.url.searchParams.get('success') === '1'
 const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
+  no_payroll_type: 'El empleado debe pertenecer a al menos un tipo de planilla.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }

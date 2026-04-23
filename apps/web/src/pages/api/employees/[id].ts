@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     hireDate: g('hireDate'),
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
-    payrollTypeIds,
+    payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
   }
 
   if (
@@ -82,6 +82,9 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   const msg = data.error ?? ''
 
+  if (msg.toLowerCase().includes('tipo de planilla') || msg.toLowerCase().includes('tipo de nómina')) {
+    return redirect(`/employees/${id}?error=no_payroll_type`)
+  }
   if (msg.toLowerCase().includes('code') || res.status === 409) {
     return redirect(`/employees/${id}?error=code_taken`)
   }

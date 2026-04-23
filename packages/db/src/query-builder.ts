@@ -164,11 +164,17 @@ export async function getAllActiveEmployees(db: Db) {
 
 /**
  * Get a single employee by ID — includes payrollTypes.
+ * Gracefully returns empty payrollTypes if the pivot table is unavailable.
  */
 export async function getEmployee(db: Db, id: string) {
   const [row] = await db.select().from(employees).where(eq(employees.id, id))
   if (!row) return null
-  const types = await getEmployeePayrollTypesList(db, id)
+  let types: { id: string; code: string; name: string; sortOrder: number }[] = []
+  try {
+    types = await getEmployeePayrollTypesList(db, id)
+  } catch {
+    // Pivot table may not exist yet (pending migration) — return employee without types
+  }
   return { ...row, payrollTypeIds: types.map((t) => t.id), payrollTypes: types }
 }
 
@@ -202,6 +208,19 @@ export async function setEmployeePayrollTypes(
       .insert(employeePayrollTypes)
       .values(payrollTypeIds.map((payrollTypeId) => ({ employeeId, payrollTypeId })))
   }
+}
+
+/**
+ * Returns the first payroll type ordered by sortOrder — used as the default
+ * fallback when creating employees without an explicit type assignment.
+ */
+export async function getDefaultPayrollType(db: Db) {
+  const [row] = await db
+    .select({ id: conceptPayrollTypes.id, code: conceptPayrollTypes.code, name: conceptPayrollTypes.name })
+    .from(conceptPayrollTypes)
+    .orderBy(asc(conceptPayrollTypes.sortOrder))
+    .limit(1)
+  return row ?? null
 }
 
 /**
