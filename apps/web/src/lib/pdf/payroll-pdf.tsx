@@ -132,19 +132,8 @@ const s = StyleSheet.create({
     fontSize: 8.5,
     color: C.gray700,
   },
-  headerRight: {
-    width: 150,
-    alignItems: 'flex-end',
-  },
-  headerMeta: {
-    fontSize: 7,
-    color: C.gray500,
-    marginBottom: 1,
-  },
-  headerMetaStrong: {
-    fontSize: 8,
-    color: C.gray700,
-    fontFamily: 'Helvetica-Bold',
+  headerSpacer: {
+    width: 54,
   },
   divider: { borderBottomWidth: 1, borderBottomColor: C.gray300, marginBottom: 10 },
 
@@ -270,20 +259,30 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 /**
- * Canonical concept codes for Panamá legal deductions. Anything outside this
- * set falls into "Otras Deducciones".
+ * Canonical concept codes for Panamá legal deductions. Creditor-linked
+ * deductions are identified separately by the `ACR_` code prefix the
+ * creditors service assigns (see `createCreditorService` in the API).
  */
 const CODE = {
   sueldo: new Set(['SUELDO', 'SALARIO', 'SALARIO_BASE']),
   ss: new Set(['SS', 'SEGURO_SOCIAL', 'CSS']),
   se: new Set(['SE', 'SEGURO_EDUCATIVO', 'SEDU']),
   siacap: new Set(['SIACAP']),
-  isr: new Set(['ISR', 'IMP_RENTA', 'IMPUESTO_RENTA']),
+  isr: new Set(['ISR', 'ISLR', 'IMP_RENTA', 'IMPUESTO_RENTA']),
 }
+
+const CREDITOR_CODE_PREFIX = 'ACR_'
 
 /**
  * Split a line's concepts into the 8 numeric buckets the planilla needs.
  * Exposed as a pure function so tests and callers can reuse the same math.
+ *
+ * `otrasDeducciones` accumulates only creditor-linked concepts (ACR_*) so
+ * the column reflects cuotas de acreedores. `neto` is derived as
+ * `ingresos - (ss + se + siacap + isr + otrasDeducciones)`; any tenant-
+ * defined deduction outside the legal set and not linked to a creditor is
+ * intentionally excluded from both otrasDeducciones and neto, matching the
+ * official Planilla de Sueldos spec.
  */
 export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
   sueldo: number
@@ -322,9 +321,11 @@ export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
         siacap += amount
       } else if (CODE.isr.has(code)) {
         isr += amount
-      } else {
+      } else if (code.startsWith(CREDITOR_CODE_PREFIX)) {
         otrasDeducciones += amount
       }
+      // Any other deduction (tenant-specific, non-creditor, non-legal) is
+      // intentionally skipped — it doesn't fit any column of the spec.
     }
   }
 
@@ -332,7 +333,7 @@ export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
   // in that case "Sueldo" and "Ingresos" happen to be equal.
   if (sueldo === 0) sueldo = ingresos
 
-  const neto = toNumber(line.netAmount)
+  const neto = ingresos - (ss + se + siacap + isr + otrasDeducciones)
   return { sueldo, ingresos, ss, se, siacap, isr, otrasDeducciones, neto }
 }
 
@@ -408,14 +409,9 @@ export function PayrollPdf({
             <Text style={s.reportTitle}>{reportTitle}</Text>
             <Text style={s.periodLine}>{periodLine}</Text>
           </View>
-          <View style={s.headerRight}>
-            <Text style={s.headerMeta}>Planilla</Text>
-            <Text style={s.headerMetaStrong}>{payroll.name}</Text>
-            {payroll.paymentDate && (
-              <Text style={s.headerMeta}>Pago: {formatDateISO(payroll.paymentDate)}</Text>
-            )}
-            <Text style={s.headerMeta}>Empleados: {lines.length}</Text>
-          </View>
+          {/* Balanced spacer mirrors the logo width so the title stays
+              visually centred on the page. */}
+          <View style={s.headerSpacer} />
         </View>
 
         <View style={s.divider} fixed />

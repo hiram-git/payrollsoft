@@ -15,10 +15,16 @@ se reescribió para cumplir el formato oficial de "Planilla de Sueldos":
   ciclo repetitivo.
 - **Encabezado**: logo (placeholder), nombre de empresa, `PLANILLA <TIPO>`,
   línea `Desde DD-MM-YYYY hasta DD-MM-YYYY`.
-- **Tabla de 10 columnas**: Empleado, Cédula, Sueldo, Ingresos, Seg. Social,
-  Seg. Edu., SIACAP, ISR, Otras Ded., Neto. Clasificación por código de
-  concepto; todo lo que no cae en SS/SE/SIACAP/ISR se acumula en
-  "Otras Ded." (incluye conceptos de acreedores).
+- **Tabla de 10 columnas**: Empleado, Cédula (`employees.id_number`),
+  Sueldo, Ingresos, Seg. Social, Seg. Edu., SIACAP, ISR/ISLR, Otras Ded.,
+  Neto. La columna "Otras Ded." contiene **sólo cuotas de acreedores**,
+  detectadas por el prefijo `ACR_` que emite `createCreditorService`.
+  Las deducciones fuera del set legal y no vinculadas a acreedores se
+  omiten del reporte intencionalmente para cumplir el spec oficial.
+  El Neto se deriva como `Ingresos − (SS + SE + SIACAP + ISR + Otras Ded.)`.
+- **Header limpio**: se eliminó el bloque superior derecho (etiqueta
+  "Planilla", metadatos de pago y contador de empleados); el título queda
+  visualmente centrado gracias a un spacer que balancea el logo.
 - **Fila de TOTALES** con la suma de cada columna numérica.
 - **Tres firmas**: Elaboración / Revisión / Autorización. Nombres y cargos
   desde `company_config` cuando existen.
