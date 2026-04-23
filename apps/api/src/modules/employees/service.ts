@@ -3,6 +3,7 @@ import {
   deactivateEmployee,
   getCargoById,
   getDepartamentoById,
+  getDefaultPayrollType,
   getEmployee,
   getEmployeeByCode,
   getFuncionById,
@@ -118,6 +119,12 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
 
   if (input.payrollTypeIds && input.payrollTypeIds.length > 0) {
     await setEmployeePayrollTypes(db, employee.id, input.payrollTypeIds)
+  } else {
+    // Auto-assign to the default (first by sortOrder) payroll type when none specified
+    const defaultType = await getDefaultPayrollType(db).catch(() => null)
+    if (defaultType) {
+      await setEmployeePayrollTypes(db, employee.id, [defaultType.id])
+    }
   }
 
   return { success: true as const, data: employee }
@@ -186,7 +193,7 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
       return {
         success: false as const,
         error: 'no_payroll_type',
-        message: 'El empleado debe tener al menos un tipo de nómina',
+        message: 'El empleado debe tener al menos un tipo de planilla',
       }
     }
     await setEmployeePayrollTypes(db, id, input.payrollTypeIds)
