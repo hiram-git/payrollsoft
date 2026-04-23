@@ -113,6 +113,20 @@
       "when": 1745500000000,
       "tag": "0016_cuentas_contables",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1745600000000,
+      "tag": "0017_employee_payroll_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1745700000000,
+      "tag": "0018_assign_default_payroll_type",
+      "breakpoints": true
     }
   ]
 }
