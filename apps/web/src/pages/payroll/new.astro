@@ -4,6 +4,22 @@ import AppLayout from '../../layouts/AppLayout.astro'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+type PayrollType = { id: string; code: string; name: string; sortOrder: number }
+let payrollTypes: PayrollType[] = []
+try {
+  const res = await fetch(`${API_URL}/concepts/config`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data?: { payrollTypes?: PayrollType[] } }
+    payrollTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
+  }
+} catch { /* ignore */ }
+
+// Pre-select from global cookie if set
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   'missing-fields': 'Completa todos los campos requeridos.',
@@ -71,6 +87,20 @@ const defaultName = `PLANILLA REGULAR QUINCENAL ${defaultStart} ${defaultEnd}`
             </select>
           </div>
         </div>
+        {payrollTypes.length > 0 && (
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              Planilla de
+              <span class="ml-1 text-xs font-normal text-gray-400">(filtra qué empleados se incluyen)</span>
+            </label>
+            <select name="payrollTypeId" class="input">
+              <option value="">— Todos los empleados —</option>
+              {payrollTypes.map((pt) => (
+                <option value={pt.id} selected={pt.id === activeTypeId}>{pt.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Inicio del período *</label>

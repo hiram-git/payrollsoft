@@ -17,6 +17,7 @@ import {
   concepts,
   creditors,
   departamentos,
+  employeePayrollTypes,
   employees,
   funciones,
   loanInstallments,
@@ -77,6 +78,7 @@ export type EmployeeFilter = {
   department?: string
   isActive?: boolean
   payFrequency?: string
+  payrollTypeId?: string
 }
 
 /**
@@ -117,6 +119,14 @@ export async function listEmployees(
     conditions.push(eq(employees.payFrequency, filter.payFrequency))
   }
 
+  if (filter.payrollTypeId) {
+    const sub = db
+      .select({ eid: employeePayrollTypes.employeeId })
+      .from(employeePayrollTypes)
+      .where(eq(employeePayrollTypes.payrollTypeId, filter.payrollTypeId))
+    conditions.push(inArray(employees.id, sub))
+  }
+
   const where = conditions.length > 0 ? and(...conditions) : undefined
 
   const [data, totalResult] = await Promise.all([
@@ -153,11 +163,63 @@ export async function getAllActiveEmployees(db: Db) {
 }
 
 /**
- * Get a single employee by ID.
+ * Get a single employee by ID — includes payrollTypes.
  */
 export async function getEmployee(db: Db, id: string) {
   const [row] = await db.select().from(employees).where(eq(employees.id, id))
-  return row ?? null
+  if (!row) return null
+  const types = await getEmployeePayrollTypesList(db, id)
+  return { ...row, payrollTypeIds: types.map((t) => t.id), payrollTypes: types }
+}
+
+// ─── Employee Payroll Type Links ──────────────────────────────────────────────
+
+export async function getEmployeePayrollTypesList(db: Db, employeeId: string) {
+  return db
+    .select({
+      id: conceptPayrollTypes.id,
+      code: conceptPayrollTypes.code,
+      name: conceptPayrollTypes.name,
+      sortOrder: conceptPayrollTypes.sortOrder,
+    })
+    .from(employeePayrollTypes)
+    .innerJoin(
+      conceptPayrollTypes,
+      eq(employeePayrollTypes.payrollTypeId, conceptPayrollTypes.id)
+    )
+    .where(eq(employeePayrollTypes.employeeId, employeeId))
+    .orderBy(asc(conceptPayrollTypes.sortOrder))
+}
+
+export async function setEmployeePayrollTypes(
+  db: Db,
+  employeeId: string,
+  payrollTypeIds: string[]
+) {
+  await db.delete(employeePayrollTypes).where(eq(employeePayrollTypes.employeeId, employeeId))
+  if (payrollTypeIds.length > 0) {
+    await db
+      .insert(employeePayrollTypes)
+      .values(payrollTypeIds.map((payrollTypeId) => ({ employeeId, payrollTypeId })))
+  }
+}
+
+/**
+ * Get all active employees assigned to a specific payroll type — for generation.
+ */
+export async function getActiveEmployeesByPayrollType(db: Db, payrollTypeId: string) {
+  return db
+    .select({ ...employees })
+    .from(employees)
+    .innerJoin(
+      employeePayrollTypes,
+      and(
+        eq(employeePayrollTypes.employeeId, employees.id),
+        eq(employeePayrollTypes.payrollTypeId, payrollTypeId)
+      )
+    )
+    .where(eq(employees.isActive, true))
+    .orderBy(asc(employees.lastName))
 }
 
 /**
@@ -213,6 +275,7 @@ export type PayrollFilter = {
   status?: string
   type?: string
   year?: number
+  payrollTypeId?: string
 }
 
 /**
@@ -234,6 +297,7 @@ export async function listPayrolls(
   if (filter.year) {
     conditions.push(sql`EXTRACT(YEAR FROM ${payrolls.periodStart}) = ${filter.year}`)
   }
+  if (filter.payrollTypeId) conditions.push(eq(payrolls.payrollTypeId, filter.payrollTypeId))
 
   const where = conditions.length > 0 ? and(...conditions) : undefined
 
