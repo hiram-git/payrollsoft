@@ -9,7 +9,10 @@ Segunda iteración sobre el módulo de reportes. El componente `PayrollPdf`
 se reescribió para cumplir el formato oficial de "Planilla de Sueldos":
 
 - **A4 horizontal** (antes LETTER), sin tope de 50 empleados — el fetcher
-  recorre todas las páginas de `/payroll/:id` (pages 2..N en paralelo).
+  pide la planilla completa en **una sola petición** (`linesLimit=100000`);
+  el cap del query builder se elevó de 200 a 100000 para permitirlo.
+  Antes hacíamos N round-trips paginados, lo que en logs parecía un
+  ciclo repetitivo.
 - **Encabezado**: logo (placeholder), nombre de empresa, `PLANILLA <TIPO>`,
   línea `Desde DD-MM-YYYY hasta DD-MM-YYYY`.
 - **Tabla de 10 columnas**: Empleado, Cédula, Sueldo, Ingresos, Seg. Social,
