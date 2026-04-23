@@ -744,26 +744,60 @@ export async function bulkGetLoansByEmployees(db: Db, employeeIds: string[]) {
 }
 
 /**
- * Bulk-load total installment amounts per employee per creditor code for a payroll period.
- * Returns Map<employeeId, Map<creditorCode, totalInstallment>>.
- * Replaces the per-employee per-creditor DB calls inside CUOTA_ACREEDOR() during generation.
+ * Per-creditor aggregate for a single employee in a payroll period. Produced
+ * by `bulkLoadCreditorInstallments` and carried through to the engine so the
+ * payroll line can record a direct reference to the originating loans
+ * without a join at report time.
+ */
+export type CreditorInstallmentAggregate = {
+  creditorId: string
+  creditorCode: string
+  creditorName: string
+  installment: number
+  loanIds: string[]
+}
+
+export type BulkCreditorInstallmentsResult = {
+  /**
+   * `employeeId → creditorCode → aggregate`. `creditorCode` is the canonical
+   * lookup key the engine uses via `CUOTA_ACREEDOR()`.
+   */
+  byEmployee: Map<string, Map<string, CreditorInstallmentAggregate>>
+  /** Every creditor that showed up in the loan set, keyed by code. */
+  creditorsByCode: Map<string, { id: string; code: string; name: string }>
+}
+
+/**
+ * Bulk-load active-loan installments for a batch of employees in a payroll
+ * period. Performed with two separate queries (loans, creditors) instead of
+ * a JOIN so the report-side can read denormalised metadata from the
+ * payroll_lines JSON without cross-table scans.
+ *
+ * Returns:
+ *   - `byEmployee`: per-employee map of creditor-code → aggregated installment
+ *     + creditor metadata + list of contributing loan ids.
+ *   - `creditorsByCode`: the creditor lookup used during generation.
  */
 export async function bulkLoadCreditorInstallments(
   db: Db,
   employeeIds: string[],
   periodStart: string,
   periodEnd: string
-): Promise<Map<string, Map<string, number>>> {
-  if (employeeIds.length === 0) return new Map()
+): Promise<BulkCreditorInstallmentsResult> {
+  const empty: BulkCreditorInstallmentsResult = {
+    byEmployee: new Map(),
+    creditorsByCode: new Map(),
+  }
+  if (employeeIds.length === 0) return empty
 
-  const rows = await db
+  const loanRows = await db
     .select({
+      id: loans.id,
       employeeId: loans.employeeId,
-      creditorCode: creditors.code,
+      creditorId: loans.creditorId,
       installment: loans.installment,
     })
     .from(loans)
-    .innerJoin(creditors, eq(loans.creditorId, creditors.id))
     .where(
       and(
         inArray(loans.employeeId, employeeIds),
@@ -773,19 +807,48 @@ export async function bulkLoadCreditorInstallments(
       )
     )
 
-  const result = new Map<string, Map<string, number>>()
-  for (const row of rows) {
-    let byCreditor = result.get(row.employeeId)
-    if (!byCreditor) {
-      byCreditor = new Map()
-      result.set(row.employeeId, byCreditor)
+  const creditorIds = Array.from(
+    new Set(loanRows.map((r) => r.creditorId).filter((v): v is string => Boolean(v)))
+  )
+  if (creditorIds.length === 0) return empty
+
+  const creditorRows = await db
+    .select({ id: creditors.id, code: creditors.code, name: creditors.name })
+    .from(creditors)
+    .where(inArray(creditors.id, creditorIds))
+
+  const creditorsById = new Map(creditorRows.map((c) => [c.id, c]))
+  const creditorsByCode = new Map(creditorRows.map((c) => [c.code, c]))
+
+  const byEmployee = new Map<string, Map<string, CreditorInstallmentAggregate>>()
+  for (const row of loanRows) {
+    if (!row.creditorId) continue
+    const creditor = creditorsById.get(row.creditorId)
+    if (!creditor) continue
+
+    let perCreditor = byEmployee.get(row.employeeId)
+    if (!perCreditor) {
+      perCreditor = new Map()
+      byEmployee.set(row.employeeId, perCreditor)
     }
-    byCreditor.set(
-      row.creditorCode,
-      (byCreditor.get(row.creditorCode) ?? 0) + Number(row.installment)
-    )
+
+    const existing = perCreditor.get(creditor.code)
+    const installment = Number(row.installment)
+    if (existing) {
+      existing.installment += installment
+      existing.loanIds.push(row.id)
+    } else {
+      perCreditor.set(creditor.code, {
+        creditorId: creditor.id,
+        creditorCode: creditor.code,
+        creditorName: creditor.name,
+        installment,
+        loanIds: [row.id],
+      })
+    }
   }
-  return result
+
+  return { byEmployee, creditorsByCode }
 }
 
 /**

@@ -4,6 +4,7 @@ export type {
   ConceptInput,
   AttendanceInput,
   LineConceptEntry,
+  OtherDiscountRef,
 } from './engine'
 export { processLine } from './engine'
 export { countBusinessDays, countCalendarDays, round2 } from './utils'

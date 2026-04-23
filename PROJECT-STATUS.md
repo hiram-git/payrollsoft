@@ -1,7 +1,41 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** 23 de abril de 2026 (sesión 3 — state machine del reporte)
+**Última actualización:** 23 de abril de 2026 (sesión 3 — optimización de préstamos)
 **Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
+
+## Avance de la sesión 3 (23/04/2026) — Optimización de préstamos
+
+Desnormaliza los préstamos dentro de `payroll_lines.concepts` para que la
+lectura del reporte no necesite volver a unir `loans` + `creditors`:
+
+- **Eliminado el JOIN** en `bulkLoadCreditorInstallments`. Antes hacía
+  `loans INNER JOIN creditors` en la misma query; ahora dispara dos
+  queries independientes (`loans` + `creditors IN (ids)`), agrega en
+  JS y devuelve:
+  `{ byEmployee: Map<empId, Map<creditorCode, aggregate>>, creditorsByCode }`
+  donde el agregado incluye `{ creditorId, creditorCode, creditorName,
+  installment, loanIds[] }`.
+- **Nueva llave `other_discounts`** por entrada de concepto creditor-
+  linked en `payroll_lines.concepts`. `LineConceptEntry` gana un campo
+  opcional:
+  ```ts
+  other_discounts?: {
+    loan_ids: string[]
+    creditor_id: string
+    creditor_code: string
+    creditor_name: string
+  }
+  ```
+  Lo escribe el servicio después de `processLine()` vía el helper
+  `stampOtherDiscounts` (tanto en generación bulk como en regeneración
+  por empleado). Permite a cualquier reporte localizar al préstamo y al
+  acreedor leyendo solamente `payroll_lines`.
+- **PDF actualizado**: la columna "Otras Ded." ahora sumatoria los
+  conceptos con `other_discounts` (fallback al prefijo `ACR_` para filas
+  legadas generadas antes del refactor).
+- Tests de `@payroll/core` — 77/77 pass sin cambios.
+
+## Avance previo de la sesión 3 — State machine de Planilla PDF
 
 ## Avance de la sesión 3 (23/04/2026) — State machine de Planilla PDF
 
