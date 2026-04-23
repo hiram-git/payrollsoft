@@ -15,7 +15,9 @@ try {
     const json = (await res.json()) as { data?: { payrollTypes?: PayrollType[] } }
     payrollTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
   }
-} catch { /* ignore */ }
+} catch {
+  /* ignore */
+}
 
 // Pre-select from global cookie if set
 const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''

@@ -26,7 +26,8 @@ try {
   ])
   if (configRes.status === 401) return Astro.redirect('/login')
   if (configRes.ok) catalogs = ((await configRes.json()) as { data: Catalogs }).data
-  if (cuentasRes.ok) cuentasContables = ((await cuentasRes.json()) as { data: CuentaContable[] }).data ?? []
+  if (cuentasRes.ok)
+    cuentasContables = ((await cuentasRes.json()) as { data: CuentaContable[] }).data ?? []
 } catch {
   loadError = 'No se pudo conectar con el servidor'
 }

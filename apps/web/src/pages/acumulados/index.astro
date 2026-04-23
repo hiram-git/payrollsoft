@@ -127,9 +127,10 @@ const grandTotalDeductions = summaryRows
 const SUMMARY_PAGE_SIZE = 50
 const summaryTotal = summaryRows.length
 const summaryTotalPages = Math.max(1, Math.ceil(summaryTotal / SUMMARY_PAGE_SIZE))
-const pagedSummaryRows = filterView === 'summary'
-  ? summaryRows.slice((page - 1) * SUMMARY_PAGE_SIZE, page * SUMMARY_PAGE_SIZE)
-  : []
+const pagedSummaryRows =
+  filterView === 'summary'
+    ? summaryRows.slice((page - 1) * SUMMARY_PAGE_SIZE, page * SUMMARY_PAGE_SIZE)
+    : []
 
 // Build URL helpers
 function buildUrl(extra: Record<string, string>) {
