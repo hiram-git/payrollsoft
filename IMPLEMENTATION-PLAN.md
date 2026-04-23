@@ -227,10 +227,28 @@ Rutas:
 
 ### Completado
 
-- [x] **Planilla PDF (formato horizontal)** — reporte consolidado por planilla,
-  con encabezado, totales, tabla por empleado y chips de conceptos.
-  Orientación `landscape` forzada en el componente `PayrollPdf`.
-- [x] Botón primario "Planilla PDF" en la vista de detalle (`/payroll/[id]`).
+- [x] **Planilla PDF (A4 horizontal, sin límite de empleados)** — reporte
+  oficial con:
+  - Encabezado: logo de la empresa (placeholder "LOGO" cuando no hay),
+    nombre de la empresa, título `PLANILLA <TIPO>` y la línea de período
+    `Desde DD-MM-YYYY hasta DD-MM-YYYY`.
+  - Tabla de 10 columnas: Empleado, Cédula, Sueldo, Ingresos, Seg. Social,
+    Seg. Edu., SIACAP, ISR, Otras Ded. (acreedores + otras deducciones
+    fuera de las 4 de ley), Neto.
+  - Fila de TOTALES que suma todas las columnas numéricas.
+  - Tres bloques de firma: Elaboración (Especialista en Nóminas),
+    Revisión (Jefe de Recursos Humanos), Autorización (Director General).
+    Los nombres se toman de `company_config` si están configurados.
+  - Pie de página fijo: `Generado: fecha+hora exacta` y
+    `Página X de Y` en todas las páginas.
+- [x] Paginación eliminada — el endpoint recorre todas las páginas de
+  `/payroll/:id` (pages 2..N en paralelo) hasta incluir a cada empleado
+  cubierto por la planilla.
+- [x] **Filtros propagados**: `search`, `department`, `employeeIds` y
+  `payrollTypeId` pasan del URL de `/payroll/[id]` al endpoint PDF. La
+  cookie global `payroll.activeTypeId` se usa como fallback del tipo.
+- [x] Botón primario "Planilla PDF" en la vista de detalle (`/payroll/[id]`)
+  construye el `href` con los filtros visibles.
 - [x] Enlace "Más reportes" desde la vista de detalle hacia `/reports/payroll`.
 
 ### Pendiente (por implementar en futuras iteraciones)

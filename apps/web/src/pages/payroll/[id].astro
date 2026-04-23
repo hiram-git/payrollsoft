@@ -98,6 +98,20 @@ const linesTo = Math.min(linesPage * LINES_PER_PAGE, linesTotal)
 const msgSuccess = Astro.url.searchParams.get('success') ?? ''
 const msgError = Astro.url.searchParams.get('error') ?? ''
 
+// Build the query string the PDF endpoint should see so the generated report
+// matches the filters visible on this page. Keep it to filter-like params
+// only (skip pagination / UI state).
+const pdfFilterKeys = ['search', 'department', 'employeeIds', 'payrollTypeId'] as const
+const pdfFilterParams = new URLSearchParams()
+for (const key of pdfFilterKeys) {
+  const value = Astro.url.searchParams.get(key)
+  if (value) pdfFilterParams.set(key, value)
+}
+const pdfQuery = pdfFilterParams.toString()
+const pdfHref = pdfQuery
+  ? `/api/reports/payroll/${id}/pdf?${pdfQuery}`
+  : `/api/reports/payroll/${id}/pdf`
+
 const statusLabel: Record<string, string> = {
   created: 'Creada',
   processing: 'Procesando…',
@@ -172,11 +186,11 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         <div class="flex items-center gap-2 flex-shrink-0">
           {(isGenerated || isClosed) && (
             <a
-              href={`/api/reports/payroll/${id}/pdf`}
+              href={pdfHref}
               target="_blank"
               rel="noopener"
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-              title="Descargar Planilla PDF (formato horizontal)"
+              title="Descargar Planilla PDF (A4 horizontal) con los filtros aplicados"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Planilla PDF

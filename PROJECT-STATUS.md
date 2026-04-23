@@ -1,9 +1,35 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** 23 de abril de 2026 (sesión 3 — módulo de reportes)
+**Última actualización:** 23 de abril de 2026 (sesión 3 — módulo de reportes, segunda iteración)
 **Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
 
-## Avance de la sesión 3 (23/04/2026) — Módulo de Reportes de Planilla
+## Avance de la sesión 3 (23/04/2026) — Planilla PDF oficial
+
+Segunda iteración sobre el módulo de reportes. El componente `PayrollPdf`
+se reescribió para cumplir el formato oficial de "Planilla de Sueldos":
+
+- **A4 horizontal** (antes LETTER), sin tope de 50 empleados — el fetcher
+  recorre todas las páginas de `/payroll/:id` (pages 2..N en paralelo).
+- **Encabezado**: logo (placeholder), nombre de empresa, `PLANILLA <TIPO>`,
+  línea `Desde DD-MM-YYYY hasta DD-MM-YYYY`.
+- **Tabla de 10 columnas**: Empleado, Cédula, Sueldo, Ingresos, Seg. Social,
+  Seg. Edu., SIACAP, ISR, Otras Ded., Neto. Clasificación por código de
+  concepto; todo lo que no cae en SS/SE/SIACAP/ISR se acumula en
+  "Otras Ded." (incluye conceptos de acreedores).
+- **Fila de TOTALES** con la suma de cada columna numérica.
+- **Tres firmas**: Elaboración / Revisión / Autorización. Nombres y cargos
+  desde `company_config` cuando existen.
+- **Footer fijo**: "Generado: fecha+hora" + "Página X de Y".
+- **Filtros propagados**: el botón "Planilla PDF" de `/payroll/[id]`
+  construye el `href` con los `search` / `department` / `employeeIds` /
+  `payrollTypeId` actuales. La cookie `payroll.activeTypeId` actúa como
+  fallback. Ambas rutas (`/api/payroll/:id/pdf` y
+  `/api/reports/payroll/:id/pdf`) comparten `parsePayrollReportFilters` +
+  `fetchPayrollReportData` + `renderPayrollPdfResponse`.
+- **DB**: `getPayrollLines` / `getPayrollLinesPaged` ahora devuelven
+  `employee.idNumber` (cédula panameña) para la columna correspondiente.
+
+## Avance previo de la sesión 3 — Módulo de Reportes de Planilla
 
 - ✅ **Refactorización de la generación de PDF** a una capa de reportes
   reutilizable (`apps/web/src/lib/reports/`): data-fetcher único
@@ -359,8 +385,14 @@ mediante `orientation="landscape"` en el componente `PayrollPdf`
 
 ### Completado
 
-- [x] **Planilla PDF (landscape)** — disponible como botón primario en
-  `/payroll/[id]` y desde el dropdown de `/reports/payroll`.
+- [x] **Planilla PDF (A4 landscape, sin tope de empleados)** — formato
+  oficial con 10 columnas, fila de totales, 3 firmas, encabezado con logo
+  + nombre + tipo + período, footer con fecha+hora y "Página X de Y".
+- [x] Paginación completa en el fetcher: pages 2..N en paralelo.
+- [x] Filtros propagados desde `/payroll/[id]`: `search`, `department`,
+  `employeeIds`, `payrollTypeId` (con fallback a la cookie
+  `payroll.activeTypeId`). Parser compartido `parsePayrollReportFilters`.
+- [x] Cédula del empleado (`idNumber`) expuesta desde `getPayrollLines`.
 - [x] Nuevo endpoint canónico `GET /api/reports/payroll/:id/pdf`.
 - [x] Ruta legacy `GET /api/payroll/:id/pdf` mantenida (delega al renderer
   compartido).

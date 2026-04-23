@@ -1,4 +1,4 @@
-import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,9 @@ export type PdfPayrollLine = {
     concepts: PdfLineConceptEntry[]
   }
   employee: {
+    id: string
     code: string
+    idNumber?: string | null
     firstName: string
     lastName: string
     department: string | null
@@ -39,307 +41,465 @@ export type PdfPayroll = {
   totalNet: string
 }
 
+export type PdfCompany = {
+  companyName: string | null
+  logoEmpresa: string | null
+  elaboradoPor: string | null
+  cargoElaborador: string | null
+  jefeRecursosHumanos: string | null
+  cargoJefeRrhh: string | null
+  directorGeneral?: string | null
+  cargoDirector?: string | null
+}
+
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 
 Font.registerHyphenationCallback((word) => [word])
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Palette ─────────────────────────────────────────────────────────────────
 
 const C = {
   black: '#111827',
   gray700: '#374151',
   gray500: '#6b7280',
   gray400: '#9ca3af',
+  gray300: '#d1d5db',
   gray200: '#e5e7eb',
   gray100: '#f3f4f6',
   gray50: '#f9fafb',
-  blue600: '#2563eb',
+  blue700: '#1d4ed8',
   blue50: '#eff6ff',
   emerald700: '#047857',
   emerald50: '#ecfdf5',
   red600: '#dc2626',
   red50: '#fef2f2',
   white: '#ffffff',
+  navy: '#0f172a',
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
   page: {
     fontFamily: 'Helvetica',
     fontSize: 8,
     color: C.black,
-    paddingTop: 36,
-    paddingBottom: 48,
-    paddingHorizontal: 40,
+    paddingTop: 28,
+    paddingBottom: 40,
+    paddingHorizontal: 24,
   },
-  // Header
+  // ── Header ──
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 20,
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
   },
-  headerLeft: { flex: 1 },
-  appName: { fontSize: 14, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 2 },
-  payrollName: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.black, marginBottom: 4 },
-  metaRow: { flexDirection: 'row', gap: 12, marginBottom: 2 },
-  metaLabel: { color: C.gray500, fontSize: 7.5 },
-  metaValue: { color: C.gray700, fontSize: 7.5 },
-  statusPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
-    alignSelf: 'flex-start',
-  },
-  statusText: { fontSize: 7, fontFamily: 'Helvetica-Bold' },
-  // Divider
-  divider: { borderBottomWidth: 1, borderBottomColor: C.gray200, marginBottom: 14 },
-  // Totals
-  totalsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  totalCard: {
-    flex: 1,
-    backgroundColor: C.gray50,
-    borderRadius: 4,
-    padding: 10,
+  logoBox: {
+    width: 54,
+    height: 54,
     borderWidth: 1,
-    borderColor: C.gray200,
+    borderColor: C.gray300,
+    borderRadius: 4,
+    backgroundColor: C.gray50,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  totalLabel: { fontSize: 7, color: C.gray500, marginBottom: 3, textTransform: 'uppercase' },
-  totalValue: { fontSize: 12, fontFamily: 'Helvetica-Bold' },
-  // Table
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: C.gray100,
-    borderRadius: 3,
-    paddingVertical: 5,
-    paddingHorizontal: 6,
+  logoPlaceholder: {
+    fontSize: 7,
+    color: C.gray400,
+    fontFamily: 'Helvetica-Bold',
+    letterSpacing: 1,
+  },
+  headerMiddle: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  companyName: {
+    fontSize: 12,
+    fontFamily: 'Helvetica-Bold',
+    color: C.navy,
     marginBottom: 2,
   },
-  tableHeaderCell: {
+  reportTitle: {
+    fontSize: 14,
+    fontFamily: 'Helvetica-Bold',
+    color: C.black,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  periodLine: {
+    fontSize: 8.5,
+    color: C.gray700,
+  },
+  headerRight: {
+    width: 150,
+    alignItems: 'flex-end',
+  },
+  headerMeta: {
+    fontSize: 7,
+    color: C.gray500,
+    marginBottom: 1,
+  },
+  headerMetaStrong: {
+    fontSize: 8,
+    color: C.gray700,
+    fontFamily: 'Helvetica-Bold',
+  },
+  divider: { borderBottomWidth: 1, borderBottomColor: C.gray300, marginBottom: 10 },
+
+  // ── Table ──
+  table: { flexDirection: 'column' },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: C.navy,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+  },
+  th: {
     fontSize: 7,
     fontFamily: 'Helvetica-Bold',
-    color: C.gray500,
+    color: C.white,
     textTransform: 'uppercase',
+    paddingHorizontal: 2,
   },
-  tableRow: {
+  tr: {
     flexDirection: 'row',
-    paddingVertical: 5,
-    paddingHorizontal: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: C.gray100,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.gray200,
   },
-  tableRowAlt: { backgroundColor: C.gray50 },
-  cell: { fontSize: 7.5 },
-  cellBold: { fontSize: 7.5, fontFamily: 'Helvetica-Bold' },
-  cellMuted: { fontSize: 7, color: C.gray500, marginTop: 1 },
-  // Col widths
-  colEmployee: { flex: 3 },
-  colDept: { flex: 2.5 },
-  colAmount: { flex: 1.5, textAlign: 'right' },
-  colNet: { flex: 1.5, textAlign: 'right' },
-  // Concepts sub-row
-  conceptsRow: {
-    paddingHorizontal: 6,
-    paddingBottom: 6,
+  trAlt: { backgroundColor: C.gray50 },
+  td: { fontSize: 7.5, paddingHorizontal: 2 },
+  tdMuted: { color: C.gray500 },
+
+  // Column widths (A4 landscape usable width ≈ 794 pt after 24pt margins)
+  colEmployee: { width: '16%' },
+  colCedula: { width: '9%' },
+  colSueldo: { width: '8%', textAlign: 'right' },
+  colIngresos: { width: '8%', textAlign: 'right' },
+  colSS: { width: '8%', textAlign: 'right' },
+  colSE: { width: '8%', textAlign: 'right' },
+  colSiacap: { width: '8%', textAlign: 'right' },
+  colIsr: { width: '8%', textAlign: 'right' },
+  colOtras: { width: '10%', textAlign: 'right' },
+  colNeto: { width: '9%', textAlign: 'right' },
+
+  // ── Totals row ──
+  totalsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-  },
-  conceptPill: { paddingHorizontal: 5, paddingVertical: 2, borderRadius: 3, borderWidth: 1 },
-  conceptText: { fontSize: 6.5 },
-  // Footer
-  footer: {
-    position: 'absolute',
-    bottom: 24,
-    left: 40,
-    right: 40,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    backgroundColor: C.gray100,
     borderTopWidth: 1,
-    borderTopColor: C.gray200,
-    paddingTop: 6,
+    borderTopColor: C.navy,
+    marginTop: 2,
   },
-  footerText: { fontSize: 6.5, color: C.gray400 },
-  // Section title
-  sectionTitle: {
+  tdTotal: {
     fontSize: 8,
     fontFamily: 'Helvetica-Bold',
-    color: C.gray700,
-    marginBottom: 6,
-    textTransform: 'uppercase',
+    paddingHorizontal: 2,
   },
+
+  // ── Signatures ──
+  signatureSection: {
+    marginTop: 36,
+    flexDirection: 'row',
+    gap: 20,
+  },
+  signatureBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  signatureLabel: {
+    fontSize: 7,
+    color: C.gray500,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    marginBottom: 30,
+  },
+  signatureLine: {
+    borderTopWidth: 1,
+    borderTopColor: C.gray700,
+    width: '90%',
+    paddingTop: 4,
+    alignItems: 'center',
+  },
+  signatureName: { fontSize: 8.5, fontFamily: 'Helvetica-Bold', color: C.black },
+  signatureRole: { fontSize: 7.5, color: C.gray500, marginTop: 1 },
+
+  // ── Footer ──
+  footer: {
+    position: 'absolute',
+    bottom: 16,
+    left: 24,
+    right: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 0.5,
+    borderTopColor: C.gray300,
+    paddingTop: 4,
+  },
+  footerText: { fontSize: 6.5, color: C.gray500 },
 })
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmt(v: string | number) {
-  return Number(v).toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function fmt(v: number) {
+  return v.toLocaleString('es-PA', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function toNumber(v: string | number | undefined | null): number {
+  if (v === undefined || v === null) return 0
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatDateISO(iso: string): string {
+  // Input is YYYY-MM-DD; output DD-MM-YYYY (avoids locale/timezone surprises).
+  const [y, m, d] = iso.split('-')
+  if (!y || !m || !d) return iso
+  return `${d}-${m}-${y}`
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  regular: 'Regular',
-  thirteenth: 'XIII Mes',
-  special: 'Especial',
-}
-const FREQ_LABEL: Record<string, string> = {
-  biweekly: 'Quincenal',
-  monthly: 'Mensual',
-  weekly: 'Semanal',
-}
-const STATUS_LABEL: Record<string, string> = {
-  created: 'Creada',
-  generated: 'Generada',
-  closed: 'Cerrada',
-  processing: 'Procesando',
-}
-const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
-  created: { bg: C.gray100, text: C.gray500 },
-  generated: { bg: C.blue50, text: C.blue600 },
-  closed: { bg: C.emerald50, text: C.emerald700 },
-  processing: { bg: '#fffbeb', text: '#b45309' },
+  regular: 'REGULAR',
+  thirteenth: 'XIII MES',
+  special: 'ESPECIAL',
 }
 
-// ─── Document ────────────────────────────────────────────────────────────────
+/**
+ * Canonical concept codes for Panamá legal deductions. Anything outside this
+ * set falls into "Otras Deducciones".
+ */
+const CODE = {
+  sueldo: new Set(['SUELDO', 'SALARIO', 'SALARIO_BASE']),
+  ss: new Set(['SS', 'SEGURO_SOCIAL', 'CSS']),
+  se: new Set(['SE', 'SEGURO_EDUCATIVO', 'SEDU']),
+  siacap: new Set(['SIACAP']),
+  isr: new Set(['ISR', 'IMP_RENTA', 'IMPUESTO_RENTA']),
+}
+
+/**
+ * Split a line's concepts into the 8 numeric buckets the planilla needs.
+ * Exposed as a pure function so tests and callers can reuse the same math.
+ */
+export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
+  sueldo: number
+  ingresos: number
+  ss: number
+  se: number
+  siacap: number
+  isr: number
+  otrasDeducciones: number
+  neto: number
+} {
+  let sueldo = 0
+  let ingresos = 0
+  let ss = 0
+  let se = 0
+  let siacap = 0
+  let isr = 0
+  let otrasDeducciones = 0
+
+  for (const c of line.concepts) {
+    const code = c.code?.toUpperCase() ?? ''
+    const amount = toNumber(c.amount)
+
+    if (c.type === 'income') {
+      ingresos += amount
+      if (CODE.sueldo.has(code)) sueldo = amount
+      continue
+    }
+
+    if (c.type === 'deduction') {
+      if (CODE.ss.has(code)) {
+        ss += amount
+      } else if (CODE.se.has(code)) {
+        se += amount
+      } else if (CODE.siacap.has(code)) {
+        siacap += amount
+      } else if (CODE.isr.has(code)) {
+        isr += amount
+      } else {
+        otrasDeducciones += amount
+      }
+    }
+  }
+
+  // If the tenant has no explicit SUELDO concept, fall back to the full gross —
+  // in that case "Sueldo" and "Ingresos" happen to be equal.
+  if (sueldo === 0) sueldo = ingresos
+
+  const neto = toNumber(line.netAmount)
+  return { sueldo, ingresos, ss, se, siacap, isr, otrasDeducciones, neto }
+}
+
+// ─── Document ─────────────────────────────────────────────────────────────────
 
 export function PayrollPdf({
   payroll,
   lines,
+  company,
 }: {
   payroll: PdfPayroll
   lines: PdfPayrollLine[]
+  company: PdfCompany | null
 }) {
-  const status = STATUS_COLORS[payroll.status] ?? { bg: C.gray100, text: C.gray500 }
+  const buckets = lines.map((l) => ({
+    line: l,
+    ...computePayrollPdfBuckets(l.line),
+  }))
+
+  const totals = buckets.reduce(
+    (acc, b) => {
+      acc.sueldo += b.sueldo
+      acc.ingresos += b.ingresos
+      acc.ss += b.ss
+      acc.se += b.se
+      acc.siacap += b.siacap
+      acc.isr += b.isr
+      acc.otrasDeducciones += b.otrasDeducciones
+      acc.neto += b.neto
+      return acc
+    },
+    { sueldo: 0, ingresos: 0, ss: 0, se: 0, siacap: 0, isr: 0, otrasDeducciones: 0, neto: 0 }
+  )
+
   const generatedAt = new Date().toLocaleString('es-PA', {
-    dateStyle: 'long',
-    timeStyle: 'short',
+    dateStyle: 'medium',
+    timeStyle: 'medium',
   })
 
+  const companyName = company?.companyName ?? 'Empresa'
+  const logo = company?.logoEmpresa ?? null
+  const typeLabel = TYPE_LABEL[payroll.type] ?? payroll.type.toUpperCase()
+  const reportTitle = `PLANILLA ${typeLabel}`
+  const periodLine = `Desde ${formatDateISO(payroll.periodStart)} hasta ${formatDateISO(payroll.periodEnd)}`
+
+  const elaborador = {
+    name: company?.elaboradoPor ?? '',
+    role: company?.cargoElaborador ?? 'Especialista en Nóminas',
+  }
+  const revisor = {
+    name: company?.jefeRecursosHumanos ?? '',
+    role: company?.cargoJefeRrhh ?? 'Jefe de Recursos Humanos',
+  }
+  const autorizador = {
+    name: company?.directorGeneral ?? '',
+    role: company?.cargoDirector ?? 'Director General',
+  }
+
   return (
-    <Document title={payroll.name} author="PayrollSoft" subject="Planilla">
-      <Page size="LETTER" style={s.page} orientation="landscape">
-        {/* ── Header ── */}
-        <View style={s.header}>
-          <View style={s.headerLeft}>
-            <Text style={s.appName}>PayrollSoft</Text>
-            <Text style={s.payrollName}>{payroll.name}</Text>
-            <View style={s.metaRow}>
-              <Text style={s.metaLabel}>Tipo:</Text>
-              <Text style={s.metaValue}>{TYPE_LABEL[payroll.type] ?? payroll.type}</Text>
-              <Text style={s.metaLabel}>Frecuencia:</Text>
-              <Text style={s.metaValue}>{FREQ_LABEL[payroll.frequency] ?? payroll.frequency}</Text>
-              <Text style={s.metaLabel}>Período:</Text>
-              <Text style={s.metaValue}>
-                {payroll.periodStart} — {payroll.periodEnd}
-              </Text>
-              {payroll.paymentDate && (
-                <>
-                  <Text style={s.metaLabel}>Fecha de pago:</Text>
-                  <Text style={s.metaValue}>{payroll.paymentDate}</Text>
-                </>
-              )}
-            </View>
-          </View>
-          <View style={[s.statusPill, { backgroundColor: status.bg }]}>
-            <Text style={[s.statusText, { color: status.text }]}>
-              {STATUS_LABEL[payroll.status] ?? payroll.status}
-            </Text>
-          </View>
-        </View>
-
-        <View style={s.divider} />
-
-        {/* ── Totals ── */}
-        <View style={s.totalsRow}>
-          <View style={s.totalCard}>
-            <Text style={s.totalLabel}>Total Bruto</Text>
-            <Text style={[s.totalValue, { color: C.black }]}>{fmt(payroll.totalGross)}</Text>
-          </View>
-          <View style={s.totalCard}>
-            <Text style={s.totalLabel}>Deducciones</Text>
-            <Text style={[s.totalValue, { color: C.red600 }]}>{fmt(payroll.totalDeductions)}</Text>
-          </View>
-          <View style={[s.totalCard, { borderColor: C.emerald700, backgroundColor: C.emerald50 }]}>
-            <Text style={s.totalLabel}>Neto a Pagar</Text>
-            <Text style={[s.totalValue, { color: C.emerald700 }]}>{fmt(payroll.totalNet)}</Text>
-          </View>
-          <View style={[s.totalCard, { backgroundColor: C.white }]}>
-            <Text style={s.totalLabel}>Empleados</Text>
-            <Text style={[s.totalValue, { color: C.black }]}>{lines.length}</Text>
-          </View>
-        </View>
-
-        {/* ── Employee table ── */}
-        <Text style={s.sectionTitle}>Detalle por empleado</Text>
-
-        {/* Table header */}
-        <View style={s.tableHeader}>
-          <Text style={[s.tableHeaderCell, s.colEmployee]}>Empleado</Text>
-          <Text style={[s.tableHeaderCell, s.colDept]}>Depto / Puesto</Text>
-          <Text style={[s.tableHeaderCell, s.colAmount]}>Bruto</Text>
-          <Text style={[s.tableHeaderCell, s.colAmount]}>Deduc.</Text>
-          <Text style={[s.tableHeaderCell, s.colNet]}>Neto</Text>
-        </View>
-
-        {/* Table rows */}
-        {lines.map((l, i) => (
-          <View key={l.employee.code} wrap={false}>
-            <View style={[s.tableRow, i % 2 === 1 ? s.tableRowAlt : {}]}>
-              <View style={s.colEmployee}>
-                <Text style={s.cellBold}>
-                  {l.employee.firstName} {l.employee.lastName}
-                </Text>
-                <Text style={s.cellMuted}>{l.employee.code}</Text>
-              </View>
-              <View style={s.colDept}>
-                <Text style={s.cell}>{l.employee.department ?? '—'}</Text>
-                {l.employee.position && <Text style={s.cellMuted}>{l.employee.position}</Text>}
-              </View>
-              <Text style={[s.cell, s.colAmount]}>{fmt(l.line.grossAmount)}</Text>
-              <Text style={[s.cell, s.colAmount, { color: C.red600 }]}>
-                {fmt(l.line.deductions)}
-              </Text>
-              <Text style={[s.cellBold, s.colNet, { color: C.emerald700 }]}>
-                {fmt(l.line.netAmount)}
-              </Text>
-            </View>
-            {/* Concept pills */}
-            {l.line.concepts.filter((c) => c.amount !== 0).length > 0 && (
-              <View style={[s.conceptsRow, i % 2 === 1 ? { backgroundColor: C.gray50 } : {}]}>
-                {l.line.concepts
-                  .filter((c) => c.amount !== 0)
-                  .map((c) => (
-                    <View
-                      key={c.code}
-                      style={[
-                        s.conceptPill,
-                        {
-                          backgroundColor: c.type === 'income' ? C.blue50 : C.red50,
-                          borderColor: c.type === 'income' ? '#bfdbfe' : '#fecaca',
-                        },
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          s.conceptText,
-                          { color: c.type === 'income' ? C.blue600 : C.red600 },
-                        ]}
-                      >
-                        {c.code} · {c.name}: {fmt(c.amount)}
-                      </Text>
-                    </View>
-                  ))}
-              </View>
+    <Document title={reportTitle} author="PayrollSoft" subject={payroll.name}>
+      <Page size="A4" style={s.page} orientation="landscape" wrap>
+        {/* ── Header (repeats on every page) ── */}
+        <View style={s.header} fixed>
+          <View style={s.logoBox}>
+            {logo ? (
+              <Image src={logo} style={{ width: 48, height: 48, objectFit: 'contain' }} />
+            ) : (
+              <Text style={s.logoPlaceholder}>LOGO</Text>
             )}
           </View>
-        ))}
+          <View style={s.headerMiddle}>
+            <Text style={s.companyName}>{companyName}</Text>
+            <Text style={s.reportTitle}>{reportTitle}</Text>
+            <Text style={s.periodLine}>{periodLine}</Text>
+          </View>
+          <View style={s.headerRight}>
+            <Text style={s.headerMeta}>Planilla</Text>
+            <Text style={s.headerMetaStrong}>{payroll.name}</Text>
+            {payroll.paymentDate && (
+              <Text style={s.headerMeta}>Pago: {formatDateISO(payroll.paymentDate)}</Text>
+            )}
+            <Text style={s.headerMeta}>Empleados: {lines.length}</Text>
+          </View>
+        </View>
+
+        <View style={s.divider} fixed />
+
+        {/* ── Table ── */}
+        <View style={s.table}>
+          {/* Header row (repeats every page via `fixed`) */}
+          <View style={s.tableHeader} fixed>
+            <Text style={[s.th, s.colEmployee]}>Empleado</Text>
+            <Text style={[s.th, s.colCedula]}>Cédula</Text>
+            <Text style={[s.th, s.colSueldo]}>Sueldo</Text>
+            <Text style={[s.th, s.colIngresos]}>Ingresos</Text>
+            <Text style={[s.th, s.colSS]}>Seg. Social</Text>
+            <Text style={[s.th, s.colSE]}>Seg. Edu.</Text>
+            <Text style={[s.th, s.colSiacap]}>SIACAP</Text>
+            <Text style={[s.th, s.colIsr]}>ISR</Text>
+            <Text style={[s.th, s.colOtras]}>Otras Ded.</Text>
+            <Text style={[s.th, s.colNeto]}>Neto</Text>
+          </View>
+
+          {/* Body rows */}
+          {buckets.map((b, i) => {
+            const emp = b.line.employee
+            const fullName = `${emp.firstName} ${emp.lastName}`.trim()
+            return (
+              <View key={emp.code} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
+                <Text style={[s.td, s.colEmployee]}>{fullName}</Text>
+                <Text style={[s.td, s.colCedula, s.tdMuted]}>{emp.idNumber ?? '—'}</Text>
+                <Text style={[s.td, s.colSueldo]}>{fmt(b.sueldo)}</Text>
+                <Text style={[s.td, s.colIngresos]}>{fmt(b.ingresos)}</Text>
+                <Text style={[s.td, s.colSS]}>{fmt(b.ss)}</Text>
+                <Text style={[s.td, s.colSE]}>{fmt(b.se)}</Text>
+                <Text style={[s.td, s.colSiacap]}>{fmt(b.siacap)}</Text>
+                <Text style={[s.td, s.colIsr]}>{fmt(b.isr)}</Text>
+                <Text style={[s.td, s.colOtras]}>{fmt(b.otrasDeducciones)}</Text>
+                <Text style={[s.td, s.colNeto, { fontFamily: 'Helvetica-Bold' }]}>
+                  {fmt(b.neto)}
+                </Text>
+              </View>
+            )
+          })}
+
+          {/* Totals row */}
+          <View style={s.totalsRow} wrap={false}>
+            <Text style={[s.tdTotal, s.colEmployee]}>TOTALES</Text>
+            <Text style={[s.tdTotal, s.colCedula, s.tdMuted]}>{lines.length} emp.</Text>
+            <Text style={[s.tdTotal, s.colSueldo]}>{fmt(totals.sueldo)}</Text>
+            <Text style={[s.tdTotal, s.colIngresos]}>{fmt(totals.ingresos)}</Text>
+            <Text style={[s.tdTotal, s.colSS]}>{fmt(totals.ss)}</Text>
+            <Text style={[s.tdTotal, s.colSE]}>{fmt(totals.se)}</Text>
+            <Text style={[s.tdTotal, s.colSiacap]}>{fmt(totals.siacap)}</Text>
+            <Text style={[s.tdTotal, s.colIsr]}>{fmt(totals.isr)}</Text>
+            <Text style={[s.tdTotal, s.colOtras]}>{fmt(totals.otrasDeducciones)}</Text>
+            <Text style={[s.tdTotal, s.colNeto, { color: C.emerald700 }]}>{fmt(totals.neto)}</Text>
+          </View>
+        </View>
+
+        {/* ── Signatures ── */}
+        <View style={s.signatureSection} wrap={false}>
+          {[
+            { label: 'Elaborado por', ...elaborador },
+            { label: 'Revisado por', ...revisor },
+            { label: 'Autorizado por', ...autorizador },
+          ].map((sig) => (
+            <View key={sig.label} style={s.signatureBlock}>
+              <Text style={s.signatureLabel}>{sig.label}</Text>
+              <View style={s.signatureLine}>
+                <Text style={s.signatureName}>{sig.name || ' '}</Text>
+                <Text style={s.signatureRole}>{sig.role}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
 
         {/* ── Footer ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>PayrollSoft — {payroll.name}</Text>
+          <Text style={s.footerText}>Generado: {generatedAt}</Text>
+          <Text style={s.footerText}>
+            {companyName} — {payroll.name}
+          </Text>
           <Text
             style={s.footerText}
             render={({ pageNumber, totalPages }) => `Página ${pageNumber} de ${totalPages}`}
           />
-          <Text style={s.footerText}>Generado: {generatedAt}</Text>
         </View>
       </Page>
     </Document>
