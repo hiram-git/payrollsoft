@@ -187,7 +187,7 @@ const freqLabel: Record<string, string> = {
         </button>
         {payrollTypes.length > 0 && (
           <button type="button" class="tab-btn" data-tab="nomina" onclick="switchTab('nomina', this)">
-            Tipos de Nómina
+            Tipos de Planilla
           </button>
         )}
       </div>
@@ -403,12 +403,12 @@ const freqLabel: Record<string, string> = {
         </div>
       </div>
 
-      <!-- TAB: Tipos de Nómina -->
+      <!-- TAB: Tipos de Planilla -->
       {payrollTypes.length > 0 && (
         <div id="tab-nomina" style="display:none">
           <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-1">Tipos de Nómina</h3>
-            <p class="text-xs text-gray-500 mb-4">El empleado debe pertenecer a al menos un tipo de nómina.</p>
+            <h3 class="font-semibold text-gray-800 mb-1">Tipos de Planilla</h3>
+            <p class="text-xs text-gray-500 mb-4">El empleado debe pertenecer a al menos un tipo de planilla.</p>
             <div class="grid grid-cols-2 gap-3">
               {payrollTypes.map((pt) => (
                 <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">

@@ -43,7 +43,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     mailFromAddress: gn('mailFromAddress'),
     mailFromName: gn('mailFromName'),
     elaboradoPor: gn('elaboradoPor'),
-    cargoElaborador: g('cargoElaborador') || 'Especialista en Nóminas',
+    cargoElaborador: g('cargoElaborador') || 'Especialista en Planillas',
     jefeRecursosHumanos: gn('jefeRecursosHumanos'),
     cargoJefeRrhh: g('cargoJefeRrhh') || 'Jefe de Recursos Humanos',
     // Logos: base64 data URLs or empty string → null

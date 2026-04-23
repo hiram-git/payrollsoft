@@ -34,13 +34,13 @@ const activeCount = conceptos.filter((c) => c.isActive).length
 const inactiveCount = conceptos.length - activeCount
 ---
 
-<AppLayout title="Conceptos de Nómina">
+<AppLayout title="Conceptos de Planilla">
   <div class="page">
 
     <!-- Header -->
     <div class="hdr">
       <div>
-        <h1 class="hdr-title">Conceptos de Nómina</h1>
+        <h1 class="hdr-title">Conceptos de Planilla</h1>
         <p class="hdr-sub">
           {activeCount} activos{inactiveCount > 0 && <span> · {inactiveCount} inactivos</span>}
         </p>
