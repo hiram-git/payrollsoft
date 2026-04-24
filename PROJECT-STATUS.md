@@ -1,7 +1,33 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** 23 de abril de 2026 (sesión 3 — feedback independiente por botón en `/payroll/[id]`)
+**Última actualización:** 23 de abril de 2026 (sesión 3 — `/employees` filtrado por tipo desde el navbar)
 **Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
+
+## Avance de la sesión 3 (23/04/2026) — Listado de empleados filtrado por el navbar
+
+Propaga la selección de tipo de planilla del navbar al listado de
+empleados, sin nuevas queries ni migraciones:
+
+- **Backend ya soportado** — `listEmployees(db, { payrollTypeId }, ...)`
+  en `packages/db/src/query-builder.ts` aplica un `IN` sobre
+  `employee_payroll_types.payroll_type_id`. Sólo entran al resultado
+  los empleados que tienen una fila que los vincula al tipo activo.
+  La ruta API `GET /employees?payrollTypeId=…` ya expone el parámetro.
+- **UI** (`apps/web/src/pages/employees/index.astro`) ahora lee la
+  cookie `payroll.activeTypeId` — la misma que actualiza el selector
+  del navbar vía `/api/config/select-payroll-type` — y la reenvía como
+  `?payrollTypeId=…` a la API al cargar el listado. Si el usuario
+  limpia el selector ("Todos los tipos") la cookie queda vacía y no
+  se aplica filtro: se muestran todos los empleados.
+- **Hint visual**: cuando el filtro está activo, aparece un chip azul
+  junto al título "Filtrado por tipo de planilla" con tooltip
+  explicativo.
+- **Reactividad**: el selector del navbar recarga la página con un
+  POST + redirect, así que el listado queda actualizado
+  automáticamente tras cambiar el tipo — misma mecánica que ya usa
+  `/reports/payroll`.
+
+## Avance previo de la sesión 3 — Feedback independiente por botón en el dropdown de Reportes
 
 ## Avance de la sesión 3 (23/04/2026) — Feedback independiente por botón en el dropdown de Reportes
 
