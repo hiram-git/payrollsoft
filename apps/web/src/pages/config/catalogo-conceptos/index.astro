@@ -131,7 +131,12 @@ const isCuentasTab = activeTab === 'cuentas'
               </thead>
               <tbody>
                 {cuentasContables.map((item) => (
-                  <tr class="tr" id={`row-${item.id}`}>
+                  <tr
+                    class="tr"
+                    id={`row-${item.id}`}
+                    data-edit-target={item.id}
+                    data-name={item.name}
+                  >
                     <td class="td td-code">{item.code}</td>
                     <td class="td view-name">{item.name}</td>
 
@@ -142,9 +147,9 @@ const isCuentasTab = activeTab === 'cuentas'
                         class="edit-row"
                       >
                         <input type="hidden" name="_method" value="PUT" />
-                        <input type="text" name="name" value={item.name} class="inp flex-1" required maxlength="255" />
+                        <input type="text" name="name" value={item.name} data-edit-input="name" class="inp flex-1" required maxlength="255" />
                         <button type="submit" class="btn-ok-sm">Guardar</button>
-                        <button type="button" onclick={`cancelEdit('${item.id}')`} class="btn-ghost-sm">Cancelar</button>
+                        <button type="button" data-cancel-edit={item.id} class="btn-ghost-sm">Cancelar</button>
                       </form>
                     </td>
 
@@ -152,7 +157,7 @@ const isCuentasTab = activeTab === 'cuentas'
                       <div class="row-actions">
                         <button
                           type="button"
-                          onclick={`startEditCuenta('${item.id}')`}
+                          data-start-edit-cuenta={item.id}
                           title="Editar"
                           class="action-btn"
                         >
@@ -221,7 +226,13 @@ const isCuentasTab = activeTab === 'cuentas'
               </thead>
               <tbody>
                 {currentTab.items.map((item) => (
-                  <tr class="tr" id={`row-${item.id}`}>
+                  <tr
+                    class="tr"
+                    id={`row-${item.id}`}
+                    data-edit-target={item.id}
+                    data-name={item.name}
+                    data-sort-order={item.sortOrder}
+                  >
                     <td class="td td-code">{item.code}</td>
                     <td class="td view-name">{item.name}</td>
                     <td class="td text-center view-order">{item.sortOrder}</td>
@@ -235,10 +246,10 @@ const isCuentasTab = activeTab === 'cuentas'
                       >
                         <input type="hidden" name="_method" value="PUT" />
                         <input type="hidden" name="_tab" value={activeTab} />
-                        <input type="text" name="name" value={item.name} class="inp flex-1" required maxlength="100" />
-                        <input type="number" name="sortOrder" value={item.sortOrder} class="inp w-20" min="0" />
+                        <input type="text" name="name" value={item.name} data-edit-input="name" class="inp flex-1" required maxlength="100" />
+                        <input type="number" name="sortOrder" value={item.sortOrder} data-edit-input="sortOrder" class="inp w-20" min="0" />
                         <button type="submit" class="btn-ok-sm">Guardar</button>
-                        <button type="button" onclick={`cancelEdit('${item.id}')`} class="btn-ghost-sm">Cancelar</button>
+                        <button type="button" data-cancel-edit={item.id} class="btn-ghost-sm">Cancelar</button>
                       </form>
                     </td>
 
@@ -246,7 +257,7 @@ const isCuentasTab = activeTab === 'cuentas'
                       <div class="row-actions">
                         <button
                           type="button"
-                          onclick={`startEdit('${item.id}')`}
+                          data-start-edit={item.id}
                           title="Editar"
                           class="action-btn"
                         >
@@ -365,21 +376,67 @@ const isCuentasTab = activeTab === 'cuentas'
     document.getElementById('newItemForm')?.classList.add('hidden')
   })
 
-  function startEdit(id) {
-    const row = document.getElementById('row-' + id)
-    row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.add('hidden'))
-    row.querySelectorAll('.edit-cell').forEach(el => el.classList.remove('hidden'))
+  // Sync the inline-edit inputs with the canonical values carried on the row
+  // via `data-*` attributes. Rewriting the .value on every open guarantees
+  // the field reflects the latest DB value that was server-rendered — any
+  // stale text left over from a previous aborted edit is wiped. Without
+  // this, the browser would keep whatever the user last typed into the
+  // input node, making the field appear "not pre-loaded".
+  function resetEditInputs(row) {
+    var inputs = row.querySelectorAll('[data-edit-input]')
+    for (var i = 0; i < inputs.length; i++) {
+      var input = inputs[i]
+      var key = input.getAttribute('data-edit-input')
+      if (key === 'name') input.value = row.dataset.name || ''
+      else if (key === 'sortOrder') input.value = row.dataset.sortOrder || '0'
+    }
   }
 
-  function startEditCuenta(id) {
-    const row = document.getElementById('row-' + id)
-    row.querySelectorAll('.view-name, .view-actions').forEach(el => el.classList.add('hidden'))
-    row.querySelectorAll('.edit-cell').forEach(el => el.classList.remove('hidden'))
+  function openEdit(row, hideSelectors) {
+    resetEditInputs(row)
+    row.querySelectorAll(hideSelectors).forEach(function (el) { el.classList.add('hidden') })
+    row.querySelectorAll('.edit-cell').forEach(function (el) { el.classList.remove('hidden') })
+    var firstInput = row.querySelector('[data-edit-input="name"]')
+    if (firstInput) {
+      firstInput.focus()
+      firstInput.select()
+    }
   }
 
-  function cancelEdit(id) {
-    const row = document.getElementById('row-' + id)
-    row.querySelectorAll('.view-name, .view-order, .view-actions').forEach(el => el.classList.remove('hidden'))
-    row.querySelectorAll('.edit-cell').forEach(el => el.classList.add('hidden'))
+  function closeEdit(row, showSelectors) {
+    row.querySelectorAll(showSelectors).forEach(function (el) { el.classList.remove('hidden') })
+    row.querySelectorAll('.edit-cell').forEach(function (el) { el.classList.add('hidden') })
   }
+
+  // Delegated listeners — robust against Astro's script scoping and easier
+  // to reason about than a string of onclick="fn(id)" attributes.
+  document.addEventListener('click', function (e) {
+    var target = e.target instanceof Element ? e.target : null
+    if (!target) return
+    var startBtn = target.closest('[data-start-edit]')
+    if (startBtn) {
+      var id = startBtn.getAttribute('data-start-edit')
+      var row = document.getElementById('row-' + id)
+      if (row) openEdit(row, '.view-name, .view-order, .view-actions')
+      return
+    }
+    var startCuentaBtn = target.closest('[data-start-edit-cuenta]')
+    if (startCuentaBtn) {
+      var idC = startCuentaBtn.getAttribute('data-start-edit-cuenta')
+      var rowC = document.getElementById('row-' + idC)
+      if (rowC) openEdit(rowC, '.view-name, .view-actions')
+      return
+    }
+    var cancelBtn = target.closest('[data-cancel-edit]')
+    if (cancelBtn) {
+      var idX = cancelBtn.getAttribute('data-cancel-edit')
+      var rowX = document.getElementById('row-' + idX)
+      if (rowX) {
+        var showSel = rowX.dataset.sortOrder !== undefined
+          ? '.view-name, .view-order, .view-actions'
+          : '.view-name, .view-actions'
+        closeEdit(rowX, showSel)
+      }
+    }
+  })
 </script>
