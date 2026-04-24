@@ -1,9 +1,38 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** 23 de abril de 2026 (sesión 3 — hook unificado `usePayrollReport`)
+**Última actualización:** 23 de abril de 2026 (sesión 3 — feedback independiente por botón en `/payroll/[id]`)
 **Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
 
-## Avance de la sesión 3 (23/04/2026) — Hook unificado `usePayrollReport`
+## Avance de la sesión 3 (23/04/2026) — Feedback independiente por botón en el dropdown de Reportes
+
+Refactor del dropdown "Reportes" en `/payroll/[id]` para que cada acción
+(Generar / Descargar / Regenerar) maneje su propio estado de carga sin
+bloquear ni afectar al resto de los botones de la vista:
+
+- **Eliminado el modal bloqueante** (`report-modal`) que anteriormente
+  oscurecía toda la pantalla durante una generación. Ya no hay
+  `body.overflow=hidden`, así que las acciones de la vista (Cerrar
+  planilla, Reabrir, Eliminar, Regenerar planilla, etc.) siguen
+  operativas durante una regeneración del PDF.
+- **Spinner inline por ítem**: cada `<button>` del dropdown lleva dos
+  íconos (estático + busy) que se intercambian con `.hidden` cuando ese
+  botón específico entra en busy. La etiqueta también cambia
+  ("Generar" → "Generando…", "Regenerar" → "Regenerando…",
+  "Descargar" → "Descargando…").
+- **Aislamiento real**: helper `controllerFor(action, defaultLabel,
+  busyLabel)` por botón, que expone `setVisible / setBusy / setEnabled
+  / showError`. Sólo el botón clicado se deshabilita; los demás
+  permanecen interactivos. El trigger del dropdown tampoco se
+  deshabilita.
+- **Errores localizados**: si la generación falla, el mensaje aparece
+  bajo el botón que disparó la acción (vía `data-row-error`), no en un
+  cartel global.
+- La visibilidad sigue dictada por la máquina de estados:
+  `not_generated` muestra Generar; `generated` muestra Descargar +
+  Regenerar. La descarga incluye una breve señal visual (1.5 s)
+  porque la navegación al endpoint la hace el navegador.
+
+## Avance previo de la sesión 3 — Hook unificado `usePayrollReport`
 
 Consolida la lógica de la máquina de estados del reporte en un único
 composable reutilizable por la vista de detalle y el listado:
