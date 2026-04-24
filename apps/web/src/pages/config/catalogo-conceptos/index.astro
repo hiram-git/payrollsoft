@@ -124,7 +124,7 @@ const isCuentasTab = activeTab === 'cuentas'
             <table class="tbl">
               <thead>
                 <tr>
-                  <th class="th">Código</th>
+                  <th class="th w-32">Código</th>
                   <th class="th">Nombre</th>
                   <th class="th w-28"></th>
                 </tr>
@@ -137,27 +137,38 @@ const isCuentasTab = activeTab === 'cuentas'
                     data-edit-target={item.id}
                     data-name={item.name}
                   >
-                    <td class="td td-code">{item.code}</td>
-                    <td class="td view-name">{item.name}</td>
+                    <td class="td td-code w-32">{item.code}</td>
 
-                    <td class="td hidden edit-cell" colspan="2">
+                    <!-- Nombre column hosts both the read-only label and the
+                         edit form — keeping them in the same <td> as the
+                         thead's Nombre column guarantees the input picks up
+                         the same width as the header. -->
+                    <td class="td">
+                      <span class="view-mode">{item.name}</span>
                       <form
+                        id={`edit-form-${item.id}`}
                         method="POST"
                         action={`/api/config/cuentas-contables/${item.id}`}
-                        class="edit-row"
+                        class="edit-mode hidden"
                       >
                         <input type="hidden" name="_method" value="PUT" />
-                        <input type="text" name="name" value={item.name} data-edit-input="name" class="inp flex-1" required maxlength="255" />
-                        <button type="submit" class="btn-ok-sm">Guardar</button>
-                        <button type="button" data-cancel-edit={item.id} class="btn-ghost-sm">Cancelar</button>
+                        <input
+                          type="text"
+                          name="name"
+                          value={item.name}
+                          data-edit-input="name"
+                          class="inp"
+                          required
+                          maxlength="255"
+                        />
                       </form>
                     </td>
 
-                    <td class="td view-actions">
-                      <div class="row-actions">
+                    <td class="td w-28">
+                      <div class="row-actions view-mode">
                         <button
                           type="button"
-                          data-start-edit-cuenta={item.id}
+                          data-start-edit={item.id}
                           title="Editar"
                           class="action-btn"
                         >
@@ -178,6 +189,10 @@ const isCuentasTab = activeTab === 'cuentas'
                             </svg>
                           </button>
                         </form>
+                      </div>
+                      <div class="edit-actions edit-mode hidden">
+                        <button type="submit" form={`edit-form-${item.id}`} class="btn-ok-sm">Guardar</button>
+                        <button type="button" data-cancel-edit={item.id} class="btn-ghost-sm">Cancelar</button>
                       </div>
                     </td>
                   </tr>
@@ -218,7 +233,7 @@ const isCuentasTab = activeTab === 'cuentas'
             <table class="tbl">
               <thead>
                 <tr>
-                  <th class="th">Código</th>
+                  <th class="th w-32">Código</th>
                   <th class="th">Nombre</th>
                   <th class="th w-20 text-center">Orden</th>
                   <th class="th w-28"></th>
@@ -233,28 +248,50 @@ const isCuentasTab = activeTab === 'cuentas'
                     data-name={item.name}
                     data-sort-order={item.sortOrder}
                   >
-                    <td class="td td-code">{item.code}</td>
-                    <td class="td view-name">{item.name}</td>
-                    <td class="td text-center view-order">{item.sortOrder}</td>
+                    <td class="td td-code w-32">{item.code}</td>
 
-                    <!-- Edit inline form (hidden, spans name+order+actions cols via JS) -->
-                    <td class="td hidden edit-cell" colspan="3">
+                    <!-- Each column in the body matches the matching <th>
+                         one-to-one. The edit form lives inside the Nombre
+                         cell; the sortOrder input and submit button link
+                         back to the form via form="edit-form-{id}" so the
+                         inputs keep their own columns yet submit as one. -->
+                    <td class="td">
+                      <span class="view-mode">{item.name}</span>
                       <form
+                        id={`edit-form-${item.id}`}
                         method="POST"
                         action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
-                        class="edit-row"
+                        class="edit-mode hidden"
                       >
                         <input type="hidden" name="_method" value="PUT" />
                         <input type="hidden" name="_tab" value={activeTab} />
-                        <input type="text" name="name" value={item.name} data-edit-input="name" class="inp flex-1" required maxlength="100" />
-                        <input type="number" name="sortOrder" value={item.sortOrder} data-edit-input="sortOrder" class="inp w-20" min="0" />
-                        <button type="submit" class="btn-ok-sm">Guardar</button>
-                        <button type="button" data-cancel-edit={item.id} class="btn-ghost-sm">Cancelar</button>
+                        <input
+                          type="text"
+                          name="name"
+                          value={item.name}
+                          data-edit-input="name"
+                          class="inp"
+                          required
+                          maxlength="100"
+                        />
                       </form>
                     </td>
 
-                    <td class="td view-actions">
-                      <div class="row-actions">
+                    <td class="td text-center w-20">
+                      <span class="view-mode">{item.sortOrder}</span>
+                      <input
+                        type="number"
+                        form={`edit-form-${item.id}`}
+                        name="sortOrder"
+                        value={item.sortOrder}
+                        data-edit-input="sortOrder"
+                        class="inp edit-mode hidden"
+                        min="0"
+                      />
+                    </td>
+
+                    <td class="td w-28">
+                      <div class="row-actions view-mode">
                         <button
                           type="button"
                           data-start-edit={item.id}
@@ -279,6 +316,10 @@ const isCuentasTab = activeTab === 'cuentas'
                             </svg>
                           </button>
                         </form>
+                      </div>
+                      <div class="edit-actions edit-mode hidden">
+                        <button type="submit" form={`edit-form-${item.id}`} class="btn-ok-sm">Guardar</button>
+                        <button type="button" data-cancel-edit={item.id} class="btn-ghost-sm">Cancelar</button>
                       </div>
                     </td>
                   </tr>
@@ -325,19 +366,22 @@ const isCuentasTab = activeTab === 'cuentas'
   .form-actions { display: flex; gap: .5rem; align-items: flex-end; }
 
   /* Table */
-  .tbl { width: 100%; border-collapse: collapse; font-size: .8125rem; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: .8125rem; table-layout: fixed; }
   .th  { padding: .625rem 1rem; text-align: left; font-size: .75rem; font-weight: 600; color: var(--mute); text-transform: uppercase; letter-spacing: .04em; background: var(--ink-3); border-bottom: 1px solid var(--rule); }
   .td  { padding: .75rem 1rem; color: var(--fore); border-bottom: 1px solid var(--rule); vertical-align: middle; }
   .tr:last-child .td { border-bottom: none; }
   .tr:hover .td { background: var(--ink-3); }
   .td-code { font-family: var(--f-mono); font-size: .75rem; color: var(--mute-2); }
+  /* Column widths — declared on both <th> and matching <td> so the table
+     keeps a predictable layout when inputs replace plain text in edit mode. */
   .w-20 { width: 5rem; }
   .w-28 { width: 7rem; }
+  .w-32 { width: 8rem; }
   .text-center { text-align: center; }
 
-  /* Edit inline */
-  .edit-cell { padding: .5rem 1rem; }
-  .edit-row  { display: flex; gap: .625rem; align-items: center; }
+  /* Inline edit — actions live inside the same <td> as view-mode actions
+     so the column width (w-28) is preserved when toggling between modes. */
+  .edit-actions { display: flex; align-items: center; justify-content: flex-end; gap: .375rem; }
 
   /* Row actions */
   .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
@@ -369,19 +413,18 @@ const isCuentasTab = activeTab === 'cuentas'
 
 <script is:inline>
   // Toggle new item form
-  document.getElementById('btnNew')?.addEventListener('click', () => {
+  document.getElementById('btnNew')?.addEventListener('click', function () {
     document.getElementById('newItemForm')?.classList.toggle('hidden')
   })
-  document.getElementById('btnCancelNew')?.addEventListener('click', () => {
+  document.getElementById('btnCancelNew')?.addEventListener('click', function () {
     document.getElementById('newItemForm')?.classList.add('hidden')
   })
 
-  // Sync the inline-edit inputs with the canonical values carried on the row
-  // via `data-*` attributes. Rewriting the .value on every open guarantees
-  // the field reflects the latest DB value that was server-rendered — any
-  // stale text left over from a previous aborted edit is wiped. Without
-  // this, the browser would keep whatever the user last typed into the
-  // input node, making the field appear "not pre-loaded".
+  // Sync inline-edit inputs from the canonical DB values stamped on the row
+  // via `data-*` attributes on every open. This defeats browser-held stale
+  // values (e.g. after the user typed something then cancelled) — the HTML
+  // `value="…"` attribute only sets the DOM default, not the live `.value`
+  // property, so without this reset the field would keep previous input.
   function resetEditInputs(row) {
     var inputs = row.querySelectorAll('[data-edit-input]')
     for (var i = 0; i < inputs.length; i++) {
@@ -392,10 +435,10 @@ const isCuentasTab = activeTab === 'cuentas'
     }
   }
 
-  function openEdit(row, hideSelectors) {
+  function openEdit(row) {
     resetEditInputs(row)
-    row.querySelectorAll(hideSelectors).forEach(function (el) { el.classList.add('hidden') })
-    row.querySelectorAll('.edit-cell').forEach(function (el) { el.classList.remove('hidden') })
+    row.querySelectorAll('.view-mode').forEach(function (el) { el.classList.add('hidden') })
+    row.querySelectorAll('.edit-mode').forEach(function (el) { el.classList.remove('hidden') })
     var firstInput = row.querySelector('[data-edit-input="name"]')
     if (firstInput) {
       firstInput.focus()
@@ -403,40 +446,26 @@ const isCuentasTab = activeTab === 'cuentas'
     }
   }
 
-  function closeEdit(row, showSelectors) {
-    row.querySelectorAll(showSelectors).forEach(function (el) { el.classList.remove('hidden') })
-    row.querySelectorAll('.edit-cell').forEach(function (el) { el.classList.add('hidden') })
+  function closeEdit(row) {
+    row.querySelectorAll('.view-mode').forEach(function (el) { el.classList.remove('hidden') })
+    row.querySelectorAll('.edit-mode').forEach(function (el) { el.classList.add('hidden') })
   }
 
-  // Delegated listeners — robust against Astro's script scoping and easier
-  // to reason about than a string of onclick="fn(id)" attributes.
+  // Delegated click handler covers both tabs (catalog items and cuentas
+  // contables) through the same data-attribute protocol.
   document.addEventListener('click', function (e) {
     var target = e.target instanceof Element ? e.target : null
     if (!target) return
     var startBtn = target.closest('[data-start-edit]')
     if (startBtn) {
-      var id = startBtn.getAttribute('data-start-edit')
-      var row = document.getElementById('row-' + id)
-      if (row) openEdit(row, '.view-name, .view-order, .view-actions')
-      return
-    }
-    var startCuentaBtn = target.closest('[data-start-edit-cuenta]')
-    if (startCuentaBtn) {
-      var idC = startCuentaBtn.getAttribute('data-start-edit-cuenta')
-      var rowC = document.getElementById('row-' + idC)
-      if (rowC) openEdit(rowC, '.view-name, .view-actions')
+      var row = document.getElementById('row-' + startBtn.getAttribute('data-start-edit'))
+      if (row) openEdit(row)
       return
     }
     var cancelBtn = target.closest('[data-cancel-edit]')
     if (cancelBtn) {
-      var idX = cancelBtn.getAttribute('data-cancel-edit')
-      var rowX = document.getElementById('row-' + idX)
-      if (rowX) {
-        var showSel = rowX.dataset.sortOrder !== undefined
-          ? '.view-name, .view-order, .view-actions'
-          : '.view-name, .view-actions'
-        closeEdit(rowX, showSel)
-      }
+      var rowC = document.getElementById('row-' + cancelBtn.getAttribute('data-cancel-edit'))
+      if (rowC) closeEdit(rowC)
     }
   })
 </script>
