@@ -1,10 +1,14 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
-import { PAYROLL_REPORTS } from '../../lib/reports/registry'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+
+// The navbar's payroll-type selector persists its choice in this cookie.
+// Using it as a server-side filter means the listing reacts automatically
+// to whatever type the user has active — no page-local selector needed.
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 
 type Payroll = {
   id: string
@@ -30,11 +34,8 @@ let totalPages = 1
 let error = ''
 
 try {
-  // Ask the API for a generous slice and filter client-side. The payroll list
-  // endpoint does not yet support multi-status filtering, so we page through
-  // the filtered result ourselves — fine for the typical volume of payrolls
-  // per tenant (dozens, not thousands).
   const params = new URLSearchParams({ page: '1', limit: '500' })
+  if (activeTypeId) params.set('payrollTypeId', activeTypeId)
   const res = await fetch(`${API_URL}/payroll?${params}`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
   })
@@ -91,17 +92,16 @@ function fmt(v: string) {
 <AppLayout title="Reportes de Planilla">
   <div class="p-8">
 
-    <!-- Page header -->
-    <div class="flex items-center justify-between mb-2">
+    <div class="flex items-start justify-between mb-2">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">Reportes de Planilla</h1>
         <p class="text-sm text-gray-500 mt-0.5">
-          Genera reportes PDF, Excel y comprobantes para planillas generadas o cerradas.
+          Genera, descarga o regenera la Planilla PDF por cada planilla cerrada o generada.
+          El filtro por tipo se hereda del selector superior.
         </p>
       </div>
     </div>
 
-    <!-- Filter bar -->
     <div class="flex items-center justify-between gap-4 mb-4 mt-6">
       <form method="GET" action="" class="flex items-center gap-2">
         <input
@@ -125,7 +125,6 @@ function fmt(v: string) {
       <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
 
-    <!-- Table -->
     <div class="bg-white rounded-xl border border-gray-200 overflow-visible">
       {payrolls.length === 0 ? (
         <div class="py-16 text-center">
@@ -147,16 +146,14 @@ function fmt(v: string) {
               <th class="text-left px-4 py-3 font-medium text-gray-600">Planilla</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Período</th>
-              <th class="text-right px-4 py-3 font-medium text-gray-600">Bruto</th>
-              <th class="text-right px-4 py-3 font-medium text-gray-600">Deduc.</th>
               <th class="text-right px-4 py-3 font-medium text-gray-600">Neto</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
-              <th class="px-4 py-3 text-right font-medium text-gray-600">Reporte</th>
+              <th class="px-4 py-3 text-right font-medium text-gray-600">Acciones</th>
             </tr>
           </thead>
           <tbody class="divide-y divide-gray-100">
             {payrolls.map((p) => (
-              <tr class="hover:bg-gray-50 transition-colors">
+              <tr class="hover:bg-gray-50 transition-colors" data-report-row data-payroll-id={p.id}>
                 <td class="px-4 py-3.5">
                   <a href={`/payroll/${p.id}`} class="font-medium text-gray-900 hover:text-gray-600">
                     {p.name}
@@ -169,78 +166,45 @@ function fmt(v: string) {
                 <td class="px-4 py-3.5 text-gray-500 font-mono text-xs">
                   {p.periodStart} → {p.periodEnd}
                 </td>
-                <td class="px-4 py-3.5 text-right text-gray-700 tabular-nums">{fmt(p.totalGross)}</td>
-                <td class="px-4 py-3.5 text-right text-red-600 tabular-nums">{fmt(p.totalDeductions)}</td>
                 <td class="px-4 py-3.5 text-right font-semibold text-gray-900 tabular-nums">{fmt(p.totalNet)}</td>
                 <td class="px-4 py-3.5">
                   <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[p.status] ?? 'bg-gray-100 text-gray-500'}`}>
                     {statusLabel[p.status] ?? p.status}
                   </span>
                 </td>
-                <td class="px-4 py-3.5 text-right">
-                  <div class="relative inline-block text-left" data-report-menu>
+                <td class="px-4 py-3.5">
+                  <div class="flex items-center gap-1.5 justify-end" data-report-actions>
+                    <!-- Loading skeleton / status dot — replaced on subscribe -->
+                    <span class="text-[11px] text-gray-400" data-report-status>…</span>
                     <button
                       type="button"
-                      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
-                      data-report-trigger
-                      aria-haspopup="menu"
-                      aria-expanded="false"
+                      data-report-action="generate"
+                      class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition-colors"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                      Reportes
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 2 14 8 20 8"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                      <span data-report-label>Generar</span>
                     </button>
-                    <div
-                      class="hidden absolute right-0 mt-1 w-72 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg z-20"
-                      data-report-panel
-                      role="menu"
+                    <button
+                      type="button"
+                      data-report-action="download"
+                      class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition-colors"
                     >
-                      <ul class="py-1">
-                        {PAYROLL_REPORTS.map((r) => {
-                          const isAvailable = r.status === 'available'
-                          const href = r.href(p.id)
-                          return (
-                            <li role="none">
-                              {isAvailable ? (
-                                <a
-                                  href={href}
-                                  target={r.opensInNewTab ? '_blank' : undefined}
-                                  rel={r.opensInNewTab ? 'noopener' : undefined}
-                                  class="flex items-start gap-3 px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
-                                  role="menuitem"
-                                >
-                                  <span class="mt-0.5 inline-flex items-center justify-center w-9 h-5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold tracking-wide">{r.code}</span>
-                                  <span class="flex-1">
-                                    <span class="block font-medium leading-tight">{r.label}</span>
-                                    <span class="block text-xs text-gray-500 leading-snug mt-0.5">{r.description}</span>
-                                  </span>
-                                </a>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled
-                                  aria-disabled="true"
-                                  title="Próximamente — en desarrollo"
-                                  class="w-full flex items-start gap-3 px-3 py-2 text-left text-sm text-gray-400 cursor-not-allowed"
-                                  role="menuitem"
-                                >
-                                  <span class="mt-0.5 inline-flex items-center justify-center w-9 h-5 rounded bg-gray-100 text-gray-400 text-[10px] font-bold tracking-wide">{r.code}</span>
-                                  <span class="flex-1">
-                                    <span class="flex items-center gap-1.5 font-medium leading-tight">
-                                      {r.label}
-                                      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide bg-amber-50 text-amber-700">
-                                        Próximamente
-                                      </span>
-                                    </span>
-                                    <span class="block text-xs text-gray-400 leading-snug mt-0.5">{r.description}</span>
-                                  </span>
-                                </button>
-                              )}
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Descargar
+                    </button>
+                    <button
+                      type="button"
+                      data-report-action="regenerate"
+                      class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 disabled:opacity-60 disabled:cursor-wait transition-colors"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                      <span data-report-label>Regenerar</span>
+                    </button>
+                    <span
+                      class="hidden text-[11px] text-red-600"
+                      data-report-error
+                      title=""
+                    >Error</span>
                   </div>
                 </td>
               </tr>
@@ -250,7 +214,6 @@ function fmt(v: string) {
       )}
     </div>
 
-    <!-- Pagination -->
     {totalPages > 1 && (
       <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
         <span>Mostrando {showingFrom}–{showingTo} de {total}</span>
@@ -277,39 +240,78 @@ function fmt(v: string) {
 </AppLayout>
 
 <script>
-  // Lightweight dropdown toggle for the "Reportes" menus. Only one can be open
-  // at a time; clicking outside or pressing Escape closes the active menu.
-  (function () {
-    const menus = Array.from(document.querySelectorAll<HTMLElement>('[data-report-menu]'))
+  import { payrollReportUrls, usePayrollReport } from '../../lib/reports/use-payroll-report'
+  import type { ReportState } from '../../lib/reports/use-payroll-report'
 
-    function closeAll() {
-      for (const m of menus) {
-        const panel = m.querySelector<HTMLElement>('[data-report-panel]')
-        const trigger = m.querySelector<HTMLElement>('[data-report-trigger]')
-        if (panel) panel.classList.add('hidden')
-        if (trigger) trigger.setAttribute('aria-expanded', 'false')
+  // Each row owns its own controller + subscribe, so a busy regeneration on
+  // one row never blocks the others or freezes the whole table.
+  for (const row of document.querySelectorAll<HTMLElement>('[data-report-row]')) {
+    const payrollId = row.dataset.payrollId
+    if (!payrollId) continue
+
+    const statusEl = row.querySelector<HTMLElement>('[data-report-status]')
+    const errorEl = row.querySelector<HTMLElement>('[data-report-error]')
+    const btnGenerate = row.querySelector<HTMLButtonElement>('[data-report-action="generate"]')
+    const btnDownload = row.querySelector<HTMLButtonElement>('[data-report-action="download"]')
+    const btnRegenerate = row.querySelector<HTMLButtonElement>('[data-report-action="regenerate"]')
+    const labelGenerate = btnGenerate?.querySelector<HTMLElement>('[data-report-label]') ?? null
+    const labelRegenerate = btnRegenerate?.querySelector<HTMLElement>('[data-report-label]') ?? null
+
+    const controller = usePayrollReport({
+      payrollId,
+      ...payrollReportUrls(payrollId),
+    })
+
+    function applyState(state: ReportState) {
+      // Status dot / hint
+      if (statusEl) {
+        if (state.kind === 'loading') statusEl.textContent = '…'
+        else if (state.kind === 'busy') statusEl.textContent = '…'
+        else if (state.kind === 'error') statusEl.textContent = ''
+        else statusEl.textContent = state.snapshot.status === 'generated' ? '✓' : '—'
+      }
+
+      const snapshot = state.kind === 'idle'
+        ? state.snapshot
+        : state.kind === 'busy' || state.kind === 'error'
+          ? state.lastSnapshot
+          : null
+
+      const isGenerated = snapshot?.status === 'generated'
+      const showGenerate = snapshot != null && !isGenerated
+      const showDownload = snapshot != null && isGenerated
+      const showRegenerate = snapshot != null && isGenerated
+
+      btnGenerate?.classList.toggle('hidden', !showGenerate)
+      btnDownload?.classList.toggle('hidden', !showDownload)
+      btnRegenerate?.classList.toggle('hidden', !showRegenerate)
+
+      const isBusy = state.kind === 'busy'
+      if (btnGenerate) btnGenerate.disabled = isBusy
+      if (btnDownload) btnDownload.disabled = isBusy
+      if (btnRegenerate) btnRegenerate.disabled = isBusy
+
+      if (labelGenerate) labelGenerate.textContent = isBusy && state.action === 'generate' ? 'Generando…' : 'Generar'
+      if (labelRegenerate) labelRegenerate.textContent = isBusy && state.action === 'regenerate' ? 'Regenerando…' : 'Regenerar'
+
+      if (errorEl) {
+        if (state.kind === 'error') {
+          errorEl.classList.remove('hidden')
+          errorEl.textContent = 'Error'
+          errorEl.title = state.message
+        } else {
+          errorEl.classList.add('hidden')
+          errorEl.textContent = ''
+          errorEl.title = ''
+        }
       }
     }
 
-    for (const menu of menus) {
-      const trigger = menu.querySelector<HTMLElement>('[data-report-trigger]')
-      const panel = menu.querySelector<HTMLElement>('[data-report-panel]')
-      if (!trigger || !panel) continue
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation()
-        const open = !panel.classList.contains('hidden')
-        closeAll()
-        if (!open) {
-          panel.classList.remove('hidden')
-          trigger.setAttribute('aria-expanded', 'true')
-        }
-      })
-      panel.addEventListener('click', (e) => e.stopPropagation())
-    }
+    controller.subscribe(applyState)
+    btnGenerate?.addEventListener('click', () => controller.generate())
+    btnDownload?.addEventListener('click', () => controller.download())
+    btnRegenerate?.addEventListener('click', () => controller.regenerate())
 
-    document.addEventListener('click', closeAll)
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') closeAll()
-    })
-  })()
+    void controller.refresh()
+  }
 </script>
