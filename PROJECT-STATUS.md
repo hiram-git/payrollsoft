@@ -1,7 +1,36 @@
 # Estado del Proyecto — PayrollSoft
 
-**Última actualización:** 23 de abril de 2026 (sesión 3 — optimización de préstamos)
+**Última actualización:** 23 de abril de 2026 (sesión 3 — hook unificado `usePayrollReport`)
 **Branch activo:** `claude/refactor-payroll-pdf-landscape-vu25U`
+
+## Avance de la sesión 3 (23/04/2026) — Hook unificado `usePayrollReport`
+
+Consolida la lógica de la máquina de estados del reporte en un único
+composable reutilizable por la vista de detalle y el listado:
+
+- **`apps/web/src/lib/reports/use-payroll-report.ts`** — factory
+  `usePayrollReport({ payrollId, stateUrl, generateUrl, regenerateUrl,
+  downloadUrl })` que devuelve `{ getState, subscribe, refresh, generate,
+  regenerate, download, urls }`. Estados: `loading | idle | busy | error`
+  (con `lastSnapshot` durante busy/error para preservar los controles).
+  Helper `payrollReportUrls(id)` expone los paths canónicos.
+- **Listado `/reports/payroll`** — cada fila crea su propio controller,
+  con estado independiente (busy en un reporte no bloquea los demás).
+  La tabla ahora lista sólo planillas en estado `generated|closed` y
+  **filtra por el tipo seleccionado en el navbar** reenviando
+  `payrollTypeId` (cookie `payroll.activeTypeId`) al endpoint
+  `/payroll?payrollTypeId=...`.
+- **Vista de detalle `/payroll/[id]`** — botones dispersos (Generar
+  / Descargar / Regenerar) sustituidos por un **dropdown "Reportes"**
+  único con las 3 opciones. El dropdown queda separado del botón
+  "Regenerar planilla" (máquina de estados de la planilla, no del PDF),
+  clarificando la diferencia entre gestión de archivo y recálculo.
+- La descarga Excel queda como botón secundario al lado del dropdown —
+  corresponde a un archivo que sí se puede descargar inmediatamente.
+- Modal bloqueante y spinner se disparan sólo cuando el estado entra en
+  `busy`; se cierran automáticamente al volver a `idle` o `error`.
+
+## Avance previo de la sesión 3 — Optimización de préstamos
 
 ## Avance de la sesión 3 (23/04/2026) — Optimización de préstamos
 
