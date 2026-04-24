@@ -186,7 +186,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
               </button>
               <div
                 id="report-dropdown-panel"
-                class="hidden absolute right-0 mt-1 w-64 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg z-20"
+                class="hidden absolute right-0 mt-1 w-72 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg z-20"
                 role="menu"
               >
                 <ul class="py-1 text-sm">
@@ -197,10 +197,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
                       role="menuitem"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
-                      <span>
+                      <span class="w-4 h-4 mt-0.5 shrink-0">
+                        <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+                        <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      </span>
+                      <span class="flex-1">
                         <span class="block font-medium" data-label>Generar</span>
                         <span class="block text-xs text-gray-500 leading-snug mt-0.5">Renderiza el PDF y lo guarda en disco.</span>
+                        <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
                       </span>
                     </button>
                   </li>
@@ -211,9 +215,12 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
                       role="menuitem"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      <span>
-                        <span class="block font-medium">Descargar</span>
+                      <span class="w-4 h-4 mt-0.5 shrink-0">
+                        <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      </span>
+                      <span class="flex-1">
+                        <span class="block font-medium" data-label>Descargar</span>
                         <span class="block text-xs text-gray-500 leading-snug mt-0.5">Baja la última versión persistida del PDF.</span>
                       </span>
                     </button>
@@ -225,15 +232,18 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
                       role="menuitem"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4 mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                      <span>
+                      <span class="w-4 h-4 mt-0.5 shrink-0">
+                        <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                      </span>
+                      <span class="flex-1">
                         <span class="block font-medium" data-label>Regenerar</span>
                         <span class="block text-xs text-gray-500 leading-snug mt-0.5">Renderiza y sobrescribe el PDF actual. No re-calcula la planilla.</span>
+                        <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
                       </span>
                     </button>
                   </li>
                 </ul>
-                <p id="report-dropdown-error" class="hidden border-t border-gray-100 px-3 py-2 text-xs text-red-600"></p>
               </div>
             </div>
             <a
@@ -537,27 +547,6 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     )}
   </div>
 
-  <!-- Report generation blocking modal -->
-  <div
-    id="report-modal"
-    class="hidden fixed inset-0 z-[60] flex items-center justify-center p-4"
-    role="dialog"
-    aria-modal="true"
-    aria-live="polite"
-  >
-    <div class="absolute inset-0 bg-black/50 backdrop-blur-sm"></div>
-    <div class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center">
-      <div class="w-12 h-12 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center">
-        <svg class="w-6 h-6 text-blue-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-      </div>
-      <h3 class="text-base font-semibold text-gray-900 mb-1.5">Generando reporte</h3>
-      <p id="report-modal-body" class="text-sm text-gray-500 leading-relaxed">
-        Generando reporte de planilla, por favor espere…
-      </p>
-      <p id="report-modal-error" class="hidden mt-3 text-sm text-red-600"></p>
-    </div>
-  </div>
-
   <!-- Confirmation modal -->
   <div id="confirm-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
     <div id="modal-backdrop" class="absolute inset-0 bg-black/40 backdrop-blur-sm"></div>
@@ -715,22 +704,15 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
   import { payrollReportUrls, usePayrollReport } from '../../lib/reports/use-payroll-report'
   import type { ReportState } from '../../lib/reports/use-payroll-report'
 
-  // "Reportes" dropdown — single entry point for Generar / Descargar /
-  // Regenerar. The same usePayrollReport composable drives this widget and
-  // the per-row controls on /reports/payroll, so the state machine stays
-  // identical across the two views.
+  // "Reportes" dropdown — Generar / Descargar / Regenerar share the same
+  // usePayrollReport state machine, but each menu item owns its own busy
+  // and error feedback so a long-running Regenerar never disables Generar
+  // (or any other action elsewhere on the page).
   const container = document.getElementById('report-dropdown') as HTMLElement | null
   if (container) {
     const payrollId = container.dataset.payrollId
     const trigger = document.getElementById('btn-report-dropdown') as HTMLButtonElement | null
     const panel = document.getElementById('report-dropdown-panel') as HTMLElement | null
-    const reportModal = document.getElementById('report-modal') as HTMLElement
-    const modalError = document.getElementById('report-modal-error') as HTMLElement
-    const dropdownError = document.getElementById('report-dropdown-error') as HTMLElement | null
-    const btnGenerate = container.querySelector<HTMLButtonElement>('[data-report-action="generate"]')
-    const btnDownload = container.querySelector<HTMLButtonElement>('[data-report-action="download"]')
-    const btnRegenerate = container.querySelector<HTMLButtonElement>('[data-report-action="regenerate"]')
-    const triggerLabel = document.getElementById('btn-report-dropdown-label') as HTMLElement | null
 
     if (payrollId && trigger && panel) {
       const controller = usePayrollReport({
@@ -746,16 +728,6 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         panel!.classList.add('hidden')
         trigger!.setAttribute('aria-expanded', 'false')
       }
-      function showModal() {
-        modalError.classList.add('hidden')
-        modalError.textContent = ''
-        reportModal.classList.remove('hidden')
-        document.body.style.overflow = 'hidden'
-      }
-      function hideModal() {
-        reportModal.classList.add('hidden')
-        document.body.style.overflow = ''
-      }
 
       trigger.addEventListener('click', (e) => {
         e.stopPropagation()
@@ -769,6 +741,55 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         if (e.key === 'Escape') closePanel()
       })
 
+      // Per-action UI controllers — each tracks its own busy/disabled/label
+      // independently so they can be reused, reasoned about and tested in
+      // isolation.
+      type Action = 'generate' | 'download' | 'regenerate'
+
+      function controllerFor(action: Action, defaultLabel: string, busyLabel: string) {
+        const btn = container!.querySelector<HTMLButtonElement>(`[data-report-action="${action}"]`)
+        if (!btn) return null
+        const labelEl = btn.querySelector<HTMLElement>('[data-label]')
+        const errorEl = btn.querySelector<HTMLElement>('[data-row-error]')
+        const iconStatic = btn.querySelector<HTMLElement>('[data-icon-static]')
+        const iconBusy = btn.querySelector<HTMLElement>('[data-icon-busy]')
+
+        return {
+          setVisible(visible: boolean) {
+            btn.classList.toggle('hidden', !visible)
+          },
+          setBusy(busy: boolean) {
+            btn.disabled = busy
+            btn.setAttribute('aria-busy', busy ? 'true' : 'false')
+            iconStatic?.classList.toggle('hidden', busy)
+            iconBusy?.classList.toggle('hidden', !busy)
+            if (labelEl) labelEl.textContent = busy ? busyLabel : defaultLabel
+          },
+          setEnabled(enabled: boolean) {
+            // Only flip enabled state when not in a busy phase — busy wins
+            if (btn.getAttribute('aria-busy') === 'true') return
+            btn.disabled = !enabled
+          },
+          showError(message: string | null) {
+            if (!errorEl) return
+            if (message) {
+              errorEl.classList.remove('hidden')
+              errorEl.textContent = message
+              errorEl.title = message
+            } else {
+              errorEl.classList.add('hidden')
+              errorEl.textContent = ''
+              errorEl.title = ''
+            }
+          },
+          element: btn,
+        }
+      }
+
+      const generateUi = controllerFor('generate', 'Generar', 'Generando…')
+      const downloadUi = controllerFor('download', 'Descargar', 'Descargando…')
+      const regenerateUi = controllerFor('regenerate', 'Regenerar', 'Regenerando…')
+
       function applyState(state: ReportState) {
         const snapshot = state.kind === 'idle'
           ? state.snapshot
@@ -777,56 +798,55 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
             : null
 
         const isGenerated = snapshot?.status === 'generated'
-        const isBusy = state.kind === 'busy'
 
-        if (btnGenerate) {
-          btnGenerate.disabled = isBusy || isGenerated === true
-          const label = btnGenerate.querySelector<HTMLElement>('[data-label]')
-          if (label) label.textContent = isBusy && state.action === 'generate' ? 'Generando…' : 'Generar'
-        }
-        if (btnDownload) {
-          btnDownload.disabled = isBusy || !isGenerated
-        }
-        if (btnRegenerate) {
-          btnRegenerate.disabled = isBusy || !isGenerated
-          const label = btnRegenerate.querySelector<HTMLElement>('[data-label]')
-          if (label) label.textContent = isBusy && state.action === 'regenerate' ? 'Regenerando…' : 'Regenerar'
-        }
-        if (triggerLabel) {
-          triggerLabel.textContent = isBusy ? 'Procesando…' : 'Reportes'
-        }
-        trigger!.disabled = isBusy
+        // Visibility follows the state machine: Generar appears only while
+        // there is no PDF yet; Descargar / Regenerar only once one exists.
+        // While the snapshot is still unknown (initial loading), keep the
+        // Generar option visible as a safe default.
+        generateUi?.setVisible(snapshot == null || !isGenerated)
+        downloadUi?.setVisible(isGenerated === true)
+        regenerateUi?.setVisible(isGenerated === true)
 
-        if (state.kind === 'busy') {
-          showModal()
-          closePanel()
-        } else {
-          hideModal()
-        }
+        const action = state.kind === 'busy' ? state.action : null
+        // Per-button busy state — the others stay enabled.
+        generateUi?.setBusy(action === 'generate')
+        regenerateUi?.setBusy(action === 'regenerate')
+        // Download has no async backend call; surface a brief visual only
+        // when explicitly clicked (handled in its own listener below).
 
-        if (dropdownError) {
-          if (state.kind === 'error') {
-            dropdownError.classList.remove('hidden')
-            dropdownError.textContent = state.message
-          } else {
-            dropdownError.classList.add('hidden')
-            dropdownError.textContent = ''
+        // Errors get attached to the action that caused them so the user
+        // sees feedback exactly where they clicked.
+        if (state.kind === 'error') {
+          if (action === 'generate' || (action == null && !isGenerated)) {
+            generateUi?.showError(state.message)
+          } else if (action === 'regenerate' || (action == null && isGenerated)) {
+            regenerateUi?.showError(state.message)
           }
+        } else {
+          generateUi?.showError(null)
+          regenerateUi?.showError(null)
         }
       }
 
       controller.subscribe(applyState)
-      btnGenerate?.addEventListener('click', async () => {
-        closePanel()
-        await controller.generate()
+
+      generateUi?.element.addEventListener('click', (e) => {
+        e.stopPropagation()
+        void controller.generate()
       })
-      btnDownload?.addEventListener('click', () => {
-        closePanel()
+      regenerateUi?.element.addEventListener('click', (e) => {
+        e.stopPropagation()
+        void controller.regenerate()
+      })
+      downloadUi?.element.addEventListener('click', (e) => {
+        e.stopPropagation()
+        // Cosmetic feedback while the browser starts the download — flips
+        // back automatically since navigation either succeeds or surfaces
+        // its own error.
+        downloadUi.setBusy(true)
         controller.download()
-      })
-      btnRegenerate?.addEventListener('click', async () => {
+        setTimeout(() => downloadUi.setBusy(false), 1500)
         closePanel()
-        await controller.regenerate()
       })
 
       void controller.refresh()
