@@ -5,6 +5,11 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
+// Mandatory global filter — propagated to the loans API which joins
+// through `employee_payroll_types` to keep results scoped to the active
+// type the topbar is showing.
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
 
 const LIMIT = 50
@@ -47,6 +52,7 @@ let result: PagedResponse = { data: [], total: 0, page: 1, limit: LIMIT, totalPa
 try {
   const qs = new URLSearchParams({ page: String(page), limit: String(LIMIT) })
   if (search) qs.set('search', search)
+  if (activeTypeId) qs.set('payrollTypeId', activeTypeId)
   const res = await fetch(`${API_URL}/loans?${qs}`, { headers })
   if (res.status === 401) return Astro.redirect('/login')
   if (res.ok) result = (await res.json()) as PagedResponse

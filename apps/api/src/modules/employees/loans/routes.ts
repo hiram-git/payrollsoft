@@ -60,6 +60,7 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
           isActive:
             query.isActive === 'true' ? true : query.isActive === 'false' ? false : undefined,
           search: query.search || undefined,
+          payrollTypeId: query.payrollTypeId || undefined,
         },
         {
           page: query.page ? Number(query.page) : 1,
@@ -76,6 +77,7 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
         isActive: t.Optional(t.String()),
         page: t.Optional(t.String()),
         limit: t.Optional(t.String()),
+        payrollTypeId: t.Optional(t.String()),
       }),
     }
   )

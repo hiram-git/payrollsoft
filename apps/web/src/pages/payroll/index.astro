@@ -5,6 +5,10 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
+// Mandatory global filter — the topbar guarantees the cookie is set to a
+// valid type id before any list module renders.
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+
 type Payroll = {
   id: string
   name: string
@@ -29,6 +33,7 @@ const PAGE_SIZE = 25
 
 try {
   const params = new URLSearchParams({ page: String(page) })
+  if (activeTypeId) params.set('payrollTypeId', activeTypeId)
   const res = await fetch(`${API_URL}/payroll?${params}`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
   })
