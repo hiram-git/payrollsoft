@@ -47,7 +47,11 @@ const roleLabels: Record<string, string> = {
 const userRoleLabel = roleLabels[userRole] ?? ''
 
 // ── Payroll type selector ──────────────────────────────────────────────────────
-const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+// Mandatory global filter: every list module that ties data to a payroll
+// type segments by this cookie. There is no "All types" mode — when the
+// cookie is missing or stale we fall back to the first payroll type so
+// the user always sees data scoped to one type.
+const cookieTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 let payrollTypes: PayrollType[] = []
 if (authCookie) {
@@ -60,6 +64,21 @@ if (authCookie) {
       payrollTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
     }
   } catch (_) {}
+}
+
+// Resolve the active id: prefer the cookie if it still points at a real
+// type, otherwise pick the first one in business order. We persist the
+// fallback back into the cookie so every server-rendered page (and every
+// downstream API call) reads the same value.
+const cookieIsValid = cookieTypeId !== '' && payrollTypes.some((t) => t.id === cookieTypeId)
+const activeTypeId = cookieIsValid ? cookieTypeId : (payrollTypes[0]?.id ?? '')
+if (!cookieIsValid && activeTypeId) {
+  Astro.cookies.set('payroll.activeTypeId', activeTypeId, {
+    path: '/',
+    maxAge: 365 * 24 * 60 * 60,
+    httpOnly: false,
+    sameSite: 'lax',
+  })
 }
 const activeType = payrollTypes.find((t) => t.id === activeTypeId) ?? null
 
@@ -1004,29 +1023,17 @@ const icons: Record<IconKey, string> = {
                   <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                     <path d="M1 2.5h10M3 6h6M5 9.5h2"/>
                   </svg>
-                  <span class="pt-label" id="pt-label">{activeType ? activeType.name : 'Todos los tipos'}</span>
-                  <svg class="pt-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square">
-                    <path d="M2.5 4l2.5 2.5L7.5 4"/>
-                  </svg>
-                </button>
-                <div class="pt-dropdown" id="pt-dropdown" role="listbox" aria-label="Tipo de planilla">
-                  <button type="button" class={`pt-option${!activeTypeId ? ' pt-option-active' : ''}`} data-value="" role="option" aria-selected={String(!activeTypeId)}>
-                    <span class="pt-dot"></span>
-                    Todos los tipos
-                  </button>
-                  <div class="pt-divider"></div>
-                  {payrollTypes.map((t) => (
-                    <button
-                      type="button"
-                      class={`pt-option${t.id === activeTypeId ? ' pt-option-active' : ''}`}
-                      data-value={t.id}
-                      role="option"
-                      aria-selected={String(t.id === activeTypeId)}
-                    >
-                      <span class="pt-dot"></span>
-                      {t.name}
-                    </button>
-                  ))}
+                  <select
+                    name="payrollTypeId"
+                    class="type-selector"
+                    onchange="this.closest('form').submit()"
+                    aria-label="Tipo de planilla activo"
+                    required
+                  >
+                    {payrollTypes.map((t) => (
+                      <option value={t.id} selected={t.id === activeTypeId}>{t.name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             )}

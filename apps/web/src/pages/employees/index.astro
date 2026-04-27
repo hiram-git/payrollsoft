@@ -131,8 +131,10 @@ const showingTo = Math.min(page * PAGE_SIZE, total)
           {q ? (
             <p class="text-sm text-gray-400">Sin resultados para "<span class="font-medium">{q}</span>"</p>
           ) : (
-            <p class="text-sm text-gray-400 mb-1">No hay empleados registrados.<br/>
-              <a href="/employees/new" class="text-gray-900 underline underline-offset-2 hover:text-gray-600">Agregar el primero</a>
+            <p class="text-sm text-gray-400 mb-1">
+              No se encontraron registros para el tipo de planilla seleccionado.
+              <br />
+              <a href="/employees/new" class="text-gray-900 underline underline-offset-2 hover:text-gray-600">Agregar empleado</a>
             </p>
           )}
         </div>

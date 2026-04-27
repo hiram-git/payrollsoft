@@ -1736,6 +1736,9 @@ export type LoanListFilter = {
   isActive?: boolean
   /** Free-text: matches employee name, employee code, or creditor name */
   search?: string
+  /** Restrict to loans whose employee is linked to this payroll type
+   *  via `employee_payroll_types`. Drives the global mandatory filter. */
+  payrollTypeId?: string
 }
 
 export async function listAllLoans(
@@ -1780,6 +1783,13 @@ export async function listAllLoans(
         sql`(${employees.firstName} || ' ' || ${employees.lastName}) ilike ${s}`
       )
     )
+  }
+  if (filter.payrollTypeId) {
+    const sub = db
+      .select({ eid: employeePayrollTypes.employeeId })
+      .from(employeePayrollTypes)
+      .where(eq(employeePayrollTypes.payrollTypeId, filter.payrollTypeId))
+    conditions.push(inArray(loans.employeeId, sub))
   }
 
   const where = conditions.length ? and(...conditions) : undefined
