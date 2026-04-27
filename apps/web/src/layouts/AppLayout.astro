@@ -47,7 +47,11 @@ const roleLabels: Record<string, string> = {
 const userRoleLabel = roleLabels[userRole] ?? ''
 
 // ── Payroll type selector ──────────────────────────────────────────────────────
-const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+// Mandatory global filter: every list module that ties data to a payroll
+// type segments by this cookie. There is no "All types" mode — when the
+// cookie is missing or stale we fall back to the first payroll type so
+// the user always sees data scoped to one type.
+const cookieTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 let payrollTypes: PayrollType[] = []
 if (authCookie) {
@@ -60,6 +64,21 @@ if (authCookie) {
       payrollTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
     }
   } catch (_) {}
+}
+
+// Resolve the active id: prefer the cookie if it still points at a real
+// type, otherwise pick the first one in business order. We persist the
+// fallback back into the cookie so every server-rendered page (and every
+// downstream API call) reads the same value.
+const cookieIsValid = cookieTypeId !== '' && payrollTypes.some((t) => t.id === cookieTypeId)
+const activeTypeId = cookieIsValid ? cookieTypeId : (payrollTypes[0]?.id ?? '')
+if (!cookieIsValid && activeTypeId) {
+  Astro.cookies.set('payroll.activeTypeId', activeTypeId, {
+    path: '/',
+    maxAge: 365 * 24 * 60 * 60,
+    httpOnly: false,
+    sameSite: 'lax',
+  })
 }
 const activeType = payrollTypes.find((t) => t.id === activeTypeId) ?? null
 
@@ -959,8 +978,8 @@ const icons: Record<IconKey, string> = {
                     class="type-selector"
                     onchange="this.closest('form').submit()"
                     aria-label="Tipo de planilla activo"
+                    required
                   >
-                    <option value="">Todos los tipos</option>
                     {payrollTypes.map((t) => (
                       <option value={t.id} selected={t.id === activeTypeId}>{t.name}</option>
                     ))}
