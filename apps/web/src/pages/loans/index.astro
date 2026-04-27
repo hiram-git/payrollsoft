@@ -280,7 +280,9 @@ function pageWindow(cur: number, total: number) {
     <div class="table-card">
       {loans.length === 0 ? (
         <div class="empty-state">
-          {search ? `Sin resultados para "${search}".` : 'No hay préstamos registrados.'}
+          {search
+            ? `Sin resultados para "${search}".`
+            : 'No se encontraron registros para el tipo de planilla seleccionado.'}
         </div>
       ) : (
         <>

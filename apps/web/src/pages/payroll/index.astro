@@ -126,9 +126,11 @@ function fmt(v: string) {
     <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
       {payrolls.length === 0 ? (
         <div class="py-16 text-center">
-          <p class="text-sm text-gray-400 mb-1">No hay planillas registradas</p>
+          <p class="text-sm text-gray-400 mb-1">
+            No se encontraron registros para el tipo de planilla seleccionado.
+          </p>
           <a href="/payroll/new" class="text-sm text-gray-900 underline underline-offset-2 hover:text-gray-600">
-            Crear la primera planilla
+            Crear una planilla nueva
           </a>
         </div>
       ) : (
