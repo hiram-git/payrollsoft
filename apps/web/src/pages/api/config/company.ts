@@ -50,6 +50,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     logoEmpresa: gn('logoEmpresa'),
     logoIzquierdoReportes: gn('logoIzquierdoReportes'),
     logoDerechoReportes: gn('logoDerechoReportes'),
+    // Per-tenant Planilla PDF lifecycle. The API validates the value
+    // against an allow-list and falls back to the existing setting if
+    // anything unexpected slips through.
+    payrollReportMode: g('payrollReportMode') || 'on_demand',
   }
 
   // Only include mailPassword if the user supplied a value (blank = keep existing)
