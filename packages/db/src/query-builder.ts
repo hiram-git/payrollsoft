@@ -2337,7 +2337,9 @@ export async function getPayrollReport(db: AnyDb, payrollId: string) {
 
 export type MarkGeneratedInput = {
   payrollId: string
-  pdfPath: string
+  /** Object key / path of the persisted PDF, or null when the tenant uses
+   *  on-demand mode (the row records "generated" but no file exists). */
+  pdfPath: string | null
   generatedBy?: string | null
 }
 

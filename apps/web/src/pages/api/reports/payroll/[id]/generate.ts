@@ -4,16 +4,28 @@ import {
   parsePayrollReportFilters,
 } from '../../../../../lib/reports/payroll-data'
 import { renderPayrollPdfBuffer } from '../../../../../lib/reports/payroll-pdf-renderer'
-import { writePayrollReport } from '../../../../../lib/reports/payroll-report-storage'
+import { getReportStorage, payrollReportKey } from '../../../../../lib/reports/storage'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const TENANT = 'demo'
 
+type CompanyConfigData = { payrollReportMode?: string | null } | null
+
 /**
- * Renders the Planilla PDF, persists it on the local filesystem and tells
- * the API to flip the payroll_reports row to `generated`. This is the only
- * path that writes PDFs to disk — the download endpoint just streams
- * whatever path the API returns, so generate + state are always consistent.
+ * Render the Planilla PDF and reconcile the payroll_reports row with the
+ * outcome. The persistence strategy is dictated entirely by the tenant's
+ * `company_config.payroll_report_mode`:
+ *
+ *   on_demand    → render the bytes (validates the report can be produced
+ *                   without errors), discard them, mark the row as
+ *                   generated. Future downloads re-render live.
+ *   file_storage → render, upload to R2 under a tenant-scoped key, store
+ *                   the key as `pdf_path`. Future downloads stream the
+ *                   stored object instantly.
+ *
+ * Switching modes mid-life is safe — the row's status stays correct
+ * regardless, and the download endpoint falls back to live rendering
+ * whenever it can't read the stored object.
  */
 export const POST: APIRoute = async ({ params, cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
@@ -32,6 +44,12 @@ export const POST: APIRoute = async ({ params, cookies, url, redirect }) => {
   if (result.kind === 'not-found') return new Response('Planilla no encontrada', { status: 404 })
   if (result.kind === 'error') return new Response(result.message, { status: result.status })
 
+  // The tenant's mode is part of `result.data.company` already (it's
+  // exposed by the company config endpoint), so no extra round-trip is
+  // needed to know which strategy to apply.
+  const company = result.data.company as CompanyConfigData
+  const mode = company?.payrollReportMode ?? 'on_demand'
+
   let pdfBytes: Uint8Array
   try {
     pdfBytes = await renderPayrollPdfBuffer(result.data)
@@ -40,12 +58,19 @@ export const POST: APIRoute = async ({ params, cookies, url, redirect }) => {
     return new Response('Error al renderizar el PDF', { status: 500 })
   }
 
-  let pdfPath: string
-  try {
-    pdfPath = await writePayrollReport(id, pdfBytes, TENANT)
-  } catch (err) {
-    console.error('Payroll PDF write error:', err)
-    return new Response('Error al guardar el PDF en disco', { status: 500 })
+  let pdfPath: string | null = null
+  const storage = getReportStorage(mode)
+  if (storage) {
+    try {
+      const key = payrollReportKey(id, TENANT)
+      pdfPath = await storage.put({ key, bytes: pdfBytes, contentType: 'application/pdf' })
+    } catch (err) {
+      console.error('Payroll PDF storage upload error:', err)
+      return new Response(
+        `No se pudo guardar el PDF en el almacenamiento (${storage.driver}). Verifica las credenciales o cambia el modo a "on_demand".`,
+        { status: 500 }
+      )
+    }
   }
 
   const apiRes = await fetch(`${API_URL}/payroll/${id}/report`, {
