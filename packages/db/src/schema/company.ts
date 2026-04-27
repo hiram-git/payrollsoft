@@ -32,6 +32,12 @@ export const companyConfig = pgTable('company_config', {
   logoEmpresa: text('logo_empresa'),
   logoIzquierdoReportes: text('logo_izquierdo_reportes'),
   logoDerechoReportes: text('logo_derecho_reportes'),
+  // Per-tenant strategy for the Planilla PDF lifecycle:
+  //   'on_demand'   — render every download (no storage; default).
+  //   'file_storage' — render once, persist to R2; subsequent downloads
+  //                    stream the stored object so the user gets the file
+  //                    instantly. R2 credentials come from env vars.
+  payrollReportMode: varchar('payroll_report_mode', { length: 20 }).notNull().default('on_demand'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
