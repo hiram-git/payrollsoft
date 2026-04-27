@@ -394,7 +394,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       const result = await markPayrollReportGeneratedService(db, {
         payrollId: params.id,
-        pdfPath: body.pdfPath,
+        pdfPath: body.pdfPath ?? null,
         generatedBy: user?.userId ?? null,
       })
       if (!result.success) {
@@ -406,7 +406,8 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     {
       beforeHandle: [guardAuth, guardRole('HR')],
       params: t.Object({ id: t.String() }),
-      body: t.Object({ pdfPath: t.String({ minLength: 1 }) }),
+      // Null when the tenant uses on_demand mode (no file persisted).
+      body: t.Object({ pdfPath: t.Optional(t.Nullable(t.String())) }),
     }
   )
 

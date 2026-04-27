@@ -44,7 +44,7 @@ export async function getPayrollReportService(db: AnyDb, payrollId: string) {
 
 export async function markPayrollReportGeneratedService(
   db: AnyDb,
-  input: { payrollId: string; pdfPath: string; generatedBy?: string | null }
+  input: { payrollId: string; pdfPath: string | null; generatedBy?: string | null }
 ) {
   const payroll = await getPayroll(db, input.payrollId)
   if (!payroll) return { success: false as const, error: 'not_found' }

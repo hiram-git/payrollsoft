@@ -28,6 +28,7 @@ const CompanyConfigBody = t.Object({
   logoEmpresa: t.Optional(t.Nullable(t.String())),
   logoIzquierdoReportes: t.Optional(t.Nullable(t.String())),
   logoDerechoReportes: t.Optional(t.Nullable(t.String())),
+  payrollReportMode: t.Optional(t.Union([t.Literal('on_demand'), t.Literal('file_storage')])),
 })
 
 export const companyRoutes = new Elysia({ prefix: '/company' })

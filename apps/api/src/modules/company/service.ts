@@ -32,7 +32,11 @@ export type CompanyConfigInput = {
   logoEmpresa?: string | null
   logoIzquierdoReportes?: string | null
   logoDerechoReportes?: string | null
+  /** 'on_demand' | 'file_storage' — see schema for semantics. */
+  payrollReportMode?: string
 }
+
+const VALID_REPORT_MODES = new Set(['on_demand', 'file_storage'])
 
 export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigInput) {
   const existing = await getCompanyConfig(db)
@@ -65,6 +69,10 @@ export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigIn
     logoEmpresa: input.logoEmpresa ?? null,
     logoIzquierdoReportes: input.logoIzquierdoReportes ?? null,
     logoDerechoReportes: input.logoDerechoReportes ?? null,
+    payrollReportMode:
+      input.payrollReportMode && VALID_REPORT_MODES.has(input.payrollReportMode)
+        ? input.payrollReportMode
+        : (existing?.payrollReportMode ?? 'on_demand'),
   }
 
   const row = await upsertCompanyConfig(db, data)

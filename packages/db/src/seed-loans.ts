@@ -10,7 +10,8 @@
  *   - 3 bancos  : BANISTMO, BAC, CAJAH
  *   - 7 financieras: FICOHSA, CREDIQ, COFISA, AZTEK, MULTIFIN, PRESTAMAS, CREDIFACIL
  *   - 1 concepto por acreedor (tipo deducción, CUOTA_ACREEDOR, print_details + use_amount_calc)
- *   - 1–4 préstamos aleatorios por empleado activo, cada uno con 12–36 cuotas mensuales
+ *   - 1–4 préstamos aleatorios por empleado activo, cada uno con 24–72 cuotas
+ *     QUINCENALES (frequency = 'quincenal', 1 cuota cada ~15 días)
  */
 import postgres from 'postgres'
 
@@ -71,9 +72,19 @@ function addMonths(date: Date, months: number): Date {
   return d
 }
 
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
 function toDateStr(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
+
+// Quincena ≈ 15 days. Two payments per month so loan terms double in count
+// and halve in size relative to a monthly cadence.
+const DAYS_PER_QUINCENA = 15
 
 /** Shuffle array in place, return it. */
 function shuffle<T>(arr: T[]): T[] {
@@ -186,18 +197,24 @@ try {
     for (const code of selected) {
       const { id: creditorId, name: creditorName } = creditorMap[code]
 
-      // Installment plan
+      // Loan term: 12–36 months, expressed as biweekly cuotas (×2). Halving
+      // the per-cuota amount keeps total loan principal in the same range
+      // as the previous monthly model while matching how panameñan
+      // payrolls actually pay creditors (every quincena).
       const months = rand(12, 36)
+      const installmentCount = months * 2
 
-      // Installment: 3–10% of monthly salary, capped to reasonable range
-      const minInst = Math.max(25, salary * 0.03)
-      const maxInst = Math.max(50, Math.min(500, salary * 0.1))
+      // Per-cuota amount: 1.5–5% of monthly salary (i.e. half of what a
+      // monthly schedule would charge), capped to a reasonable range.
+      const minInst = Math.max(15, salary * 0.015)
+      const maxInst = Math.max(30, Math.min(300, salary * 0.05))
       const installmentAmt = randFloat(minInst, maxInst)
-      const totalAmt = randFloat(installmentAmt * months, installmentAmt * months) // exact
+      const totalAmt = installmentAmt * installmentCount
 
-      // Start date: between 3 and 36 months ago
+      // Start date: between 3 and 36 months ago, anchored to a quincena
+      // boundary so due_dates land on the typical 15th / 30th cadence.
       const startDate = addMonths(new Date(), -rand(3, 36))
-      const endDate = addMonths(startDate, months)
+      const endDate = addDays(startDate, installmentCount * DAYS_PER_QUINCENA)
 
       const [loan] = await sql<{ id: string }[]>`
         INSERT INTO loans (
@@ -210,21 +227,21 @@ try {
           ${emp.id}, ${creditorId}, ${creditorName},
           ${String(totalAmt)}, ${String(totalAmt)}, ${String(installmentAmt)},
           ${toDateStr(startDate)}, ${toDateStr(endDate)},
-          ${pick(loanTypes)}, 'monthly',
+          ${pick(loanTypes)}, 'quincenal',
           true, true
         )
         RETURNING id
       `
 
-      // Build installment rows (last one absorbs rounding difference)
-      const remainder = Math.round((totalAmt - installmentAmt * (months - 1)) * 100) / 100
+      // Build installment rows (last one absorbs rounding difference).
+      const remainder = Math.round((totalAmt - installmentAmt * (installmentCount - 1)) * 100) / 100
 
-      for (let i = 1; i <= months; i++) {
+      for (let i = 1; i <= installmentCount; i++) {
         allInstallments.push({
           loan_id: loan.id,
           installment_number: i,
-          amount: String(i === months ? remainder : installmentAmt),
-          due_date: toDateStr(addMonths(startDate, i - 1)),
+          amount: String(i === installmentCount ? remainder : installmentAmt),
+          due_date: toDateStr(addDays(startDate, (i - 1) * DAYS_PER_QUINCENA)),
           status: 'pending',
         })
       }
