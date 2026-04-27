@@ -1,6 +1,7 @@
 /**
- * Stress seed — inserts 5000 employees into the demo tenant for load testing.
- * Usage: bun --env-file ../../.env src/seed-stress.ts
+ * Stress seed — inserts a configurable number of employees into the demo
+ * tenant for load testing. Override with the `STRESS_TOTAL` env var:
+ *   STRESS_TOTAL=5000 bun --env-file ../../.env src/seed-stress.ts
  *
  * Requires the base seed (seed.ts) to have run first so that
  * cargo, funcion, and departamento records exist.
@@ -11,7 +12,10 @@ import postgres from 'postgres'
 
 const TENANT_SLUG = 'demo'
 const BATCH_SIZE = 500
-const TOTAL = 5000
+// Default tuned for end-to-end testing of the report pipeline (covers
+// pagination + render perf without taking forever to seed). Bump via
+// STRESS_TOTAL env var when you need to load-test larger volumes.
+const TOTAL = Number(process.env.STRESS_TOTAL ?? '500')
 
 const url = process.env.DATABASE_URL
 if (!url) {
