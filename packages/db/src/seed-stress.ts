@@ -207,6 +207,22 @@ const start = already
 const remaining = TOTAL - already
 console.log(`Generando ${remaining} empleados (${start} ya existen)…`)
 
+// ── Resolve a default payroll type to link every seeded employee to ─────────
+// Without this, the topbar's mandatory type filter would yield zero employees
+// in modules like Empleados / Préstamos because employee_payroll_types stays
+// empty for stress-seeded rows. Picks the first type by sortOrder so it
+// matches the AppLayout's auto-default behaviour.
+const [defaultType] = await sql<{ id: string }[]>`
+  SELECT id FROM concept_payroll_types ORDER BY sort_order ASC LIMIT 1
+`
+if (!defaultType) {
+  console.error(
+    '\n❌  No payroll types found. Run the base seed (seed.ts) first so concept_payroll_types is populated.'
+  )
+  await sql.end()
+  process.exit(1)
+}
+
 // ── Batch insert ──────────────────────────────────────────────────────────────
 let inserted = 0
 const t0 = Date.now()
@@ -255,6 +271,17 @@ for (let batchStart = start; batchStart < TOTAL; batchStart += BATCH_SIZE) {
       'is_active'
     )}
     ON CONFLICT (code) DO NOTHING
+  `
+
+  // Link every employee in this batch to the default payroll type so the
+  // mandatory topbar filter (used in /employees, /loans, /reports) returns
+  // them. Idempotent via ON CONFLICT in case the seeder is re-run.
+  await sql`
+    INSERT INTO employee_payroll_types (employee_id, payroll_type_id)
+    SELECT e.id, ${defaultType.id}::uuid
+    FROM employees e
+    WHERE e.code = ANY(${rows.map((r) => r.code)})
+    ON CONFLICT DO NOTHING
   `
 
   inserted += rows.length
