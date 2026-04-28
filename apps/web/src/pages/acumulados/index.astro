@@ -11,12 +11,17 @@ const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
 // ─── Filter params from URL ────────────────────────────────────────────────────
 const sp = Astro.url.searchParams
 const filterEmployeeId = sp.get('employeeId') ?? ''
+const filterEmployeeSearch = sp.get('employeeSearch') ?? ''
 const filterConcept = sp.get('conceptCode') ?? ''
 const filterType = sp.get('conceptType') ?? ''
 const filterFrom = sp.get('from') ?? ''
 const filterTo = sp.get('to') ?? ''
 const filterView = sp.get('view') ?? 'summary' // 'summary' | 'detail'
 const page = Math.max(1, Number(sp.get('page') ?? 1))
+
+// Mandatory global filter — forwarded to the API so totals and details
+// are scoped to the active payroll type.
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,10 +67,12 @@ let fetchError = ''
 
 const filterQs = new URLSearchParams({
   ...(filterEmployeeId && { employeeId: filterEmployeeId }),
+  ...(filterEmployeeSearch && { employeeSearch: filterEmployeeSearch }),
   ...(filterConcept && { conceptCode: filterConcept }),
   ...(filterType && { conceptType: filterType }),
   ...(filterFrom && { from: filterFrom }),
   ...(filterTo && { to: filterTo }),
+  ...(activeTypeId && { payrollTypeId: activeTypeId }),
 })
 
 try {
@@ -137,6 +144,7 @@ function buildUrl(extra: Record<string, string>) {
   const params = new URLSearchParams({
     view: filterView,
     ...(filterEmployeeId && { employeeId: filterEmployeeId }),
+    ...(filterEmployeeSearch && { employeeSearch: filterEmployeeSearch }),
     ...(filterConcept && { conceptCode: filterConcept }),
     ...(filterType && { conceptType: filterType }),
     ...(filterFrom && { from: filterFrom }),
@@ -161,7 +169,9 @@ function buildUrl(extra: Record<string, string>) {
       <input type="hidden" name="view" value={filterView} />
       <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
 
-        <!-- Employee combobox -->
+        <!-- Employee combobox: exact-id selection via the dropdown,
+             OR partial-text fallback (employeeSearch) when the user
+             just types and hits Filter without picking a suggestion. -->
         <div class="lg:col-span-2">
           <label class="block text-xs font-medium text-gray-500 mb-1">Empleado</label>
           <input type="hidden" name="employeeId" id="emp-id" value={filterEmployeeId} />
@@ -169,8 +179,11 @@ function buildUrl(extra: Record<string, string>) {
             <input
               type="text"
               id="emp-text"
+              name="employeeSearch"
               placeholder="Buscar por nombre o código…"
-              value={selectedEmp ? `${selectedEmp.lastName}, ${selectedEmp.firstName} (${selectedEmp.code})` : ''}
+              value={selectedEmp
+                ? `${selectedEmp.lastName}, ${selectedEmp.firstName} (${selectedEmp.code})`
+                : filterEmployeeSearch}
               autocomplete="off"
               class="filter-input pr-7"
             />
@@ -178,7 +191,7 @@ function buildUrl(extra: Record<string, string>) {
               type="button"
               id="emp-clear"
               class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              style={selectedEmp ? '' : 'display:none'}
+              style={selectedEmp || filterEmployeeSearch ? '' : 'display:none'}
               aria-label="Limpiar selección"
             >
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8">

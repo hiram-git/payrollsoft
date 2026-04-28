@@ -5,10 +5,14 @@ import { tenantPlugin } from '../../middleware/tenant'
 
 const FilterQuery = t.Object({
   employeeId: t.Optional(t.String()),
+  /** Partial match against name / code. */
+  employeeSearch: t.Optional(t.String()),
   conceptCode: t.Optional(t.String()),
   conceptType: t.Optional(t.String()),
   from: t.Optional(t.String()),
   to: t.Optional(t.String()),
+  /** Mandatory global filter coming from the topbar cookie. */
+  payrollTypeId: t.Optional(t.String()),
   page: t.Optional(t.String()),
   limit: t.Optional(t.String()),
 })
@@ -33,10 +37,12 @@ export const acumuladosRoutes = new Elysia({ prefix: '/acumulados' })
         db,
         {
           employeeId: query.employeeId || undefined,
+          employeeSearch: query.employeeSearch || undefined,
           conceptCode: query.conceptCode || undefined,
           conceptType: query.conceptType || undefined,
           from: query.from || undefined,
           to: query.to || undefined,
+          payrollTypeId: query.payrollTypeId || undefined,
         },
         page,
         limit
@@ -62,10 +68,12 @@ export const acumuladosRoutes = new Elysia({ prefix: '/acumulados' })
 
       const rows = await getAcumuladosSummary(db, {
         employeeId: query.employeeId || undefined,
+        employeeSearch: query.employeeSearch || undefined,
         conceptCode: query.conceptCode || undefined,
         conceptType: query.conceptType || undefined,
         from: query.from || undefined,
         to: query.to || undefined,
+        payrollTypeId: query.payrollTypeId || undefined,
       })
 
       return { success: true, data: rows }
