@@ -2318,6 +2318,15 @@ export async function getPosition(db: AnyDb, id: string) {
   return rows[0] ?? null
 }
 
+/**
+ * Lookup a position by its (case-insensitive) code. Used by the new/edit
+ * forms to give realtime "code is taken" feedback on the input's onBlur.
+ */
+export async function getPositionByCode(db: AnyDb, code: string) {
+  const rows = await db.select().from(positions).where(ilike(positions.code, code)).limit(1)
+  return rows[0] ?? null
+}
+
 export type CreatePositionData = {
   code: string
   name: string
@@ -2326,6 +2335,7 @@ export type CreatePositionData = {
   departamentoId?: string | null
   funcionId?: string | null
   partidaId?: string | null
+  status?: 'en_uso' | 'vacante'
 }
 
 export async function createPosition(db: AnyDb, data: CreatePositionData) {
