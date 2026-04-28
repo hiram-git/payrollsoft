@@ -328,7 +328,7 @@ const loanTypes = [
   </div>
 </AppLayout>
 
-<script type="application/json" id="emp-data" set:text={JSON.stringify(employees.map((e) => ({ id: e.id, code: e.code, firstName: e.firstName, lastName: e.lastName })))} />
+<script type="application/json" id="emp-data" is:inline set:html={JSON.stringify(employees.map((e) => ({ id: e.id, code: e.code, firstName: e.firstName, lastName: e.lastName }))).replace(/</g, '\\u003c')} />
 
 <script>
   // Searchable employee combobox — same shape as the one in /acumulados.
