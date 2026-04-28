@@ -196,9 +196,11 @@ const s = StyleSheet.create({
   colNeto: { width: '9%', textAlign: 'right' },
 
   // ── Per-employee creditor cuotas sub-row ──
-  // Renders below each employee with `Acreedor: monto | …` right-aligned
-  // (text-anchored to the right edge of the table) so multiple creditors
-  // fill the line from right to left.
+  // The text aligns to the *loan-column area* of the table (Otras Ded. +
+  // Neto, ~19% of width) and reads left-to-right, matching the column
+  // order. A spacer matches the leading 8 columns (Empleado..ISR = 73%)
+  // so the cuotas always start at the same x position the "Otras Ded."
+  // header sits in — no longer pushing leftward across the row.
   cuotasRow: {
     flexDirection: 'row',
     paddingHorizontal: 4,
@@ -207,11 +209,17 @@ const s = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: C.gray200,
   },
+  cuotasSpacer: {
+    // 16% (Empleado) + 9% (Cédula) + 8%×6 (Sueldo, Ingresos, SS, SE, SIACAP,
+    // ISR) = 73%. Keep in sync with col* widths below if you ever reshape
+    // the table.
+    width: '73%',
+  },
   cuotasText: {
     flex: 1,
     fontSize: 6.5,
     color: C.gray500,
-    textAlign: 'right',
+    textAlign: 'left',
     paddingHorizontal: 2,
   },
 
@@ -538,6 +546,7 @@ export function PayrollPdf({
                 </View>
                 {cuotasLine && (
                   <View style={[s.cuotasRow, i % 2 === 1 ? s.trAlt : {}]}>
+                    <View style={s.cuotasSpacer} />
                     <Text style={s.cuotasText}>{cuotasLine}</Text>
                   </View>
                 )}
