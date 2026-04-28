@@ -10,6 +10,10 @@ export const positions = pgTable('positions', {
   funcionId: uuid('funcion_id'),
   partidaId: uuid('partida_id'),
   isActive: boolean('is_active').notNull().default(true),
+  // Position lifecycle: 'vacante' (open / no employee assigned) |
+  // 'en_uso' (currently occupied). Independent of `isActive`, which
+  // controls whether the position is selectable at all.
+  status: varchar('status', { length: 20 }).notNull().default('vacante'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })

@@ -513,6 +513,11 @@ const icons: Record<IconKey, string> = {
         display: flex;
         flex-direction: column;
         min-width: 0;
+        /* Without this, a child `flex:1` element with `overflow-y:auto`
+           can grow beyond its parent under content pressure (the classic
+           flexbox scroll trap). `min-height: 0` lets the inner
+           `.page-content` honour its own overflow rule. */
+        min-height: 0;
         overflow: hidden;
       }
 
@@ -834,6 +839,9 @@ const icons: Record<IconKey, string> = {
       /* ── Page content ───────────────────────────────────── */
       .page-content {
         flex: 1;
+        /* Same trap as in `.main-col`: in a flex column the child needs
+           `min-height: 0` for `overflow-y: auto` to be honoured. */
+        min-height: 0;
         overflow-y: auto;
         overflow-x: hidden;
         background: var(--ink);

@@ -10,6 +10,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
 
+  const status = g('status')
   const body = {
     code: g('code'),
     name: g('name'),
@@ -18,6 +19,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     departamentoId: g('departamentoId') || null,
     funcionId: g('funcionId') || null,
     partidaId: g('partidaId') || null,
+    status: status === 'en_uso' || status === 'vacante' ? status : 'vacante',
   }
 
   if (!body.code || !body.name || !body.salary) {

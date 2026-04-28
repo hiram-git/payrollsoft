@@ -2,12 +2,15 @@ import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
+  checkPositionCodeService,
   createPositionService,
   deletePositionService,
   getPositionService,
   listPositionsService,
   updatePositionService,
 } from './service'
+
+const StatusLiteral = t.Union([t.Literal('en_uso'), t.Literal('vacante')])
 
 const PositionBody = t.Object({
   code: t.String({ minLength: 1, maxLength: 20 }),
@@ -17,6 +20,7 @@ const PositionBody = t.Object({
   departamentoId: t.Optional(t.Nullable(t.String())),
   funcionId: t.Optional(t.Nullable(t.String())),
   partidaId: t.Optional(t.Nullable(t.String())),
+  status: t.Optional(StatusLiteral),
 })
 
 const PositionUpdateBody = t.Object({
@@ -27,6 +31,7 @@ const PositionUpdateBody = t.Object({
   departamentoId: t.Optional(t.Nullable(t.String())),
   funcionId: t.Optional(t.Nullable(t.String())),
   partidaId: t.Optional(t.Nullable(t.String())),
+  status: t.Optional(StatusLiteral),
 })
 
 export const positionsRoutes = new Elysia({ prefix: '/positions' })
@@ -46,6 +51,29 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
     {
       beforeHandle: [guardAuth, guardRole('VIEWER')],
       query: t.Object({ isActive: t.Optional(t.String()) }),
+    }
+  )
+
+  // GET /positions/check-code?code=ABC&excludeId=…
+  // Realtime availability lookup used by the create / edit forms on
+  // input blur. Declared BEFORE /:id so Elysia doesn't interpret
+  // "check-code" as an id parameter.
+  .get(
+    '/check-code',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await checkPositionCodeService(db, query.code, query.excludeId)
+      return { success: true, ...result }
+    },
+    {
+      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      query: t.Object({
+        code: t.String({ minLength: 1, maxLength: 20 }),
+        excludeId: t.Optional(t.String()),
+      }),
     }
   )
 

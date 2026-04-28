@@ -104,7 +104,11 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
 ---
 
 <AppLayout title="Configuración de Empresa">
-  <div class="p-8 max-w-5xl">
+  <!-- Outer wrapper: centred horizontally with `mx-auto` and bottom-
+       padded so the Save button never sits flush against the viewport
+       edge. The form itself doesn't set its own height — the parent
+       `.page-content` from AppLayout owns the scroll. -->
+  <div class="p-8 pb-16 max-w-5xl mx-auto">
 
     <!-- Header -->
     <div class="flex items-start justify-between mb-6">

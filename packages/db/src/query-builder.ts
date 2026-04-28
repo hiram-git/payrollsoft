@@ -493,10 +493,15 @@ export async function getPayrollAcumulados(db: Db, payrollId: string, employeeId
 
 export type AcumuladosFilter = {
   employeeId?: string
+  /** Partial match against employee first/last name or code (ILIKE). */
+  employeeSearch?: string
   conceptCode?: string
   conceptType?: string
   from?: string // YYYY-MM-DD — filters on payroll.periodStart
   to?: string // YYYY-MM-DD — filters on payroll.periodEnd
+  /** Restrict to employees linked to this payroll type via
+   *  `employee_payroll_types`. Drives the global mandatory filter. */
+  payrollTypeId?: string
 }
 
 export async function queryAcumulados(db: Db, filter: AcumuladosFilter, page = 1, limit = 100) {
@@ -576,11 +581,32 @@ export async function getAcumuladosSummary(db: Db, filter: AcumuladosFilter) {
 function buildAcumuladosConditions(filter: AcumuladosFilter) {
   const conditions = []
   if (filter.employeeId) conditions.push(eq(payrollAcumulados.employeeId, filter.employeeId))
+  if (filter.employeeSearch) {
+    const q = `%${filter.employeeSearch}%`
+    conditions.push(
+      or(
+        ilike(employees.firstName, q),
+        ilike(employees.lastName, q),
+        ilike(employees.code, q),
+        sql`(${employees.firstName} || ' ' || ${employees.lastName}) ilike ${q}`
+      )
+    )
+  }
   if (filter.conceptCode)
     conditions.push(eq(payrollAcumulados.conceptCode, filter.conceptCode.toUpperCase()))
   if (filter.conceptType) conditions.push(eq(payrollAcumulados.conceptType, filter.conceptType))
   if (filter.from) conditions.push(gte(payrolls.periodStart, filter.from))
   if (filter.to) conditions.push(lte(payrolls.periodEnd, filter.to))
+  if (filter.payrollTypeId) {
+    // Match via the employee↔type link table (same shape we use in
+    // listEmployees / listAllLoans). No JOIN — semi-join via subquery.
+    conditions.push(
+      inArray(
+        payrollAcumulados.employeeId,
+        sql`(SELECT employee_id FROM employee_payroll_types WHERE payroll_type_id = ${filter.payrollTypeId})`
+      )
+    )
+  }
   return conditions
 }
 
@@ -2145,6 +2171,11 @@ export async function findUserByEmail(db: Db, email: string) {
   return row ?? null
 }
 
+export async function findUserById(db: Db, id: string) {
+  const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+  return row ?? null
+}
+
 /** Find a super admin by email in the public schema. */
 export async function findSuperAdminByEmail(db: Db, email: string) {
   const [row] = await db
@@ -2292,6 +2323,15 @@ export async function getPosition(db: AnyDb, id: string) {
   return rows[0] ?? null
 }
 
+/**
+ * Lookup a position by its (case-insensitive) code. Used by the new/edit
+ * forms to give realtime "code is taken" feedback on the input's onBlur.
+ */
+export async function getPositionByCode(db: AnyDb, code: string) {
+  const rows = await db.select().from(positions).where(ilike(positions.code, code)).limit(1)
+  return rows[0] ?? null
+}
+
 export type CreatePositionData = {
   code: string
   name: string
@@ -2300,6 +2340,7 @@ export type CreatePositionData = {
   departamentoId?: string | null
   funcionId?: string | null
   partidaId?: string | null
+  status?: 'en_uso' | 'vacante'
 }
 
 export async function createPosition(db: AnyDb, data: CreatePositionData) {

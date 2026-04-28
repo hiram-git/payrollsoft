@@ -1,4 +1,4 @@
-import type { PdfCompany, PdfPayroll, PdfPayrollLine } from '../pdf/payroll-pdf'
+import type { PdfCompany, PdfGeneratedBy, PdfPayroll, PdfPayrollLine } from '../pdf/payroll-pdf'
 
 /**
  * Shape assembled for every payroll report (PDF, XLSX, summary, payslips,
@@ -9,6 +9,8 @@ export type PayrollReportData = {
   payroll: PdfPayroll
   lines: PdfPayrollLine[]
   company: PdfCompany | null
+  /** Resolved generator details from the payroll_reports row, if any. */
+  generatedBy?: PdfGeneratedBy | null
 }
 
 export type PayrollReportFilters = {

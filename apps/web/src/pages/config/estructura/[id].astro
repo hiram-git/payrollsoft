@@ -17,6 +17,7 @@ type Position = {
   funcionId: string | null
   partidaId: string | null
   isActive: boolean
+  status: 'en_uso' | 'vacante' | string
 }
 type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
 
@@ -104,16 +105,37 @@ const errorMessages: Record<string, string> = {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
-            <input type="text" name="code" class="input" required value={pos.code} maxlength="20" />
+            <input
+              type="text"
+              name="code"
+              id="position-code"
+              class="input"
+              required
+              value={pos.code}
+              maxlength="20"
+              data-original={pos.code}
+              data-exclude-id={pos.id}
+              autocomplete="off"
+            />
+            <p id="position-code-feedback" class="hidden mt-1 text-xs"></p>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
             <input type="text" name="name" class="input" required value={pos.name} />
           </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Salario base (USD) *</label>
-          <input type="text" name="salary" class="input" required value={pos.salary} />
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Salario base (USD) *</label>
+            <input type="text" name="salary" class="input" required value={pos.salary} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Estatus *</label>
+            <select name="status" class="input" required>
+              <option value="vacante" selected={pos.status === 'vacante'}>Vacante</option>
+              <option value="en_uso" selected={pos.status === 'en_uso'}>En uso</option>
+            </select>
+          </div>
         </div>
         <div class="grid grid-cols-3 gap-4">
           <div>
@@ -184,3 +206,51 @@ const errorMessages: Record<string, string> = {
     @apply w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
   }
 </style>
+
+<script>
+  // Realtime code-availability check on blur. The edit form passes
+  // excludeId so the position's *own* code doesn't trip a phantom
+  // collision. If the user blurs the field with the original value the
+  // network call is skipped — nothing changed, nothing to validate.
+  const codeInput = document.getElementById('position-code') as HTMLInputElement | null
+  const feedback = document.getElementById('position-code-feedback') as HTMLElement | null
+  const submitBtn = document.querySelector<HTMLButtonElement>('button[type="submit"]')
+  if (codeInput && feedback) {
+    const original = codeInput.dataset.original ?? ''
+    const excludeId = codeInput.dataset.excludeId ?? ''
+    let abort: AbortController | null = null
+    codeInput.addEventListener('blur', async () => {
+      const code = codeInput.value.trim()
+      feedback.classList.add('hidden')
+      feedback.className = 'hidden mt-1 text-xs'
+      if (submitBtn) submitBtn.disabled = false
+      if (!code || code === original) return
+      abort?.abort()
+      abort = new AbortController()
+      try {
+        const params = new URLSearchParams({ code })
+        if (excludeId) params.set('excludeId', excludeId)
+        const res = await fetch(`/api/config/estructura/check-code?${params}`, {
+          signal: abort.signal,
+        })
+        if (!res.ok) return
+        const data = (await res.json()) as { available: boolean }
+        feedback.classList.remove('hidden')
+        if (data.available) {
+          feedback.textContent = '✓ Código disponible'
+          feedback.className = 'mt-1 text-xs text-emerald-600'
+        } else {
+          feedback.textContent = '✕ El código ya está en uso'
+          feedback.className = 'mt-1 text-xs text-red-600'
+          if (submitBtn) submitBtn.disabled = true
+        }
+      } catch {
+        /* network errors → silent */
+      }
+    })
+    codeInput.addEventListener('input', () => {
+      feedback.classList.add('hidden')
+      if (submitBtn) submitBtn.disabled = false
+    })
+  }
+</script>

@@ -15,6 +15,7 @@ type Position = {
   funcionId: string | null
   partidaId: string | null
   isActive: boolean
+  status: 'en_uso' | 'vacante' | string
 }
 type CatalogItem = { id: string; code: string; name: string }
 
@@ -92,6 +93,7 @@ const success = Astro.url.searchParams.get('success') === '1'
               <th class="text-left px-4 py-3 font-medium text-gray-600">Departamento</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Función</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Partida</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">Estatus</th>
               <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -106,6 +108,11 @@ const success = Astro.url.searchParams.get('success') === '1'
                 <td class="px-4 py-3 text-gray-600">{pos.departamentoId ? (deptMap.get(pos.departamentoId) ?? '—') : '—'}</td>
                 <td class="px-4 py-3 text-gray-600">{pos.funcionId ? (funcionMap.get(pos.funcionId) ?? '—') : '—'}</td>
                 <td class="px-4 py-3 text-gray-600 text-xs font-mono">{pos.partidaId ? (partidaMap.get(pos.partidaId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${pos.status === 'en_uso' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
+                    {pos.status === 'en_uso' ? 'En uso' : 'Vacante'}
+                  </span>
+                </td>
                 <td class="px-4 py-3">
                   <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${pos.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                     {pos.isActive ? 'Activo' : 'Inactivo'}

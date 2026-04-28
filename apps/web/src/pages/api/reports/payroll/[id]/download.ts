@@ -14,6 +14,8 @@ type ReportState = {
   status: 'generated' | 'not_generated'
   pdfPath: string | null
   generatedAt: string | null
+  generatedByName: string | null
+  generatedByEmail: string | null
 }
 
 /**
@@ -79,7 +81,12 @@ export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
 
     payrollName = result.data.payroll.name
     try {
-      pdfBytes = await renderPayrollPdfBuffer(result.data)
+      // Live re-render preserves the original generator's identity in
+      // the footer so the report still answers "who produced this".
+      pdfBytes = await renderPayrollPdfBuffer({
+        ...result.data,
+        generatedBy: { name: state.generatedByName, email: state.generatedByEmail },
+      })
     } catch (err) {
       console.error('Payroll PDF render error:', err)
       return new Response('Error al renderizar el PDF', { status: 500 })

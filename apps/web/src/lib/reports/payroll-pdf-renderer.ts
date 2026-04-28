@@ -13,6 +13,7 @@ export async function renderPayrollPdfBuffer(data: PayrollReportData): Promise<U
     payroll: data.payroll,
     lines: data.lines,
     company: data.company,
+    generatedBy: data.generatedBy ?? null,
   })
   // @react-pdf/renderer's `renderToBuffer` signature doesn't match React 19's
   // `FunctionComponentElement`; runtime is fine, the cast silences the
