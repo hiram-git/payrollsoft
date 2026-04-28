@@ -26,27 +26,55 @@ type Creditor = {
   isActive: boolean
 }
 
+/**
+ * The /employees endpoint clamps `limit` at 100 server-side. For a tenant
+ * with hundreds of employees linked to the active payroll type, asking
+ * for `limit=500` silently truncates to 100 and the combobox looks like
+ * it isn't filtering correctly. Walk every page (filter still applied
+ * server-side via `payrollTypeId`) and aggregate so the dropdown sees
+ * the complete set scoped to the active type.
+ */
+const API_LIMIT = 100
+const MAX_PAGES = 50 // safety cap — covers 5,000 employees of a single type
+async function fetchAllEmployeesForType(typeId: string): Promise<Employee[]> {
+  const all: Employee[] = []
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const params = new URLSearchParams({
+      page: String(page),
+      limit: String(API_LIMIT),
+      isActive: 'true',
+    })
+    if (typeId) params.set('payrollTypeId', typeId)
+    const res = await fetch(`${API_URL}/employees?${params}`, { headers })
+    if (res.status === 401) throw new Response('unauthorized', { status: 401 })
+    if (!res.ok) break
+    const json = (await res.json()) as { data: Employee[] }
+    const batch = json.data ?? []
+    all.push(...batch)
+    if (batch.length < API_LIMIT) break
+  }
+  return all
+}
+
 let employees: Employee[] = []
 let creditors: Creditor[] = []
 
 try {
-  const empParams = new URLSearchParams({ limit: '500' })
-  if (activeTypeId) empParams.set('payrollTypeId', activeTypeId)
-  const [empRes, credRes] = await Promise.all([
-    fetch(`${API_URL}/employees?${empParams}`, { headers }),
+  const [emps, credRes] = await Promise.all([
+    fetchAllEmployeesForType(activeTypeId),
     fetch(`${API_URL}/creditors`, { headers }),
   ])
-  if (empRes.status === 401) return Astro.redirect('/login')
-  if (empRes.ok) {
-    const json = (await empRes.json()) as { data: Employee[] }
-    employees = (json.data ?? []).filter((e) => e.isActive)
-  }
+  // Defensive client-side filter on `isActive` mirrors the topbar's
+  // semantics — even if the API ever drifts and returns inactive rows,
+  // the combobox stays scoped.
+  employees = emps.filter((e) => e.isActive)
   if (credRes.ok) {
     const json = (await credRes.json()) as { data: Creditor[] }
     creditors = (json.data ?? []).filter((c) => c.isActive)
   }
-} catch {
-  // proceed with empty lists
+} catch (err) {
+  if (err instanceof Response && err.status === 401) return Astro.redirect('/login')
+  // proceed with empty lists on any other failure
 }
 
 const preselectedEmployee = employees.find(
@@ -101,7 +129,13 @@ const loanTypes = [
                Hidden `employeeId` carries the picked id to the form;
                visible text input lets the user filter as they type. -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">Empleado *</label>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-sm font-medium text-gray-700">Empleado *</label>
+              <span class="text-[11px] text-gray-500">
+                {employees.length} {employees.length === 1 ? 'empleado disponible' : 'empleados disponibles'}
+                {activeTypeId && ' · filtrado por tipo de planilla'}
+              </span>
+            </div>
             <input
               type="hidden"
               name="employeeId"
