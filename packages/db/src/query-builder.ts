@@ -2332,6 +2332,36 @@ export async function getPositionByCode(db: AnyDb, code: string) {
   return rows[0] ?? null
 }
 
+/**
+ * Recompute the lifecycle status of a position based on whether any
+ * active employee is currently assigned to it. Called from the employee
+ * service whenever an employee gains, changes or loses a positionId so
+ * the catalog "Estatus" column stays in sync without any extra UI work.
+ *
+ *   `positions.status = 'en_uso'`   ↔   ≥1 active employee references it
+ *   `positions.status = 'vacante'`  ↔   no active employee references it
+ *
+ * Pass `null` for a no-op (the employee never had a position to begin
+ * with). Errors are silenced on purpose — the employee write must not
+ * roll back because of a status sync glitch.
+ */
+export async function recomputePositionStatus(db: AnyDb, positionId: string | null) {
+  if (!positionId) return
+  try {
+    const [{ taken }] = await db
+      .select({ taken: count() })
+      .from(employees)
+      .where(and(eq(employees.positionId, positionId), eq(employees.isActive, true)))
+    const occupied = Number(taken) > 0
+    await db
+      .update(positions)
+      .set({ status: occupied ? 'en_uso' : 'vacante', updatedAt: new Date() })
+      .where(eq(positions.id, positionId))
+  } catch (err) {
+    console.error('recomputePositionStatus error for', positionId, err)
+  }
+}
+
 export type CreatePositionData = {
   code: string
   name: string

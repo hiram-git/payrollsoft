@@ -8,6 +8,7 @@ import {
   getEmployeeByCode,
   getFuncionById,
   listEmployees,
+  recomputePositionStatus,
   setEmployeePayrollTypes,
   updateEmployee,
 } from '@payroll/db'
@@ -127,6 +128,9 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
     }
   }
 
+  // Newly assigned position flips to 'en_uso' automatically.
+  await recomputePositionStatus(db, employee.positionId)
+
   return { success: true as const, data: employee }
 }
 
@@ -186,6 +190,7 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
     patch.department = department
   }
 
+  const previousPositionId = existing.positionId ?? null
   const updated = await updateEmployee(db, id, patch)
 
   if (input.payrollTypeIds !== undefined) {
@@ -198,6 +203,16 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
     }
     await setEmployeePayrollTypes(db, id, input.payrollTypeIds)
   }
+
+  // Reconcile position status on both ends of the change. The newly
+  // assigned position flips to 'en_uso' (or stays there if it was
+  // already occupied by someone else); the previous position drops
+  // back to 'vacante' once the last active employee leaves it.
+  const nextPositionId = updated?.positionId ?? null
+  if (previousPositionId !== nextPositionId) {
+    await recomputePositionStatus(db, previousPositionId)
+  }
+  await recomputePositionStatus(db, nextPositionId)
 
   return { success: true as const, data: updated }
 }
@@ -217,5 +232,8 @@ export async function deactivateEmployeeService(db: AnyDb, id: string) {
     }
   }
   const updated = await deactivateEmployee(db, id)
+  // Frees the position automatically — it stays 'en_uso' only while at
+  // least one *active* employee references it.
+  await recomputePositionStatus(db, existing.positionId ?? null)
   return { success: true as const, data: updated }
 }
