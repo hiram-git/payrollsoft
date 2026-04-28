@@ -7,6 +7,10 @@ if (!authCookie) return Astro.redirect('/login')
 
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
 
+// Mandatory global filter — only employees linked to the active payroll
+// type appear in the combobox. Same cookie the topbar selector writes.
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+
 type Employee = {
   id: string
   code: string
@@ -26,8 +30,10 @@ let employees: Employee[] = []
 let creditors: Creditor[] = []
 
 try {
+  const empParams = new URLSearchParams({ limit: '500' })
+  if (activeTypeId) empParams.set('payrollTypeId', activeTypeId)
   const [empRes, credRes] = await Promise.all([
-    fetch(`${API_URL}/employees?limit=100`, { headers }),
+    fetch(`${API_URL}/employees?${empParams}`, { headers }),
     fetch(`${API_URL}/creditors`, { headers }),
   ])
   if (empRes.status === 401) return Astro.redirect('/login')
@@ -43,7 +49,9 @@ try {
   // proceed with empty lists
 }
 
-const preselectedEmployeeId = Astro.url.searchParams.get('employeeId') ?? ''
+const preselectedEmployee = employees.find(
+  (e) => e.id === (Astro.url.searchParams.get('employeeId') ?? '')
+)
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
@@ -89,17 +97,51 @@ const loanTypes = [
         <h2 class="font-semibold text-gray-800">Información del Préstamo</h2>
 
         <div class="grid grid-cols-2 gap-4">
-          <!-- Employee -->
+          <!-- Employee — searchable combobox.
+               Hidden `employeeId` carries the picked id to the form;
+               visible text input lets the user filter as they type. -->
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Empleado *</label>
-            <select name="employeeId" id="employeeId" class="input" required>
-              <option value="">Seleccione empleado...</option>
-              {employees.map((emp) => (
-                <option value={emp.id} selected={emp.id === preselectedEmployeeId}>
-                  {emp.code} — {emp.firstName} {emp.lastName}
-                </option>
-              ))}
-            </select>
+            <input
+              type="hidden"
+              name="employeeId"
+              id="emp-id"
+              value={preselectedEmployee?.id ?? ''}
+              required
+            />
+            <div class="relative">
+              <input
+                type="text"
+                id="emp-text"
+                placeholder="Buscar por nombre o código…"
+                value={preselectedEmployee
+                  ? `${preselectedEmployee.code} — ${preselectedEmployee.firstName} ${preselectedEmployee.lastName}`
+                  : ''}
+                autocomplete="off"
+                class="input pr-7"
+              />
+              <button
+                type="button"
+                id="emp-clear"
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                style={preselectedEmployee ? '' : 'display:none'}
+                aria-label="Limpiar selección"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M2 2l8 8M10 2l-8 8"/>
+                </svg>
+              </button>
+              <ul
+                id="emp-dropdown"
+                class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto text-sm"
+                role="listbox"
+              ></ul>
+            </div>
+            {employees.length === 0 && (
+              <p class="mt-1 text-xs text-amber-600">
+                No hay empleados activos para el tipo de planilla seleccionado.
+              </p>
+            )}
           </div>
 
           <!-- Creditor -->
@@ -251,6 +293,101 @@ const loanTypes = [
     </form>
   </div>
 </AppLayout>
+
+<script type="application/json" id="emp-data" set:text={JSON.stringify(employees.map((e) => ({ id: e.id, code: e.code, firstName: e.firstName, lastName: e.lastName })))} />
+
+<script>
+  // Searchable employee combobox — same shape as the one in /acumulados.
+  // Submitting picks the highlighted id via a hidden input; typing
+  // clears the previous selection so the form never submits a stale id.
+  type EmpEntry = { id: string; code: string; firstName: string; lastName: string }
+  const empData: EmpEntry[] = JSON.parse(
+    (document.getElementById('emp-data') as HTMLScriptElement)?.textContent ?? '[]'
+  )
+
+  const empIdInput = document.getElementById('emp-id') as HTMLInputElement | null
+  const empTextInput = document.getElementById('emp-text') as HTMLInputElement | null
+  const empDropdown = document.getElementById('emp-dropdown') as HTMLUListElement | null
+  const empClear = document.getElementById('emp-clear') as HTMLButtonElement | null
+
+  function filterEmps(q: string): EmpEntry[] {
+    const lq = q.toLowerCase()
+    return empData
+      .filter(
+        (e) =>
+          e.firstName.toLowerCase().includes(lq) ||
+          e.lastName.toLowerCase().includes(lq) ||
+          e.code.toLowerCase().includes(lq) ||
+          `${e.firstName} ${e.lastName}`.toLowerCase().includes(lq)
+      )
+      .slice(0, 30)
+  }
+
+  function renderDropdown(items: EmpEntry[]) {
+    if (!empDropdown) return
+    if (items.length === 0) {
+      empDropdown.classList.add('hidden')
+      return
+    }
+    empDropdown.innerHTML = items
+      .map(
+        (e) =>
+          `<li class="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors" role="option" data-id="${e.id}" data-label="${e.code} — ${e.firstName} ${e.lastName}">
+            <span class="font-mono text-xs text-gray-400 mr-2">${e.code}</span>
+            <span class="font-medium text-gray-800">${e.firstName} ${e.lastName}</span>
+          </li>`
+      )
+      .join('')
+    empDropdown.classList.remove('hidden')
+  }
+
+  // Picking from the panel beats the input's blur — preventDefault on
+  // mousedown keeps the input focused so the click event still fires.
+  empDropdown?.addEventListener('mousedown', (e) => e.preventDefault())
+
+  empDropdown?.addEventListener('click', (e) => {
+    const li = (e.target as HTMLElement).closest<HTMLElement>('li[data-id]')
+    if (!li || !empIdInput || !empTextInput || !empDropdown || !empClear) return
+    empIdInput.value = li.dataset.id ?? ''
+    empTextInput.value = li.dataset.label ?? ''
+    empDropdown.classList.add('hidden')
+    empClear.style.display = ''
+  })
+
+  empTextInput?.addEventListener('input', () => {
+    if (!empIdInput || !empClear) return
+    // Typing means the previous picked id is no longer canonical.
+    empIdInput.value = ''
+    empClear.style.display = 'none'
+    const q = empTextInput.value.trim()
+    if (q.length === 0) {
+      // Empty query → show the full list so users can browse.
+      renderDropdown(empData.slice(0, 30))
+      return
+    }
+    renderDropdown(filterEmps(q))
+  })
+
+  empTextInput?.addEventListener('focus', () => {
+    if (!empIdInput?.value) {
+      const q = empTextInput?.value.trim() ?? ''
+      renderDropdown(q.length === 0 ? empData.slice(0, 30) : filterEmps(q))
+    }
+  })
+
+  empTextInput?.addEventListener('blur', () => {
+    setTimeout(() => empDropdown?.classList.add('hidden'), 100)
+  })
+
+  empClear?.addEventListener('click', () => {
+    if (!empIdInput || !empTextInput || !empDropdown || !empClear) return
+    empIdInput.value = ''
+    empTextInput.value = ''
+    empDropdown.classList.add('hidden')
+    empClear.style.display = 'none'
+    empTextInput.focus()
+  })
+</script>
 
 <style>
   .input {
