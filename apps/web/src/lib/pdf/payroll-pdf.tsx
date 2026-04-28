@@ -63,6 +63,15 @@ export type PdfCompany = {
   cargoDirector?: string | null
 }
 
+/**
+ * User that triggered the last successful generation. Surfaced in the
+ * page footer so the recipient can trace back to the operator.
+ */
+export type PdfGeneratedBy = {
+  name: string | null
+  email: string | null
+}
+
 // ─── Fonts ────────────────────────────────────────────────────────────────────
 
 Font.registerHyphenationCallback((word) => [word])
@@ -185,6 +194,26 @@ const s = StyleSheet.create({
   colIsr: { width: '8%', textAlign: 'right' },
   colOtras: { width: '10%', textAlign: 'right' },
   colNeto: { width: '9%', textAlign: 'right' },
+
+  // ── Per-employee creditor cuotas sub-row ──
+  // Renders below each employee with `Acreedor: monto | …` right-aligned
+  // (text-anchored to the right edge of the table) so multiple creditors
+  // fill the line from right to left.
+  cuotasRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 4,
+    paddingTop: 1,
+    paddingBottom: 4,
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.gray200,
+  },
+  cuotasText: {
+    flex: 1,
+    fontSize: 6.5,
+    color: C.gray500,
+    textAlign: 'right',
+    paddingHorizontal: 2,
+  },
 
   // ── Totals row ──
   totalsRow: {
@@ -351,16 +380,56 @@ export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
   return { sueldo, ingresos, ss, se, siacap, isr, otrasDeducciones, neto }
 }
 
+/**
+ * Format the creditor cuotas associated to a payroll line as
+ * `BAC: 20.00 | BANGENERAL: 30.00`. Returns null when the line has no
+ * creditor entries so the renderer can skip the sub-row entirely.
+ *
+ * Source of truth is the `other_discounts` metadata stamped onto each
+ * creditor concept (see `stampOtherDiscounts` in the payroll service).
+ * Falls back to the legacy `ACR_*` code prefix for older rows that
+ * don't yet carry the metadata.
+ */
+export function formatCuotasLine(line: PdfPayrollLine['line']): string | null {
+  type Cuota = { name: string; amount: number }
+  const cuotas: Cuota[] = []
+  for (const c of line.concepts) {
+    if (c.type !== 'deduction') continue
+    const code = c.code?.toUpperCase() ?? ''
+    if (CODE.ss.has(code) || CODE.se.has(code) || CODE.siacap.has(code) || CODE.isr.has(code)) {
+      continue
+    }
+    const meta = c.other_discounts
+    if (meta) {
+      cuotas.push({
+        name: meta.creditor_code || meta.creditor_name || c.code,
+        amount: toNumber(c.amount),
+      })
+      continue
+    }
+    if (code.startsWith(CREDITOR_CODE_PREFIX)) {
+      cuotas.push({
+        name: code.slice(CREDITOR_CODE_PREFIX.length) || c.code,
+        amount: toNumber(c.amount),
+      })
+    }
+  }
+  if (cuotas.length === 0) return null
+  return cuotas.map((c) => `${c.name}: ${fmt(c.amount)}`).join(' | ')
+}
+
 // ─── Document ─────────────────────────────────────────────────────────────────
 
 export function PayrollPdf({
   payroll,
   lines,
   company,
+  generatedBy,
 }: {
   payroll: PdfPayroll
   lines: PdfPayrollLine[]
   company: PdfCompany | null
+  generatedBy?: PdfGeneratedBy | null
 }) {
   const buckets = lines.map((l) => ({
     line: l,
@@ -450,20 +519,28 @@ export function PayrollPdf({
           {buckets.map((b, i) => {
             const emp = b.line.employee
             const fullName = `${emp.firstName} ${emp.lastName}`.trim()
+            const cuotasLine = formatCuotasLine(b.line.line)
             return (
-              <View key={emp.code} style={[s.tr, i % 2 === 1 ? s.trAlt : {}]} wrap={false}>
-                <Text style={[s.td, s.colEmployee]}>{fullName}</Text>
-                <Text style={[s.td, s.colCedula, s.tdMuted]}>{emp.idNumber ?? '—'}</Text>
-                <Text style={[s.td, s.colSueldo]}>{fmt(b.sueldo)}</Text>
-                <Text style={[s.td, s.colIngresos]}>{fmt(b.ingresos)}</Text>
-                <Text style={[s.td, s.colSS]}>{fmt(b.ss)}</Text>
-                <Text style={[s.td, s.colSE]}>{fmt(b.se)}</Text>
-                <Text style={[s.td, s.colSiacap]}>{fmt(b.siacap)}</Text>
-                <Text style={[s.td, s.colIsr]}>{fmt(b.isr)}</Text>
-                <Text style={[s.td, s.colOtras]}>{fmt(b.otrasDeducciones)}</Text>
-                <Text style={[s.td, s.colNeto, { fontFamily: 'Helvetica-Bold' }]}>
-                  {fmt(b.neto)}
-                </Text>
+              <View key={emp.code} wrap={false}>
+                <View style={[s.tr, i % 2 === 1 ? s.trAlt : {}]}>
+                  <Text style={[s.td, s.colEmployee]}>{fullName}</Text>
+                  <Text style={[s.td, s.colCedula, s.tdMuted]}>{emp.idNumber ?? '—'}</Text>
+                  <Text style={[s.td, s.colSueldo]}>{fmt(b.sueldo)}</Text>
+                  <Text style={[s.td, s.colIngresos]}>{fmt(b.ingresos)}</Text>
+                  <Text style={[s.td, s.colSS]}>{fmt(b.ss)}</Text>
+                  <Text style={[s.td, s.colSE]}>{fmt(b.se)}</Text>
+                  <Text style={[s.td, s.colSiacap]}>{fmt(b.siacap)}</Text>
+                  <Text style={[s.td, s.colIsr]}>{fmt(b.isr)}</Text>
+                  <Text style={[s.td, s.colOtras]}>{fmt(b.otrasDeducciones)}</Text>
+                  <Text style={[s.td, s.colNeto, { fontFamily: 'Helvetica-Bold' }]}>
+                    {fmt(b.neto)}
+                  </Text>
+                </View>
+                {cuotasLine && (
+                  <View style={[s.cuotasRow, i % 2 === 1 ? s.trAlt : {}]}>
+                    <Text style={s.cuotasText}>{cuotasLine}</Text>
+                  </View>
+                )}
               </View>
             )
           })}
@@ -502,7 +579,11 @@ export function PayrollPdf({
 
         {/* ── Footer ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>Generado: {generatedAt}</Text>
+          <Text style={s.footerText}>
+            Generado: {generatedAt}
+            {generatedBy?.name ? ` · por ${generatedBy.name}` : ''}
+            {generatedBy?.email ? ` (${generatedBy.email})` : ''}
+          </Text>
           <Text style={s.footerText}>
             {companyName} — {payroll.name}
           </Text>

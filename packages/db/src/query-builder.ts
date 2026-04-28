@@ -2171,6 +2171,11 @@ export async function findUserByEmail(db: Db, email: string) {
   return row ?? null
 }
 
+export async function findUserById(db: Db, id: string) {
+  const [row] = await db.select().from(users).where(eq(users.id, id)).limit(1)
+  return row ?? null
+}
+
 /** Find a super admin by email in the public schema. */
 export async function findSuperAdminByEmail(db: Db, email: string) {
   const [row] = await db

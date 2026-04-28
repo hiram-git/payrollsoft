@@ -12,6 +12,25 @@ const TENANT = 'demo'
 type CompanyConfigData = { payrollReportMode?: string | null } | null
 
 /**
+ * Decode the auth JWT (server-side, payload only) so we can stamp the
+ * generator's name + email into the PDF footer at render time. The
+ * payload is already validated upstream by every protected route, so
+ * we trust the same fields the AppLayout reads to populate the topbar.
+ */
+function decodeJwtPayload(token: string): { name?: string; email?: string } | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const json = Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString(
+      'utf8'
+    )
+    return JSON.parse(json) as { name?: string; email?: string }
+  } catch {
+    return null
+  }
+}
+
+/**
  * Render the Planilla PDF and reconcile the payroll_reports row with the
  * outcome. The persistence strategy is dictated entirely by the tenant's
  * `company_config.payroll_report_mode`:
@@ -50,9 +69,15 @@ export const POST: APIRoute = async ({ params, cookies, url, redirect }) => {
   const company = result.data.company as CompanyConfigData
   const mode = company?.payrollReportMode ?? 'on_demand'
 
+  // Stamp the current user as the report's generator so the footer
+  // already shows the right name even on the first render (file_storage
+  // mode persists this rendering verbatim).
+  const jwt = decodeJwtPayload(authCookie)
+  const generatedBy = jwt ? { name: jwt.name ?? null, email: jwt.email ?? null } : null
+
   let pdfBytes: Uint8Array
   try {
-    pdfBytes = await renderPayrollPdfBuffer(result.data)
+    pdfBytes = await renderPayrollPdfBuffer({ ...result.data, generatedBy })
   } catch (err) {
     console.error('Payroll PDF render error:', err)
     return new Response('Error al renderizar el PDF', { status: 500 })
