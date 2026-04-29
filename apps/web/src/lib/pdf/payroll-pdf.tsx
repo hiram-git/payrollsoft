@@ -196,36 +196,43 @@ const s = StyleSheet.create({
   colNeto: { width: '9%', textAlign: 'right' },
 
   // ── Per-employee creditor cuotas sub-row ──
-  // Cuotas are laid out as a fixed-width grid that flows right-to-left
-  // (`row-reverse`) and each cell is right-aligned. The right edge of the
-  // last cell is anchored to the table's right margin so the rightmost
-  // cuota column lines up across every employee row regardless of how
-  // many cuotas they have. This avoids the previous left-to-right
-  // overflow that pushed long cuota strings past the table margin.
+  // Cuotas sit directly below the "Otras Ded." column. The cuotas
+  // column's right edge = total_table_width − neto_column_width, so
+  // it ends exactly where the "Otras Ded." cell ends (i.e. the left
+  // edge of the "Neto" column). Layout is composed of three slots:
+  //   • 73% leading spacer (Empleado..ISR — 16+9+8×6).
+  //   • 10% cuotas column   (under "Otras Ded.").
+  //   •  9% trailing spacer (under "Neto", left untouched).
+  // Each cuota is right-aligned and stacks vertically inside the
+  // 10% column so several cuotas can coexist without overflowing.
   cuotasRow: {
-    flexDirection: 'row-reverse',
+    flexDirection: 'row',
     paddingHorizontal: 4,
     paddingTop: 1,
     paddingBottom: 4,
     borderBottomWidth: 0.5,
     borderBottomColor: C.gray200,
   },
+  cuotasLeadingSpacer: { width: '73%' },
+  cuotasColumn: {
+    width: '10%',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    paddingHorizontal: 2,
+  },
+  cuotasTrailingSpacer: { width: '9%' },
   cuotaCell: {
-    // Fixed slot width keeps cuota columns aligned across rows. With six
-    // visible slots (78% combined), the leading 22% of the row stays
-    // empty when fewer cuotas exist — never overflowing the right edge.
-    width: '13%',
     fontSize: 6.5,
     color: C.gray500,
     textAlign: 'right',
-    paddingHorizontal: 2,
+    paddingTop: 0.5,
   },
   cuotaOverflow: {
     fontSize: 6.5,
     color: C.gray400,
     fontStyle: 'italic',
     textAlign: 'right',
-    paddingHorizontal: 2,
+    paddingTop: 0.5,
   },
 
   // ── Totals row ──
@@ -556,17 +563,21 @@ export function PayrollPdf({
                 </View>
                 {cuotas.length > 0 && (
                   <View style={[s.cuotasRow, i % 2 === 1 ? s.trAlt : {}]}>
-                    {/* Source order is preserved on screen because
-                        flexDirection: 'row-reverse' lays the first child
-                        at the rightmost slot. The rightmost slot lines
-                        up across every row so cuota columns stay
-                        aligned regardless of how many cuotas exist. */}
-                    {visibleCuotas.map((c, idx) => (
-                      <Text key={`${c.name}-${idx}`} style={s.cuotaCell}>
-                        {c.name}: {fmt(c.amount)}
-                      </Text>
-                    ))}
-                    {overflowCount > 0 && <Text style={s.cuotaOverflow}>+{overflowCount} más</Text>}
+                    {/* Spacers on each side anchor the cuotas column
+                        directly under "Otras Ded." — its right edge
+                        sits at total_table_width − neto_width. */}
+                    <View style={s.cuotasLeadingSpacer} />
+                    <View style={s.cuotasColumn}>
+                      {visibleCuotas.map((c, idx) => (
+                        <Text key={`${c.name}-${idx}`} style={s.cuotaCell}>
+                          {c.name}: {fmt(c.amount)}
+                        </Text>
+                      ))}
+                      {overflowCount > 0 && (
+                        <Text style={s.cuotaOverflow}>+{overflowCount} más</Text>
+                      )}
+                    </View>
+                    <View style={s.cuotasTrailingSpacer} />
                   </View>
                 )}
               </View>
