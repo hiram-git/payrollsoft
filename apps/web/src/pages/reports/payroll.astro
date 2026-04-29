@@ -32,13 +32,19 @@ let payrolls: Payroll[] = []
 let total = 0
 let totalPages = 1
 let error = ''
+// Per-tenant lifecycle for the Planilla PDF, drives whether we render
+// the state-machine triplet (Generar/Descargar/Regenerar) or a single
+// on-demand "Planilla PDF" button per row.
+let payrollReportMode: 'on_demand' | 'file_storage' = 'on_demand'
 
 try {
   const params = new URLSearchParams({ page: '1', limit: '500' })
   if (activeTypeId) params.set('payrollTypeId', activeTypeId)
-  const res = await fetch(`${API_URL}/payroll?${params}`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
-  })
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [res, companyRes] = await Promise.all([
+    fetch(`${API_URL}/payroll?${params}`, { headers }),
+    fetch(`${API_URL}/company`, { headers }),
+  ])
   if (res.status === 401) return Astro.redirect('/login')
   if (res.ok) {
     const json = (await res.json()) as { data: Payroll[] }
@@ -54,6 +60,14 @@ try {
     payrolls = matching.slice(from, from + PAGE_SIZE)
   } else {
     error = 'Error al cargar las planillas'
+  }
+  if (companyRes.ok) {
+    const companyJson = (await companyRes.json()) as {
+      data: { payrollReportMode?: string | null } | null
+    }
+    if (companyJson.data?.payrollReportMode === 'file_storage') {
+      payrollReportMode = 'file_storage'
+    }
   }
 } catch {
   error = 'No se pudo conectar con el servidor'
@@ -184,39 +198,53 @@ function fmt(v: string) {
                   </span>
                 </td>
                 <td class="px-4 py-3.5">
-                  <div class="flex items-center gap-1.5 justify-end" data-report-actions>
-                    <!-- Loading skeleton / status dot — replaced on subscribe -->
-                    <span class="text-[11px] text-gray-400" data-report-status>…</span>
-                    <button
-                      type="button"
-                      data-report-action="generate"
-                      class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 2 14 8 20 8"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
-                      <span data-report-label>Generar</span>
-                    </button>
-                    <button
-                      type="button"
-                      data-report-action="download"
-                      class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                      Descargar
-                    </button>
-                    <button
-                      type="button"
-                      data-report-action="regenerate"
-                      class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 disabled:opacity-60 disabled:cursor-wait transition-colors"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                      <span data-report-label>Regenerar</span>
-                    </button>
-                    <span
-                      class="hidden text-[11px] text-red-600"
-                      data-report-error
-                      title=""
-                    >Error</span>
-                  </div>
+                  {payrollReportMode === 'on_demand' ? (
+                    <div class="flex items-center justify-end">
+                      <a
+                        data-planilla-pdf
+                        href={`/api/reports/payroll/${p.id}/download`}
+                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors"
+                        title="Descargar Planilla PDF"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+                        Planilla PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <div class="flex items-center gap-1.5 justify-end" data-report-actions>
+                      <!-- Loading skeleton / status dot — replaced on subscribe -->
+                      <span class="text-[11px] text-gray-400" data-report-status>…</span>
+                      <button
+                        type="button"
+                        data-report-action="generate"
+                        class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 2 14 8 20 8"/><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+                        <span data-report-label>Generar</span>
+                      </button>
+                      <button
+                        type="button"
+                        data-report-action="download"
+                        class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-60 disabled:cursor-wait transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Descargar
+                      </button>
+                      <button
+                        type="button"
+                        data-report-action="regenerate"
+                        class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-300 bg-white text-gray-700 text-xs font-medium hover:bg-gray-50 disabled:opacity-60 disabled:cursor-wait transition-colors"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                        <span data-report-label>Regenerar</span>
+                      </button>
+                      <span
+                        class="hidden text-[11px] text-red-600"
+                        data-report-error
+                        title=""
+                      >Error</span>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -251,14 +279,27 @@ function fmt(v: string) {
 </AppLayout>
 
 <script>
+  import { downloadPayrollPdfWithModal } from '../../lib/reports/pdf-download-modal'
   import { payrollReportUrls, usePayrollReport } from '../../lib/reports/use-payroll-report'
   import type { ReportState } from '../../lib/reports/use-payroll-report'
 
+  // On-demand mode: each "Planilla PDF" anchor opens the shared loading
+  // modal while the bytes are fetched, then triggers the download.
+  for (const a of document.querySelectorAll<HTMLAnchorElement>('[data-planilla-pdf]')) {
+    a.addEventListener('click', (e) => {
+      e.preventDefault()
+      void downloadPayrollPdfWithModal(a.href)
+    })
+  }
+
   // Each row owns its own controller + subscribe, so a busy regeneration on
   // one row never blocks the others or freezes the whole table.
+  // Rows without a state-machine action triplet (i.e. on_demand mode) are
+  // skipped — they don't need the report-state subscription.
   for (const row of document.querySelectorAll<HTMLElement>('[data-report-row]')) {
     const payrollId = row.dataset.payrollId
     if (!payrollId) continue
+    if (!row.querySelector('[data-report-action]')) continue
 
     const statusEl = row.querySelector<HTMLElement>('[data-report-status]')
     const errorEl = row.querySelector<HTMLElement>('[data-report-error]')

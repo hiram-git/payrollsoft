@@ -185,6 +185,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         <div class="flex items-center gap-2 flex-shrink-0">
           {(isGenerated || isClosed) && payrollReportMode === 'on_demand' && (
             <a
+              data-planilla-pdf
               href={`/api/reports/payroll/${id}/download`}
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
               title="Descargar Planilla PDF"
@@ -879,5 +880,18 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
       void controller.refresh()
     }
   }
+</script>
+
+<script>
+  import { downloadPayrollPdfWithModal } from '../../lib/reports/pdf-download-modal'
+
+  // On-demand mode: clicking "Planilla PDF" intercepts the navigation
+  // so the loading modal stays visible until the bytes have actually
+  // arrived from the server.
+  const planillaBtn = document.querySelector<HTMLAnchorElement>('[data-planilla-pdf]')
+  planillaBtn?.addEventListener('click', (e) => {
+    e.preventDefault()
+    void downloadPayrollPdfWithModal(planillaBtn.href)
+  })
 </script>
 
