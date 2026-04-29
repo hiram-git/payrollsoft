@@ -196,30 +196,35 @@ const s = StyleSheet.create({
   colNeto: { width: '9%', textAlign: 'right' },
 
   // ── Per-employee creditor cuotas sub-row ──
-  // The text aligns to the *loan-column area* of the table (Otras Ded. +
-  // Neto, ~19% of width) and reads left-to-right, matching the column
-  // order. A spacer matches the leading 8 columns (Empleado..ISR = 73%)
-  // so the cuotas always start at the same x position the "Otras Ded."
-  // header sits in — no longer pushing leftward across the row.
+  // Cuotas are laid out as a fixed-width grid that flows right-to-left
+  // (`row-reverse`) and each cell is right-aligned. The right edge of the
+  // last cell is anchored to the table's right margin so the rightmost
+  // cuota column lines up across every employee row regardless of how
+  // many cuotas they have. This avoids the previous left-to-right
+  // overflow that pushed long cuota strings past the table margin.
   cuotasRow: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     paddingHorizontal: 4,
     paddingTop: 1,
     paddingBottom: 4,
     borderBottomWidth: 0.5,
     borderBottomColor: C.gray200,
   },
-  cuotasSpacer: {
-    // 16% (Empleado) + 9% (Cédula) + 8%×6 (Sueldo, Ingresos, SS, SE, SIACAP,
-    // ISR) = 73%. Keep in sync with col* widths below if you ever reshape
-    // the table.
-    width: '73%',
-  },
-  cuotasText: {
-    flex: 1,
+  cuotaCell: {
+    // Fixed slot width keeps cuota columns aligned across rows. With six
+    // visible slots (78% combined), the leading 22% of the row stays
+    // empty when fewer cuotas exist — never overflowing the right edge.
+    width: '13%',
     fontSize: 6.5,
     color: C.gray500,
-    textAlign: 'left',
+    textAlign: 'right',
+    paddingHorizontal: 2,
+  },
+  cuotaOverflow: {
+    fontSize: 6.5,
+    color: C.gray400,
+    fontStyle: 'italic',
+    textAlign: 'right',
     paddingHorizontal: 2,
   },
 
@@ -388,19 +393,23 @@ export function computePayrollPdfBuckets(line: PdfPayrollLine['line']): {
   return { sueldo, ingresos, ss, se, siacap, isr, otrasDeducciones, neto }
 }
 
+export type CuotaEntry = { name: string; amount: number }
+
 /**
- * Format the creditor cuotas associated to a payroll line as
- * `BAC: 20.00 | BANGENERAL: 30.00`. Returns null when the line has no
- * creditor entries so the renderer can skip the sub-row entirely.
- *
- * Source of truth is the `other_discounts` metadata stamped onto each
- * creditor concept (see `stampOtherDiscounts` in the payroll service).
- * Falls back to the legacy `ACR_*` code prefix for older rows that
- * don't yet carry the metadata.
+ * Maximum cuotas rendered per employee row in the PDF. Anything beyond
+ * this count is summarised with a `+N más` overflow marker so the row
+ * never escapes the right margin of the table.
  */
-export function formatCuotasLine(line: PdfPayrollLine['line']): string | null {
-  type Cuota = { name: string; amount: number }
-  const cuotas: Cuota[] = []
+const MAX_CUOTAS_PER_ROW = 6
+
+/**
+ * Extract creditor cuotas associated to a payroll line as a structured
+ * array. Source of truth is the `other_discounts` metadata stamped onto
+ * each creditor concept (see `stampOtherDiscounts` in the payroll
+ * service); legacy rows fall back to the `ACR_*` code prefix.
+ */
+export function extractCuotas(line: PdfPayrollLine['line']): CuotaEntry[] {
+  const cuotas: CuotaEntry[] = []
   for (const c of line.concepts) {
     if (c.type !== 'deduction') continue
     const code = c.code?.toUpperCase() ?? ''
@@ -422,8 +431,7 @@ export function formatCuotasLine(line: PdfPayrollLine['line']): string | null {
       })
     }
   }
-  if (cuotas.length === 0) return null
-  return cuotas.map((c) => `${c.name}: ${fmt(c.amount)}`).join(' | ')
+  return cuotas
 }
 
 // ─── Document ─────────────────────────────────────────────────────────────────
@@ -527,7 +535,9 @@ export function PayrollPdf({
           {buckets.map((b, i) => {
             const emp = b.line.employee
             const fullName = `${emp.firstName} ${emp.lastName}`.trim()
-            const cuotasLine = formatCuotasLine(b.line.line)
+            const cuotas = extractCuotas(b.line.line)
+            const visibleCuotas = cuotas.slice(0, MAX_CUOTAS_PER_ROW)
+            const overflowCount = cuotas.length - visibleCuotas.length
             return (
               <View key={emp.code} wrap={false}>
                 <View style={[s.tr, i % 2 === 1 ? s.trAlt : {}]}>
@@ -544,10 +554,19 @@ export function PayrollPdf({
                     {fmt(b.neto)}
                   </Text>
                 </View>
-                {cuotasLine && (
+                {cuotas.length > 0 && (
                   <View style={[s.cuotasRow, i % 2 === 1 ? s.trAlt : {}]}>
-                    <View style={s.cuotasSpacer} />
-                    <Text style={s.cuotasText}>{cuotasLine}</Text>
+                    {/* Source order is preserved on screen because
+                        flexDirection: 'row-reverse' lays the first child
+                        at the rightmost slot. The rightmost slot lines
+                        up across every row so cuota columns stay
+                        aligned regardless of how many cuotas exist. */}
+                    {visibleCuotas.map((c, idx) => (
+                      <Text key={`${c.name}-${idx}`} style={s.cuotaCell}>
+                        {c.name}: {fmt(c.amount)}
+                      </Text>
+                    ))}
+                    {overflowCount > 0 && <Text style={s.cuotaOverflow}>+{overflowCount} más</Text>}
                   </View>
                 )}
               </View>

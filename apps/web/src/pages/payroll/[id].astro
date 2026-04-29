@@ -53,6 +53,10 @@ let payroll: Payroll | null = null
 let lines: PayrollLine[] = []
 let linesTotal = 0
 let linesTotalPages = 1
+// Per-tenant lifecycle for the Planilla PDF: 'on_demand' renders every
+// download (no state machine, single button); 'file_storage' persists
+// to R2 and is driven by the payroll_reports state machine.
+let payrollReportMode: 'on_demand' | 'file_storage' = 'on_demand'
 
 try {
   const params = new URLSearchParams({
@@ -60,9 +64,11 @@ try {
     linesLimit: String(LINES_PER_PAGE),
   })
   if (linesSearch) params.set('search', linesSearch)
-  const res = await fetch(`${API_URL}/payroll/${id}?${params}`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
-  })
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const [res, companyRes] = await Promise.all([
+    fetch(`${API_URL}/payroll/${id}?${params}`, { headers }),
+    fetch(`${API_URL}/company`, { headers }),
+  ])
   if (res.status === 401) return Astro.redirect('/login')
   if (res.status === 404) return Astro.redirect('/payroll')
   if (res.ok) {
@@ -79,6 +85,13 @@ try {
     lines = json.data.lines
     linesTotal = json.data.linesTotal ?? 0
     linesTotalPages = json.data.linesTotalPages ?? 1
+  }
+  if (companyRes.ok) {
+    const companyJson = (await companyRes.json()) as {
+      data: { payrollReportMode?: string | null } | null
+    }
+    const mode = companyJson.data?.payrollReportMode
+    if (mode === 'file_storage') payrollReportMode = 'file_storage'
   }
 } catch {
   return Astro.redirect('/payroll')
@@ -170,7 +183,17 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 
         <!-- Action buttons -->
         <div class="flex items-center gap-2 flex-shrink-0">
-          {(isGenerated || isClosed) && (
+          {(isGenerated || isClosed) && payrollReportMode === 'on_demand' && (
+            <a
+              href={`/api/reports/payroll/${id}/download`}
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              title="Descargar Planilla PDF"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+              Planilla PDF
+            </a>
+          )}
+          {(isGenerated || isClosed) && payrollReportMode === 'file_storage' && (
             <div id="report-dropdown" class="relative inline-block text-left" data-payroll-id={id}>
               <button
                 id="btn-report-dropdown"
@@ -246,22 +269,26 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                 </ul>
               </div>
             </div>
-            <a
-              href={`/api/payroll/${id}/xlsx`}
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-              title="Descargar Excel"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-              Excel
-            </a>
-            <a
-              href="/reports/payroll"
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-              title="Ver todos los reportes de planilla"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-              Más reportes
-            </a>
+          )}
+          {(isGenerated || isClosed) && (
+            <>
+              <a
+                href={`/api/payroll/${id}/xlsx`}
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                title="Descargar Excel"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Excel
+              </a>
+              <a
+                href="/reports/payroll"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                title="Ver todos los reportes de planilla"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                Más reportes
+              </a>
+            </>
           )}
           {isCreated && !isProcessing && (
             <form id="form-generate" method="POST" action={`/api/payroll/${id}`}>
