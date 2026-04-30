@@ -7,6 +7,7 @@ const errorMessages: Record<string, string> = {
 
 const errorKey = Astro.url.searchParams.get('error') ?? ''
 const errorMessage = errorMessages[errorKey] ?? ''
+const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
 ---
 
 <!doctype html>
@@ -306,12 +307,9 @@ const errorMessage = errorMessages[errorKey] ?? ''
       transition: color 140ms ease;
     }
     .eye-btn:hover { color: var(--fore-dim); }
-    .err-banner {
+    .err-banner, .ok-banner {
       font-family: var(--f-mono);
       font-size: 11.5px;
-      color: var(--err);
-      border: 1px solid rgba(224,107,92,0.35);
-      background: rgba(224,107,92,0.06);
       padding: 10px 12px;
       border-radius: 3px;
       margin-bottom: 22px;
@@ -320,6 +318,26 @@ const errorMessage = errorMessages[errorKey] ?? ''
       align-items: center;
       gap: 10px;
     }
+    .err-banner {
+      color: var(--err);
+      border: 1px solid rgba(224,107,92,0.35);
+      background: rgba(224,107,92,0.06);
+    }
+    .ok-banner {
+      color: var(--ok);
+      border: 1px solid rgba(111,181,140,0.35);
+      background: rgba(111,181,140,0.06);
+    }
+    .forgot-link {
+      font-family: var(--f-mono);
+      font-size: 10.5px;
+      color: var(--mute);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      transition: color 140ms ease;
+    }
+    .forgot-link:hover { color: var(--fore-dim); }
     .submit-btn {
       width: 100%;
       height: 52px;
@@ -495,6 +513,14 @@ const errorMessage = errorMessages[errorKey] ?? ''
       <h1 class="form-h1">Bienvenido.</h1>
       <p class="form-sub">Ingresa con las credenciales de tu empresa.</p>
 
+      {passwordReset && (
+        <div class="ok-banner">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="2 5.8 4.5 8.2 9 3.4"/>
+          </svg>
+          Tu contraseña fue restablecida. Inicia sesión con la nueva.
+        </div>
+      )}
       {errorMessage && (
         <div class="err-banner">
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3">
@@ -545,6 +571,7 @@ const errorMessage = errorMessages[errorKey] ?? ''
       <div class="field" style="margin-bottom:28px">
         <div class="label-row">
           <span class="field-label">Contraseña</span>
+          <a href="/forgot-password" class="forgot-link">Recuperar contraseña</a>
         </div>
         <div class="input-wrap">
           <input

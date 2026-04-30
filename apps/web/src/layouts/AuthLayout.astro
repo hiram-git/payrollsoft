@@ -1,0 +1,389 @@
+---
+/**
+ * Two-panel auth shell shared across the unauthenticated flows
+ * (forgot-password, reset-password). Mirrors login.astro's visual
+ * language so the brand identity stays consistent. The page-specific
+ * form lives in the default slot.
+ */
+type Props = {
+  title: string
+}
+const { title } = Astro.props
+---
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title} — Payroll Panamá</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script is:inline>
+    try { document.documentElement.dataset.theme = localStorage.getItem('payroll.theme') || 'dark'; } catch(e) {}
+  </script>
+  <style>
+    :root, [data-theme="dark"] {
+      --ink:      #07101F;
+      --ink-2:    #0A1628;
+      --ink-3:    #101E33;
+      --ink-4:    #16263F;
+      --navy:     #003087;
+      --navy-hi:  #1E4BA8;
+      --navy-lo:  #00205A;
+      --rule:     #1A2740;
+      --rule-hi:  #243555;
+      --mute:     #6A7690;
+      --mute-2:   #8B97AE;
+      --fore:     #EDEEF2;
+      --fore-dim: #C9CEDB;
+      --warn:     #E3B25A;
+      --err:      #E06B5C;
+      --ok:       #6FB58C;
+      --f-display:'Fraunces','Times New Roman',serif;
+      --f-sans:   'Inter Tight',-apple-system,system-ui,sans-serif;
+      --f-mono:   'JetBrains Mono',ui-monospace,monospace;
+    }
+    [data-theme="light"] {
+      --ink:      #F4F5F7;
+      --ink-2:    #FFFFFF;
+      --ink-3:    #FFFFFF;
+      --ink-4:    #EFF1F5;
+      --navy:     #003087;
+      --navy-hi:  #1E4BA8;
+      --navy-lo:  #00205A;
+      --rule:     #E4E7EE;
+      --rule-hi:  #D2D7E0;
+      --mute:     #7A8499;
+      --mute-2:   #5B6478;
+      --fore:     #0C1424;
+      --fore-dim: #2A3346;
+      --warn:     #B07A17;
+      --err:      #B53A2B;
+      --ok:       #2E7A56;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--ink);
+      color: var(--fore);
+      font-family: var(--f-sans);
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: -0.005em;
+      overflow: hidden;
+      transition: background 180ms ease, color 180ms ease;
+    }
+    ::selection { background: var(--navy); color: #fff; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      height: 100vh;
+      width: 100vw;
+    }
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .left-panel { display: none; }
+    }
+
+    .left-panel {
+      position: relative;
+      background: var(--ink-2);
+      border-right: 1px solid var(--rule);
+      padding: 40px 56px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .motif {
+      position: absolute; inset: 0;
+      pointer-events: none; opacity: 0.55;
+      width: 100%; height: 100%;
+    }
+    .left-top { position: relative; display: flex; align-items: center; gap: 14px; z-index: 2; }
+    .mark-box {
+      width: 36px; height: 36px;
+      border-radius: 4px;
+      background: var(--navy);
+      display: grid; place-items: center;
+      font-family: var(--f-display);
+      font-weight: 400; font-size: 20px;
+      color: #fff;
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+    .wordmark {
+      font-family: var(--f-sans); font-weight: 500;
+      font-size: 14px; letter-spacing: 0.02em; color: var(--fore);
+    }
+    .wordmark-sub {
+      font-family: var(--f-mono); font-size: 11px; color: var(--mute);
+      letter-spacing: 0.08em; text-transform: uppercase; margin-top: 2px;
+    }
+    .left-center { position: relative; z-index: 2; max-width: 520px; }
+    .display-h {
+      font-family: var(--f-display); font-weight: 300;
+      font-size: clamp(40px, 5vw, 68px);
+      line-height: 1.05; letter-spacing: -0.025em;
+      margin: 0 0 28px 0; color: var(--fore);
+    }
+    .display-em { font-style: italic; font-weight: 300; color: var(--fore-dim); }
+    .display-rule { width: 64px; height: 1px; background: var(--rule-hi); margin: 0 0 28px 0; }
+    .display-p {
+      font-family: var(--f-sans); font-weight: 400;
+      font-size: 15px; line-height: 1.6; color: var(--mute-2);
+      max-width: 420px; margin: 0;
+    }
+    .left-bottom {
+      position: relative; z-index: 2;
+      display: flex; justify-content: space-between; align-items: flex-end;
+      gap: 24px;
+      font-family: var(--f-mono); font-size: 11px; color: var(--mute);
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .stat-block { display: flex; flex-direction: column; gap: 4px; }
+    .stat-val {
+      font-family: var(--f-mono); font-size: 13px; color: var(--fore-dim);
+      letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+    }
+
+    .right-panel {
+      position: relative; display: flex; flex-direction: column;
+      justify-content: space-between; padding: 40px 48px;
+      background: var(--ink); min-width: 0;
+      overflow-y: auto;
+    }
+    .right-top {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 24px; flex-wrap: wrap;
+      font-family: var(--f-mono); font-size: 11px; color: var(--mute);
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .form-wrap { align-self: center; width: 100%; max-width: 420px; margin: 0 auto; }
+    .eyebrow {
+      font-family: var(--f-mono); font-size: 11px; color: var(--mute);
+      letter-spacing: 0.14em; text-transform: uppercase;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .eyebrow-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--navy); display: inline-block; }
+    .form-h1 {
+      font-family: var(--f-display); font-weight: 300;
+      font-size: 38px; line-height: 1.05; letter-spacing: -0.02em;
+      margin: 0 0 10px 0; color: var(--fore);
+    }
+    .form-sub { font-family: var(--f-sans); font-size: 14px; color: var(--mute-2); margin: 0 0 36px 0; }
+    .field { margin-bottom: 20px; }
+    .label-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+    .field-label {
+      font-family: var(--f-mono); font-size: 11px; color: var(--mute-2);
+      letter-spacing: 0.1em; text-transform: uppercase;
+    }
+    .input-wrap {
+      position: relative; border-bottom: 1px solid var(--rule);
+      transition: border-color 160ms ease;
+    }
+    .input-wrap:focus-within { border-bottom-color: var(--fore); }
+    .field-input {
+      width: 100%; background: transparent; border: none; outline: none;
+      padding: 12px 0; padding-right: 36px;
+      color: var(--fore); font-family: var(--f-sans);
+      font-size: 16px; letter-spacing: -0.005em; caret-color: var(--fore);
+    }
+    .field-input::placeholder { color: var(--mute); }
+    .field-help { font-family: var(--f-sans); font-size: 12px; color: var(--mute); margin-top: 6px; }
+    .eye-btn {
+      position: absolute; right: 0; top: 50%;
+      transform: translateY(-50%);
+      background: transparent; border: none; cursor: pointer;
+      color: var(--mute); padding: 6px;
+      display: grid; place-items: center;
+      transition: color 140ms ease;
+    }
+    .eye-btn:hover { color: var(--fore-dim); }
+    .err-banner, .ok-banner {
+      font-family: var(--f-mono); font-size: 11.5px;
+      padding: 10px 12px; border-radius: 3px; margin-bottom: 22px;
+      letter-spacing: 0.04em; display: flex; align-items: center; gap: 10px;
+    }
+    .err-banner { color: var(--err); border: 1px solid rgba(224,107,92,0.35); background: rgba(224,107,92,0.06); }
+    .ok-banner  { color: var(--ok);  border: 1px solid rgba(111,181,140,0.35); background: rgba(111,181,140,0.06); }
+    .submit-btn {
+      width: 100%; height: 52px;
+      background: var(--navy); color: #fff;
+      border: none; border-radius: 3px;
+      font-family: var(--f-sans); font-weight: 500;
+      font-size: 14.5px; letter-spacing: 0.02em;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: background 160ms ease;
+      margin-bottom: 20px;
+    }
+    .submit-btn:hover { background: var(--navy-hi); }
+    .submit-btn:active { background: var(--navy-lo); }
+    .submit-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+    .right-bottom {
+      display: flex; justify-content: space-between; align-items: center;
+      font-family: var(--f-mono); font-size: 11px; color: var(--mute);
+      letter-spacing: 0.08em; text-transform: uppercase;
+    }
+    .auth-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      color: var(--fore-dim);
+      font-family: var(--f-mono); font-size: 11px;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      text-decoration: none;
+      border-bottom: 1px dashed var(--rule-hi);
+      padding-bottom: 1px;
+      transition: color 160ms ease, border-color 160ms ease;
+    }
+    .auth-link:hover { color: var(--fore); border-bottom-color: var(--fore); }
+    .auth-aside {
+      text-align: center;
+      font-family: var(--f-sans); font-size: 13px;
+      color: var(--mute-2);
+      margin-top: 8px;
+    }
+
+    .theme-switch {
+      position: fixed; top: 24px; right: 24px; z-index: 40;
+      display: inline-flex; padding: 3px;
+      background: var(--ink-3); border: 1px solid var(--rule);
+      border-radius: 999px; box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+    .ts-knob {
+      position: absolute; top: 3px;
+      width: 36px; height: 28px;
+      background: var(--ink-2); border: 1px solid var(--rule-hi);
+      border-radius: 999px;
+      transition: transform 220ms cubic-bezier(.2,.7,.2,1);
+      pointer-events: none;
+    }
+    .ts-btn {
+      position: relative; z-index: 2;
+      width: 36px; height: 28px;
+      display: grid; place-items: center;
+      border: none; background: transparent; cursor: pointer;
+      border-radius: 999px;
+      transition: color 160ms ease;
+    }
+    .ts-btn[data-active="true"]  { color: var(--fore); }
+    .ts-btn[data-active="false"] { color: var(--mute); }
+  </style>
+</head>
+<body>
+
+<div class="theme-switch" role="group" aria-label="Cambiar tema" id="theme-switch">
+  <span class="ts-knob" id="ts-knob"></span>
+  <button class="ts-btn" id="ts-light" data-active="false" aria-label="Tema claro" title="Tema claro">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+      <circle cx="7" cy="7" r="2.6"/>
+      <path d="M7 1.5v1.3M7 11.2v1.3M1.5 7h1.3M11.2 7h1.3M3 3l.9.9M10.1 10.1l.9.9M3 11l.9-.9M10.1 3.9l.9-.9"/>
+    </svg>
+  </button>
+  <button class="ts-btn" id="ts-dark" data-active="true" aria-label="Tema oscuro" title="Tema oscuro">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M11.5 8.5A4.8 4.8 0 0 1 5.5 2.5a5 5 0 1 0 6 6Z"/>
+    </svg>
+  </button>
+</div>
+
+<div class="shell">
+  <aside class="left-panel">
+    <svg class="motif" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice" viewBox="0 0 800 1000">
+      <defs>
+        <pattern id="gridp" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">
+          <path d="M40 0H0V40" fill="none" stroke="#1A2740" stroke-width="0.5"/>
+        </pattern>
+        <radialGradient id="vign" cx="30%" cy="30%" r="80%">
+          <stop offset="0%" stop-color="#0A1628" stop-opacity="0"/>
+          <stop offset="100%" stop-color="#07101F" stop-opacity="1"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="1000" fill="url(#gridp)"/>
+      <polyline fill="none" stroke="#1E4BA8" stroke-width="1" stroke-opacity="0.55"
+        points="40,780 120,740 200,760 280,700 360,680 440,640 520,600 600,560 680,520 760,460"/>
+      <line x1="40" y1="820" x2="760" y2="820" stroke="#243555" stroke-width="0.8"/>
+      <circle cx="200" cy="760" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="360" cy="680" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="520" cy="600" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <circle cx="680" cy="520" r="2.5" fill="#0A1628" stroke="#1E4BA8" stroke-width="1"/>
+      <rect width="800" height="1000" fill="url(#vign)"/>
+    </svg>
+
+    <div class="left-top">
+      <div class="mark-box">P</div>
+      <div>
+        <div class="wordmark">PayrollSoft</div>
+        <div class="wordmark-sub">Payroll Panamá · Sistema de planillas</div>
+      </div>
+    </div>
+
+    <div class="left-center">
+      <h1 class="display-h">
+        Acceso seguro,<br/>
+        <span class="display-em">restablecido en minutos.</span>
+      </h1>
+      <div class="display-rule"></div>
+      <p class="display-p">
+        Tu cuenta queda protegida con enlaces de un solo uso, expiración corta y verificación por correo.
+      </p>
+    </div>
+
+    <div class="left-bottom">
+      <div class="stat-block">
+        <span>Seguridad</span>
+        <span class="stat-val">Token único · Expiración 30 min</span>
+      </div>
+      <div class="stat-block" style="text-align:right">
+        <span>Soporte</span>
+        <span class="stat-val">soporte@payrollsoft.com</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="right-panel">
+    <div class="right-top">
+      <span>Acceso seguro</span>
+      <span>TLS 1.3</span>
+    </div>
+
+    <slot />
+
+    <div class="right-bottom">
+      <span>Payroll Panamá © {new Date().getFullYear()}</span>
+      <span>Seguro · Confiable</span>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+  (function () {
+    const html = document.documentElement;
+    const knob = document.getElementById('ts-knob');
+    const btnLight = document.getElementById('ts-light');
+    const btnDark = document.getElementById('ts-dark');
+
+    function applyTheme(t) {
+      html.dataset.theme = t;
+      try { localStorage.setItem('payroll.theme', t); } catch(e) {}
+      const isDark = t === 'dark';
+      btnLight.dataset.active = (!isDark).toString();
+      btnDark.dataset.active  = isDark.toString();
+      knob.style.transform = isDark ? 'translateX(36px)' : 'translateX(0)';
+    }
+
+    const current = html.dataset.theme || 'dark';
+    applyTheme(current);
+
+    btnLight.addEventListener('click', () => applyTheme('light'));
+    btnDark.addEventListener('click',  () => applyTheme('dark'));
+  })();
+</script>
+
+</body>
+</html>
