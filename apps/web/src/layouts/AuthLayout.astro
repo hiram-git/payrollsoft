@@ -22,7 +22,7 @@ const { title } = Astro.props
   <script is:inline>
     try { document.documentElement.dataset.theme = localStorage.getItem('payroll.theme') || 'dark'; } catch(e) {}
   </script>
-  <style>
+  <style is:global>
     :root, [data-theme="dark"] {
       --ink:      #07101F;
       --ink-2:    #0A1628;

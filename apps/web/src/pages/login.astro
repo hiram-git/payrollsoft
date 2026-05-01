@@ -540,24 +540,6 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
         </div>
       )}
 
-      <!-- Tenant -->
-      <div class="field">
-        <div class="label-row">
-          <span class="field-label">Código de empresa</span>
-        </div>
-        <div class="input-wrap">
-          <input
-            id="tenant"
-            name="tenant"
-            type="text"
-            required
-            autocomplete="organization"
-            placeholder="demo"
-            class="field-input"
-          />
-        </div>
-      </div>
-
       <!-- Email -->
       <div class="field">
         <div class="label-row">
@@ -577,7 +559,7 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       </div>
 
       <!-- Password -->
-      <div class="field" style="margin-bottom:28px">
+      <div class="field">
         <div class="label-row">
           <span class="field-label">Contraseña</span>
         </div>
@@ -597,6 +579,24 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
               <circle cx="8" cy="8" r="2"/>
             </svg>
           </button>
+        </div>
+      </div>
+
+      <!-- Tenant -->
+      <div class="field" style="margin-bottom:28px">
+        <div class="label-row">
+          <span class="field-label">Código de empresa</span>
+        </div>
+        <div class="input-wrap">
+          <input
+            id="tenant"
+            name="tenant"
+            type="text"
+            required
+            autocomplete="organization"
+            placeholder="demo"
+            class="field-input"
+          />
         </div>
       </div>
 
