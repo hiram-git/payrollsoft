@@ -7,6 +7,7 @@ const errorMessages: Record<string, string> = {
 
 const errorKey = Astro.url.searchParams.get('error') ?? ''
 const errorMessage = errorMessages[errorKey] ?? ''
+const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
 ---
 
 <!doctype html>
@@ -306,12 +307,9 @@ const errorMessage = errorMessages[errorKey] ?? ''
       transition: color 140ms ease;
     }
     .eye-btn:hover { color: var(--fore-dim); }
-    .err-banner {
+    .err-banner, .ok-banner {
       font-family: var(--f-mono);
       font-size: 11.5px;
-      color: var(--err);
-      border: 1px solid rgba(224,107,92,0.35);
-      background: rgba(224,107,92,0.06);
       padding: 10px 12px;
       border-radius: 3px;
       margin-bottom: 22px;
@@ -320,6 +318,35 @@ const errorMessage = errorMessages[errorKey] ?? ''
       align-items: center;
       gap: 10px;
     }
+    .err-banner {
+      color: var(--err);
+      border: 1px solid rgba(224,107,92,0.35);
+      background: rgba(224,107,92,0.06);
+    }
+    .ok-banner {
+      color: var(--ok);
+      border: 1px solid rgba(111,181,140,0.35);
+      background: rgba(111,181,140,0.06);
+    }
+    .forgot-row {
+      text-align: center;
+      margin: 0 0 12px 0;
+    }
+    .forgot-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--fore-dim);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border-bottom: 1px dashed var(--rule-hi);
+      padding-bottom: 1px;
+      transition: color 160ms ease, border-color 160ms ease;
+    }
+    .forgot-link:hover { color: var(--fore); border-bottom-color: var(--fore); }
     .submit-btn {
       width: 100%;
       height: 52px;
@@ -495,6 +522,14 @@ const errorMessage = errorMessages[errorKey] ?? ''
       <h1 class="form-h1">Bienvenido.</h1>
       <p class="form-sub">Ingresa con las credenciales de tu empresa.</p>
 
+      {passwordReset && (
+        <div class="ok-banner">
+          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="2 5.8 4.5 8.2 9 3.4"/>
+          </svg>
+          Tu contraseña fue restablecida. Inicia sesión con la nueva.
+        </div>
+      )}
       {errorMessage && (
         <div class="err-banner">
           <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3">
@@ -572,6 +607,10 @@ const errorMessage = errorMessages[errorKey] ?? ''
           <path d="M2 7h10M8.5 3.5L12 7l-3.5 3.5"/>
         </svg>
       </button>
+
+      <p class="forgot-row">
+        <a href="/forgot-password" class="forgot-link">¿Olvidaste tu contraseña?</a>
+      </p>
     </form>
 
     <div class="right-bottom">

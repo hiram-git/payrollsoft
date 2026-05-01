@@ -22,6 +22,7 @@ import {
   loanInstallments,
   loans,
   partidasPresupuestarias,
+  passwordResets,
   payrollAcumulados,
   payrollLines,
   payrollReports,
@@ -2183,6 +2184,57 @@ export async function findSuperAdminByEmail(db: Db, email: string) {
     .from(superAdmins)
     .where(eq(superAdmins.email, email.toLowerCase()))
   return row ?? null
+}
+
+/** Replace a tenant user's password hash. */
+export async function updateUserPasswordHash(db: Db, userId: string, passwordHash: string) {
+  const [row] = await db
+    .update(users)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(eq(users.id, userId))
+    .returning()
+  return row ?? null
+}
+
+// ─── Password reset queries ──────────────────────────────────────────────────
+
+/** Insert a fresh single-use password reset token. */
+export async function createPasswordReset(
+  db: Db,
+  data: { userId: string; tokenHash: string; expiresAt: Date }
+) {
+  const [row] = await db.insert(passwordResets).values(data).returning()
+  return row
+}
+
+/**
+ * Look up a reset token by its hash. The caller still needs to validate
+ * `expiresAt` and `usedAt` against the current time before honouring it.
+ */
+export async function findPasswordResetByTokenHash(db: Db, tokenHash: string) {
+  const [row] = await db
+    .select()
+    .from(passwordResets)
+    .where(eq(passwordResets.tokenHash, tokenHash))
+    .limit(1)
+  return row ?? null
+}
+
+/** Mark a token as redeemed; subsequent attempts must fail. */
+export async function markPasswordResetUsed(db: Db, id: string) {
+  await db.update(passwordResets).set({ usedAt: new Date() }).where(eq(passwordResets.id, id))
+}
+
+/**
+ * Best-effort cleanup of any pending tokens for a user before issuing
+ * a fresh one — keeps only one valid token in flight at a time so a
+ * stolen-then-reissued link can't be used in parallel.
+ */
+export async function invalidatePendingPasswordResets(db: Db, userId: string) {
+  await db
+    .update(passwordResets)
+    .set({ usedAt: new Date() })
+    .where(and(eq(passwordResets.userId, userId), sql`${passwordResets.usedAt} IS NULL`))
 }
 
 /**
