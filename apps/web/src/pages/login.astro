@@ -328,16 +328,25 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       border: 1px solid rgba(111,181,140,0.35);
       background: rgba(111,181,140,0.06);
     }
+    .forgot-row {
+      text-align: center;
+      margin: 0 0 12px 0;
+    }
     .forgot-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       font-family: var(--f-mono);
-      font-size: 10.5px;
-      color: var(--mute);
+      font-size: 11px;
+      color: var(--fore-dim);
       letter-spacing: 0.08em;
       text-transform: uppercase;
       text-decoration: none;
-      transition: color 140ms ease;
+      border-bottom: 1px dashed var(--rule-hi);
+      padding-bottom: 1px;
+      transition: color 160ms ease, border-color 160ms ease;
     }
-    .forgot-link:hover { color: var(--fore-dim); }
+    .forgot-link:hover { color: var(--fore); border-bottom-color: var(--fore); }
     .submit-btn {
       width: 100%;
       height: 52px;
@@ -571,7 +580,6 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       <div class="field" style="margin-bottom:28px">
         <div class="label-row">
           <span class="field-label">Contraseña</span>
-          <a href="/forgot-password" class="forgot-link">Recuperar contraseña</a>
         </div>
         <div class="input-wrap">
           <input
@@ -599,6 +607,10 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
           <path d="M2 7h10M8.5 3.5L12 7l-3.5 3.5"/>
         </svg>
       </button>
+
+      <p class="forgot-row">
+        <a href="/forgot-password" class="forgot-link">¿Olvidaste tu contraseña?</a>
+      </p>
     </form>
 
     <div class="right-bottom">
