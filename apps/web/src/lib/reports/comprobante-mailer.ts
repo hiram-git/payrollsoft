@@ -141,11 +141,46 @@ export async function sendComprobanteEmails(
   const currencySymbol = company?.currencySymbol ?? '$'
   const companyName = company?.companyName ?? null
 
+  // Fallback path: if the /payroll endpoint doesn't include the email
+  // (older API build that still ships the pre-fix payload), look it up
+  // directly on /employees/:id. The result is cached per employee for
+  // the duration of this request so a 100-line bulk send only hits the
+  // endpoint once per missing address.
+  const employeeEmailCache = new Map<string, string | null>()
+  async function resolveEmployeeEmail(
+    employeeId: string,
+    initial: unknown
+  ): Promise<string | null> {
+    const trimmed = typeof initial === 'string' ? initial.trim() : ''
+    if (trimmed.length > 0) return trimmed
+    if (employeeEmailCache.has(employeeId)) return employeeEmailCache.get(employeeId) ?? null
+    try {
+      const res = await fetch(`${API_URL}/employees/${employeeId}`, { headers })
+      if (!res.ok) {
+        employeeEmailCache.set(employeeId, null)
+        return null
+      }
+      const json = (await res.json()) as { data?: { email?: string | null } }
+      const fetched = typeof json.data?.email === 'string' ? json.data.email.trim() : ''
+      const result = fetched.length > 0 ? fetched : null
+      employeeEmailCache.set(employeeId, result)
+      return result
+    } catch {
+      employeeEmailCache.set(employeeId, null)
+      return null
+    }
+  }
+
   for (const entry of targets) {
     const employee = entry.employee
     const employeeName = `${employee.firstName} ${employee.lastName}`.trim()
+    const email = await resolveEmployeeEmail(employee.id, employee.email)
 
-    if (!employee.email) {
+    if (!email) {
+      console.warn(
+        `Comprobante skip — line ${entry.line.id} (employee ${employee.id} ${employeeName}) has no email; received value:`,
+        JSON.stringify(employee.email)
+      )
       outcomes.push({
         lineId: entry.line.id,
         employeeId: employee.id,
@@ -169,7 +204,7 @@ export async function sendComprobanteEmails(
         companyName,
       })
       await sendMail(mailerConfig, {
-        to: employee.email,
+        to: email,
         subject: message.subject,
         html: message.html,
         text: message.text,
@@ -185,7 +220,7 @@ export async function sendComprobanteEmails(
         lineId: entry.line.id,
         employeeId: employee.id,
         employeeName,
-        email: employee.email,
+        email,
         status: 'sent',
       })
     } catch (err) {
@@ -195,7 +230,7 @@ export async function sendComprobanteEmails(
         lineId: entry.line.id,
         employeeId: employee.id,
         employeeName,
-        email: employee.email,
+        email,
         status: 'failed',
         error: message,
       })
