@@ -729,6 +729,11 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 </script>
 
 <script>
+  import {
+    closeLoadingModal,
+    flashSuccessAndClose,
+    openLoadingModal,
+  } from '../../lib/reports/pdf-download-modal'
   import { payrollReportUrls, usePayrollReport } from '../../lib/reports/use-payroll-report'
   import type { ReportState } from '../../lib/reports/use-payroll-report'
 
@@ -858,13 +863,35 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 
       controller.subscribe(applyState)
 
+      // file_storage flow: wrap the long-running write in the same
+      // blocking modal the on-demand path uses, so the user sees that
+      // something is happening and gets a clear "Planilla generada
+      // exitosamente" confirmation when it lands. Error states keep
+      // surfacing inline through the dropdown's own controller.
+      async function runWithModal(action: 'generate' | 'regenerate') {
+        const titles = action === 'generate'
+          ? { loading: 'Generando planilla', success: 'Planilla generada exitosamente' }
+          : { loading: 'Regenerando planilla', success: 'Planilla regenerada exitosamente' }
+        openLoadingModal(titles.loading)
+        if (action === 'generate') await controller.generate()
+        else await controller.regenerate()
+        const finalState = controller.getState()
+        if (finalState.kind === 'error') {
+          closeLoadingModal()
+        } else {
+          flashSuccessAndClose(titles.success)
+        }
+      }
+
       generateUi?.element.addEventListener('click', (e) => {
         e.stopPropagation()
-        void controller.generate()
+        closePanel()
+        void runWithModal('generate')
       })
       regenerateUi?.element.addEventListener('click', (e) => {
         e.stopPropagation()
-        void controller.regenerate()
+        closePanel()
+        void runWithModal('regenerate')
       })
       downloadUi?.element.addEventListener('click', (e) => {
         e.stopPropagation()

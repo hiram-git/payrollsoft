@@ -279,7 +279,12 @@ function fmt(v: string) {
 </AppLayout>
 
 <script>
-  import { downloadPayrollPdfWithModal } from '../../lib/reports/pdf-download-modal'
+  import {
+    closeLoadingModal,
+    downloadPayrollPdfWithModal,
+    flashSuccessAndClose,
+    openLoadingModal,
+  } from '../../lib/reports/pdf-download-modal'
   import { payrollReportUrls, usePayrollReport } from '../../lib/reports/use-payroll-report'
   import type { ReportState } from '../../lib/reports/use-payroll-report'
 
@@ -359,10 +364,30 @@ function fmt(v: string) {
       }
     }
 
+    // file_storage row buttons share the on-demand modal so the user
+    // sees a blocking "Generando…" state while the API renders the
+    // PDF, plus a "Planilla generada exitosamente" confirmation when
+    // it lands. Errors stay surfaced via the per-row inline chip.
+    async function runWithModal(action: 'generate' | 'regenerate') {
+      const titles = action === 'generate'
+        ? { loading: 'Generando planilla', success: 'Planilla generada exitosamente' }
+        : { loading: 'Regenerando planilla', success: 'Planilla regenerada exitosamente' }
+      openLoadingModal(titles.loading)
+      if (action === 'generate') await controller.generate()
+      else await controller.regenerate()
+      const finalState = controller.getState()
+      if (finalState.kind === 'error') closeLoadingModal()
+      else flashSuccessAndClose(titles.success)
+    }
+
     controller.subscribe(applyState)
-    btnGenerate?.addEventListener('click', () => controller.generate())
+    btnGenerate?.addEventListener('click', () => {
+      void runWithModal('generate')
+    })
     btnDownload?.addEventListener('click', () => controller.download())
-    btnRegenerate?.addEventListener('click', () => controller.regenerate())
+    btnRegenerate?.addEventListener('click', () => {
+      void runWithModal('regenerate')
+    })
 
     void controller.refresh()
   }
