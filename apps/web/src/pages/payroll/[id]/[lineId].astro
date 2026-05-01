@@ -132,6 +132,17 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           Comprobante
         </a>
+        <button
+          type="button"
+          data-send-comprobante
+          data-payroll-id={id}
+          data-line-id={lineId}
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-wait"
+          title="Enviar el comprobante de pago al correo del empleado"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+          Enviar por correo
+        </button>
       </div>
     </div>
 
@@ -384,5 +395,51 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden') && modalLoading.classList.contains('hidden')) closeModal()
+  })
+</script>
+
+<script>
+  import {
+    closeLoadingModal,
+    flashSuccessAndClose,
+    openLoadingModal,
+  } from '../../../lib/reports/pdf-download-modal'
+
+  // Single comprobante: confirm, render + email server-side, surface
+  // a clear success / error toast through the shared modal.
+  const sendBtn = document.querySelector<HTMLButtonElement>('[data-send-comprobante]')
+  sendBtn?.addEventListener('click', async () => {
+    const payrollId = sendBtn.dataset.payrollId
+    const lineId = sendBtn.dataset.lineId
+    if (!payrollId || !lineId) return
+    const ok = window.confirm(
+      'Se enviará el comprobante de pago al correo del empleado. ¿Deseas continuar?'
+    )
+    if (!ok) return
+    sendBtn.disabled = true
+    openLoadingModal('Enviando comprobante', 'Esto puede tardar unos segundos…')
+    try {
+      const res = await fetch(`/api/payroll/${payrollId}/line/${lineId}/comprobante/send`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        message?: string
+        error?: string
+        data?: { email?: string | null }
+      }
+      if (!res.ok) {
+        closeLoadingModal()
+        alert(body.message ?? body.error ?? `Error al enviar el comprobante (HTTP ${res.status})`)
+        return
+      }
+      const email = body.data?.email ?? 'el empleado'
+      flashSuccessAndClose('Comprobante enviado', { subtitle: `Entregado a ${email}` })
+    } catch (err) {
+      closeLoadingModal()
+      alert(`Error al enviar el comprobante: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      sendBtn.disabled = false
+    }
   })
 </script>
