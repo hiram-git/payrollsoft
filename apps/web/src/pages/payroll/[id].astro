@@ -926,6 +926,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     flashSuccessAndClose,
     openLoadingModal,
   } from '../../lib/reports/pdf-download-modal'
+  import { alertDialog, confirmDialog } from '../../lib/ui/dialog'
 
   // On-demand mode: clicking "Planilla PDF" intercepts the navigation
   // so the loading modal stays visible until the bytes have actually
@@ -936,16 +937,21 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     void downloadPayrollPdfWithModal(planillaBtn.href)
   })
 
-  // Bulk-send comprobantes: confirm, show the same blocking modal we
-  // use for PDF generation, then surface a per-employee summary in an
-  // alert so the operator knows exactly who got their payslip.
+  // Bulk-send comprobantes: confirm via the design-system dialog, run
+  // the request inside the loading modal, then surface a tailored
+  // success or error dialog so feedback always sticks until the user
+  // dismisses it.
   const sendBtn = document.querySelector<HTMLButtonElement>('[data-send-comprobantes]')
   sendBtn?.addEventListener('click', async () => {
     const payrollId = sendBtn.dataset.payrollId
     if (!payrollId) return
-    const ok = window.confirm(
-      'Se enviará el comprobante de pago al correo de cada empleado de esta planilla. ¿Deseas continuar?'
-    )
+    const ok = await confirmDialog({
+      title: 'Enviar comprobantes',
+      message:
+        'Se enviará el comprobante de pago al correo de cada empleado de esta planilla. ¿Deseas continuar?',
+      kind: 'info',
+      confirmLabel: 'Enviar',
+    })
     if (!ok) return
     sendBtn.disabled = true
     openLoadingModal('Enviando comprobantes', 'Esto puede tardar varios segundos…')
@@ -961,22 +967,43 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
         message?: string
         error?: string
       }
+      closeLoadingModal()
       if (!res.ok) {
-        closeLoadingModal()
-        alert(body.message ?? body.error ?? `Error al enviar comprobantes (HTTP ${res.status})`)
+        await alertDialog({
+          title: 'No se pudieron enviar los comprobantes',
+          message:
+            body.message ?? body.error ?? `Error inesperado (HTTP ${res.status}). Intenta de nuevo.`,
+          kind: 'danger',
+        })
         return
       }
       const summary = body.data ?? { sent: 0, skipped: 0, failed: 0 }
+      const subtitle =
+        summary.failed > 0 || summary.skipped > 0
+          ? `Sin correo registrado: ${summary.skipped} · Fallaron: ${summary.failed}`
+          : 'Todos los empleados recibieron su comprobante'
       flashSuccessAndClose(`Comprobantes enviados: ${summary.sent}`, {
-        subtitle:
-          summary.failed > 0 || summary.skipped > 0
-            ? `Sin correo: ${summary.skipped} · Fallaron: ${summary.failed}`
-            : 'Todos los empleados recibieron su comprobante',
+        subtitle,
         delayMs: 2200,
       })
+      // Surface partial-failure detail in a dismissible dialog so the
+      // operator can act on it after the success flash fades.
+      if (summary.failed > 0 || summary.skipped > 0) {
+        setTimeout(() => {
+          void alertDialog({
+            title: 'Resumen del envío',
+            message: `Enviados: ${summary.sent}. Sin correo registrado: ${summary.skipped}. Fallaron: ${summary.failed}.`,
+            kind: summary.failed > 0 ? 'warning' : 'info',
+          })
+        }, 2300)
+      }
     } catch (err) {
       closeLoadingModal()
-      alert(`Error al enviar comprobantes: ${err instanceof Error ? err.message : String(err)}`)
+      await alertDialog({
+        title: 'Error al enviar comprobantes',
+        message: err instanceof Error ? err.message : String(err),
+        kind: 'danger',
+      })
     } finally {
       sendBtn.disabled = false
     }

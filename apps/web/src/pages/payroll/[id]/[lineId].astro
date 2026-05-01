@@ -404,17 +404,23 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
     flashSuccessAndClose,
     openLoadingModal,
   } from '../../../lib/reports/pdf-download-modal'
+  import { alertDialog, confirmDialog } from '../../../lib/ui/dialog'
 
-  // Single comprobante: confirm, render + email server-side, surface
-  // a clear success / error toast through the shared modal.
+  // Single comprobante: confirm via the design-system dialog, run the
+  // request inside the loading modal, surface success / error through
+  // matching design-system dialogs (no native confirm/alert chrome).
   const sendBtn = document.querySelector<HTMLButtonElement>('[data-send-comprobante]')
   sendBtn?.addEventListener('click', async () => {
     const payrollId = sendBtn.dataset.payrollId
     const lineId = sendBtn.dataset.lineId
     if (!payrollId || !lineId) return
-    const ok = window.confirm(
-      'Se enviará el comprobante de pago al correo del empleado. ¿Deseas continuar?'
-    )
+    const ok = await confirmDialog({
+      title: 'Enviar comprobante',
+      message:
+        'Se enviará el comprobante de pago al correo registrado del empleado. ¿Deseas continuar?',
+      kind: 'info',
+      confirmLabel: 'Enviar',
+    })
     if (!ok) return
     sendBtn.disabled = true
     openLoadingModal('Enviando comprobante', 'Esto puede tardar unos segundos…')
@@ -428,16 +434,30 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         error?: string
         data?: { email?: string | null }
       }
+      closeLoadingModal()
       if (!res.ok) {
-        closeLoadingModal()
-        alert(body.message ?? body.error ?? `Error al enviar el comprobante (HTTP ${res.status})`)
+        // 422 = no_email is reported with a friendly warning; transport
+        // failures use the danger style.
+        const noEmail = body.error === 'no_email'
+        await alertDialog({
+          title: noEmail ? 'Empleado sin correo' : 'No se pudo enviar el comprobante',
+          message:
+            body.message ??
+            body.error ??
+            `Error inesperado (HTTP ${res.status}). Intenta de nuevo.`,
+          kind: noEmail ? 'warning' : 'danger',
+        })
         return
       }
       const email = body.data?.email ?? 'el empleado'
       flashSuccessAndClose('Comprobante enviado', { subtitle: `Entregado a ${email}` })
     } catch (err) {
       closeLoadingModal()
-      alert(`Error al enviar el comprobante: ${err instanceof Error ? err.message : String(err)}`)
+      await alertDialog({
+        title: 'Error al enviar el comprobante',
+        message: err instanceof Error ? err.message : String(err),
+        kind: 'danger',
+      })
     } finally {
       sendBtn.disabled = false
     }
