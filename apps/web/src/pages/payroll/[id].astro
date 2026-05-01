@@ -273,6 +273,16 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
           )}
           {(isGenerated || isClosed) && (
             <>
+              <button
+                type="button"
+                data-send-comprobantes
+                data-payroll-id={id}
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-wait"
+                title="Enviar el comprobante PDF a cada empleado por correo"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                Enviar comprobantes
+              </button>
               <a
                 href={`/api/payroll/${id}/xlsx`}
                 class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
@@ -910,7 +920,12 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 </script>
 
 <script>
-  import { downloadPayrollPdfWithModal } from '../../lib/reports/pdf-download-modal'
+  import {
+    closeLoadingModal,
+    downloadPayrollPdfWithModal,
+    flashSuccessAndClose,
+    openLoadingModal,
+  } from '../../lib/reports/pdf-download-modal'
 
   // On-demand mode: clicking "Planilla PDF" intercepts the navigation
   // so the loading modal stays visible until the bytes have actually
@@ -919,6 +934,52 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
   planillaBtn?.addEventListener('click', (e) => {
     e.preventDefault()
     void downloadPayrollPdfWithModal(planillaBtn.href)
+  })
+
+  // Bulk-send comprobantes: confirm, show the same blocking modal we
+  // use for PDF generation, then surface a per-employee summary in an
+  // alert so the operator knows exactly who got their payslip.
+  const sendBtn = document.querySelector<HTMLButtonElement>('[data-send-comprobantes]')
+  sendBtn?.addEventListener('click', async () => {
+    const payrollId = sendBtn.dataset.payrollId
+    if (!payrollId) return
+    const ok = window.confirm(
+      'Se enviará el comprobante de pago al correo de cada empleado de esta planilla. ¿Deseas continuar?'
+    )
+    if (!ok) return
+    sendBtn.disabled = true
+    openLoadingModal('Enviando comprobantes', 'Esto puede tardar varios segundos…')
+    try {
+      const res = await fetch(`/api/payroll/${payrollId}/comprobantes/send`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      })
+      const body = (await res.json().catch(() => ({}))) as {
+        data?: { sent: number; skipped: number; failed: number }
+        message?: string
+        error?: string
+      }
+      if (!res.ok) {
+        closeLoadingModal()
+        alert(body.message ?? body.error ?? `Error al enviar comprobantes (HTTP ${res.status})`)
+        return
+      }
+      const summary = body.data ?? { sent: 0, skipped: 0, failed: 0 }
+      flashSuccessAndClose(`Comprobantes enviados: ${summary.sent}`, {
+        subtitle:
+          summary.failed > 0 || summary.skipped > 0
+            ? `Sin correo: ${summary.skipped} · Fallaron: ${summary.failed}`
+            : 'Todos los empleados recibieron su comprobante',
+        delayMs: 2200,
+      })
+    } catch (err) {
+      closeLoadingModal()
+      alert(`Error al enviar comprobantes: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      sendBtn.disabled = false
+    }
   })
 </script>
 
