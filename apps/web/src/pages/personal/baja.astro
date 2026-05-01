@@ -1,0 +1,231 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+// Same global filter every other module respects — when set, the listing
+// only shows employees linked to the active payroll type. The backend
+// joins via employee_payroll_types.
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+
+const PAGE_SIZE = 50
+
+const page = Math.max(1, Number(Astro.url.searchParams.get('page') ?? '1'))
+const q = Astro.url.searchParams.get('q') ?? ''
+
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  idNumber: string
+  position: string | null
+  department: string | null
+  baseSalary: string
+  hireDate: string | null
+  terminationDate: string | null
+  isActive: boolean
+}
+
+let employees: Employee[] = []
+let total = 0
+let totalPages = 1
+let error = ''
+
+try {
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(PAGE_SIZE),
+    isActive: 'false',
+  })
+  if (q) params.set('search', q)
+  if (activeTypeId) params.set('payrollTypeId', activeTypeId)
+
+  const res = await fetch(`${API_URL}/employees?${params}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as {
+      data: Employee[]
+      total: number
+      totalPages: number
+    }
+    employees = json.data ?? []
+    total = json.total ?? 0
+    totalPages = json.totalPages ?? 1
+  } else if (res.status === 401) {
+    return Astro.redirect('/login')
+  } else {
+    error = 'Error al cargar empleados'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor'
+}
+
+function pageUrl(p: number) {
+  const u = new URL(Astro.url)
+  u.searchParams.set('page', String(p))
+  if (q) u.searchParams.set('q', q)
+  else u.searchParams.delete('q')
+  return u.pathname + u.search
+}
+
+function formatDateISO(iso: string | null): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  if (!y || !m || !d) return iso
+  return `${d}-${m}-${y}`
+}
+
+const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+const showingTo = Math.min(page * PAGE_SIZE, total)
+---
+
+<AppLayout title="Personal de Baja">
+  <div class="px-6 py-8 max-w-6xl mx-auto">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Personal de Baja</h1>
+          {activeTypeId && (
+            <span
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700"
+              title="La lista se está filtrando por el tipo de planilla activo en el navbar"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+              Filtrado por tipo de planilla
+            </span>
+          )}
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            Inactivos
+          </span>
+        </div>
+        <p class="text-sm text-gray-500 mt-0.5">{total} {total === 1 ? 'empleado' : 'empleados'}</p>
+      </div>
+      <a
+        href="/employees"
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        title="Ver listado de empleados activos"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Ver activos
+      </a>
+    </div>
+
+    <!-- Search -->
+    <form method="GET" action="/personal/baja" class="mb-5">
+      <div class="relative max-w-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input
+          type="search"
+          name="q"
+          value={q}
+          placeholder="Buscar por nombre, código o cédula…"
+          class="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+        />
+      </div>
+    </form>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <!-- Table -->
+    <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      {employees.length === 0 ? (
+        <div class="py-16 text-center">
+          {q ? (
+            <p class="text-sm text-gray-400">Sin resultados para "<span class="font-medium">{q}</span>"</p>
+          ) : (
+            <p class="text-sm text-gray-400">
+              No hay personal de baja para el tipo de planilla seleccionado.
+            </p>
+          )}
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Código</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Cédula</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Puesto</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">F. Ingreso</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">F. Baja</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {employees.map((emp) => (
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3.5 font-mono text-xs text-gray-500">{emp.code}</td>
+                <td class="px-4 py-3.5 font-medium text-gray-900">
+                  <a href={`/employees/${emp.id}`} class="hover:text-gray-600">
+                    {emp.firstName} {emp.lastName}
+                  </a>
+                </td>
+                <td class="px-4 py-3.5 text-gray-600 font-mono text-xs">{emp.idNumber}</td>
+                <td class="px-4 py-3.5 text-gray-600 text-xs">{emp.position ?? '—'}</td>
+                <td class="px-4 py-3.5 text-gray-500 font-mono text-xs">{formatDateISO(emp.hireDate)}</td>
+                <td class="px-4 py-3.5 text-gray-700 font-mono text-xs">{formatDateISO(emp.terminationDate)}</td>
+                <td class="px-4 py-3.5">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                    Inactivo
+                  </span>
+                </td>
+                <td class="px-4 py-3.5">
+                  <div class="flex items-center justify-end gap-1">
+                    <a href={`/employees/${emp.id}`} class="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Ver ficha">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+
+    <!-- Pagination -->
+    {totalPages > 1 && (
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
+        <span>
+          Mostrando {showingFrom}–{showingTo} de {total}
+        </span>
+        <div class="flex items-center gap-1">
+          {page > 1 ? (
+            <a href={pageUrl(page - 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">
+              ← Anterior
+            </a>
+          ) : (
+            <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">
+              ← Anterior
+            </span>
+          )}
+
+          <span class="px-3 py-1.5 text-xs text-gray-600">
+            Pág. {page} / {totalPages}
+          </span>
+
+          {page < totalPages ? (
+            <a href={pageUrl(page + 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">
+              Siguiente →
+            </a>
+          ) : (
+            <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">
+              Siguiente →
+            </span>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</AppLayout>
