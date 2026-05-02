@@ -209,7 +209,11 @@ try {
       const minInst = Math.max(15, salary * 0.015)
       const maxInst = Math.max(30, Math.min(300, salary * 0.05))
       const installmentAmt = randFloat(minInst, maxInst)
-      const totalAmt = installmentAmt * installmentCount
+      // installmentAmt is already rounded to 2 decimals, but multiplying
+      // a binary float by an integer reintroduces precision artifacts
+      // (e.g. 53.99 × 48 = 2591.5200000000004). Round once more after
+      // the product so loans.amount / balance carry exactly 2 decimals.
+      const totalAmt = Math.round(installmentAmt * installmentCount * 100) / 100
 
       // Start date: between 3 and 36 months ago, anchored to a quincena
       // boundary so due_dates land on the typical 15th / 30th cadence.
