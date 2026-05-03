@@ -64,6 +64,28 @@ export function guardAuth({
 }
 
 /**
+ * Reject any request that is not authenticated as a super admin. The JWT's
+ * `type` field is the source of truth — a tenant user with role=SUPER_ADMIN
+ * (which should never happen) would still be rejected.
+ */
+export function guardSuperAdmin({
+  user,
+  set,
+}: {
+  user: AuthUser | null
+  set: { status: number | string }
+}) {
+  if (!user) {
+    set.status = 401
+    return { success: false, error: 'Unauthorized' }
+  }
+  if (user.type !== 'super_admin') {
+    set.status = 403
+    return { success: false, error: 'Forbidden: super admin only' }
+  }
+}
+
+/**
  * Returns a `beforeHandle` guard that enforces a minimum role.
  * Role hierarchy: SUPER_ADMIN > ADMIN > HR > ACCOUNTANT > VIEWER
  */
