@@ -98,10 +98,25 @@ const errorFlag = Astro.url.searchParams.get('error')
       </div>
     )}
     {errorFlag === 'no-admin' && (
-      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">La empresa aún no tiene administrador configurado.</div>
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+        La empresa no tiene un administrador con <code class="font-mono">is_tenant_admin = true</code>.
+        Re-ejecutá el seed o marcá el flag manualmente antes de impersonar.
+      </div>
+    )}
+    {errorFlag === 'not-active' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+        Solo se puede impersonar a empresas en estado <span class="font-mono">ACTIVE</span>.
+      </div>
     )}
     {errorFlag === 'server-error' && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">No se pudo aplicar la acción.</div>
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        No se pudo aplicar la acción.
+        {Astro.url.searchParams.get('detail') && (
+          <span class="block mt-1 text-xs font-mono opacity-80">
+            {Astro.url.searchParams.get('detail')}
+          </span>
+        )}
+      </div>
     )}
     {error && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>

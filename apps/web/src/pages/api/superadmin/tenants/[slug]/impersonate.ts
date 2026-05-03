@@ -27,7 +27,22 @@ export const POST: APIRoute = async ({ cookies, redirect, params }) => {
   }
 
   if (!res.ok) {
-    return redirect(`/superadmin/tenants/${params.slug}?error=server-error`)
+    // Forward the API's error verbatim so the detail page can render a
+    // useful message (e.g. "Tenant has no admin user yet" when the
+    // seed didn't flip is_tenant_admin) instead of a generic banner.
+    let detail = 'server-error'
+    try {
+      const body = (await res.json()) as { error?: string }
+      if (body.error) detail = body.error
+    } catch {
+      // ignore — fall back to status-based hint
+    }
+    console.error(`[impersonate] API ${res.status}: ${detail}`)
+    const flag =
+      res.status === 404 ? 'no-admin' : res.status === 409 ? 'not-active' : 'server-error'
+    return redirect(
+      `/superadmin/tenants/${params.slug}?error=${flag}&detail=${encodeURIComponent(detail)}`
+    )
   }
 
   const json = (await res.json()) as { data?: { token?: string; expiresInSeconds?: number } }
