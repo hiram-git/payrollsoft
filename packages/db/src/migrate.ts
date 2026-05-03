@@ -148,7 +148,7 @@ async function migrateTenant(slug: string) {
   // biome-ignore lint/style/noNonNullAssertion: url checked above
   const sql = postgres(url!, {
     prepare: false,
-    connection: { search_path: `tenant_${slug},public` },
+    connection: { search_path: `tenant_${slug},payroll_auth,public` },
     onnotice: () => {}, // suppress NOTICE spam
   })
 
@@ -167,10 +167,13 @@ if (isPublic) {
   // biome-ignore lint/style/noNonNullAssertion: url checked above
   const sql = postgres(url!, {
     prepare: false,
+    // The first migration creates `payroll_auth`; the search_path tolerates
+    // the fact that on a fresh DB the schema does not yet exist.
+    connection: { search_path: 'payroll_auth,public' },
     onnotice: () => {},
   })
   try {
-    await runMigrations(sql, './drizzle/public', 'public')
+    await runMigrations(sql, './drizzle/public', 'payroll_auth')
   } finally {
     await sql.end()
   }
@@ -178,9 +181,14 @@ if (isPublic) {
   await migrateTenant(tenantSlug)
 } else if (allTenants) {
   // biome-ignore lint/style/noNonNullAssertion: url checked above
-  const sql = postgres(url!, { prepare: false })
+  const sql = postgres(url!, {
+    prepare: false,
+    connection: { search_path: 'payroll_auth,public' },
+  })
   const rows = await sql<{ slug: string }[]>`
-    SELECT slug FROM tenants WHERE is_active = true ORDER BY slug
+    SELECT slug FROM payroll_auth.tenants
+     WHERE status IN ('ACTIVE','PROVISIONING')
+     ORDER BY slug
   `
   await sql.end()
 

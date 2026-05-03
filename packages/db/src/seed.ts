@@ -45,16 +45,19 @@ const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
 })
 const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
 
-const publicSql = postgres(url, { prepare: false })
+const publicSql = postgres(url, {
+  prepare: false,
+  connection: { search_path: 'payroll_auth,public' },
+})
 const tenantSql = postgres(url, {
   prepare: false,
-  connection: { search_path: `tenant_${TENANT_SLUG},public` },
+  connection: { search_path: `tenant_${TENANT_SLUG},payroll_auth,public` },
 })
 
 try {
   // ── Super admin ──────────────────────────────────────────────────────────────
   await publicSql`
-    INSERT INTO super_admins (email, password_hash, name)
+    INSERT INTO payroll_auth.super_admins (email, password_hash, name)
     VALUES (${SUPER_ADMIN_EMAIL}, ${superAdminHash}, ${SUPER_ADMIN_NAME})
     ON CONFLICT (email) DO UPDATE
       SET password_hash = EXCLUDED.password_hash,
@@ -64,10 +67,11 @@ try {
 
   // ── Tenant ───────────────────────────────────────────────────────────────────
   await publicSql`
-    INSERT INTO tenants (slug, name, database_schema)
-    VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`})
+    INSERT INTO payroll_auth.tenants (slug, name, database_schema, status)
+    VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`}, 'ACTIVE')
     ON CONFLICT (slug) DO UPDATE
-      SET name = EXCLUDED.name
+      SET name   = EXCLUDED.name,
+          status = 'ACTIVE'
   `
   console.log(`✓ Tenant      : ${TENANT_SLUG}`)
 
