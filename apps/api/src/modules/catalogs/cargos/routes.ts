@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
   createCargoService,
@@ -36,7 +36,7 @@ export const cargosRoutes = new Elysia({ prefix: '/cargos' })
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:read')],
       query: t.Object({ search: t.Optional(t.String()) }),
     }
   )
@@ -55,7 +55,10 @@ export const cargosRoutes = new Elysia({ prefix: '/cargos' })
       }
       return { success: true, data: row }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('catalogs:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   .post(
@@ -73,7 +76,7 @@ export const cargosRoutes = new Elysia({ prefix: '/cargos' })
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: CargoBody }
+    { beforeHandle: [guardAuth, guardPermission('catalogs:create')], body: CargoBody }
   )
 
   .put(
@@ -91,7 +94,7 @@ export const cargosRoutes = new Elysia({ prefix: '/cargos' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:update')],
       params: t.Object({ id: t.String() }),
       body: CargoUpdateBody,
     }
@@ -111,5 +114,8 @@ export const cargosRoutes = new Elysia({ prefix: '/cargos' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('catalogs:delete')],
+      params: t.Object({ id: t.String() }),
+    }
   )
