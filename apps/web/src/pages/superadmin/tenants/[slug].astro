@@ -78,11 +78,24 @@ const errorFlag = Astro.url.searchParams.get('error')
       </div>
     </div>
 
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Empresa creada. Esperando que termine la provisión…
+      </div>
+    )}
     {flash === 'updated' && (
       <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Estado actualizado.</div>
     )}
     {flash === 'admin-reset' && (
       <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Contraseña del administrador actualizada.</div>
+    )}
+    {(tenant?.status === 'PROVISIONING' || provisioning?.state === 'running') && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+        <svg class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+        Provisionando schema y aplicando migraciones — esta página se refrescará automáticamente.
+      </div>
     )}
     {errorFlag === 'no-admin' && (
       <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">La empresa aún no tiene administrador configurado.</div>
@@ -169,4 +182,17 @@ const errorFlag = Astro.url.searchParams.get('error')
       </div>
     )}
   </div>
+
+  {(tenant?.status === 'PROVISIONING' || provisioning?.state === 'running') && (
+    <script is:inline>
+      // While the schema is still being built we re-render the page every
+      // 2.5s so the user sees PROVISIONING → ACTIVE without manually
+      // refreshing. The query string is preserved (so the "created" flash
+      // sticks until status flips), and the timer self-clears when the
+      // server-rendered status no longer matches.
+      setTimeout(() => {
+        window.location.reload()
+      }, 2500)
+    </script>
+  )}
 </SuperAdminLayout>

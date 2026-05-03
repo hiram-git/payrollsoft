@@ -52,7 +52,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   }
 
   if (res.ok) {
-    return redirect('/superadmin/tenants?flash=created')
+    // Land on the tenant detail page so the user watches provisioning
+    // transition from PROVISIONING → ACTIVE in real time. The detail
+    // page polls itself while state=running.
+    return redirect(`/superadmin/tenants/${slug}?flash=created`)
   }
 
   let kind: string | undefined
