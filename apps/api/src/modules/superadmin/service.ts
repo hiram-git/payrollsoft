@@ -14,7 +14,7 @@ import {
  * (list, suspend, reactivate, archive). Routes stay thin and just translate
  * service results into HTTP responses.
  */
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import postgres from 'postgres'
 
 // biome-ignore lint/suspicious/noExplicitAny: Drizzle generic
@@ -155,4 +155,56 @@ export async function listSuperAdminAudit(db: AnyDb, filters: AuditFilters = {})
     query = query.where(eq(superAdminAudit.action, filters.action))
   }
   return query.limit(limit)
+}
+
+/**
+ * Operational metrics for the super-admin dashboard / external monitors.
+ *
+ * Returns counts by tenant status plus the most recent provisioning
+ * failures so an on-call engineer can spot stuck schemas without trawling
+ * the audit feed.
+ */
+export type PlatformMetrics = {
+  tenantCounts: {
+    total: number
+    active: number
+    provisioning: number
+    suspended: number
+    archived: number
+  }
+  failedProvisionings: Array<{
+    tenantId: string
+    state: string
+    error: string | null
+    finishedAt: Date | null
+  }>
+}
+
+export async function getPlatformMetrics(db: AnyDb): Promise<PlatformMetrics> {
+  const [counts] = await db
+    .select({
+      total: sql<number>`count(*)::int`,
+      active: sql<number>`count(*) filter (where ${tenants.status} = 'ACTIVE')::int`,
+      provisioning: sql<number>`count(*) filter (where ${tenants.status} = 'PROVISIONING')::int`,
+      suspended: sql<number>`count(*) filter (where ${tenants.status} = 'SUSPENDED')::int`,
+      archived: sql<number>`count(*) filter (where ${tenants.status} = 'ARCHIVED')::int`,
+    })
+    .from(tenants)
+
+  const failed = await db
+    .select({
+      tenantId: tenantProvisioning.tenantId,
+      state: tenantProvisioning.state,
+      error: tenantProvisioning.error,
+      finishedAt: tenantProvisioning.finishedAt,
+    })
+    .from(tenantProvisioning)
+    .where(eq(tenantProvisioning.state, 'failed'))
+    .orderBy(desc(tenantProvisioning.finishedAt))
+    .limit(20)
+
+  return {
+    tenantCounts: counts ?? { total: 0, active: 0, provisioning: 0, suspended: 0, archived: 0 },
+    failedProvisionings: failed,
+  }
 }

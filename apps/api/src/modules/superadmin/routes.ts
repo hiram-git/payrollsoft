@@ -8,6 +8,7 @@ import {
   changeTenantStatus,
   createTenant,
   findTenantBySlug,
+  getPlatformMetrics,
   getProvisioningStatus,
   listPermissionsCatalog,
   listSuperAdminAudit,
@@ -209,6 +210,12 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
     async () => ({ success: true, data: await listPermissionsCatalog(publicDb) }),
     { beforeHandle: [guardSuperAdmin] }
   )
+
+  // ── GET /superadmin/metrics ────────────────────────────────────────────────
+  // Snapshot for the super-admin dashboard and external probes.
+  .get('/metrics', async () => ({ success: true, data: await getPlatformMetrics(publicDb) }), {
+    beforeHandle: [guardSuperAdmin],
+  })
 
   // ── GET /superadmin/audit ──────────────────────────────────────────────────
   .get(
