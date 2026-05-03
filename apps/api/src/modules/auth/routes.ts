@@ -106,15 +106,75 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
   })
 
   // ── GET /auth/me ─────────────────────────────────────────────────────────────
+  // Returns the authenticated identity exactly as it sits in the JWT (so
+  // nothing needs the database). Super admins surface as a synthetic user
+  // with no tenant context; tenant users carry their effective permissions
+  // and the permissions_version stamped at login.
   .get(
     '/me',
     ({ user }) => ({
       success: true,
-      data: user,
+      data: {
+        userId: user?.userId,
+        email: user?.email ?? null,
+        name: user?.name ?? null,
+        type: user?.type,
+        tenantSlug: user?.tenantSlug ?? null,
+        tenantId: user?.tenantId ?? null,
+        role: user?.role,
+        permissions: user?.permissions ?? [],
+        permissionsVersion: user?.permissionsVersion ?? 0,
+      },
     }),
     {
       beforeHandle: [guardAuth],
     }
+  )
+
+  // ── POST /auth/refresh ──────────────────────────────────────────────────────
+  // Re-issues the auth cookie with freshly-resolved effective permissions.
+  // Call this after the user is told (e.g. by a 403 surfaced from a button
+  // that should now be allowed) that their permissions changed. Super
+  // admins skip the DB read entirely — their token never carries a perms
+  // array because they implicitly satisfy every check.
+  .post(
+    '/refresh',
+    async ({ jwt, user, cookie: { auth }, db, tenantSlug, set }) => {
+      if (!user) {
+        set.status = 401
+        return { success: false, error: 'Unauthorized' }
+      }
+      if (user.type === 'super_admin') {
+        // Nothing to refresh — re-sign the same payload to extend exp.
+        const token = await jwt.sign(user)
+        auth.set({ value: token, ...cookieOptions(env.NODE_ENV === 'production') })
+        return { success: true, data: { permissions: [], permissionsVersion: 0 } }
+      }
+      if (!tenantSlug) {
+        set.status = 400
+        return { success: false, error: 'Tenant not identified. Use X-Tenant header.' }
+      }
+
+      const { getEffectivePermissions } = await import('@payroll/db')
+      const effective = await getEffectivePermissions(db, user.userId)
+      const refreshed = {
+        ...user,
+        tenantSlug,
+        permissions: effective.permissions,
+        permissionsVersion: effective.permissionsVersion,
+      }
+      const token = await jwt.sign(refreshed)
+      auth.set({ value: token, ...cookieOptions(env.NODE_ENV === 'production') })
+
+      return {
+        success: true,
+        data: {
+          permissions: effective.permissions,
+          permissionsVersion: effective.permissionsVersion,
+        },
+      }
+    },
+    { beforeHandle: [guardAuth] }
   )
 
   // ── POST /auth/forgot-password ──────────────────────────────────────────────
