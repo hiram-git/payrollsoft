@@ -1,0 +1,27 @@
+---
+import type { PermissionCode } from '@payroll/types'
+import { can, canAny, getIdentity } from '../lib/auth'
+
+interface Props {
+  /** Required permissions (AND-combined). */
+  require?: PermissionCode | PermissionCode[]
+  /** Optional permissions (OR-combined). Either branch grants access. */
+  any?: PermissionCode | PermissionCode[]
+}
+
+const { require, any } = Astro.props
+const identity = getIdentity(Astro.cookies)
+
+const requiredList = Array.isArray(require) ? require : require ? [require] : []
+const anyList = Array.isArray(any) ? any : any ? [any] : []
+
+let allowed = true
+if (requiredList.length > 0 && !can(identity, ...requiredList)) {
+  allowed = false
+}
+if (allowed && anyList.length > 0 && !canAny(identity, ...anyList)) {
+  allowed = false
+}
+---
+
+{allowed && <slot />}
