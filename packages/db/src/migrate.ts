@@ -1,20 +1,16 @@
 /**
- * Custom Migration Runner — verbose output, full control over SQL execution.
+ * CLI wrapper around the shared migration runner.
  *
  * Usage:
  *   bun --env-file=../../.env src/migrate.ts --public
  *   bun --env-file=../../.env src/migrate.ts --tenant=demo
  *   bun --env-file=../../.env src/migrate.ts --all-tenants
- *
- * Tracking table: <schema>.__migrations  (tag-based, not hash-based)
- * Each migration entry: { tag, applied_at }
  */
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import postgres from 'postgres'
+import { runMigrations } from './migrator'
 
 const args = process.argv.slice(2)
-const tenantFlag = args.find((a) => a.startsWith('--tenant='))
+const tenantFlag = args.find((a: string) => a.startsWith('--tenant='))
 const isPublic = args.includes('--public')
 const allTenants = args.includes('--all-tenants')
 const tenantSlug = tenantFlag?.split('=')[1]
@@ -30,150 +26,32 @@ if (!url) {
   process.exit(1)
 }
 
-// ─── Journal reader ────────────────────────────────────────────────────────────
-
-type JournalEntry = { idx: number; tag: string }
-
-function readJournal(folder: string): JournalEntry[] {
-  const path = join(folder, 'meta', '_journal.json')
-  const raw = JSON.parse(readFileSync(path, 'utf8')) as { entries: JournalEntry[] }
-  return raw.entries.sort((a, b) => a.idx - b.idx)
-}
-
-function readSql(folder: string, tag: string): string {
-  return readFileSync(join(folder, `${tag}.sql`), 'utf8')
-}
-
-// Split on the Drizzle breakpoint marker (with or without leading newline/space)
-function splitStatements(sql: string): string[] {
-  return sql
-    .split(/--> statement-breakpoint/g)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0)
-}
-
-// ─── Core runner ──────────────────────────────────────────────────────────────
-
-// PostgreSQL error codes we can safely ignore on first boot ("already exists" variants)
-const IGNORABLE_CODES = new Set([
-  '42P07', // relation already exists
-  '42710', // object already exists
-  '42P06', // schema already exists
-  '42701', // column already exists
-  '42P16', // constraint already exists (index)
-  '23505', // unique violation (idempotent inserts)
-])
-
-async function runMigrations(
-  sql: postgres.Sql,
-  folder: string,
-  schemaLabel: string
-): Promise<void> {
-  const journal = readJournal(folder)
-
-  // Ensure tracking table exists in the current search_path schema
-  await sql`
-    CREATE TABLE IF NOT EXISTS __migrations (
-      tag        VARCHAR(255) PRIMARY KEY,
-      applied_at TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-    )
-  `
-
-  // Load already-applied tags
-  const applied = await sql<{ tag: string }[]>`SELECT tag FROM __migrations ORDER BY applied_at`
-  const appliedSet = new Set(applied.map((r) => r.tag))
-
-  if (appliedSet.size === 0) {
-    console.log(
-      `  [${schemaLabel}] No migrations recorded yet — "already exists" errors will be skipped (idempotent run)`
-    )
-  } else {
-    console.log(`  [${schemaLabel}] ${appliedSet.size} migration(s) already applied:`)
-    for (const tag of appliedSet) {
-      console.log(`    ✔  ${tag}`)
-    }
-  }
-
-  const pending = journal.filter((e) => !appliedSet.has(e.tag))
-
-  if (pending.length === 0) {
-    console.log(`  [${schemaLabel}] ✅  Nothing new to apply.\n`)
-    return
-  }
-
-  console.log(`  [${schemaLabel}] ${pending.length} pending migration(s) to run:\n`)
-
-  for (const entry of pending) {
-    console.log(`  ── ${entry.tag} ──`)
-    const rawSql = readSql(folder, entry.tag)
-    const statements = splitStatements(rawSql)
-    let skipped = 0
-
-    for (let i = 0; i < statements.length; i++) {
-      const stmt = statements[i]
-      const preview = stmt.replace(/\s+/g, ' ').slice(0, 100)
-      process.stdout.write(
-        `    [${i + 1}/${statements.length}] ${preview}${stmt.length > 100 ? '…' : ''} → `
-      )
-      try {
-        await sql.unsafe(stmt)
-        console.log('✔ OK')
-      } catch (err) {
-        const pgCode = (err as { code?: string })?.code
-        // Always skip "already exists" codes — migrations are forward-only and idempotent
-        if (pgCode && IGNORABLE_CODES.has(pgCode)) {
-          console.log('⚠  already exists (skipped)')
-          skipped++
-        } else {
-          console.log('✖ FAILED')
-          console.error(`       PG code: ${pgCode ?? 'unknown'}`)
-          console.error(`       Message: ${err instanceof Error ? err.message : String(err)}`)
-          throw err
-        }
-      }
-    }
-
-    // Record as applied after all statements succeed (or were safely skipped)
-    await sql`INSERT INTO __migrations (tag) VALUES (${entry.tag}) ON CONFLICT (tag) DO NOTHING`
-    const note = skipped > 0 ? ` (${skipped} stmt(s) skipped — already existed)` : ''
-    console.log(`  ✅  ${entry.tag} recorded${note}\n`)
-  }
-
-  console.log(`  [${schemaLabel}] All done.\n`)
-}
-
-// ─── Tenant helper ─────────────────────────────────────────────────────────────
-
 async function migrateTenant(slug: string) {
   // biome-ignore lint/style/noNonNullAssertion: url checked above
   const sql = postgres(url!, {
     prepare: false,
     connection: { search_path: `tenant_${slug},payroll_auth,public` },
-    onnotice: () => {}, // suppress NOTICE spam
+    onnotice: () => {},
   })
 
   try {
     await sql`CREATE SCHEMA IF NOT EXISTS ${sql(`tenant_${slug}`)}`
     console.log(`  schema tenant_${slug} ensured`)
-    await runMigrations(sql, './drizzle/tenant', `tenant_${slug}`)
+    await runMigrations(sql, { folder: './drizzle/tenant', schemaLabel: `tenant_${slug}` })
   } finally {
     await sql.end()
   }
 }
 
-// ─── Entry point ───────────────────────────────────────────────────────────────
-
 if (isPublic) {
   // biome-ignore lint/style/noNonNullAssertion: url checked above
   const sql = postgres(url!, {
     prepare: false,
-    // The first migration creates `payroll_auth`; the search_path tolerates
-    // the fact that on a fresh DB the schema does not yet exist.
     connection: { search_path: 'payroll_auth,public' },
     onnotice: () => {},
   })
   try {
-    await runMigrations(sql, './drizzle/public', 'payroll_auth')
+    await runMigrations(sql, { folder: './drizzle/public', schemaLabel: 'payroll_auth' })
   } finally {
     await sql.end()
   }
