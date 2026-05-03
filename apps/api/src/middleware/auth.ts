@@ -17,6 +17,16 @@ export type AuthUser = {
   permissions?: PermissionCode[]
   /** Snapshot of users.permissions_version at login. */
   permissionsVersion?: number
+  /**
+   * When set, the JWT was minted by the super-admin impersonation flow:
+   * the bearer is acting as a tenant user but the original super-admin
+   * identity is preserved here so audit logs and the UI banner can
+   * surface it.
+   */
+  impersonatedBy?: {
+    superAdminId: string
+    superAdminEmail?: string
+  }
 }
 
 // ─── JWT plugin (singleton, prevents re-registration) ────────────────────────

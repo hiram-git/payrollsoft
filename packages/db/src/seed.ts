@@ -76,15 +76,189 @@ try {
   console.log(`✓ Tenant      : ${TENANT_SLUG}`)
 
   // ── Tenant user ──────────────────────────────────────────────────────────────
-  await tenantSql`
-    INSERT INTO users (email, password_hash, name, role)
-    VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'})
+  const [userRow] = await tenantSql<{ id: string }[]>`
+    INSERT INTO users (email, password_hash, name, role, is_tenant_admin)
+    VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'}, true)
     ON CONFLICT (email) DO UPDATE
-      SET password_hash = EXCLUDED.password_hash,
-          name          = EXCLUDED.name,
-          role          = EXCLUDED.role
+      SET password_hash    = EXCLUDED.password_hash,
+          name             = EXCLUDED.name,
+          role             = EXCLUDED.role,
+          is_tenant_admin  = true
+    RETURNING id
   `
   console.log(`✓ Usuario     : ${USER_EMAIL}`)
+
+  // ── System roles + permissions + tenant_admin assignment ─────────────────────
+  // These mirror SYSTEM_ROLES from @payroll/types, but inlined so the seed
+  // stays runnable from a Bun/Node CLI without bundling the package.
+  type SystemRoleSeed = {
+    code: 'tenant_admin' | 'hr' | 'accountant' | 'viewer'
+    name: string
+    description: string
+    permissions: string[]
+  }
+
+  // tenant_admin gets every tenant-scope code listed in the catalog so a
+  // future addition to permissions_catalog flows through automatically.
+  const tenantAdminPerms = await tenantSql<{ code: string }[]>`
+    SELECT code FROM payroll_auth.permissions_catalog WHERE scope = 'tenant'
+  `
+
+  const HR: string[] = [
+    'employees:create',
+    'employees:read',
+    'employees:update',
+    'employees:export',
+    'employees:import',
+    'positions:create',
+    'positions:read',
+    'positions:update',
+    'shifts:create',
+    'shifts:read',
+    'shifts:update',
+    'shifts:assign',
+    'attendance:read',
+    'attendance:mark',
+    'attendance:edit',
+    'attendance:approve',
+    'attendance:import',
+    'vacations:read',
+    'vacations:request',
+    'vacations:approve',
+    'vacations:reject',
+    'vacations:cancel',
+    'loans:create',
+    'loans:read',
+    'loans:update',
+    'advances:create',
+    'advances:read',
+    'creditors:read',
+    'payroll:read',
+    'concepts:read',
+    'catalogs:read',
+    'payslip:read',
+    'payslip:download',
+    'payslip:send_email',
+    'reports:personnel.view',
+    'reports:personnel.export',
+    'reports:attendance.view',
+    'reports:attendance.export',
+  ]
+  const ACCOUNTANT: string[] = [
+    'employees:read',
+    'positions:read',
+    'shifts:read',
+    'attendance:read',
+    'loans:read',
+    'loans:approve',
+    'advances:read',
+    'advances:approve',
+    'creditors:read',
+    'creditors:create',
+    'creditors:update',
+    'payroll:read',
+    'payroll:create',
+    'payroll:generate',
+    'payroll:recalculate',
+    'payroll:approve',
+    'payroll:close',
+    'payroll:export',
+    'concepts:read',
+    'concepts:create',
+    'concepts:update',
+    'catalogs:read',
+    'catalogs:create',
+    'catalogs:update',
+    'payslip:read',
+    'payslip:download',
+    'payslip:send_email',
+    'reports:payroll.view',
+    'reports:payroll.export',
+    'reports:loans.view',
+  ]
+  const VIEWER: string[] = [
+    'employees:read',
+    'positions:read',
+    'shifts:read',
+    'attendance:read',
+    'vacations:read',
+    'loans:read',
+    'advances:read',
+    'creditors:read',
+    'payroll:read',
+    'concepts:read',
+    'catalogs:read',
+    'payslip:read',
+    'reports:payroll.view',
+    'reports:personnel.view',
+    'reports:attendance.view',
+  ]
+
+  const systemRoles: SystemRoleSeed[] = [
+    {
+      code: 'tenant_admin',
+      name: 'Administrador',
+      description: 'Acceso total a la empresa: usuarios, roles, planillas y configuración.',
+      permissions: tenantAdminPerms.map((r) => r.code),
+    },
+    {
+      code: 'hr',
+      name: 'Recursos Humanos',
+      description: 'Gestión de empleados, asistencias, vacaciones y comprobantes.',
+      permissions: HR,
+    },
+    {
+      code: 'accountant',
+      name: 'Contabilidad',
+      description: 'Generación, aprobación y cierre de planillas; conceptos y reportes contables.',
+      permissions: ACCOUNTANT,
+    },
+    {
+      code: 'viewer',
+      name: 'Solo lectura',
+      description: 'Consulta de información sin permisos de edición.',
+      permissions: VIEWER,
+    },
+  ]
+
+  const roleIds = new Map<string, string>()
+  for (const r of systemRoles) {
+    const [{ id }] = await tenantSql<{ id: string }[]>`
+      INSERT INTO roles (code, name, description, is_system)
+      VALUES (${r.code}, ${r.name}, ${r.description}, true)
+      ON CONFLICT (code) DO UPDATE
+        SET name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            is_system = true,
+            updated_at = now()
+      RETURNING id
+    `
+    roleIds.set(r.code, id)
+
+    // Re-grant from scratch so the seed is the authoritative source.
+    await tenantSql`DELETE FROM role_permissions WHERE role_id = ${id}`
+    if (r.permissions.length > 0) {
+      const rows = r.permissions.map((code) => ({ role_id: id, permission_code: code }))
+      await tenantSql`
+        INSERT INTO role_permissions ${tenantSql(rows, 'role_id', 'permission_code')}
+        ON CONFLICT (role_id, permission_code) DO NOTHING
+      `
+    }
+  }
+  console.log('✓ Roles       : tenant_admin, hr, accountant, viewer (con permisos)')
+
+  await tenantSql`
+    INSERT INTO user_roles (user_id, role_id)
+    VALUES (${userRow.id}, ${roleIds.get('tenant_admin')})
+    ON CONFLICT (user_id, role_id) DO NOTHING
+  `
+  // Force JWT refresh on next request so any old cookie picks up the
+  // new effective permissions.
+  await tenantSql`
+    UPDATE users SET permissions_version = permissions_version + 1
+     WHERE id = ${userRow.id}
+  `
+  console.log(`✓ Asignación  : ${USER_EMAIL} → tenant_admin`)
 
   // ── Función ──────────────────────────────────────────────────────────────────
   await tenantSql`
