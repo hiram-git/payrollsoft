@@ -43,11 +43,8 @@ try {
     fetch(`${API_URL}/roles/${roleId}`, {
       headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug },
     }),
-    // Use the superadmin route only when available; tenants don't have it,
-    // so we fall back to a per-tenant route in Phase 5.4. For now we just
-    // hide the catalog when the read fails.
-    fetch(`${API_URL}/superadmin/permissions`, {
-      headers: { Cookie: `auth=${identity.raw}` },
+    fetch(`${API_URL}/roles/permissions/catalog`, {
+      headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug },
     }),
   ])
   if (roleRes.ok) {
@@ -137,7 +134,7 @@ const flash = Astro.url.searchParams.get('flash')
 
         {moduleEntries.length === 0 ? (
           <div class="border border-gray-200 rounded-lg bg-white p-6 text-sm text-gray-500">
-            Para editar permisos a detalle, necesitas también el permiso super-admin del catálogo. Contacta a tu super administrador.
+            No se pudo cargar el catálogo de permisos. Recarga la página o contacta a soporte.
           </div>
         ) : (
           <div class="space-y-3">

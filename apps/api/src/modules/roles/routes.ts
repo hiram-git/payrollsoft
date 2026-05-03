@@ -1,4 +1,6 @@
+import { permissionsCatalog } from '@payroll/db'
 import { Elysia, t } from 'elysia'
+import { publicDb } from '../../config/db'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 import {
@@ -141,6 +143,21 @@ export const roleRoutes = new Elysia({ prefix: '/roles' })
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('roles:delete')],
       params: t.Object({ id: t.String() }),
     }
+  )
+
+  // ── GET /roles/permissions/catalog ─────────────────────────────────────────
+  // The full catalog, exposed to anyone who can read roles. Tenant admins
+  // need it to render the permission tree without the super-admin endpoint.
+  .get(
+    '/permissions/catalog',
+    async () => {
+      const data = await publicDb
+        .select()
+        .from(permissionsCatalog)
+        .orderBy(permissionsCatalog.module)
+      return { success: true, data }
+    },
+    { beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('roles:read')] }
   )
 
   // ── PUT /roles/:id/permissions ─────────────────────────────────────────────
