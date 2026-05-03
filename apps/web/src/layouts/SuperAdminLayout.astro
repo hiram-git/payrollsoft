@@ -1,0 +1,167 @@
+---
+/**
+ * Lightweight shell for /superadmin/* pages. Borrows the design tokens
+ * from AppLayout but skips the per-tenant chrome (no tenant pill, no
+ * sidebar nav tied to tenant modules). The sidebar surfaces the three
+ * super-admin sections: tenants, permissions catalog, and audit feed.
+ */
+import { getIdentity, initials } from '../lib/auth'
+
+interface Props {
+  title: string
+}
+const { title } = Astro.props
+const identity = getIdentity(Astro.cookies)
+const path = Astro.url.pathname
+
+function isActive(href: string) {
+  return path === href || (href !== '/superadmin' && path.startsWith(href))
+}
+
+const userInitials = initials(identity)
+const userName = identity?.name ?? 'Super Admin'
+const userEmail = identity?.email ?? ''
+---
+<!doctype html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title} — Payroll Panamá Superadmin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <script is:inline>
+    try { document.documentElement.dataset.theme = localStorage.getItem('payroll.theme') || 'dark'; } catch(e) {}
+  </script>
+  <style is:global>
+    :root, [data-theme="dark"] {
+      --ink:#07101F; --ink-2:#0A1628; --ink-3:#101E33; --ink-4:#16263F;
+      --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.18);
+      --rule:#1A2740; --rule-hi:#243555;
+      --fore:#EDEEF2; --fore-dim:#C9CEDB; --mute-2:#8B97AE; --mute:#6A7690;
+      --warn:#E3B25A; --err:#E06B5C; --ok:#6FB58C;
+      --f-display:'Fraunces','Times New Roman',serif;
+      --f-sans:'Inter Tight',-apple-system,system-ui,sans-serif;
+      --f-mono:'JetBrains Mono',ui-monospace,monospace;
+    }
+    [data-theme="light"] {
+      --ink:#F4F5F7; --ink-2:#FFFFFF; --ink-3:#FFFFFF; --ink-4:#EFF1F5;
+      --rule:#E4E7EE; --rule-hi:#D2D7E0;
+      --fore:#0C1424; --fore-dim:#2A3346; --mute-2:#5B6478; --mute:#7A8499;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height:100%; margin:0; }
+    body {
+      background: var(--ink); color: var(--fore);
+      font-family: var(--f-sans); font-size: 14px; line-height: 1.5;
+      -webkit-font-smoothing: antialiased; letter-spacing:-0.005em;
+      transition: background 180ms ease, color 180ms ease;
+    }
+    .sa-shell { display:flex; height:100vh; width:100vw; overflow:hidden; }
+    .sa-side {
+      width:240px; flex-shrink:0; background:var(--ink-2);
+      border-right:1px solid var(--rule);
+      display:flex; flex-direction:column; padding:20px 14px;
+      overflow-y:auto;
+    }
+    .sa-brand { display:flex; align-items:center; gap:12px; padding:4px 10px 20px; }
+    .sa-brand-mark {
+      width:32px; height:32px; border-radius:4px; background:var(--navy);
+      display:grid; place-items:center; color:#fff;
+      font-family: var(--f-display); font-size:18px;
+    }
+    .sa-brand-name { font-weight:500; font-size:14px; color:var(--fore); }
+    .sa-brand-sub { font-family:var(--f-mono); font-size:9.5px; color:var(--mute); letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
+    .sa-section { font-family:var(--f-mono); font-size:10px; color:var(--mute); letter-spacing:.16em; text-transform:uppercase; padding:14px 12px 8px; }
+    .sa-item {
+      display:flex; align-items:center; gap:12px; padding:9px 12px;
+      border-radius:3px; color:var(--fore-dim); font-size:13.5px;
+      text-decoration:none; transition:background 140ms ease, color 140ms ease;
+      position:relative;
+    }
+    .sa-item:hover:not(.sa-active) { background:var(--ink-4); color:var(--fore); }
+    .sa-active { background:var(--navy-soft); color:var(--fore); font-weight:500; }
+    .sa-active::before { content:''; position:absolute; left:0; top:6px; bottom:6px; width:2px; background:var(--navy-hi); border-radius:0 2px 2px 0; }
+    .sa-main { flex:1; display:flex; flex-direction:column; min-width:0; min-height:0; overflow:hidden; }
+    .sa-top {
+      height:56px; flex-shrink:0; background:var(--ink-2);
+      border-bottom:1px solid var(--rule);
+      display:flex; align-items:center; padding:0 24px; gap:12px;
+    }
+    .sa-crumbs { flex:1; display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--mute-2); }
+    .sa-crumbs .cur { color:var(--fore); font-weight:500; }
+    .sa-user-pill {
+      display:flex; align-items:center; gap:8px;
+      padding:4px 10px 4px 4px; border-radius:999px;
+      border:1px solid var(--rule); background:var(--ink-3);
+      font-family:var(--f-sans);
+    }
+    .sa-circle { width:26px; height:26px; border-radius:50%; background:var(--navy); display:grid; place-items:center; font-size:11px; font-weight:600; color:#fff; }
+    .sa-content { flex:1; overflow:auto; background:var(--ink); }
+    /* Cards/forms picked up from AppLayout pattern */
+    [data-theme="dark"] .sa-content .bg-white { background-color: var(--ink-2); }
+    [data-theme="dark"] .sa-content .bg-gray-50 { background-color: var(--ink-3); }
+    [data-theme="dark"] .sa-content .border-gray-200 { border-color: var(--rule); }
+    [data-theme="dark"] .sa-content .border-gray-100 { border-color: var(--rule); }
+    [data-theme="dark"] .sa-content .text-gray-900 { color: var(--fore); }
+    [data-theme="dark"] .sa-content .text-gray-700 { color: var(--fore-dim); }
+    [data-theme="dark"] .sa-content .text-gray-600 { color: var(--mute-2); }
+    [data-theme="dark"] .sa-content .text-gray-500 { color: var(--mute); }
+    [data-theme="dark"] .sa-content .text-gray-400 { color: var(--mute); }
+    [data-theme="dark"] .sa-content .hover\:bg-gray-50:hover { background-color: var(--ink-4); }
+    [data-theme="dark"] .sa-content input,
+    [data-theme="dark"] .sa-content select,
+    [data-theme="dark"] .sa-content textarea {
+      background-color: var(--ink-3); border-color: var(--rule); color: var(--fore);
+    }
+    [data-theme="dark"] .sa-content input:focus,
+    [data-theme="dark"] .sa-content select:focus,
+    [data-theme="dark"] .sa-content textarea:focus {
+      border-color: var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft);
+    }
+  </style>
+</head>
+<body>
+  <div class="sa-shell">
+    <aside class="sa-side">
+      <div class="sa-brand">
+        <div class="sa-brand-mark">P</div>
+        <div>
+          <div class="sa-brand-name">PayrollSoft</div>
+          <div class="sa-brand-sub">Superadmin</div>
+        </div>
+      </div>
+
+      <div class="sa-section">Plataforma</div>
+      <a href="/superadmin" class={`sa-item${isActive('/superadmin') && path === '/superadmin' ? ' sa-active' : ''}`}>Panel</a>
+      <a href="/superadmin/tenants" class={`sa-item${isActive('/superadmin/tenants') ? ' sa-active' : ''}`}>Empresas</a>
+      <a href="/superadmin/permissions" class={`sa-item${isActive('/superadmin/permissions') ? ' sa-active' : ''}`}>Catálogo de permisos</a>
+      <a href="/superadmin/audit" class={`sa-item${isActive('/superadmin/audit') ? ' sa-active' : ''}`}>Auditoría</a>
+
+      <div style="margin-top:auto; padding:12px;">
+        <form method="POST" action="/api/auth/logout">
+          <button type="submit" style="width:100%; padding:8px 12px; border-radius:4px; border:1px solid var(--rule); background:transparent; color:var(--mute-2); font-size:12px; cursor:pointer;">
+            Cerrar sesión
+          </button>
+        </form>
+      </div>
+    </aside>
+
+    <div class="sa-main">
+      <header class="sa-top">
+        <div class="sa-crumbs">
+          <span>Superadmin</span>
+          <span style="opacity:.4">/</span>
+          <span class="cur">{title}</span>
+        </div>
+        <div class="sa-user-pill" title={userEmail}>
+          <div class="sa-circle">{userInitials}</div>
+          <span style="font-size:12.5px; font-weight:500; color:var(--fore-dim);">{userName}</span>
+        </div>
+      </header>
+      <main class="sa-content"><slot /></main>
+    </div>
+  </div>
+</body>
+</html>

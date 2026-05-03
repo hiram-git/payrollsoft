@@ -1,0 +1,83 @@
+---
+import SuperAdminLayout from '../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+type CatalogEntry = {
+  code: string
+  module: string
+  action: string
+  scope: 'tenant' | 'global'
+  description: string
+  isDangerous: boolean
+}
+
+let catalog: CatalogEntry[] = []
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/superadmin/permissions`, {
+    headers: { Cookie: `auth=${identity.raw}` },
+  })
+  if (res.ok) catalog = ((await res.json()) as { data: CatalogEntry[] }).data ?? []
+  else error = 'No se pudo cargar el catálogo.'
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const grouped = new Map<string, CatalogEntry[]>()
+for (const e of catalog) {
+  if (!grouped.has(e.module)) grouped.set(e.module, [])
+  grouped.get(e.module)?.push(e)
+}
+const moduleEntries = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+---
+<SuperAdminLayout title="Catálogo de permisos">
+  <div class="p-8 max-w-5xl">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Catálogo de permisos</h1>
+      <p class="text-sm text-gray-500 mt-0.5">Códigos canónicos disponibles para asignar a roles. {catalog.length} permisos en total.</p>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <div class="space-y-3">
+      {moduleEntries.map(([module, entries]) => (
+        <details class="border border-gray-200 rounded-lg bg-white" open>
+          <summary class="cursor-pointer px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
+            <span class="text-sm font-medium text-gray-900">{module}</span>
+            <span class="text-xs text-gray-400">{entries.length} permisos</span>
+          </summary>
+          <div class="border-t border-gray-100">
+            <table class="w-full text-sm">
+              <tbody>
+                {entries.map((p) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2.5 font-mono text-xs text-gray-900 whitespace-nowrap">{p.code}</td>
+                    <td class="px-4 py-2.5 text-xs">
+                      <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        p.scope === 'global' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-600'
+                      }`}>{p.scope}</span>
+                      {p.isDangerous && (
+                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700">Sensible</span>
+                      )}
+                    </td>
+                    <td class="px-4 py-2.5 text-xs text-gray-600">{p.description}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</SuperAdminLayout>

@@ -1,0 +1,102 @@
+---
+import SuperAdminLayout from '../../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+type Tenant = {
+  id: string
+  slug: string
+  name: string
+  status: string
+  contactEmail: string | null
+  createdAt: string
+  archivedAt: string | null
+}
+
+let tenants: Tenant[] = []
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/superadmin/tenants`, {
+    headers: { Cookie: `auth=${identity.raw}` },
+  })
+  if (res.ok) tenants = ((await res.json()) as { data: Tenant[] }).data ?? []
+  else error = 'No se pudo cargar la lista de empresas.'
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const flash = Astro.url.searchParams.get('flash')
+---
+<SuperAdminLayout title="Empresas">
+  <div class="p-8 max-w-6xl">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Empresas</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{tenants.length} {tenants.length === 1 ? 'empresa' : 'empresas'} registradas en la plataforma.</p>
+      </div>
+      <a href="/superadmin/tenants/new" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva empresa
+      </a>
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Empresa provisionada correctamente.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Estado actualizado.</div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      {tenants.length === 0 ? (
+        <div class="py-16 text-center text-sm text-gray-400">No hay empresas todavía. Crea la primera con el botón arriba.</div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Slug</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Contacto</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Creada</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tenants.map((t) => (
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3.5 font-mono text-xs text-gray-500">
+                  <a href={`/superadmin/tenants/${t.slug}`} class="hover:text-gray-900">{t.slug}</a>
+                </td>
+                <td class="px-4 py-3.5 font-medium text-gray-900">{t.name}</td>
+                <td class="px-4 py-3.5 text-gray-600 text-xs">{t.contactEmail ?? '—'}</td>
+                <td class="px-4 py-3.5">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                    t.status === 'ACTIVE' ? 'bg-green-50 text-green-700' :
+                    t.status === 'PROVISIONING' ? 'bg-amber-50 text-amber-700' :
+                    t.status === 'SUSPENDED' ? 'bg-gray-100 text-gray-700' :
+                    'bg-gray-100 text-gray-500'
+                  }`}>{t.status}</span>
+                </td>
+                <td class="px-4 py-3.5 text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString('es-PA')}</td>
+                <td class="px-4 py-3.5 text-right">
+                  <a href={`/superadmin/tenants/${t.slug}`} class="text-xs text-gray-500 hover:text-gray-900">Detalle →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</SuperAdminLayout>

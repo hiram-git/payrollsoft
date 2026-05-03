@@ -1,0 +1,172 @@
+---
+import SuperAdminLayout from '../../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+const slug = Astro.params.slug ?? ''
+
+type Tenant = {
+  id: string
+  slug: string
+  name: string
+  status: string
+  contactEmail: string | null
+  databaseSchema: string
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+}
+type Provisioning = {
+  state: 'pending' | 'running' | 'done' | 'failed'
+  error: string | null
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+let tenant: Tenant | null = null
+let provisioning: Provisioning | null = null
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/superadmin/tenants/${slug}`, {
+    headers: { Cookie: `auth=${identity.raw}` },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as {
+      data: { tenant: Tenant; provisioning: Provisioning | null }
+    }
+    tenant = json.data.tenant
+    provisioning = json.data.provisioning
+  } else if (res.status === 404) {
+    return Astro.redirect('/superadmin/tenants')
+  } else {
+    error = 'No se pudo cargar la empresa.'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const flash = Astro.url.searchParams.get('flash')
+const errorFlag = Astro.url.searchParams.get('error')
+---
+<SuperAdminLayout title={tenant?.name ?? 'Empresa'}>
+  <div class="p-8 max-w-4xl">
+    <div class="mb-6">
+      <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empresas</a>
+      <div class="mt-2 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 tracking-tight">{tenant?.name}</h1>
+          <p class="text-sm text-gray-500 mt-0.5">
+            Slug: <span class="font-mono">{tenant?.slug}</span>
+            <span class="mx-1.5 text-gray-400">·</span>
+            Schema: <span class="font-mono">{tenant?.databaseSchema}</span>
+            <span class="mx-1.5 text-gray-400">·</span>
+            <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+              tenant?.status === 'ACTIVE' ? 'bg-green-50 text-green-700' :
+              tenant?.status === 'PROVISIONING' ? 'bg-amber-50 text-amber-700' :
+              tenant?.status === 'SUSPENDED' ? 'bg-gray-100 text-gray-700' :
+              'bg-gray-100 text-gray-500'
+            }`}>{tenant?.status}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Estado actualizado.</div>
+    )}
+    {flash === 'admin-reset' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Contraseña del administrador actualizada.</div>
+    )}
+    {errorFlag === 'no-admin' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">La empresa aún no tiene administrador configurado.</div>
+    )}
+    {errorFlag === 'server-error' && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">No se pudo aplicar la acción.</div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    {tenant && (
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Info -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Información</h2>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between"><dt class="text-gray-500">Contacto</dt><dd class="text-gray-900">{tenant.contactEmail ?? '—'}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Creada</dt><dd class="text-gray-900">{new Date(tenant.createdAt).toLocaleString('es-PA')}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Última actualización</dt><dd class="text-gray-900">{new Date(tenant.updatedAt).toLocaleString('es-PA')}</dd></div>
+            {tenant.archivedAt && (
+              <div class="flex justify-between"><dt class="text-gray-500">Archivada</dt><dd class="text-gray-900">{new Date(tenant.archivedAt).toLocaleString('es-PA')}</dd></div>
+            )}
+          </dl>
+        </div>
+
+        <!-- Provisioning -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Provisión</h2>
+          {provisioning ? (
+            <dl class="space-y-2 text-sm">
+              <div class="flex justify-between"><dt class="text-gray-500">Estado</dt><dd class="text-gray-900 font-mono">{provisioning.state}</dd></div>
+              {provisioning.startedAt && (
+                <div class="flex justify-between"><dt class="text-gray-500">Iniciada</dt><dd class="text-gray-900">{new Date(provisioning.startedAt).toLocaleString('es-PA')}</dd></div>
+              )}
+              {provisioning.finishedAt && (
+                <div class="flex justify-between"><dt class="text-gray-500">Finalizada</dt><dd class="text-gray-900">{new Date(provisioning.finishedAt).toLocaleString('es-PA')}</dd></div>
+              )}
+              {provisioning.error && (
+                <div class="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 mt-2">{provisioning.error}</div>
+              )}
+            </dl>
+          ) : (
+            <p class="text-sm text-gray-500">Sin información de provisión.</p>
+          )}
+        </div>
+
+        <!-- Lifecycle -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Acciones</h2>
+          <div class="flex flex-wrap items-center gap-3">
+            {tenant.status !== 'ACTIVE' && tenant.status !== 'ARCHIVED' && (
+              <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`}>
+                <input type="hidden" name="status" value="ACTIVE" />
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700">Reactivar</button>
+              </form>
+            )}
+            {tenant.status === 'ACTIVE' && (
+              <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`}>
+                <input type="hidden" name="status" value="SUSPENDED" />
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-gray-700 text-white hover:bg-gray-800">Suspender</button>
+              </form>
+            )}
+            {tenant.status !== 'ARCHIVED' && (
+              <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`} onsubmit="return confirm('¿Archivar esta empresa? La acción es reversible solo cambiando el estado.');">
+                <input type="hidden" name="status" value="ARCHIVED" />
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md border border-red-200 text-red-700 hover:bg-red-50">Archivar</button>
+              </form>
+            )}
+          </div>
+
+          <div class="border-t border-gray-200 mt-5 pt-5">
+            <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">Restablecer contraseña del admin</h3>
+            <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/admin-reset`} class="flex flex-wrap items-end gap-2">
+              <div>
+                <input type="password" name="password" required minlength="12" maxlength="256"
+                  class="w-72 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                  placeholder="Nueva contraseña (>=12 caracteres)" />
+              </div>
+              <button type="submit" class="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Establecer contraseña</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</SuperAdminLayout>
