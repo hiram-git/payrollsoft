@@ -90,7 +90,19 @@ const flash = Astro.url.searchParams.get('flash')
                 </td>
                 <td class="px-4 py-3.5 text-xs text-gray-500">{new Date(t.createdAt).toLocaleDateString('es-PA')}</td>
                 <td class="px-4 py-3.5 text-right">
-                  <a href={`/superadmin/tenants/${t.slug}`} class="text-xs text-gray-500 hover:text-gray-900">Detalle →</a>
+                  <div class="flex items-center justify-end gap-3">
+                    {t.status === 'ACTIVE' && (
+                      <form
+                        method="POST"
+                        action={`/api/superadmin/tenants/${t.slug}/impersonate`}
+                        onsubmit="return confirm('Vas a iniciar sesión como administrador de esta empresa durante 30 minutos. La acción queda registrada en auditoría.');"
+                        style="margin:0"
+                      >
+                        <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">Entrar como →</button>
+                      </form>
+                    )}
+                    <a href={`/superadmin/tenants/${t.slug}`} class="text-xs text-gray-500 hover:text-gray-900">Detalle</a>
+                  </div>
                 </td>
               </tr>
             ))}

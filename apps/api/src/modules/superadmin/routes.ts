@@ -1,10 +1,13 @@
+import { superAdminAudit } from '@payroll/db'
 import { validateTenantSlug } from '@payroll/utils'
 import { Elysia, t } from 'elysia'
 import { publicDb } from '../../config/db'
 import { env } from '../../config/env'
 import { hashPassword } from '../../lib/password'
 import { authPlugin, guardSuperAdmin } from '../../middleware/auth'
+import { jwtPlugin } from '../../middleware/auth'
 import {
+  buildImpersonationPayload,
   changeTenantStatus,
   createTenant,
   findTenantBySlug,
@@ -31,6 +34,54 @@ import {
  */
 export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
   .use(authPlugin)
+  .use(jwtPlugin)
+
+  // ── POST /superadmin/tenants/:slug/impersonate ────────────────────────────
+  // Mints a short-lived (30 min) JWT representing the tenant_admin of `slug`
+  // and tags it with impersonatedBy so the UI surfaces a permanent banner
+  // and audit_log captures every action under the original super-admin's
+  // identity.
+  .post('/tenants/:slug/impersonate', async ({ params, user, jwt, set }) => {
+    if (!user || user.type !== 'super_admin') {
+      set.status = 403
+      return { success: false, error: 'Forbidden: super admin only' }
+    }
+
+    const tenant = await findTenantBySlug(publicDb, params.slug)
+    if (!tenant) {
+      set.status = 404
+      return { success: false, error: 'Tenant not found' }
+    }
+    if (tenant.status !== 'ACTIVE') {
+      set.status = 409
+      return { success: false, error: `Tenant is ${tenant.status}` }
+    }
+
+    const payload = await buildImpersonationPayload(env.DATABASE_URL, params.slug, {
+      id: user.userId,
+      email: user.email ?? null,
+    })
+    if (!payload) {
+      set.status = 404
+      return { success: false, error: 'Tenant has no admin user yet' }
+    }
+
+    // 30-minute session — long enough to do real work, short enough that
+    // a forgotten tab won't keep the elevated identity alive forever.
+    const token = await jwt.sign({ ...payload, exp: Math.floor(Date.now() / 1000) + 30 * 60 })
+
+    await publicDb.insert(superAdminAudit).values({
+      superAdminId: user.userId,
+      tenantId: tenant.id,
+      action: 'tenant.impersonate',
+      payload: { adminUserId: payload.userId, ttlMinutes: 30 },
+    })
+
+    return {
+      success: true,
+      data: { token, tenantSlug: params.slug, expiresInSeconds: 30 * 60 },
+    }
+  })
 
   // ── GET /superadmin/tenants ────────────────────────────────────────────────
   .get('/tenants', async () => ({ success: true, data: await listTenants(publicDb) }), {

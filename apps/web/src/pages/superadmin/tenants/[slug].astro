@@ -147,6 +147,17 @@ const errorFlag = Astro.url.searchParams.get('error')
         <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2">
           <h2 class="text-sm font-medium text-gray-700 mb-3">Acciones</h2>
           <div class="flex flex-wrap items-center gap-3">
+            {tenant.status === 'ACTIVE' && (
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/impersonate`}
+                onsubmit="return confirm('Vas a iniciar sesión como administrador de esta empresa durante 30 minutos. La acción queda registrada en auditoría.');"
+              >
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700">
+                  Entrar como administrador
+                </button>
+              </form>
+            )}
             {tenant.status !== 'ACTIVE' && tenant.status !== 'ARCHIVED' && (
               <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`}>
                 <input type="hidden" name="status" value="ACTIVE" />

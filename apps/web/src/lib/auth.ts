@@ -22,6 +22,8 @@ export type ServerIdentity = {
   tenantSlug: string | null
   permissions: PermissionCode[]
   permissionsVersion: number
+  /** When set, the JWT was minted by the super-admin impersonation flow. */
+  impersonatedBy: { superAdminId: string; superAdminEmail?: string } | null
   raw: string
 }
 
@@ -35,6 +37,7 @@ const EMPTY_IDENTITY: ServerIdentity = {
   tenantSlug: null,
   permissions: [],
   permissionsVersion: 0,
+  impersonatedBy: null,
   raw: '',
 }
 
@@ -60,6 +63,7 @@ export function getIdentity(cookies: AstroCookies): ServerIdentity | null {
       tenantSlug: string
       permissions: PermissionCode[]
       permissionsVersion: number
+      impersonatedBy: { superAdminId: string; superAdminEmail?: string }
     }>
     return {
       ...EMPTY_IDENTITY,
@@ -72,6 +76,7 @@ export function getIdentity(cookies: AstroCookies): ServerIdentity | null {
       tenantSlug: payload.tenantSlug ?? null,
       permissions: payload.permissions ?? [],
       permissionsVersion: payload.permissionsVersion ?? 0,
+      impersonatedBy: payload.impersonatedBy ?? null,
       raw,
     }
   } catch {

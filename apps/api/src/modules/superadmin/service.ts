@@ -99,6 +99,91 @@ export async function changeTenantStatus(
 }
 
 /**
+ * Build an AuthUser payload representing the tenant_admin of `slug` acting
+ * under super-admin impersonation. Returns null when the tenant has no admin
+ * user yet.
+ *
+ * Effective permissions are resolved against the tenant's roles graph via
+ * the same recursive CTE used at login, so the impersonating super-admin
+ * gets exactly what the tenant_admin would have.
+ */
+export async function buildImpersonationPayload(
+  databaseUrl: string,
+  slug: string,
+  superAdmin: { id: string; email: string | null }
+): Promise<{
+  userId: string
+  tenantId: string
+  tenantSlug: string
+  role: 'ADMIN'
+  type: 'user'
+  name: string
+  email: string
+  permissions: string[]
+  permissionsVersion: number
+  impersonatedBy: { superAdminId: string; superAdminEmail?: string }
+} | null> {
+  const sqlc = postgres(databaseUrl, {
+    prepare: false,
+    connection: { search_path: `tenant_${slug},payroll_auth,public` },
+    onnotice: () => {},
+  })
+  try {
+    const [admin] = await sqlc<
+      { id: string; email: string; name: string; permissions_version: number }[]
+    >`
+      SELECT id, email, name, permissions_version
+        FROM users
+       WHERE is_tenant_admin = true AND is_active = true
+       LIMIT 1
+    `
+    if (!admin) return null
+
+    const rows = await sqlc<{ permissions: string[] | null }[]>`
+      WITH RECURSIVE
+        direct AS (
+          SELECT ur.role_id, 0 AS depth
+            FROM user_roles ur
+           WHERE ur.user_id = ${admin.id}::uuid
+        ),
+        closure AS (
+          SELECT role_id, depth FROM direct
+          UNION
+          SELECT ri.parent_role_id, c.depth + 1
+            FROM role_inheritance ri
+            JOIN closure c ON ri.child_role_id = c.role_id
+           WHERE c.depth < 10
+        )
+      SELECT (
+        SELECT array_agg(DISTINCT rp.permission_code)
+          FROM closure c
+          JOIN role_permissions rp ON rp.role_id = c.role_id
+      ) AS permissions
+    `
+
+    const permissions = rows[0]?.permissions ?? []
+
+    return {
+      userId: admin.id,
+      tenantId: slug,
+      tenantSlug: slug,
+      role: 'ADMIN',
+      type: 'user',
+      name: admin.name,
+      email: admin.email,
+      permissions,
+      permissionsVersion: admin.permissions_version,
+      impersonatedBy: {
+        superAdminId: superAdmin.id,
+        superAdminEmail: superAdmin.email ?? undefined,
+      },
+    }
+  } finally {
+    await sqlc.end()
+  }
+}
+
+/**
  * Reset the password of the tenant admin. Returns the new admin user id, or
  * null if the tenant does not exist or has no admin yet.
  */
