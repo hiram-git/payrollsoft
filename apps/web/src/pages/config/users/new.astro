@@ -1,0 +1,79 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'users:create')) return Astro.redirect('/config/users')
+
+const errorFlag = Astro.url.searchParams.get('error')
+const errorMessages: Record<string, string> = {
+  'email-taken': 'Ese correo ya está registrado en la empresa.',
+  'missing-fields': 'Todos los campos marcados son obligatorios.',
+  'weak-password': 'La contraseña debe tener al menos 12 caracteres.',
+  'server-error': 'No se pudo crear el usuario. Inténtalo de nuevo.',
+}
+const errorMessage = errorFlag ? errorMessages[errorFlag] : ''
+---
+
+<AppLayout title="Nuevo usuario">
+  <div class="p-8 max-w-xl">
+    <div class="mb-6">
+      <a href="/config/users" class="text-xs text-gray-500 hover:text-gray-900">← Volver a usuarios</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nuevo usuario</h1>
+      <p class="text-sm text-gray-500 mt-0.5">El usuario podrá iniciar sesión con la contraseña que asignes aquí. Le asignarás roles después.</p>
+    </div>
+
+    {errorMessage && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{errorMessage}</div>
+    )}
+
+    <form method="POST" action="/api/tenant-users/create" class="space-y-5 bg-white border border-gray-200 rounded-lg p-6">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre completo</label>
+        <input
+          type="text"
+          name="name"
+          required
+          minlength="1"
+          maxlength="255"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          placeholder="Ej. María González"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Correo electrónico</label>
+        <input
+          type="email"
+          name="email"
+          required
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          placeholder="usuario@empresa.com"
+        />
+      </div>
+
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1.5">Contraseña inicial</label>
+        <input
+          type="password"
+          name="password"
+          required
+          minlength="12"
+          maxlength="256"
+          class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          placeholder="Mínimo 12 caracteres"
+        />
+        <p class="mt-1.5 text-xs text-gray-500">Comparte esta contraseña por un canal seguro. El usuario podrá cambiarla en su primer acceso.</p>
+      </div>
+
+      <div class="flex items-center gap-2 pt-2">
+        <button
+          type="submit"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+        >Crear usuario</button>
+        <a href="/config/users" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</AppLayout>
