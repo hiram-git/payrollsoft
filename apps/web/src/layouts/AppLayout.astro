@@ -71,19 +71,14 @@ if (authCookie) {
 }
 
 // Resolve the active id: prefer the cookie if it still points at a real
-// type, otherwise pick the first one in business order. We persist the
-// fallback back into the cookie so every server-rendered page (and every
-// downstream API call) reads the same value.
+// type, otherwise fall back to the first one in business order. We do
+// NOT persist the fallback back into the cookie here — Astro can begin
+// streaming the response before the layout finishes its frontmatter
+// (e.g. after an impersonation cookie swap), and a late `cookies.set`
+// throws ResponseSentError. The cookie still gets persisted whenever
+// the user picks a type explicitly via /api/config/select-payroll-type.
 const cookieIsValid = cookieTypeId !== '' && payrollTypes.some((t) => t.id === cookieTypeId)
 const activeTypeId = cookieIsValid ? cookieTypeId : (payrollTypes[0]?.id ?? '')
-if (!cookieIsValid && activeTypeId) {
-  Astro.cookies.set('payroll.activeTypeId', activeTypeId, {
-    path: '/',
-    maxAge: 365 * 24 * 60 * 60,
-    httpOnly: false,
-    sameSite: 'lax',
-  })
-}
 const activeType = payrollTypes.find((t) => t.id === activeTypeId) ?? null
 
 function isActive(href: string) {
