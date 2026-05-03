@@ -20,6 +20,7 @@ import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 import { payrollRoutes } from './modules/payroll/routes'
 import { positionsRoutes } from './modules/positions/routes'
+import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
 import { superadminRoutes } from './modules/superadmin/routes'
 
 const app = new Elysia()
@@ -44,6 +45,8 @@ const app = new Elysia()
   }))
   .use(authRoutes)
   .use(superadminRoutes)
+  .use(roleRoutes)
+  .use(userRoleRoutes)
   .use(companyRoutes)
   .use(positionsRoutes)
   .use(employeeRoutes)
