@@ -30,8 +30,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect, params }) => 
   if (!res.ok) {
     let detail = 'server-error'
     try {
-      const body = (await res.json()) as { error?: string }
-      if (body.error) detail = body.error
+      const text = await res.text()
+      console.error(`[users/roles] API ${res.status} body:`, text)
+      try {
+        const body = JSON.parse(text) as { error?: string; message?: string }
+        detail = body.error ?? body.message ?? text.slice(0, 200) ?? 'server-error'
+      } catch {
+        detail = text.slice(0, 200) || 'server-error'
+      }
     } catch {}
     return redirect(`/config/users/${params.id}?error=roles&detail=${encodeURIComponent(detail)}`)
   }
