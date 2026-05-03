@@ -173,6 +173,150 @@ export function isGlobalPermission(code: PermissionCode): boolean {
   return !TENANT_PERMISSION_MODULES.has(module)
 }
 
+// ─── System role definitions ─────────────────────────────────────────────────
+
+/**
+ * Roles seeded into every freshly-provisioned tenant. These are marked
+ * `is_system = true` in the roles table and cannot be deleted from the UI;
+ * tenants can layer custom roles on top via inheritance.
+ */
+export const SYSTEM_ROLE_CODES = ['tenant_admin', 'hr', 'accountant', 'viewer'] as const
+export type SystemRoleCode = (typeof SYSTEM_ROLE_CODES)[number]
+
+export type SystemRoleDefinition = {
+  code: SystemRoleCode
+  name: string
+  description: string
+  /** Codes from the permissions catalog this role grants by default. */
+  permissions: readonly PermissionCode[]
+}
+
+const ALL_TENANT_PERMISSIONS = PERMISSION_CODES.filter((c) => !isGlobalPermission(c))
+
+const HR_PERMISSIONS: readonly PermissionCode[] = [
+  'employees:create',
+  'employees:read',
+  'employees:update',
+  'employees:export',
+  'employees:import',
+  'positions:create',
+  'positions:read',
+  'positions:update',
+  'shifts:create',
+  'shifts:read',
+  'shifts:update',
+  'shifts:assign',
+  'attendance:read',
+  'attendance:mark',
+  'attendance:edit',
+  'attendance:approve',
+  'attendance:import',
+  'vacations:read',
+  'vacations:request',
+  'vacations:approve',
+  'vacations:reject',
+  'vacations:cancel',
+  'loans:create',
+  'loans:read',
+  'loans:update',
+  'advances:create',
+  'advances:read',
+  'creditors:read',
+  'payroll:read',
+  'concepts:read',
+  'catalogs:read',
+  'payslip:read',
+  'payslip:download',
+  'payslip:send_email',
+  'reports:personnel.view',
+  'reports:personnel.export',
+  'reports:attendance.view',
+  'reports:attendance.export',
+]
+
+const ACCOUNTANT_PERMISSIONS: readonly PermissionCode[] = [
+  'employees:read',
+  'positions:read',
+  'shifts:read',
+  'attendance:read',
+  'loans:read',
+  'loans:approve',
+  'advances:read',
+  'advances:approve',
+  'creditors:read',
+  'creditors:create',
+  'creditors:update',
+  'payroll:read',
+  'payroll:create',
+  'payroll:generate',
+  'payroll:recalculate',
+  'payroll:approve',
+  'payroll:close',
+  'payroll:export',
+  'concepts:read',
+  'concepts:create',
+  'concepts:update',
+  'catalogs:read',
+  'catalogs:create',
+  'catalogs:update',
+  'payslip:read',
+  'payslip:download',
+  'payslip:send_email',
+  'reports:payroll.view',
+  'reports:payroll.export',
+  'reports:loans.view',
+]
+
+const VIEWER_PERMISSIONS: readonly PermissionCode[] = [
+  'employees:read',
+  'positions:read',
+  'shifts:read',
+  'attendance:read',
+  'vacations:read',
+  'loans:read',
+  'advances:read',
+  'creditors:read',
+  'payroll:read',
+  'concepts:read',
+  'catalogs:read',
+  'payslip:read',
+  'reports:payroll.view',
+  'reports:personnel.view',
+  'reports:attendance.view',
+]
+
+export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
+  {
+    code: 'tenant_admin',
+    name: 'Administrador',
+    description: 'Acceso total a la empresa: usuarios, roles, planillas y configuración.',
+    permissions: ALL_TENANT_PERMISSIONS,
+  },
+  {
+    code: 'hr',
+    name: 'Recursos Humanos',
+    description: 'Gestión de empleados, asistencias, vacaciones y comprobantes.',
+    permissions: HR_PERMISSIONS,
+  },
+  {
+    code: 'accountant',
+    name: 'Contabilidad',
+    description: 'Generación, aprobación y cierre de planillas; conceptos y reportes contables.',
+    permissions: ACCOUNTANT_PERMISSIONS,
+  },
+  {
+    code: 'viewer',
+    name: 'Solo lectura',
+    description: 'Consulta de información sin permisos de edición.',
+    permissions: VIEWER_PERMISSIONS,
+  },
+]
+
+export function getSystemRole(code: SystemRoleCode): SystemRoleDefinition {
+  // biome-ignore lint/style/noNonNullAssertion: codes come from the const tuple above
+  return SYSTEM_ROLES.find((r) => r.code === code)!
+}
+
 // ─── Employee ─────────────────────────────────────────────────────────────────
 
 export const PAY_FREQUENCIES = ['biweekly', 'monthly', 'weekly'] as const
