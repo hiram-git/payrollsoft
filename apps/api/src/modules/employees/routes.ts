@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
   createEmployeeService,
@@ -67,11 +67,11 @@ const ListQuery = t.Object({
 /**
  * Employee routes — mounted at /employees
  *
- * GET    /employees           → list (filterable, paginated) — VIEWER+
- * GET    /employees/:id       → get one                      — VIEWER+
- * POST   /employees           → create                       — HR+
- * PUT    /employees/:id       → update                       — HR+
- * DELETE /employees/:id       → deactivate (soft)            — ADMIN+
+ * GET    /employees           → list (filterable, paginated)  — employees:read
+ * GET    /employees/:id       → get one                       — employees:read
+ * POST   /employees           → create                        — employees:create
+ * PUT    /employees/:id       → update                        — employees:update
+ * DELETE /employees/:id       → deactivate (soft)             — employees:delete
  */
 export const employeeRoutes = new Elysia({ prefix: '/employees' })
   .use(authPlugin)
@@ -102,7 +102,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
       )
       return { success: true, ...result }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], query: ListQuery }
+    { beforeHandle: [guardAuth, guardPermission('employees:read')], query: ListQuery }
   )
 
   // ── GET /employees/:id ───────────────────────────────────────────────────────
@@ -121,7 +121,10 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
       }
       return { success: true, data: employee }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('employees:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // ── POST /employees ──────────────────────────────────────────────────────────
@@ -150,7 +153,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
         throw err
       }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: EmployeeBody }
+    { beforeHandle: [guardAuth, guardPermission('employees:create')], body: EmployeeBody }
   )
 
   // ── PUT /employees/:id ───────────────────────────────────────────────────────
@@ -179,7 +182,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
       }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('employees:update')],
       params: t.Object({ id: t.String() }),
       body: EmployeeUpdateBody,
     }
@@ -202,7 +205,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('employees:delete')],
       params: t.Object({ id: t.String() }),
     }
   )

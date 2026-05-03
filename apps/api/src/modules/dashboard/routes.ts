@@ -1,6 +1,6 @@
 import { getDashboardStats } from '@payroll/db'
 import { Elysia } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 
 export const dashboardRoutes = new Elysia({ prefix: '/dashboard' })
@@ -17,5 +17,5 @@ export const dashboardRoutes = new Elysia({ prefix: '/dashboard' })
       const stats = await getDashboardStats(db)
       return { success: true, data: stats }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')] }
+    { beforeHandle: [guardAuth, guardPermission('payroll:read')] }
   )
