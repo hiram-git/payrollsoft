@@ -1,4 +1,5 @@
 export * from './tenant'
+export * from './permissions'
 export * from './users'
 export * from './password-resets'
 export * from './employee'

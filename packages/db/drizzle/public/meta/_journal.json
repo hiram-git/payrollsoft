@@ -15,6 +15,13 @@
       "when": 1762128000000,
       "tag": "0001_payroll_auth_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762128001000,
+      "tag": "0002_permissions_catalog",
+      "breakpoints": true
     }
   ]
 }
