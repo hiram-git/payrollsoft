@@ -11,8 +11,7 @@
  * graph cannot DoS the login endpoint.
  */
 import type { PermissionCode } from '@payroll/types'
-import { sql } from 'drizzle-orm'
-import { eq } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import type { createPublicDb, createTenantDb } from './client'
 import { users } from './schema/users'
 
@@ -93,10 +92,15 @@ export async function getEffectivePermissions(
  */
 export async function bumpPermissionsVersion(db: Db, userIds: string[]): Promise<void> {
   if (userIds.length === 0) return
-  await db.execute(sql`
-    UPDATE users
-       SET permissions_version = permissions_version + 1,
-           updated_at          = now()
-     WHERE id = ANY(${userIds}::uuid[])
-  `)
+  // Use the typed query builder instead of raw `ANY($1::uuid[])` — postgres.js
+  // serialises a JS array into a PG array literal, but Drizzle's sql tag
+  // wraps it in a way the `::uuid[]` cast doesn't always accept, surfacing
+  // as an opaque 500 from /users/:id/roles.
+  await db
+    .update(users)
+    .set({
+      permissionsVersion: sql`${users.permissionsVersion} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(inArray(users.id, userIds))
 }
