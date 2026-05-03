@@ -94,21 +94,33 @@ describe('verifyTenantLogin', () => {
     const password = 'super-secret-123'
     const hash = await hashPassword(password)
 
+    // verifyTenantLogin runs three reads:
+    //   1. findUserByEmail              → select().from().where()
+    //   2. getEffectivePermissions head → select().from().where().limit()
+    //   3. getEffectivePermissions CTE  → db.execute(sql`...`)
+    // The mock pattern-matches by the chained call shape.
+    const userRow = {
+      id: 'user-uuid',
+      email: 'admin@acme.com',
+      passwordHash: hash,
+      isActive: true,
+      role: 'ADMIN',
+      permissionsVersion: 7,
+    }
     const mockDb = {
       select: () => ({
         from: () => ({
-          where: () =>
-            Promise.resolve([
-              {
-                id: 'user-uuid',
-                email: 'admin@acme.com',
-                passwordHash: hash,
-                isActive: true,
-                role: 'ADMIN',
-              },
-            ]),
+          where: () => {
+            const result = Promise.resolve([userRow])
+            // Allow callers that chain .limit() too.
+            return Object.assign(result, { limit: () => Promise.resolve([userRow]) })
+          },
         }),
       }),
+      execute: () =>
+        Promise.resolve([
+          { roles: ['tenant_admin'], permissions: ['employees:read', 'payroll:approve'] },
+        ]),
     }
 
     const result = await verifyTenantLogin(mockDb, 'admin@acme.com', password, 'acme')
@@ -116,7 +128,10 @@ describe('verifyTenantLogin', () => {
     expect(result?.userId).toBe('user-uuid')
     expect(result?.role).toBe('ADMIN')
     expect(result?.tenantId).toBe('acme')
+    expect(result?.tenantSlug).toBe('acme')
     expect(result?.type).toBe('user')
+    expect(result?.permissions).toEqual(['employees:read', 'payroll:approve'])
+    expect(result?.permissionsVersion).toBe(7)
   })
 
   it('returns null for wrong password', async () => {
