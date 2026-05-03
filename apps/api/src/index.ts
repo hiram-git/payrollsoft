@@ -20,6 +20,9 @@ import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 import { payrollRoutes } from './modules/payroll/routes'
 import { positionsRoutes } from './modules/positions/routes'
+import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
+import { superadminRoutes } from './modules/superadmin/routes'
+import { tenantUserRoutes } from './modules/users/routes'
 
 const app = new Elysia()
   // ── Global middleware (order matters) ──────────────────────────────────────
@@ -42,6 +45,10 @@ const app = new Elysia()
     timestamp: new Date().toISOString(),
   }))
   .use(authRoutes)
+  .use(superadminRoutes)
+  .use(roleRoutes)
+  .use(userRoleRoutes)
+  .use(tenantUserRoutes)
   .use(companyRoutes)
   .use(positionsRoutes)
   .use(employeeRoutes)

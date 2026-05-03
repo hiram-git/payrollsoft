@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
   checkPositionCodeService,
@@ -49,7 +49,7 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       return listPositionsService(db, onlyActive)
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('positions:read')],
       query: t.Object({ isActive: t.Optional(t.String()) }),
     }
   )
@@ -69,7 +69,7 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       return { success: true, ...result }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('positions:read')],
       query: t.Object({
         code: t.String({ minLength: 1, maxLength: 20 }),
         excludeId: t.Optional(t.String()),
@@ -92,7 +92,7 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('positions:read')],
       params: t.Object({ id: t.String() }),
     }
   )
@@ -113,7 +113,7 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       return result
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('positions:create')],
       body: PositionBody,
     }
   )
@@ -133,7 +133,7 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       return result
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('positions:update')],
       params: t.Object({ id: t.String() }),
       body: PositionUpdateBody,
     }
@@ -154,7 +154,7 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       return result
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('positions:delete')],
       params: t.Object({ id: t.String() }),
     }
   )

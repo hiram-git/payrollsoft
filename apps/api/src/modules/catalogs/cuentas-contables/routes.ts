@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
   createCuentaContableService,
@@ -34,7 +34,7 @@ export const cuentasContablesRoutes = new Elysia({ prefix: '/cuentas-contables' 
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:read')],
       query: t.Object({ search: t.Optional(t.String()) }),
     }
   )
@@ -53,7 +53,10 @@ export const cuentasContablesRoutes = new Elysia({ prefix: '/cuentas-contables' 
       }
       return { success: true, data: row }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('catalogs:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   .post(
@@ -71,7 +74,7 @@ export const cuentasContablesRoutes = new Elysia({ prefix: '/cuentas-contables' 
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: CuentaContableBody }
+    { beforeHandle: [guardAuth, guardPermission('catalogs:create')], body: CuentaContableBody }
   )
 
   .put(
@@ -89,7 +92,7 @@ export const cuentasContablesRoutes = new Elysia({ prefix: '/cuentas-contables' 
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:update')],
       params: t.Object({ id: t.String() }),
       body: CuentaContableUpdateBody,
     }
@@ -109,5 +112,8 @@ export const cuentasContablesRoutes = new Elysia({ prefix: '/cuentas-contables' 
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('catalogs:delete')],
+      params: t.Object({ id: t.String() }),
+    }
   )

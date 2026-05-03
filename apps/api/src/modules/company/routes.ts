@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import { getCompanyConfigService, saveCompanyConfigService } from './service'
 
@@ -45,7 +45,7 @@ export const companyRoutes = new Elysia({ prefix: '/company' })
       const data = await getCompanyConfigService(db)
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')] }
+    { beforeHandle: [guardAuth, guardPermission('settings:company.read')] }
   )
 
   .put(
@@ -58,5 +58,8 @@ export const companyRoutes = new Elysia({ prefix: '/company' })
       const result = await saveCompanyConfigService(db, body)
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], body: CompanyConfigBody }
+    {
+      beforeHandle: [guardAuth, guardPermission('settings:company.update')],
+      body: CompanyConfigBody,
+    }
   )

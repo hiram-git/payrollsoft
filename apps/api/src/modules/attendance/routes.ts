@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
   createShiftService,
@@ -78,7 +78,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       const data = await listShiftsService(db)
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')] }
+    { beforeHandle: [guardAuth, guardPermission('shifts:read')] }
   )
 
   // ── GET /attendance/shifts/:id ───────────────────────────────────────────────
@@ -97,7 +97,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('shifts:read')],
       params: t.Object({ id: t.String() }),
     }
   )
@@ -118,7 +118,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: ShiftBody }
+    { beforeHandle: [guardAuth, guardPermission('shifts:create')], body: ShiftBody }
   )
 
   // ── PUT /attendance/shifts/:id ───────────────────────────────────────────────
@@ -137,7 +137,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('shifts:update')],
       params: t.Object({ id: t.String() }),
       body: t.Partial(ShiftBody),
     }
@@ -159,7 +159,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       return { success: true }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('shifts:delete')],
       params: t.Object({ id: t.String() }),
     }
   )
@@ -180,7 +180,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       })
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], query: AttendanceListQuery }
+    { beforeHandle: [guardAuth, guardPermission('attendance:read')], query: AttendanceListQuery }
   )
 
   // ── GET /attendance/:id ──────────────────────────────────────────────────────
@@ -199,7 +199,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('attendance:read')],
       params: t.Object({ id: t.String() }),
     }
   )
@@ -219,7 +219,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: AttendanceBody }
+    { beforeHandle: [guardAuth, guardPermission('attendance:mark')], body: AttendanceBody }
   )
 
   // ── PUT /attendance/:id ──────────────────────────────────────────────────────
@@ -238,7 +238,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('attendance:edit')],
       params: t.Object({ id: t.String() }),
       body: t.Object({
         checkIn: t.Optional(t.Nullable(t.String())),
@@ -265,7 +265,7 @@ export const attendanceRoutes = new Elysia({ prefix: '/attendance' })
       return { success: true }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('attendance:edit')],
       params: t.Object({ id: t.String() }),
     }
   )

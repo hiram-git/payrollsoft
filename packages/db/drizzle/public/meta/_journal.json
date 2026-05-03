@@ -8,6 +8,27 @@
       "when": 1775728247262,
       "tag": "0000_worried_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762128000000,
+      "tag": "0001_payroll_auth_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762128001000,
+      "tag": "0002_permissions_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762128002000,
+      "tag": "0003_super_admin_audit",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
   closeLoanService,
@@ -70,7 +70,7 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
       return { success: true, ...result }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('loans:read')],
       query: t.Object({
         employeeId: t.Optional(t.String()),
         search: t.Optional(t.String()),
@@ -96,7 +96,10 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
       }
       return { success: true, data: row }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('loans:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   .get(
@@ -109,7 +112,10 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
       const data = await getLoanInstallmentsService(db, params.id)
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('loans:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   .post(
@@ -127,7 +133,7 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: LoanBody }
+    { beforeHandle: [guardAuth, guardPermission('loans:create')], body: LoanBody }
   )
 
   .put(
@@ -145,7 +151,7 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('loans:update')],
       params: t.Object({ id: t.String() }),
       body: LoanUpdateBody,
     }
@@ -166,5 +172,8 @@ export const loansRoutes = new Elysia({ prefix: '/loans' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('loans:cancel')],
+      params: t.Object({ id: t.String() }),
+    }
   )

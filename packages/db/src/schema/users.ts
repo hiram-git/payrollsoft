@@ -1,9 +1,13 @@
-import { boolean, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
+import { boolean, integer, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
 /**
  * Tenant-scoped users table.
  * Each tenant has its own users in their schema (tenant_{slug}).
- * Super admins are stored separately in the public schema (see tenant.ts).
+ * Super admins are stored separately in payroll_auth (see tenant.ts).
+ *
+ * The legacy `role` column is kept for backwards compatibility while the
+ * codebase migrates to the role/role_permissions/user_roles model. New
+ * authorization checks must consume the RBAC tables, not this column.
  */
 export const users = pgTable('users', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -12,6 +16,8 @@ export const users = pgTable('users', {
   name: varchar('name', { length: 255 }).notNull(),
   role: varchar('role', { length: 20 }).notNull().default('VIEWER'),
   isActive: boolean('is_active').notNull().default(true),
+  isTenantAdmin: boolean('is_tenant_admin').notNull().default(false),
+  permissionsVersion: integer('permissions_version').notNull().default(1),
   lastLoginAt: timestamp('last_login_at'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

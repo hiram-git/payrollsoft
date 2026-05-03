@@ -1,0 +1,86 @@
+---
+import SuperAdminLayout from '../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+type AuditEntry = {
+  id: number
+  superAdminId: string | null
+  tenantId: string | null
+  action: string
+  payload: Record<string, unknown>
+  ipAddress: string | null
+  userAgent: string | null
+  createdAt: string
+}
+
+const action = Astro.url.searchParams.get('action') ?? ''
+const tenantId = Astro.url.searchParams.get('tenantId') ?? ''
+
+let entries: AuditEntry[] = []
+let error = ''
+
+try {
+  const params = new URLSearchParams({ limit: '200' })
+  if (action) params.set('action', action)
+  if (tenantId) params.set('tenantId', tenantId)
+  const res = await fetch(`${API_URL}/superadmin/audit?${params}`, {
+    headers: { Cookie: `auth=${identity.raw}` },
+  })
+  if (res.ok) entries = ((await res.json()) as { data: AuditEntry[] }).data ?? []
+  else error = 'No se pudo cargar la auditoría.'
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+---
+<SuperAdminLayout title="Auditoría">
+  <div class="p-8 max-w-5xl">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Auditoría central</h1>
+      <p class="text-sm text-gray-500 mt-0.5">Eventos generados por superadmin sobre cualquier empresa.</p>
+    </div>
+
+    <form method="GET" action="/superadmin/audit" class="mb-5 flex items-center gap-2">
+      <input type="text" name="action" value={action} placeholder="Filtrar por acción (ej. tenant.create)" class="flex-1 max-w-xs px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent" />
+      <input type="text" name="tenantId" value={tenantId} placeholder="Tenant ID (UUID)" class="flex-1 max-w-xs px-3 py-2 text-sm font-mono border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent" />
+      <button type="submit" class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition">Filtrar</button>
+    </form>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      {entries.length === 0 ? (
+        <div class="py-16 text-center text-sm text-gray-400">Sin eventos para los filtros seleccionados.</div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Cuándo</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Acción</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tenant</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Detalle</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e) => (
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{new Date(e.createdAt).toLocaleString('es-PA')}</td>
+                <td class="px-4 py-3 font-mono text-xs text-gray-900">{e.action}</td>
+                <td class="px-4 py-3 font-mono text-[10px] text-gray-500 truncate max-w-[160px]">{e.tenantId ?? '—'}</td>
+                <td class="px-4 py-3 text-xs text-gray-600 font-mono truncate max-w-md">{Object.keys(e.payload).length === 0 ? '—' : JSON.stringify(e.payload)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</SuperAdminLayout>

@@ -1,6 +1,6 @@
 import { getAcumuladosSummary, queryAcumulados } from '@payroll/db'
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 
 const FilterQuery = t.Object({
@@ -54,7 +54,7 @@ export const acumuladosRoutes = new Elysia({ prefix: '/acumulados' })
         meta: { total, page, limit, pages: Math.ceil(total / limit) },
       }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], query: FilterQuery }
+    { beforeHandle: [guardAuth, guardPermission('reports:payroll.view')], query: FilterQuery }
   )
 
   // Grouped summary (total per employee+concept)
@@ -78,5 +78,5 @@ export const acumuladosRoutes = new Elysia({ prefix: '/acumulados' })
 
       return { success: true, data: rows }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], query: FilterQuery }
+    { beforeHandle: [guardAuth, guardPermission('reports:payroll.view')], query: FilterQuery }
   )

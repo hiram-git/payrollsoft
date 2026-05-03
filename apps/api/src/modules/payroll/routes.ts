@@ -1,6 +1,6 @@
 import { determinarPeriodoTrimestral, getThirteenthPeriods } from '@payroll/core'
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
   getPayrollReportService,
@@ -62,7 +62,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, ...data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('payroll:read')],
       query: t.Object({
         status: t.Optional(t.String()),
         type: t.Optional(t.String()),
@@ -91,7 +91,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('payroll:read')],
       params: t.Object({ id: t.String() }),
       query: t.Object({
         linesPage: t.Optional(t.String()),
@@ -116,7 +116,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('payroll:read')],
       params: t.Object({ id: t.String(), lineId: t.String() }),
     }
   )
@@ -136,7 +136,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: PayrollBody }
+    { beforeHandle: [guardAuth, guardPermission('payroll:create')], body: PayrollBody }
   )
 
   .put(
@@ -154,7 +154,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('payroll:create')],
       params: t.Object({ id: t.String() }),
       body: PayrollUpdateBody,
     }
@@ -174,7 +174,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:close')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // POST /payroll/:id/generate — created → generated
@@ -192,7 +195,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:generate')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // POST /payroll/:id/regenerate — generated → generated (reprocess)
@@ -210,7 +216,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:recalculate')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // POST /payroll/:id/close — generated → closed
@@ -228,7 +237,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:close')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // POST /payroll/:id/revert — generated → created
@@ -246,7 +258,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:reopen')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // POST /payroll/:id/reopen — closed → generated
@@ -264,7 +279,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:reopen')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // GET /payroll/thirteenth/period?date=YYYY-MM-DD — return period info for a date
@@ -276,7 +294,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: period }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('payroll:read')],
       query: t.Object({ date: t.Optional(t.String()) }),
     }
   )
@@ -290,7 +308,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: periods }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('payroll:read')],
       query: t.Object({ year: t.Optional(t.String()) }),
     }
   )
@@ -312,7 +330,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data, period: result.period }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('payroll:create')],
       body: t.Object({
         date: t.Optional(t.String()),
         name: t.Optional(t.String()),
@@ -336,7 +354,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('payroll:recalculate')],
       params: t.Object({ id: t.String(), lineId: t.String() }),
     }
   )
@@ -356,7 +374,10 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:generate')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // ── Report state machine ─────────────────────────────────────────────────
@@ -377,7 +398,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('payroll:read')],
       params: t.Object({ id: t.String() }),
     }
   )
@@ -404,7 +425,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('payroll:generate')],
       params: t.Object({ id: t.String() }),
       // Null when the tenant uses on_demand mode (no file persisted).
       body: t.Object({ pdfPath: t.Optional(t.Nullable(t.String())) }),
@@ -429,7 +450,7 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('payroll:recalculate')],
       params: t.Object({ id: t.String() }),
     }
   )

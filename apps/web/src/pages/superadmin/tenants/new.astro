@@ -1,0 +1,526 @@
+---
+import SuperAdminLayout from '../../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../../lib/auth'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const errorFlag = Astro.url.searchParams.get('error')
+const errorMessages: Record<string, string> = {
+  'invalid-slug':
+    'El slug no es válido. Usa solo letras minúsculas, números, guiones y guion bajo (3 a 50 caracteres).',
+  'slug-taken': 'Ese slug ya está en uso por otra empresa.',
+  'admin-email-invalid': 'El correo del administrador es inválido.',
+  'missing-fields': 'Completa todos los campos obligatorios.',
+  'weak-password': 'La contraseña debe tener al menos 12 caracteres.',
+  'server-error': 'No se pudo crear la empresa. Revisa el detalle en auditoría.',
+}
+const errorMessage = errorFlag ? errorMessages[errorFlag] : ''
+const prefillSlug = Astro.url.searchParams.get('slug') ?? ''
+const prefillName = Astro.url.searchParams.get('name') ?? ''
+---
+
+<SuperAdminLayout title="Nueva empresa">
+  <div class="p-8 max-w-2xl">
+    <div class="mb-6">
+      <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empresas</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nueva empresa</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Provisiona un nuevo tenant en tres pasos. Al finalizar se creará el schema
+        <span class="font-mono">tenant_&lt;slug&gt;</span>, se aplicarán las migraciones
+        y se creará el administrador inicial.
+      </p>
+    </div>
+
+    {errorMessage && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" id="banner-server-error">{errorMessage}</div>
+    )}
+
+    <!-- Stepper -->
+    <ol class="wizard-steps mb-6">
+      <li class="wizard-step is-active" data-step-indicator="1">
+        <span class="wizard-step-num">1</span>
+        <span class="wizard-step-label">Empresa</span>
+      </li>
+      <li class="wizard-step" data-step-indicator="2">
+        <span class="wizard-step-num">2</span>
+        <span class="wizard-step-label">Administrador</span>
+      </li>
+      <li class="wizard-step" data-step-indicator="3">
+        <span class="wizard-step-num">3</span>
+        <span class="wizard-step-label">Confirmación</span>
+      </li>
+    </ol>
+
+    <form
+      id="tenant-wizard"
+      method="POST"
+      action="/api/superadmin/tenants/create"
+      class="space-y-5 bg-white border border-gray-200 rounded-lg p-6"
+      novalidate
+    >
+      <!-- ── Step 1: Empresa ─────────────────────────────────────────── -->
+      <fieldset class="wizard-fieldset" data-step="1">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre comercial</label>
+          <input
+            id="f-name"
+            type="text"
+            name="name"
+            required
+            minlength="1"
+            maxlength="255"
+            value={prefillName}
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            placeholder="Ej. Acme Panamá, S.A."
+            autocomplete="off"
+          />
+          <p class="mt-1.5 text-xs text-gray-500">El slug se sugerirá automáticamente a partir de este nombre. Podés ajustarlo abajo.</p>
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Slug</label>
+          <input
+            id="f-slug"
+            type="text"
+            name="slug"
+            required
+            minlength="3"
+            maxlength="50"
+            value={prefillSlug}
+            pattern="[a-z0-9][a-z0-9_-]{2,49}"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            placeholder="acme"
+            autocomplete="off"
+          />
+          <p id="slug-feedback" class="mt-1.5 text-xs text-gray-500">
+            Solo letras minúsculas, números, guion y guion bajo. No se podrá cambiar después.
+          </p>
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">
+            Correo de contacto <span class="text-gray-400 font-normal">(opcional)</span>
+          </label>
+          <input
+            id="f-contactEmail"
+            type="email"
+            name="contactEmail"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            placeholder="contacto@empresa.com"
+          />
+        </div>
+      </fieldset>
+
+      <!-- ── Step 2: Administrador ───────────────────────────────────── -->
+      <fieldset class="wizard-fieldset" data-step="2" hidden>
+        <div>
+          <h2 class="text-sm font-medium text-gray-700">Administrador inicial</h2>
+          <p class="text-xs text-gray-500 mt-0.5">
+            Recibe el rol <span class="font-mono">tenant_admin</span> y la marca
+            <span class="font-mono">is_tenant_admin</span>.
+          </p>
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre completo</label>
+          <input
+            id="f-adminName"
+            type="text"
+            name="adminName"
+            required
+            minlength="1"
+            maxlength="255"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          />
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Correo</label>
+          <input
+            id="f-adminEmail"
+            type="email"
+            name="adminEmail"
+            required
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+          />
+        </div>
+
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Contraseña inicial</label>
+          <input
+            id="f-adminPassword"
+            type="password"
+            name="adminPassword"
+            required
+            minlength="12"
+            maxlength="256"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            placeholder="Mínimo 12 caracteres"
+          />
+          <div class="mt-2">
+            <div class="strength-track">
+              <div class="strength-fill" id="strength-fill"></div>
+            </div>
+            <p id="strength-label" class="mt-1.5 text-xs text-gray-500">
+              Comparte esta contraseña con el administrador por un canal seguro.
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- ── Step 3: Confirmación ────────────────────────────────────── -->
+      <fieldset class="wizard-fieldset" data-step="3" hidden>
+        <div class="space-y-4">
+          <div>
+            <h2 class="text-sm font-medium text-gray-700">Confirmá los datos</h2>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Al provisionar se ejecutarán las migraciones y la creación del admin de forma
+              transaccional. Si falla, se hace rollback automático del schema y el slug queda libre
+              para reintentar.
+            </p>
+          </div>
+
+          <dl class="rounded-md border border-gray-200 divide-y divide-gray-100 text-sm">
+            <div class="flex justify-between px-4 py-2.5">
+              <dt class="text-gray-500">Empresa</dt>
+              <dd class="text-gray-900 font-medium" id="sum-name">—</dd>
+            </div>
+            <div class="flex justify-between px-4 py-2.5">
+              <dt class="text-gray-500">Slug</dt>
+              <dd class="text-gray-900 font-mono" id="sum-slug">—</dd>
+            </div>
+            <div class="flex justify-between px-4 py-2.5">
+              <dt class="text-gray-500">Schema destino</dt>
+              <dd class="text-gray-900 font-mono" id="sum-schema">—</dd>
+            </div>
+            <div class="flex justify-between px-4 py-2.5">
+              <dt class="text-gray-500">Contacto</dt>
+              <dd class="text-gray-900" id="sum-contact">—</dd>
+            </div>
+            <div class="flex justify-between px-4 py-2.5">
+              <dt class="text-gray-500">Administrador</dt>
+              <dd class="text-gray-900 text-right">
+                <div id="sum-admin-name">—</div>
+                <div class="text-xs text-gray-500 font-mono" id="sum-admin-email">—</div>
+              </dd>
+            </div>
+          </dl>
+        </div>
+      </fieldset>
+
+      <!-- Wizard nav -->
+      <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+        <button
+          type="button"
+          id="btn-prev"
+          class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
+          disabled
+        >
+          ← Anterior
+        </button>
+
+        <div class="flex items-center gap-2">
+          <a href="/superadmin/tenants" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+          <button
+            type="button"
+            id="btn-next"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            Siguiente →
+          </button>
+          <button
+            type="submit"
+            id="btn-submit"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+            hidden
+          >
+            Provisionar empresa
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <style>
+    /* Stepper */
+    .wizard-steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .wizard-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: var(--ink-3);
+      color: var(--mute-2);
+      font-size: 13px;
+    }
+    .wizard-step-num {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--ink-4);
+      color: var(--fore-dim);
+      font-family: var(--f-mono);
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .wizard-step.is-active {
+      border-color: var(--navy-hi);
+      background: var(--navy-soft);
+      color: var(--fore);
+    }
+    .wizard-step.is-active .wizard-step-num {
+      background: var(--navy);
+      color: #fff;
+    }
+    .wizard-step.is-done {
+      border-color: var(--rule-hi);
+      background: var(--ink-2);
+      color: var(--fore-dim);
+    }
+    .wizard-step.is-done .wizard-step-num {
+      background: var(--ok);
+      color: var(--ink);
+    }
+    [data-theme='light'] .wizard-step.is-done .wizard-step-num { color: #fff; }
+
+    /* Password strength meter */
+    .strength-track {
+      height: 4px;
+      background: var(--rule);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .strength-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--err);
+      transition: width 200ms ease, background 200ms ease;
+    }
+    .strength-fill[data-level='2'] { background: var(--warn); }
+    .strength-fill[data-level='3'] { background: var(--ok); }
+    .strength-fill[data-level='4'] { background: var(--ok); }
+
+    /* Slug feedback states */
+    #slug-feedback.is-ok    { color: var(--ok); }
+    #slug-feedback.is-error { color: var(--err); }
+    #slug-feedback.is-busy  { color: var(--mute-2); }
+  </style>
+
+  <script is:inline define:vars={{ API_URL }}>
+    (function () {
+      const form = document.getElementById('tenant-wizard');
+      if (!form) return;
+
+      const steps = Array.from(form.querySelectorAll('[data-step]'));
+      const indicators = Array.from(document.querySelectorAll('[data-step-indicator]'));
+      const btnPrev   = document.getElementById('btn-prev');
+      const btnNext   = document.getElementById('btn-next');
+      const btnSubmit = document.getElementById('btn-submit');
+
+      const fName         = document.getElementById('f-name');
+      const fSlug         = document.getElementById('f-slug');
+      const fContactEmail = document.getElementById('f-contactEmail');
+      const fAdminName    = document.getElementById('f-adminName');
+      const fAdminEmail   = document.getElementById('f-adminEmail');
+      const fAdminPwd     = document.getElementById('f-adminPassword');
+
+      const slugFeedback  = document.getElementById('slug-feedback');
+      const strengthFill  = document.getElementById('strength-fill');
+      const strengthLabel = document.getElementById('strength-label');
+
+      let current = 1;
+      let slugTouched = !!fSlug.value;
+      let slugAvailable = false;
+      let lastCheckedSlug = '';
+
+      // ── Step navigation ──────────────────────────────────────────────────
+      function showStep(n) {
+        current = n;
+        steps.forEach((el) => {
+          el.hidden = String(el.dataset.step) !== String(n);
+        });
+        indicators.forEach((el) => {
+          const idx = Number(el.dataset.stepIndicator);
+          el.classList.toggle('is-active', idx === n);
+          el.classList.toggle('is-done',   idx <  n);
+        });
+        btnPrev.disabled = n === 1;
+        btnNext.hidden   = n === 3;
+        btnSubmit.hidden = n !== 3;
+        if (n === 3) renderSummary();
+      }
+
+      function validateStep(n) {
+        // Use native validation per field, but only on the current step.
+        const inputs = steps.find((el) => Number(el.dataset.step) === n)
+          .querySelectorAll('input[required], input[pattern]');
+        let firstInvalid = null;
+        for (const input of inputs) {
+          if (!input.checkValidity()) {
+            input.reportValidity();
+            firstInvalid = firstInvalid ?? input;
+          }
+        }
+        if (firstInvalid) return false;
+        // Step-specific extra checks
+        if (n === 1 && !slugAvailable) {
+          slugFeedback.textContent = 'Verificá que el slug esté disponible antes de continuar.';
+          slugFeedback.className = 'mt-1.5 text-xs is-error';
+          fSlug.focus();
+          return false;
+        }
+        return true;
+      }
+
+      btnNext.addEventListener('click', () => {
+        if (!validateStep(current)) return;
+        showStep(Math.min(current + 1, 3));
+      });
+      btnPrev.addEventListener('click', () => {
+        showStep(Math.max(current - 1, 1));
+      });
+
+      // Block "Enter" from submitting in steps 1 and 2.
+      form.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && current !== 3 && e.target.tagName === 'INPUT') {
+          e.preventDefault();
+          btnNext.click();
+        }
+      });
+
+      // ── Slug derivation + availability check ─────────────────────────────
+      function deriveSlug(name) {
+        return name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')        // strip diacritics
+          .replace(/[^a-z0-9]+/g, '-')             // non-alnum -> dash
+          .replace(/^-+|-+$/g, '')                 // trim dashes
+          .slice(0, 50);
+      }
+
+      fName.addEventListener('input', () => {
+        if (slugTouched) return;
+        const next = deriveSlug(fName.value);
+        fSlug.value = next;
+        scheduleSlugCheck();
+      });
+      fSlug.addEventListener('input', () => {
+        slugTouched = fSlug.value.length > 0;
+        scheduleSlugCheck();
+      });
+
+      let slugTimer = null;
+      function scheduleSlugCheck() {
+        if (slugTimer) clearTimeout(slugTimer);
+        slugAvailable = false;
+        slugFeedback.textContent = 'Verificando…';
+        slugFeedback.className = 'mt-1.5 text-xs is-busy';
+        slugTimer = setTimeout(checkSlug, 350);
+      }
+
+      async function checkSlug() {
+        const slug = fSlug.value.trim().toLowerCase();
+        if (!slug) {
+          slugFeedback.textContent = 'Solo letras minúsculas, números, guion y guion bajo.';
+          slugFeedback.className = 'mt-1.5 text-xs text-gray-500';
+          return;
+        }
+        lastCheckedSlug = slug;
+        try {
+          const res = await fetch(`${API_URL}/superadmin/tenants/check-slug/${encodeURIComponent(slug)}`, {
+            credentials: 'include',
+          });
+          if (!res.ok) throw new Error('check failed');
+          const json = await res.json();
+          // Ignore stale responses if the user kept typing.
+          if (lastCheckedSlug !== slug) return;
+          if (json.data && json.data.available) {
+            slugAvailable = true;
+            slugFeedback.textContent = `Disponible — el schema será tenant_${slug}.`;
+            slugFeedback.className = 'mt-1.5 text-xs is-ok';
+          } else {
+            slugAvailable = false;
+            slugFeedback.textContent = json.data && json.data.message
+              ? json.data.message
+              : 'Este slug no está disponible.';
+            slugFeedback.className = 'mt-1.5 text-xs is-error';
+          }
+        } catch {
+          slugAvailable = false;
+          slugFeedback.textContent = 'No se pudo verificar el slug. Reintentá en unos segundos.';
+          slugFeedback.className = 'mt-1.5 text-xs is-error';
+        }
+      }
+
+      // Run an initial check if the slug was prefilled (form re-entered after
+      // a server-side error).
+      if (fSlug.value) scheduleSlugCheck();
+
+      // ── Password strength ───────────────────────────────────────────────
+      function scorePassword(pwd) {
+        let score = 0;
+        if (pwd.length >= 12) score++;
+        if (pwd.length >= 16) score++;
+        if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+        if (/\d/.test(pwd) && /[^A-Za-z0-9]/.test(pwd)) score++;
+        return score; // 0..4
+      }
+      fAdminPwd.addEventListener('input', () => {
+        const score = scorePassword(fAdminPwd.value);
+        strengthFill.style.width = `${(score / 4) * 100}%`;
+        strengthFill.dataset.level = String(score);
+        const labels = [
+          'Comparte esta contraseña por un canal seguro.',
+          'Demasiado débil — usá al menos 12 caracteres.',
+          'Aceptable — agregá símbolos o longitud.',
+          'Buena fortaleza.',
+          'Excelente — fortaleza alta.',
+        ];
+        strengthLabel.textContent = labels[score];
+      });
+
+      // ── Confirmation summary ────────────────────────────────────────────
+      function renderSummary() {
+        const slug = fSlug.value.trim().toLowerCase();
+        document.getElementById('sum-name').textContent       = fName.value.trim() || '—';
+        document.getElementById('sum-slug').textContent       = slug || '—';
+        document.getElementById('sum-schema').textContent     = slug ? `tenant_${slug}` : '—';
+        document.getElementById('sum-contact').textContent    = fContactEmail.value.trim() || '—';
+        document.getElementById('sum-admin-name').textContent  = fAdminName.value.trim() || '—';
+        document.getElementById('sum-admin-email').textContent = fAdminEmail.value.trim() || '—';
+      }
+
+      // Lock the submit button on submit so the user can't double-click while
+      // provisioning runs (it can take a few seconds for the migrations).
+      form.addEventListener('submit', (e) => {
+        if (current !== 3) {
+          e.preventDefault();
+          return;
+        }
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = 'Provisionando…';
+      });
+
+      // Init
+      showStep(1);
+    })();
+  </script>
+</SuperAdminLayout>

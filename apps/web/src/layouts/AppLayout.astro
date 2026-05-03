@@ -1,4 +1,7 @@
 ---
+import type { PermissionCode } from '@payroll/types'
+import { can, getIdentity } from '../lib/auth'
+
 interface Props {
   title: string
 }
@@ -8,7 +11,8 @@ const path = Astro.url.pathname
 const returnTo = Astro.url.pathname + Astro.url.search
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const authCookie = Astro.cookies.get('auth')?.value ?? ''
+const identity = getIdentity(Astro.cookies)
+const authCookie = identity?.raw ?? ''
 let userName = 'Mi cuenta'
 let userEmail = ''
 let userInitials = 'U'
@@ -86,23 +90,23 @@ function isActive(href: string) {
   return path === href || (href !== '/dashboard' && path.startsWith(href))
 }
 
-type NavChild = { href: string; label: string }
+type NavChild = { href: string; label: string; require?: PermissionCode }
 type NavEntry =
-  | { kind: 'item'; href: string; label: string; icon: IconKey }
+  | { kind: 'item'; href: string; label: string; icon: IconKey; require?: PermissionCode }
   | { kind: 'group'; label: string; icon: IconKey; children: NavChild[] }
 
-const nav: NavEntry[] = [
+const navAll: NavEntry[] = [
   { kind: 'item', href: '/dashboard', label: 'Panel', icon: 'dashboard' },
   {
     kind: 'group',
     label: 'Estructura',
     icon: 'building',
     children: [
-      { href: '/config/estructura', label: 'Posición' },
-      { href: '/config/cargos', label: 'Cargos' },
-      { href: '/config/funciones', label: 'Funciones' },
-      { href: '/config/departamentos', label: 'Departamentos' },
-      { href: '/config/partidas', label: 'Partidas' },
+      { href: '/config/estructura', label: 'Posición', require: 'positions:read' },
+      { href: '/config/cargos', label: 'Cargos', require: 'catalogs:read' },
+      { href: '/config/funciones', label: 'Funciones', require: 'catalogs:read' },
+      { href: '/config/departamentos', label: 'Departamentos', require: 'catalogs:read' },
+      { href: '/config/partidas', label: 'Partidas', require: 'catalogs:read' },
     ],
   },
   {
@@ -110,9 +114,9 @@ const nav: NavEntry[] = [
     label: 'Personal',
     icon: 'personal',
     children: [
-      { href: '/employees', label: 'Empleados' },
-      { href: '/personal/baja', label: 'De Baja' },
-      { href: '/personal/documentos', label: 'Documentos' },
+      { href: '/employees', label: 'Empleados', require: 'employees:read' },
+      { href: '/personal/baja', label: 'De Baja', require: 'employees:read' },
+      { href: '/personal/documentos', label: 'Documentos', require: 'employees:read' },
     ],
   },
   {
@@ -120,8 +124,8 @@ const nav: NavEntry[] = [
     label: 'Préstamos',
     icon: 'loans',
     children: [
-      { href: '/config/acreedores', label: 'Acreedores' },
-      { href: '/loans', label: 'Gestión' },
+      { href: '/config/acreedores', label: 'Acreedores', require: 'creditors:read' },
+      { href: '/loans', label: 'Gestión', require: 'loans:read' },
     ],
   },
   {
@@ -129,8 +133,8 @@ const nav: NavEntry[] = [
     label: 'Asistencia',
     icon: 'clock',
     children: [
-      { href: '/attendance', label: 'Marcaciones' },
-      { href: '/attendance/shifts', label: 'Horarios' },
+      { href: '/attendance', label: 'Marcaciones', require: 'attendance:read' },
+      { href: '/attendance/shifts', label: 'Horarios', require: 'shifts:read' },
     ],
   },
   {
@@ -138,36 +142,69 @@ const nav: NavEntry[] = [
     label: 'Planilla',
     icon: 'payroll',
     children: [
-      { href: '/payroll', label: 'Cálculo' },
-      { href: '/config/conceptos', label: 'Conceptos' },
-      { href: '/config/catalogo-conceptos', label: 'Catálogos' },
+      { href: '/payroll', label: 'Cálculo', require: 'payroll:read' },
+      { href: '/config/conceptos', label: 'Conceptos', require: 'concepts:read' },
+      { href: '/config/catalogo-conceptos', label: 'Catálogos', require: 'catalogs:read' },
     ],
   },
-  { kind: 'item', href: '/acumulados', label: 'Acumulados', icon: 'acumulados' },
+  {
+    kind: 'item',
+    href: '/acumulados',
+    label: 'Acumulados',
+    icon: 'acumulados',
+    require: 'reports:payroll.view',
+  },
   {
     kind: 'group',
     label: 'Reportes',
     icon: 'chart',
     children: [
-      { href: '/reports/personal', label: 'Personal' },
-      { href: '/reports/payroll', label: 'Planilla' },
-      { href: '/reports/movements', label: 'Movimientos' },
+      { href: '/reports/personal', label: 'Personal', require: 'reports:personnel.view' },
+      { href: '/reports/payroll', label: 'Planilla', require: 'reports:payroll.view' },
+      { href: '/reports/movements', label: 'Movimientos', require: 'reports:payroll.view' },
     ],
   },
-  { kind: 'item', href: '/vacations', label: 'Vacaciones', icon: 'calendar' },
-  { kind: 'item', href: '/liquidations', label: 'Liquidaciones', icon: 'scale' },
+  {
+    kind: 'item',
+    href: '/vacations',
+    label: 'Vacaciones',
+    icon: 'calendar',
+    require: 'vacations:read',
+  },
+  {
+    kind: 'item',
+    href: '/liquidations',
+    label: 'Liquidaciones',
+    icon: 'scale',
+    require: 'payroll:read',
+  },
   {
     kind: 'group',
     label: 'Configuración',
     icon: 'gear',
     children: [
-      { href: '/config/company', label: 'Empresa' },
-      { href: '/config/users', label: 'Usuarios' },
-      { href: '/config/roles', label: 'Roles y permisos' },
-      { href: '/config/calendars', label: 'Calendarios' },
+      { href: '/config/company', label: 'Empresa', require: 'settings:company.read' },
+      { href: '/config/users', label: 'Usuarios', require: 'users:read' },
+      { href: '/config/roles', label: 'Roles y permisos', require: 'roles:read' },
+      { href: '/config/calendars', label: 'Calendarios', require: 'settings:company.read' },
     ],
   },
 ]
+
+// Filter the nav by what the current identity is allowed to see. Entries
+// without a `require` are visible to everyone; groups whose every child is
+// hidden disappear entirely so the sidebar never renders an empty section.
+const nav: NavEntry[] = navAll
+  .map((entry) => {
+    if (entry.kind === 'item') {
+      if (entry.require && !can(identity, entry.require)) return null
+      return entry
+    }
+    const visibleChildren = entry.children.filter((c) => !c.require || can(identity, c.require))
+    if (visibleChildren.length === 0) return null
+    return { ...entry, children: visibleChildren }
+  })
+  .filter((e): e is NavEntry => e !== null)
 
 function groupActive(children: NavChild[]) {
   return children.some((c) => isActive(c.href))

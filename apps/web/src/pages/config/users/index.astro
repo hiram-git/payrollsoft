@@ -1,0 +1,146 @@
+---
+import PermissionGate from '../../../components/PermissionGate.astro'
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'users:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const search = Astro.url.searchParams.get('q') ?? ''
+const status = Astro.url.searchParams.get('status') ?? ''
+
+type UserRow = {
+  id: string
+  email: string
+  name: string
+  role: string
+  isActive: boolean
+  isTenantAdmin: boolean
+  permissionsVersion: number
+  lastLoginAt: string | null
+  createdAt: string
+}
+
+let users: UserRow[] = []
+let error = ''
+
+try {
+  const params = new URLSearchParams()
+  if (search) params.set('search', search)
+  if (status === 'active') params.set('isActive', 'true')
+  if (status === 'inactive') params.set('isActive', 'false')
+
+  const res = await fetch(`${API_URL}/tenant-users${params.toString() ? `?${params}` : ''}`, {
+    headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data: UserRow[] }
+    users = json.data ?? []
+  } else if (res.status === 401) {
+    return Astro.redirect('/login')
+  } else {
+    error = 'No se pudo cargar la lista de usuarios.'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const successFlag = Astro.url.searchParams.get('created') === '1'
+const errorFlag = Astro.url.searchParams.get('error')
+---
+
+<AppLayout title="Usuarios">
+  <div class="p-8">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Usuarios</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{users.length} {users.length === 1 ? 'usuario' : 'usuarios'} en la empresa</p>
+      </div>
+      <PermissionGate require="users:create">
+        <a
+          href="/config/users/new"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo usuario
+        </a>
+      </PermissionGate>
+    </div>
+
+    {successFlag && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Usuario creado correctamente.
+      </div>
+    )}
+    {errorFlag === 'email-taken' && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        Ese correo ya está registrado en la empresa.
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <!-- Filters -->
+    <form method="GET" action="/config/users" class="mb-5 flex items-center gap-2">
+      <div class="relative flex-1 max-w-sm">
+        <svg xmlns="http://www.w3.org/2000/svg" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" name="q" value={search} placeholder="Buscar por nombre o correo…" class="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent" />
+      </div>
+      <select name="status" class="text-sm border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent">
+        <option value="" selected={status === ''}>Todos</option>
+        <option value="active" selected={status === 'active'}>Activos</option>
+        <option value="inactive" selected={status === 'inactive'}>Inactivos</option>
+      </select>
+      <button type="submit" class="px-3 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50 transition">Filtrar</button>
+    </form>
+
+    <!-- Table -->
+    <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
+      {users.length === 0 ? (
+        <div class="py-16 text-center text-sm text-gray-400">No hay usuarios para mostrar.</div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Correo</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Rol legacy</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3.5 font-medium text-gray-900">
+                  <a href={`/config/users/${u.id}`} class="hover:text-gray-600">{u.name}</a>
+                  {u.isTenantAdmin && (
+                    <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">Admin</span>
+                  )}
+                </td>
+                <td class="px-4 py-3.5 text-gray-700 font-mono text-xs">{u.email}</td>
+                <td class="px-4 py-3.5 text-gray-500 text-xs">{u.role}</td>
+                <td class="px-4 py-3.5">
+                  {u.isActive ? (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-50 text-green-700">Activo</span>
+                  ) : (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Inactivo</span>
+                  )}
+                </td>
+                <td class="px-4 py-3.5 text-right">
+                  <a href={`/config/users/${u.id}`} class="text-xs text-gray-500 hover:text-gray-900">Editar →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+</AppLayout>
