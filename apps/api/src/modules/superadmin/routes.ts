@@ -9,6 +9,8 @@ import {
   createTenant,
   findTenantBySlug,
   getProvisioningStatus,
+  listPermissionsCatalog,
+  listSuperAdminAudit,
   listTenants,
   resetTenantAdminPassword,
 } from './service'
@@ -197,6 +199,35 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
       beforeHandle: [guardSuperAdmin],
       body: t.Object({
         password: t.String({ minLength: 12, maxLength: 256 }),
+      }),
+    }
+  )
+
+  // ── GET /superadmin/permissions ────────────────────────────────────────────
+  .get(
+    '/permissions',
+    async () => ({ success: true, data: await listPermissionsCatalog(publicDb) }),
+    { beforeHandle: [guardSuperAdmin] }
+  )
+
+  // ── GET /superadmin/audit ──────────────────────────────────────────────────
+  .get(
+    '/audit',
+    async ({ query }) => {
+      const limit = query.limit ? Number.parseInt(query.limit, 10) : undefined
+      const data = await listSuperAdminAudit(publicDb, {
+        tenantId: query.tenantId,
+        action: query.action,
+        limit: Number.isFinite(limit) ? limit : undefined,
+      })
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      query: t.Object({
+        tenantId: t.Optional(t.String()),
+        action: t.Optional(t.String({ maxLength: 80 })),
+        limit: t.Optional(t.String()),
       }),
     }
   )

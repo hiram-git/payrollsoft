@@ -1,6 +1,7 @@
 import {
   type ProvisionTenantInput,
   type ProvisionTenantResult,
+  permissionsCatalog,
   provisionTenant,
   superAdminAudit,
   tenantProvisioning,
@@ -13,7 +14,7 @@ import {
  * (list, suspend, reactivate, archive). Routes stay thin and just translate
  * service results into HTTP responses.
  */
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import postgres from 'postgres'
 
 // biome-ignore lint/suspicious/noExplicitAny: Drizzle generic
@@ -125,4 +126,33 @@ export async function resetTenantAdminPassword(
   } finally {
     await sql.end()
   }
+}
+
+/**
+ * Read the master permissions catalog. Used by the super-admin UI to render
+ * the permission tree without baking it into the bundle.
+ */
+export async function listPermissionsCatalog(db: AnyDb) {
+  return db.select().from(permissionsCatalog).orderBy(permissionsCatalog.module)
+}
+
+export type AuditFilters = {
+  tenantId?: string
+  action?: string
+  limit?: number
+}
+
+/**
+ * Cross-tenant audit feed. Optional filters narrow by tenant or action; the
+ * default page size of 100 keeps responses bounded.
+ */
+export async function listSuperAdminAudit(db: AnyDb, filters: AuditFilters = {}) {
+  const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500)
+  let query = db.select().from(superAdminAudit).orderBy(desc(superAdminAudit.createdAt))
+  if (filters.tenantId) {
+    query = query.where(eq(superAdminAudit.tenantId, filters.tenantId))
+  } else if (filters.action) {
+    query = query.where(eq(superAdminAudit.action, filters.action))
+  }
+  return query.limit(limit)
 }
