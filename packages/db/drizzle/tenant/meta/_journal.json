@@ -162,6 +162,13 @@
       "when": 1762128002000,
       "tag": "0023_rbac_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1762128003000,
+      "tag": "0024_audit_log",
+      "breakpoints": true
     }
   ]
 }
