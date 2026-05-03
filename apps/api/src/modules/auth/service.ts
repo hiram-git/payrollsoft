@@ -1,4 +1,4 @@
-import { findSuperAdminByEmail, findUserByEmail } from '@payroll/db'
+import { findSuperAdminByEmail, findUserByEmail, getEffectivePermissions } from '@payroll/db'
 import { verifyPassword } from '../../lib/password'
 import type { AuthUser } from '../../middleware/auth'
 
@@ -6,14 +6,19 @@ import type { AuthUser } from '../../middleware/auth'
 type AnyDb = any
 
 /**
- * Verify tenant user credentials.
- * Returns AuthUser on success, null on failure.
+ * Verify tenant user credentials. On success, resolves the user's effective
+ * permissions (roles + inherited roles) so the caller can stamp them into
+ * the JWT for fast authorization checks on every subsequent request.
+ *
+ * `tenantSlug` is the URL/header-derived tenant identifier; we copy it into
+ * the AuthUser so middleware can compare it against future requests and
+ * detect cross-tenant token replay.
  */
 export async function verifyTenantLogin(
   db: AnyDb,
   email: string,
   password: string,
-  tenantId: string
+  tenantSlug: string
 ): Promise<AuthUser | null> {
   const user = await findUserByEmail(db, email)
   if (!user || !user.isActive) return null
@@ -21,13 +26,18 @@ export async function verifyTenantLogin(
   const valid = await verifyPassword(password, user.passwordHash)
   if (!valid) return null
 
+  const effective = await getEffectivePermissions(db, user.id)
+
   return {
     userId: user.id,
-    tenantId,
+    tenantId: tenantSlug,
+    tenantSlug,
     role: user.role as AuthUser['role'],
     type: 'user',
     name: user.name ?? undefined,
     email: user.email ?? undefined,
+    permissions: effective.permissions,
+    permissionsVersion: effective.permissionsVersion,
   }
 }
 
