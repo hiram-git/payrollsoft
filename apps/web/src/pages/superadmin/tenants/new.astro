@@ -12,9 +12,9 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const errorFlag = Astro.url.searchParams.get('error')
 const errorMessages: Record<string, string> = {
   'invalid-slug':
-    'El slug no es válido. Usa solo letras minúsculas, números, guiones y guion bajo (3 a 50 caracteres).',
-  'slug-taken': 'Ese slug ya está en uso por otra empresa.',
-  'admin-email-invalid': 'El correo del administrador es inválido.',
+    'El identificador no es válido. Usa solo letras minúsculas, números, guion y guion bajo (3 a 50 caracteres).',
+  'slug-taken': 'Ese identificador ya está en uso por otra empresa.',
+  'admin-email-invalid': 'El correo del administrador no es válido.',
   'missing-fields': 'Completa todos los campos obligatorios.',
   'weak-password': 'La contraseña debe tener al menos 12 caracteres.',
   'server-error': 'No se pudo crear la empresa. Revisa el detalle en auditoría.',
@@ -25,228 +25,246 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
 ---
 
 <SuperAdminLayout title="Nueva empresa">
-  <div class="p-8 max-w-2xl">
-    <div class="mb-6">
-      <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empresas</a>
-      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nueva empresa</h1>
-      <p class="text-sm text-gray-500 mt-0.5">
-        Provisiona un nuevo tenant en tres pasos. Al finalizar se creará el schema
-        <span class="font-mono">tenant_&lt;slug&gt;</span>, se aplicarán las migraciones
-        y se creará el administrador inicial.
-      </p>
-    </div>
+  <div class="p-8">
+    <div class="wizard-container">
+      <div class="mb-6">
+        <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empresas</a>
+        <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nueva empresa</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Completa los tres pasos para registrar la empresa. Al finalizar se crea el esquema
+          <span class="font-mono">tenant_&lt;identificador&gt;</span>, se aplican las migraciones
+          y se registra al administrador inicial.
+        </p>
+      </div>
 
-    {errorMessage && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" id="banner-server-error">{errorMessage}</div>
-    )}
+      {errorMessage && (
+        <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" id="banner-server-error">{errorMessage}</div>
+      )}
 
-    <!-- Stepper -->
-    <ol class="wizard-steps mb-6">
-      <li class="wizard-step is-active" data-step-indicator="1">
-        <span class="wizard-step-num">1</span>
-        <span class="wizard-step-label">Empresa</span>
-      </li>
-      <li class="wizard-step" data-step-indicator="2">
-        <span class="wizard-step-num">2</span>
-        <span class="wizard-step-label">Administrador</span>
-      </li>
-      <li class="wizard-step" data-step-indicator="3">
-        <span class="wizard-step-num">3</span>
-        <span class="wizard-step-label">Confirmación</span>
-      </li>
-    </ol>
+      <!-- Stepper -->
+      <ol class="wizard-steps mb-6">
+        <li class="wizard-step is-active" data-step-indicator="1">
+          <span class="wizard-step-num">1</span>
+          <span class="wizard-step-label">Empresa</span>
+        </li>
+        <li class="wizard-step" data-step-indicator="2">
+          <span class="wizard-step-num">2</span>
+          <span class="wizard-step-label">Administrador</span>
+        </li>
+        <li class="wizard-step" data-step-indicator="3">
+          <span class="wizard-step-num">3</span>
+          <span class="wizard-step-label">Confirmación</span>
+        </li>
+      </ol>
 
-    <form
-      id="tenant-wizard"
-      method="POST"
-      action="/api/superadmin/tenants/create"
-      class="space-y-5 bg-white border border-gray-200 rounded-lg p-6"
-      novalidate
-    >
-      <!-- ── Step 1: Empresa ─────────────────────────────────────────── -->
-      <fieldset class="wizard-fieldset" data-step="1">
-        <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre comercial</label>
-          <input
-            id="f-name"
-            type="text"
-            name="name"
-            required
-            minlength="1"
-            maxlength="255"
-            value={prefillName}
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            placeholder="Ej. Acme Panamá, S.A."
-            autocomplete="off"
-          />
-          <p class="mt-1.5 text-xs text-gray-500">El slug se sugerirá automáticamente a partir de este nombre. Podés ajustarlo abajo.</p>
-        </div>
-
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Slug</label>
-          <input
-            id="f-slug"
-            type="text"
-            name="slug"
-            required
-            minlength="3"
-            maxlength="50"
-            value={prefillSlug}
-            pattern="[a-z0-9][a-z0-9_-]{2,49}"
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            placeholder="acme"
-            autocomplete="off"
-          />
-          <p id="slug-feedback" class="mt-1.5 text-xs text-gray-500">
-            Solo letras minúsculas, números, guion y guion bajo. No se podrá cambiar después.
-          </p>
-        </div>
-
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">
-            Correo de contacto <span class="text-gray-400 font-normal">(opcional)</span>
-          </label>
-          <input
-            id="f-contactEmail"
-            type="email"
-            name="contactEmail"
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            placeholder="contacto@empresa.com"
-          />
-        </div>
-      </fieldset>
-
-      <!-- ── Step 2: Administrador ───────────────────────────────────── -->
-      <fieldset class="wizard-fieldset" data-step="2" hidden>
-        <div>
-          <h2 class="text-sm font-medium text-gray-700">Administrador inicial</h2>
-          <p class="text-xs text-gray-500 mt-0.5">
-            Recibe el rol <span class="font-mono">tenant_admin</span> y la marca
-            <span class="font-mono">is_tenant_admin</span>.
-          </p>
-        </div>
-
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre completo</label>
-          <input
-            id="f-adminName"
-            type="text"
-            name="adminName"
-            required
-            minlength="1"
-            maxlength="255"
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-          />
-        </div>
-
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Correo</label>
-          <input
-            id="f-adminEmail"
-            type="email"
-            name="adminEmail"
-            required
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-          />
-        </div>
-
-        <div class="mt-4">
-          <label class="block text-xs font-medium text-gray-600 mb-1.5">Contraseña inicial</label>
-          <input
-            id="f-adminPassword"
-            type="password"
-            name="adminPassword"
-            required
-            minlength="12"
-            maxlength="256"
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-            placeholder="Mínimo 12 caracteres"
-          />
-          <div class="mt-2">
-            <div class="strength-track">
-              <div class="strength-fill" id="strength-fill"></div>
-            </div>
-            <p id="strength-label" class="mt-1.5 text-xs text-gray-500">
-              Comparte esta contraseña con el administrador por un canal seguro.
-            </p>
-          </div>
-        </div>
-      </fieldset>
-
-      <!-- ── Step 3: Confirmación ────────────────────────────────────── -->
-      <fieldset class="wizard-fieldset" data-step="3" hidden>
-        <div class="space-y-4">
+      <form
+        id="tenant-wizard"
+        method="POST"
+        action="/api/superadmin/tenants/create"
+        class="space-y-5 bg-white border border-gray-200 rounded-lg p-6"
+        novalidate
+      >
+        <!-- ── Paso 1: Empresa ─────────────────────────────────────────── -->
+        <fieldset class="wizard-fieldset" data-step="1">
           <div>
-            <h2 class="text-sm font-medium text-gray-700">Confirmá los datos</h2>
-            <p class="text-xs text-gray-500 mt-0.5">
-              Al provisionar se ejecutarán las migraciones y la creación del admin de forma
-              transaccional. Si falla, se hace rollback automático del schema y el slug queda libre
-              para reintentar.
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre comercial</label>
+            <input
+              id="f-name"
+              type="text"
+              name="name"
+              required
+              minlength="1"
+              maxlength="255"
+              value={prefillName}
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Ej. Acme Panamá, S.A."
+              autocomplete="off"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">El identificador se sugiere automáticamente a partir de este nombre. Puedes ajustarlo abajo.</p>
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Identificador (slug)</label>
+            <input
+              id="f-slug"
+              type="text"
+              name="slug"
+              required
+              minlength="3"
+              maxlength="50"
+              value={prefillSlug}
+              pattern="[a-z0-9][a-z0-9_-]{2,49}"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="acme"
+              autocomplete="off"
+            />
+            <p id="slug-feedback" class="mt-1.5 text-xs text-gray-500">
+              Solo letras minúsculas, números, guion y guion bajo. No se puede cambiar después.
             </p>
           </div>
 
-          <dl class="rounded-md border border-gray-200 divide-y divide-gray-100 text-sm">
-            <div class="flex justify-between px-4 py-2.5">
-              <dt class="text-gray-500">Empresa</dt>
-              <dd class="text-gray-900 font-medium" id="sum-name">—</dd>
-            </div>
-            <div class="flex justify-between px-4 py-2.5">
-              <dt class="text-gray-500">Slug</dt>
-              <dd class="text-gray-900 font-mono" id="sum-slug">—</dd>
-            </div>
-            <div class="flex justify-between px-4 py-2.5">
-              <dt class="text-gray-500">Schema destino</dt>
-              <dd class="text-gray-900 font-mono" id="sum-schema">—</dd>
-            </div>
-            <div class="flex justify-between px-4 py-2.5">
-              <dt class="text-gray-500">Contacto</dt>
-              <dd class="text-gray-900" id="sum-contact">—</dd>
-            </div>
-            <div class="flex justify-between px-4 py-2.5">
-              <dt class="text-gray-500">Administrador</dt>
-              <dd class="text-gray-900 text-right">
-                <div id="sum-admin-name">—</div>
-                <div class="text-xs text-gray-500 font-mono" id="sum-admin-email">—</div>
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </fieldset>
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">
+              Correo de contacto <span class="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              id="f-contactEmail"
+              type="email"
+              name="contactEmail"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="contacto@empresa.com"
+            />
+          </div>
+        </fieldset>
 
-      <!-- Wizard nav -->
-      <div class="flex items-center justify-between pt-4 border-t border-gray-200">
-        <button
-          type="button"
-          id="btn-prev"
-          class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
-          disabled
-        >
-          ← Anterior
-        </button>
+        <!-- ── Paso 2: Administrador ───────────────────────────────────── -->
+        <fieldset class="wizard-fieldset" data-step="2" hidden>
+          <div>
+            <h2 class="text-sm font-medium text-gray-700">Administrador inicial</h2>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Recibe el rol <span class="font-mono">tenant_admin</span> y queda marcado como
+              administrador único de la empresa.
+            </p>
+          </div>
 
-        <div class="flex items-center gap-2">
-          <a href="/superadmin/tenants" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre completo</label>
+            <input
+              id="f-adminName"
+              type="text"
+              name="adminName"
+              required
+              minlength="1"
+              maxlength="255"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            />
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Correo</label>
+            <input
+              id="f-adminEmail"
+              type="email"
+              name="adminEmail"
+              required
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            />
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Contraseña inicial</label>
+            <input
+              id="f-adminPassword"
+              type="password"
+              name="adminPassword"
+              required
+              minlength="12"
+              maxlength="256"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Mínimo 12 caracteres"
+            />
+            <div class="mt-2">
+              <div class="strength-track">
+                <div class="strength-fill" id="strength-fill"></div>
+              </div>
+              <p id="strength-label" class="mt-1.5 text-xs text-gray-500">
+                Comparte esta contraseña con el administrador por un canal seguro.
+              </p>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- ── Paso 3: Confirmación ────────────────────────────────────── -->
+        <fieldset class="wizard-fieldset" data-step="3" hidden>
+          <div class="space-y-4">
+            <div>
+              <h2 class="text-sm font-medium text-gray-700">Confirma los datos</h2>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Al crear la empresa se ejecutan las migraciones y se registra al administrador de
+                forma transaccional. Si algo falla, el sistema realiza un rollback automático del
+                esquema y el identificador queda libre para reintentar.
+              </p>
+            </div>
+
+            <div
+              id="validation-banner"
+              class="hidden rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800"
+              role="alert"
+            >
+              <p class="font-medium mb-1">Faltan datos por completar</p>
+              <ul id="validation-list" class="list-disc pl-5 text-xs space-y-0.5"></ul>
+            </div>
+
+            <dl class="rounded-md border border-gray-200 divide-y divide-gray-100 text-sm">
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Empresa</dt>
+                <dd class="text-gray-900 font-medium" id="sum-name">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Identificador</dt>
+                <dd class="text-gray-900 font-mono" id="sum-slug">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Esquema destino</dt>
+                <dd class="text-gray-900 font-mono" id="sum-schema">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Contacto</dt>
+                <dd class="text-gray-900" id="sum-contact">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Administrador</dt>
+                <dd class="text-gray-900 text-right">
+                  <div id="sum-admin-name">—</div>
+                  <div class="text-xs text-gray-500 font-mono" id="sum-admin-email">—</div>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </fieldset>
+
+        <!-- Wizard nav -->
+        <div class="flex items-center justify-between pt-4 border-t border-gray-200">
           <button
             type="button"
-            id="btn-next"
-            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+            id="btn-prev"
+            class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
+            disabled
           >
-            Siguiente →
+            ← Anterior
           </button>
-          <button
-            type="submit"
-            id="btn-submit"
-            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-            hidden
-          >
-            Provisionar empresa
-          </button>
+
+          <div class="flex items-center gap-2">
+            <a href="/superadmin/tenants" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+            <button
+              type="button"
+              id="btn-next"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              Siguiente →
+            </button>
+            <button
+              type="submit"
+              id="btn-submit"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              hidden
+            >
+              Crear Empresa
+            </button>
+          </div>
         </div>
-      </div>
-    </form>
+      </form>
+    </div>
   </div>
 
   <style>
+    /* Wizard sits inside a full-bleed page; the form itself stays
+       comfortable on wide screens. */
+    .wizard-container {
+      width: 100%;
+      max-width: 720px;
+    }
+
     /* Stepper */
     .wizard-steps {
       list-style: none;
@@ -344,6 +362,8 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
       const slugFeedback  = document.getElementById('slug-feedback');
       const strengthFill  = document.getElementById('strength-fill');
       const strengthLabel = document.getElementById('strength-label');
+      const validationBanner = document.getElementById('validation-banner');
+      const validationList   = document.getElementById('validation-list');
 
       let current = 1;
       let slugTouched = !!fSlug.value;
@@ -362,13 +382,21 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           el.classList.toggle('is-done',   idx <  n);
         });
         btnPrev.disabled = n === 1;
-        btnNext.hidden   = n === 3;
-        btnSubmit.hidden = n !== 3;
-        if (n === 3) renderSummary();
+        // On the final step we hide "Siguiente" entirely; the submit button
+        // is rendered (or not) by refreshSubmitVisibility() based on the
+        // overall validity of the form.
+        btnNext.hidden = n === 3;
+        if (n === 3) {
+          renderSummary();
+        } else {
+          btnSubmit.hidden = true;
+        }
+        refreshSubmitVisibility();
       }
 
+      // Per-step validation only — used by "Siguiente". Reports inline
+      // through the native validity API and the slug feedback line.
       function validateStep(n) {
-        // Use native validation per field, but only on the current step.
         const inputs = steps.find((el) => Number(el.dataset.step) === n)
           .querySelectorAll('input[required], input[pattern]');
         let firstInvalid = null;
@@ -379,14 +407,61 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           }
         }
         if (firstInvalid) return false;
-        // Step-specific extra checks
         if (n === 1 && !slugAvailable) {
-          slugFeedback.textContent = 'Verificá que el slug esté disponible antes de continuar.';
+          slugFeedback.textContent = 'Verifica que el identificador esté disponible antes de continuar.';
           slugFeedback.className = 'mt-1.5 text-xs is-error';
           fSlug.focus();
           return false;
         }
         return true;
+      }
+
+      // Cross-step validity used to decide whether to render "Crear Empresa".
+      // Returns the list of human-readable reasons the form isn't ready yet.
+      function listAllProblems() {
+        const problems = [];
+        if (!fName.checkValidity() || fName.value.trim().length === 0) {
+          problems.push('Ingresa el nombre comercial.');
+        }
+        if (!fSlug.checkValidity()) {
+          problems.push('El identificador no cumple el formato requerido.');
+        } else if (!slugAvailable) {
+          problems.push('El identificador no está confirmado como disponible.');
+        }
+        if (fContactEmail.value && !fContactEmail.checkValidity()) {
+          problems.push('El correo de contacto no es válido.');
+        }
+        if (!fAdminName.checkValidity() || fAdminName.value.trim().length === 0) {
+          problems.push('Ingresa el nombre del administrador.');
+        }
+        if (!fAdminEmail.checkValidity() || fAdminEmail.value.trim().length === 0) {
+          problems.push('Ingresa un correo válido para el administrador.');
+        }
+        if (fAdminPwd.value.length < 12) {
+          problems.push('La contraseña inicial debe tener al menos 12 caracteres.');
+        }
+        return problems;
+      }
+
+      function refreshSubmitVisibility() {
+        if (current !== 3) {
+          btnSubmit.hidden = true;
+          if (validationBanner) validationBanner.classList.add('hidden');
+          return;
+        }
+        const problems = listAllProblems();
+        if (problems.length === 0) {
+          btnSubmit.hidden = false;
+          if (validationBanner) validationBanner.classList.add('hidden');
+        } else {
+          btnSubmit.hidden = true;
+          if (validationBanner && validationList) {
+            validationList.innerHTML = problems
+              .map((p) => `<li>${p.replace(/</g, '&lt;')}</li>`)
+              .join('');
+            validationBanner.classList.remove('hidden');
+          }
+        }
       }
 
       btnNext.addEventListener('click', () => {
@@ -404,6 +479,10 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           btnNext.click();
         }
       });
+
+      // Re-check validity on any input — keeps the final button responsive
+      // when the user goes back to fix something, then forward again.
+      form.addEventListener('input', refreshSubmitVisibility);
 
       // ── Slug derivation + availability check ─────────────────────────────
       function deriveSlug(name) {
@@ -434,6 +513,7 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         slugFeedback.textContent = 'Verificando…';
         slugFeedback.className = 'mt-1.5 text-xs is-busy';
         slugTimer = setTimeout(checkSlug, 350);
+        refreshSubmitVisibility();
       }
 
       async function checkSlug() {
@@ -441,6 +521,7 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         if (!slug) {
           slugFeedback.textContent = 'Solo letras minúsculas, números, guion y guion bajo.';
           slugFeedback.className = 'mt-1.5 text-xs text-gray-500';
+          refreshSubmitVisibility();
           return;
         }
         lastCheckedSlug = slug;
@@ -454,19 +535,21 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           if (lastCheckedSlug !== slug) return;
           if (json.data && json.data.available) {
             slugAvailable = true;
-            slugFeedback.textContent = `Disponible — el schema será tenant_${slug}.`;
+            slugFeedback.textContent = `Disponible — el esquema será tenant_${slug}.`;
             slugFeedback.className = 'mt-1.5 text-xs is-ok';
           } else {
             slugAvailable = false;
             slugFeedback.textContent = json.data && json.data.message
               ? json.data.message
-              : 'Este slug no está disponible.';
+              : 'Este identificador no está disponible.';
             slugFeedback.className = 'mt-1.5 text-xs is-error';
           }
         } catch {
           slugAvailable = false;
-          slugFeedback.textContent = 'No se pudo verificar el slug. Reintentá en unos segundos.';
+          slugFeedback.textContent = 'No se pudo verificar el identificador. Intenta de nuevo en unos segundos.';
           slugFeedback.className = 'mt-1.5 text-xs is-error';
+        } finally {
+          refreshSubmitVisibility();
         }
       }
 
@@ -489,8 +572,8 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         strengthFill.dataset.level = String(score);
         const labels = [
           'Comparte esta contraseña por un canal seguro.',
-          'Demasiado débil — usá al menos 12 caracteres.',
-          'Aceptable — agregá símbolos o longitud.',
+          'Demasiado débil — usa al menos 12 caracteres.',
+          'Aceptable — agrega símbolos o más longitud.',
           'Buena fortaleza.',
           'Excelente — fortaleza alta.',
         ];
@@ -515,8 +598,13 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           e.preventDefault();
           return;
         }
+        if (listAllProblems().length > 0) {
+          e.preventDefault();
+          refreshSubmitVisibility();
+          return;
+        }
         btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Provisionando…';
+        btnSubmit.textContent = 'Creando empresa…';
       });
 
       // Init
