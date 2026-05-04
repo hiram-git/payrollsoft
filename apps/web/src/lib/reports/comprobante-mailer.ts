@@ -3,9 +3,9 @@ import React from 'react'
 import { buildPayslipEmail } from '../email-templates/payslip'
 import { type CompanyMailFields, mailerConfigFromCompany, sendMail } from '../mailer'
 import { type StubEmployee, type StubLine, type StubPayroll, StubPdf } from '../pdf/stub-pdf'
+import { resolveTenantSlugFromCookie } from '../tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 const REPORT_LINES_LIMIT = 100000
 
 type ApiPayrollResponse = {
@@ -86,7 +86,10 @@ export async function sendComprobanteEmails(
   authCookie: string,
   lineIds: string[] | null
 ): Promise<SendResult> {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+  const headers = {
+    Cookie: `auth=${authCookie}`,
+    'X-Tenant': resolveTenantSlugFromCookie(authCookie),
+  }
 
   const payrollUrl = new URL(`${API_URL}/payroll/${payrollId}`)
   payrollUrl.searchParams.set('linesPage', '1')

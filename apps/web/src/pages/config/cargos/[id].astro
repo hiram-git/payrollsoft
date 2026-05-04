@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 const { id } = Astro.params
 
@@ -19,7 +21,7 @@ let cargo: Cargo | null = null
 
 try {
   const res = await fetch(`${API_URL}/cargos/${id}`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.status === 401) return Astro.redirect('/login')
   if (res.status === 404) return Astro.redirect('/config/cargos')

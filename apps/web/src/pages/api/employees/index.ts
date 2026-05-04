@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo' // TODO: read from session when multi-tenant UI is wired
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''

@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 // Mandatory global filter — same cookie used by the topbar selector
 // and every other module in the app. The PDF endpoint reads the cookie
@@ -24,7 +26,7 @@ type ApiEmployee = {
   isActive: boolean
 }
 
-const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 
 // Resolve the active type's display name (best-effort; the page still
 // works without it — we just won't show the chip).
