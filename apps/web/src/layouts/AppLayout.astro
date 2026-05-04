@@ -384,6 +384,13 @@ const icons: Record<IconKey, string> = {
         -webkit-font-smoothing: antialiased;
         letter-spacing: -0.005em;
         transition: background 180ms ease, color 180ms ease;
+        /* Body itself is the outermost flex column — banner (when present)
+           stacks above the app-shell, and the shell consumes whatever
+           height is left without hardcoding pixel offsets. */
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
       }
       ::selection { background: var(--navy); color: #fff; }
       ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -394,7 +401,8 @@ const icons: Record<IconKey, string> = {
       /* ── App shell ──────────────────────────────────────── */
       .app-shell {
         display: flex;
-        height: 100vh;
+        flex: 1;
+        min-height: 0;
         width: 100vw;
         overflow: hidden;
       }
@@ -1032,7 +1040,6 @@ const icons: Record<IconKey, string> = {
         font-family: var(--f-sans);
       }
       .impersonation-banner button:hover { background: rgba(255,255,255,0.28); }
-      .app-shell.with-banner { height: calc(100vh - 35px); }
     </style>
   </head>
   <body>
@@ -1055,7 +1062,7 @@ const icons: Record<IconKey, string> = {
       </div>
     )}
 
-    <div class={`app-shell${identity?.impersonatedBy ? ' with-banner' : ''}`}>
+    <div class="app-shell">
 
       <!-- Sidebar -->
       <aside class="sidebar">
