@@ -4,6 +4,7 @@ import {
   integer,
   jsonb,
   pgTable,
+  text,
   time,
   timestamp,
   uuid,
@@ -25,9 +26,21 @@ export const shifts = pgTable('shifts', {
   lunchEndToleranceAfter: integer('lunch_end_tolerance_after').notNull().default(0),
   exitToleranceBefore: integer('exit_tolerance_before').notNull().default(0),
   exitToleranceAfter: integer('exit_tolerance_after').notNull().default(0),
+  /** ISO weekdays (1=Mon..7=Sun) the shift applies to. Defaults to M-F. */
+  weekdays: integer('weekdays').array().notNull().default([1, 2, 3, 4, 5]),
   isDefault: boolean('is_default').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
+
+export const workCalendar = pgTable('work_calendar', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  date: date('date').notNull().unique(),
+  shiftId: uuid('shift_id'),
+  isWorkday: boolean('is_workday').notNull().default(true),
+  notes: text('notes'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const tolerances = pgTable('tolerances', {
@@ -60,3 +73,5 @@ export type ShiftRow = Shift
 export type Tolerance = typeof tolerances.$inferSelect
 export type AttendanceRecord = typeof attendanceRecords.$inferSelect
 export type NewAttendanceRecord = typeof attendanceRecords.$inferInsert
+export type WorkCalendarRow = typeof workCalendar.$inferSelect
+export type NewWorkCalendarRow = typeof workCalendar.$inferInsert

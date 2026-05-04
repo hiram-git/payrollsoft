@@ -46,7 +46,16 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     lunchEndToleranceAfter: gInt('lunchEndToleranceAfter'),
     exitToleranceBefore: gInt('exitToleranceBefore'),
     exitToleranceAfter: gInt('exitToleranceAfter'),
+    weekdays: form
+      .getAll('weekdays')
+      .map((v) => Number.parseInt(String(v), 10))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 7),
     isDefault: g('isDefault') === 'on' || g('isDefault') === 'true',
+  }
+  if (body.weekdays.length === 0) {
+    return redirect(
+      `/attendance/shifts/${id}?error=${encodeURIComponent('Selecciona al menos un día de la semana')}`
+    )
   }
 
   let res: Response

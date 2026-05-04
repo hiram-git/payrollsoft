@@ -169,6 +169,13 @@
       "when": 1762128003000,
       "tag": "0024_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1762128004000,
+      "tag": "0025_shifts_weekdays_and_work_calendar",
+      "breakpoints": true
     }
   ]
 }
