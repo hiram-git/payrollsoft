@@ -131,6 +131,10 @@ export async function provisionTenant(
       await runMigrations(tenant, { folder, schemaLabel: schemaName, log })
 
       adminUserId = await seedTenantBootstrapData(tenant, input.admin)
+      await seedCompanyConfig(tenant, {
+        companyName: input.name,
+        contactEmail: input.contactEmail ?? null,
+      })
     } finally {
       await tenant.end()
     }
@@ -255,4 +259,26 @@ async function seedTenantBootstrapData(
   `
 
   return adminUserId
+}
+
+/**
+ * Seed the singleton company_config row with the wizard-supplied basic
+ * data. The table is meant to hold a single row that the
+ * /config/company UI later edits — using INSERT ... WHERE NOT EXISTS
+ * keeps this idempotent so re-running provisioning never wipes any
+ * fields a tenant admin filled in afterwards.
+ *
+ * Only the two fields the wizard actually captures (companyName,
+ * email) are written; every other column keeps its schema default
+ * until the company-settings page is filled in.
+ */
+async function seedCompanyConfig(
+  tenant: postgres.Sql,
+  data: { companyName: string; contactEmail: string | null }
+): Promise<void> {
+  await tenant`
+    INSERT INTO company_config (company_name, email)
+    SELECT ${data.companyName}, ${data.contactEmail}
+     WHERE NOT EXISTS (SELECT 1 FROM company_config)
+  `
 }
