@@ -7,6 +7,7 @@ import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
 import { attendanceRoutes } from './modules/attendance/routes'
 import { authRoutes } from './modules/auth/routes'
+import { calendarRoutes } from './modules/calendar/routes'
 import { cargosRoutes } from './modules/catalogs/cargos/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
 import { cuentasContablesRoutes } from './modules/catalogs/cuentas-contables/routes'
@@ -46,6 +47,7 @@ const app = new Elysia()
   }))
   .use(authRoutes)
   .use(superadminRoutes)
+  .use(calendarRoutes)
   .use(roleRoutes)
   .use(userRoleRoutes)
   .use(tenantUserRoutes)

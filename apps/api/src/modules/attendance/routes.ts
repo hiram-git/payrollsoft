@@ -30,6 +30,7 @@ const ShiftBody = t.Object({
   lunchEndToleranceAfter: t.Optional(t.Number()),
   exitToleranceBefore: t.Optional(t.Number()),
   exitToleranceAfter: t.Optional(t.Number()),
+  weekdays: t.Optional(t.Array(t.Integer({ minimum: 1, maximum: 7 }), { maxItems: 7 })),
   isDefault: t.Optional(t.Boolean()),
 })
 

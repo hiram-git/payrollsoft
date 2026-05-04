@@ -930,6 +930,8 @@ export type CreateShiftData = {
   lunchEndToleranceAfter?: number
   exitToleranceBefore?: number
   exitToleranceAfter?: number
+  /** ISO weekdays (1=Mon..7=Sun) the shift applies to. */
+  weekdays?: number[]
   isDefault?: boolean
 }
 
@@ -950,6 +952,7 @@ export async function createShift(db: Db, data: CreateShiftData) {
       lunchEndToleranceAfter: data.lunchEndToleranceAfter ?? 0,
       exitToleranceBefore: data.exitToleranceBefore ?? 0,
       exitToleranceAfter: data.exitToleranceAfter ?? 0,
+      weekdays: data.weekdays ?? [1, 2, 3, 4, 5],
       isDefault: data.isDefault ?? false,
     })
     .returning()
@@ -976,6 +979,7 @@ export async function updateShift(db: Db, id: string, data: Partial<CreateShiftD
     patch.lunchEndToleranceAfter = data.lunchEndToleranceAfter
   if (data.exitToleranceBefore !== undefined) patch.exitToleranceBefore = data.exitToleranceBefore
   if (data.exitToleranceAfter !== undefined) patch.exitToleranceAfter = data.exitToleranceAfter
+  if (data.weekdays !== undefined) patch.weekdays = data.weekdays
   if (data.isDefault !== undefined) patch.isDefault = data.isDefault
   const [row] = await db.update(shifts).set(patch).where(eq(shifts.id, id)).returning()
   return row ?? null
