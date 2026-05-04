@@ -6,9 +6,9 @@ import {
 } from '../../../../../lib/reports/payroll-data'
 import { renderPayrollPdfBuffer } from '../../../../../lib/reports/payroll-pdf-renderer'
 import { getReportStorage } from '../../../../../lib/reports/storage'
+import { resolveTenantSlugFromCookie } from '../../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 type ReportState = {
   status: 'generated' | 'not_generated'
@@ -32,6 +32,7 @@ type ReportState = {
 export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const { id } = params
   if (!id) return new Response('ID de planilla requerido', { status: 400 })

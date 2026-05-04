@@ -61,7 +61,10 @@ let payrollTypes: PayrollType[] = []
 if (authCookie) {
   try {
     const res = await fetch(`${API_URL}/concepts/config`, {
-      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+      headers: {
+        Cookie: `auth=${authCookie}`,
+        'X-Tenant': identity?.tenantSlug ?? 'demo',
+      },
     })
     if (res.ok) {
       const json = (await res.json()) as { data?: { payrollTypes?: PayrollType[] } }

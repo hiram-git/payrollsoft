@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 // The navbar's payroll-type selector persists its choice in this cookie.
 // Using it as a server-side filter means the listing reacts automatically
@@ -40,7 +42,7 @@ let payrollReportMode: 'on_demand' | 'file_storage' = 'on_demand'
 try {
   const params = new URLSearchParams({ page: '1', limit: '500' })
   if (activeTypeId) params.set('payrollTypeId', activeTypeId)
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [res, companyRes] = await Promise.all([
     fetch(`${API_URL}/payroll?${params}`, { headers }),
     fetch(`${API_URL}/company`, { headers }),

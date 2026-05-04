@@ -1,9 +1,9 @@
 import type { APIRoute } from 'astro'
 import { fetchPersonnelReportData, personnelFileSlug } from '../../../../lib/reports/personnel-data'
 import { renderPersonnelPdfBuffer } from '../../../../lib/reports/personnel-pdf-renderer'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 /**
  * Decode the auth JWT (payload only) so we can stamp the generator
@@ -39,6 +39,7 @@ function decodeJwtPayload(token: string): { name?: string; email?: string } | nu
 export const GET: APIRoute = async ({ cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const cookieTypeId = cookies.get('payroll.activeTypeId')?.value ?? null
   const queryTypeId = url.searchParams.get('payrollTypeId')
