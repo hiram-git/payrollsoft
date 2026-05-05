@@ -7,8 +7,6 @@ if (!identity || identity.type !== 'super_admin') {
   return Astro.redirect('/superadmin/login')
 }
 
-const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-
 const errorFlag = Astro.url.searchParams.get('error')
 const errorMessages: Record<string, string> = {
   'invalid-slug':
@@ -341,7 +339,7 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
     #slug-feedback.is-busy  { color: var(--mute-2); }
   </style>
 
-  <script is:inline define:vars={{ API_URL }}>
+  <script is:inline>
     (function () {
       const form = document.getElementById('tenant-wizard');
       if (!form) return;
@@ -526,8 +524,12 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         }
         lastCheckedSlug = slug;
         try {
-          const res = await fetch(`${API_URL}/superadmin/tenants/check-slug/${encodeURIComponent(slug)}`, {
-            credentials: 'include',
+          // Hit the same-origin proxy (apps/web) so the auth cookie is
+          // forwarded server-to-server. Calling the API directly fails
+          // cross-origin in production where the cookie lives on the
+          // web's host, not the API's.
+          const res = await fetch(`/api/superadmin/tenants/check-slug/${encodeURIComponent(slug)}`, {
+            credentials: 'same-origin',
           });
           if (!res.ok) throw new Error('check failed');
           const json = await res.json();
