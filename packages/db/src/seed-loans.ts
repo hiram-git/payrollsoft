@@ -24,7 +24,7 @@ if (!url) {
 
 const args = process.argv.slice(2)
 const tenantFlag = args.find((a) => a.startsWith('--tenant='))
-const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : 'demo'
+const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : (process.env.SEED_TENANT ?? 'demo')
 const BATCH_SIZE = 500
 
 const sql = postgres(url, {
