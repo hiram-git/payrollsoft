@@ -18,12 +18,28 @@ type Shift = {
   weekdays: number[]
 }
 
+type CalendarDay = {
+  id: string
+  date: string
+  isWorkday: boolean
+  notes: string | null
+  shift: {
+    id: string
+    name: string
+    entryTime: string
+    lunchStartTime: string | null
+    lunchEndTime: string | null
+    exitTime: string
+  } | null
+}
+
 let shifts: Shift[] = []
 let years: number[] = []
 let error = ''
 
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
 try {
-  const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
   const [sRes, yRes] = await Promise.all([
     fetch(`${API_URL}/attendance/shifts`, { headers }),
     fetch(`${API_URL}/calendar/years`, { headers }),
@@ -60,6 +76,75 @@ const monthLabels = [
 
 const weekdayLabel = (n: number) =>
   ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'][n - 1] ?? String(n)
+
+// ── Visor mensual ────────────────────────────────────────────────────────
+// El selector de año/mes vive en la URL para que la vista sea bookmarkable
+// y los enlaces "anterior/siguiente" no requieran JS. Default: el año más
+// reciente con datos (o el actual si no hay) y el mes de hoy.
+const today = new Date()
+const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+const defaultYear = years.length > 0 ? Math.max(...years) : currentYear
+const requestedYear = Number.parseInt(Astro.url.searchParams.get('view-year') ?? '', 10)
+const requestedMonth = Number.parseInt(Astro.url.searchParams.get('view-month') ?? '', 10)
+const viewYear =
+  Number.isInteger(requestedYear) && requestedYear >= 1970 && requestedYear <= 2100
+    ? requestedYear
+    : defaultYear
+const viewMonth =
+  Number.isInteger(requestedMonth) && requestedMonth >= 1 && requestedMonth <= 12
+    ? requestedMonth
+    : today.getMonth() + 1
+
+function lastDayOfMonth(y: number, m: number) {
+  return new Date(y, m, 0).getDate()
+}
+function isoWeekdayUtc(y: number, m: number, d: number) {
+  const js = new Date(Date.UTC(y, m - 1, d)).getUTCDay()
+  return js === 0 ? 7 : js
+}
+function pad2(n: number) {
+  return String(n).padStart(2, '0')
+}
+function fmtTime(t: string | null | undefined) {
+  if (!t) return ''
+  // Postgres `time` se serializa como "HH:MM:SS"; recortamos a "HH:MM"
+  // para densidad visual en celdas pequeñas.
+  return t.length >= 5 ? t.slice(0, 5) : t
+}
+
+const lastDay = lastDayOfMonth(viewYear, viewMonth)
+const viewFrom = `${viewYear}-${pad2(viewMonth)}-01`
+const viewTo = `${viewYear}-${pad2(viewMonth)}-${pad2(lastDay)}`
+
+let monthDays: CalendarDay[] = []
+let monthError = ''
+try {
+  const dRes = await fetch(`${API_URL}/calendar?from=${viewFrom}&to=${viewTo}`, { headers })
+  if (dRes.ok) {
+    monthDays = ((await dRes.json()) as { data: CalendarDay[] }).data ?? []
+  } else if (dRes.status !== 401) {
+    monthError = 'No se pudo cargar el calendario del mes seleccionado.'
+  }
+} catch {
+  monthError = 'No se pudo conectar con el servidor.'
+}
+const dayMap = new Map<string, CalendarDay>()
+for (const d of monthDays) dayMap.set(d.date, d)
+
+// Padding previo al día 1 para que la grilla empiece en lunes (ISO).
+const leadingBlanks = isoWeekdayUtc(viewYear, viewMonth, 1) - 1
+const dayCells = Array.from({ length: lastDay }, (_, i) => i + 1)
+
+// Navegación mes anterior / siguiente (con wrap de año).
+const prevMonth = viewMonth === 1 ? 12 : viewMonth - 1
+const prevYear = viewMonth === 1 ? viewYear - 1 : viewYear
+const nextMonth = viewMonth === 12 ? 1 : viewMonth + 1
+const nextYear = viewMonth === 12 ? viewYear + 1 : viewYear
+
+// Años disponibles para el selector del visor: combinamos lo que ya hay en
+// DB con un par de futuros razonables, dedupe y orden descendente.
+const viewerYears = Array.from(new Set([...years, ...yearOptions])).sort((a, b) => b - a)
 ---
 
 <AppLayout title="Calendario empresarial">
@@ -99,6 +184,120 @@ const weekdayLabel = (n: number) =>
           ))}
         </div>
       </div>
+    )}
+
+    <!-- ── Visor mensual ────────────────────────────────────────────── -->
+    {years.length > 0 && (
+      <section class="mb-6 bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <header class="px-5 py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <a
+              href={`/config/calendars?view-year=${prevYear}&view-month=${prevMonth}`}
+              class="cal-arrow"
+              aria-label="Mes anterior"
+            >‹</a>
+            <h2 class="text-sm font-medium text-gray-900">
+              {monthLabels[viewMonth - 1]} {viewYear}
+            </h2>
+            <a
+              href={`/config/calendars?view-year=${nextYear}&view-month=${nextMonth}`}
+              class="cal-arrow"
+              aria-label="Mes siguiente"
+            >›</a>
+          </div>
+
+          <form method="GET" action="/config/calendars" class="flex items-end gap-2">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Año</label>
+              <select
+                name="view-year"
+                class="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              >
+                {viewerYears.map((y) => (
+                  <option value={y} selected={y === viewYear}>{y}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Mes</label>
+              <select
+                name="view-month"
+                class="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              >
+                {monthLabels.map((label, i) => (
+                  <option value={i + 1} selected={i + 1 === viewMonth}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <button
+              type="submit"
+              class="px-3 py-1.5 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              Ver
+            </button>
+          </form>
+        </header>
+
+        {monthError && (
+          <div class="px-5 py-4 text-sm text-red-700 bg-red-50 border-b border-red-200">{monthError}</div>
+        )}
+
+        {monthDays.length === 0 && !monthError ? (
+          <div class="px-5 py-10 text-center text-sm text-gray-500">
+            Este mes no tiene calendario inicializado. Usa el wizard de abajo para generarlo.
+          </div>
+        ) : (
+          <div class="cal-grid">
+            <div class="cal-head">Lun</div>
+            <div class="cal-head">Mar</div>
+            <div class="cal-head">Mié</div>
+            <div class="cal-head">Jue</div>
+            <div class="cal-head">Vie</div>
+            <div class="cal-head">Sáb</div>
+            <div class="cal-head">Dom</div>
+
+            {Array.from({ length: leadingBlanks }, (_, i) => (
+              <div class="cal-cell cal-cell-blank" aria-hidden="true" data-blank-index={i}></div>
+            ))}
+
+            {dayCells.map((d) => {
+              const iso = `${viewYear}-${pad2(viewMonth)}-${pad2(d)}`
+              const row = dayMap.get(iso)
+              const isToday = iso === todayIso
+              const state = !row
+                ? 'empty'
+                : !row.isWorkday
+                  ? 'off'
+                  : row.shift
+                    ? 'workday'
+                    : 'orphan'
+              return (
+                <div class={`cal-cell cal-cell-${state}${isToday ? ' is-today' : ''}`} data-date={iso}>
+                  <div class="cal-day-num">{d}</div>
+                  {state === 'empty' && (
+                    <div class="cal-meta cal-meta-mute">Sin datos</div>
+                  )}
+                  {state === 'off' && (
+                    <div class="cal-meta cal-meta-mute">No laborable</div>
+                  )}
+                  {state === 'workday' && row?.shift && (
+                    <>
+                      <div class="cal-shift">{row.shift.name}</div>
+                      <div class="cal-times">{fmtTime(row.shift.entryTime)} → {fmtTime(row.shift.exitTime)}</div>
+                      {row.shift.lunchStartTime && row.shift.lunchEndTime && (
+                        <div class="cal-lunch">Almuerzo {fmtTime(row.shift.lunchStartTime)}–{fmtTime(row.shift.lunchEndTime)}</div>
+                      )}
+                    </>
+                  )}
+                  {state === 'orphan' && (
+                    <div class="cal-meta cal-meta-warn">Día activo sin turno</div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </section>
     )}
 
     {!canInit && (
@@ -215,6 +414,96 @@ const weekdayLabel = (n: number) =>
       </form>
     )}
   </div>
+
+  <style>
+    /* Calendar viewer — 7-col grid, design-system tokens, theme-aware. */
+    .cal-arrow {
+      display: inline-grid; place-items: center;
+      width: 28px; height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--rule);
+      color: var(--fore-dim);
+      font-size: 16px; line-height: 1; text-decoration: none;
+      transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+    }
+    .cal-arrow:hover {
+      background: var(--ink-3);
+      color: var(--fore);
+      border-color: var(--rule-hi);
+    }
+
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      background: var(--rule);
+      gap: 1px;
+    }
+    .cal-head {
+      padding: 8px 10px;
+      background: var(--ink-3);
+      font-family: var(--f-mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--mute);
+      text-align: center;
+    }
+    .cal-cell {
+      min-height: 96px;
+      padding: 8px 10px;
+      background: var(--ink-2);
+      display: flex; flex-direction: column;
+      gap: 4px;
+      position: relative;
+    }
+    .cal-cell-blank {
+      background: var(--ink-3);
+      opacity: 0.4;
+    }
+    .cal-cell-empty { background: var(--ink-2); }
+    .cal-cell-off   { background: var(--ink-3); }
+    .cal-cell-orphan {
+      background: rgba(227, 178, 90, 0.06);
+    }
+    .cal-cell.is-today {
+      box-shadow: inset 0 0 0 2px var(--navy-hi);
+    }
+    .cal-day-num {
+      font-family: var(--f-mono);
+      font-size: 12.5px;
+      color: var(--fore-dim);
+      align-self: flex-end;
+      letter-spacing: 0.02em;
+    }
+    .cal-cell.is-today .cal-day-num { color: var(--fore); font-weight: 600; }
+    .cal-shift {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--fore);
+      line-height: 1.3;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cal-times {
+      font-family: var(--f-mono);
+      font-size: 11.5px;
+      color: var(--fore-dim);
+      letter-spacing: 0.01em;
+    }
+    .cal-lunch {
+      font-family: var(--f-mono);
+      font-size: 10.5px;
+      color: var(--mute);
+    }
+    .cal-meta {
+      font-size: 11.5px;
+      line-height: 1.3;
+      margin-top: auto;
+    }
+    .cal-meta-mute { color: var(--mute); }
+    .cal-meta-warn { color: var(--warn); }
+  </style>
 
   <script is:inline>
     (function () {
