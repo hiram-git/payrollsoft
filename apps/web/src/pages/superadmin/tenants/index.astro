@@ -31,8 +31,6 @@ try {
 } catch {
   error = 'No se pudo conectar con el servidor.'
 }
-
-const flash = Astro.url.searchParams.get('flash')
 ---
 <SuperAdminLayout title="Empresas">
   <div class="p-8">
@@ -47,15 +45,19 @@ const flash = Astro.url.searchParams.get('flash')
       </a>
     </div>
 
-    {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Empresa provisionada correctamente.</div>
-    )}
-    {flash === 'updated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Estado actualizado.</div>
-    )}
     {error && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
+
+    <script is:inline>
+      window.SA_FLASH_MESSAGES = {
+        created: { title: 'Empresa creada',     message: 'La empresa fue aprovisionada correctamente.' },
+        updated: { title: 'Estado actualizado', message: 'El estado de la empresa fue actualizado.' },
+      };
+      window.SA_ERROR_MESSAGES = {
+        'server-error': { title: 'No se pudo aplicar la acción', message: 'Ocurrió un error al ejecutar la operación.' },
+      };
+    </script>
 
     <div class="border border-gray-200 rounded-lg overflow-hidden bg-white">
       {tenants.length === 0 ? (
@@ -95,8 +97,17 @@ const flash = Astro.url.searchParams.get('flash')
                       <form
                         method="POST"
                         action={`/api/superadmin/tenants/${t.slug}/impersonate`}
-                        onsubmit="return confirm('Vas a iniciar sesión como administrador de esta empresa durante 30 minutos. La acción queda registrada en auditoría.');"
                         style="margin:0"
+                        data-saconfirm
+                        data-sa-title="Entrar como administrador"
+                        data-sa-message={`Vas a iniciar sesión como administrador de "${t.name}" durante 30 minutos. La acción queda registrada en auditoría.`}
+                        data-sa-confirm-label="Iniciar sesión"
+                        data-sa-tone="primary"
+                        data-sa-loading-title="Iniciando sesión"
+                        data-sa-loading-message="Generando token de impersonación…"
+                        data-sa-success-title="Sesión iniciada"
+                        data-sa-success-message="Te estamos llevando al panel del tenant."
+                        data-sa-error-title="No se pudo iniciar la impersonación"
                       >
                         <button type="submit" class="text-xs text-blue-600 hover:text-blue-800">Entrar como →</button>
                       </form>

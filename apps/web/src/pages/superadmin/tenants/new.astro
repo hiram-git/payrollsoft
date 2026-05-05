@@ -7,18 +7,6 @@ if (!identity || identity.type !== 'super_admin') {
   return Astro.redirect('/superadmin/login')
 }
 
-const errorFlag = Astro.url.searchParams.get('error')
-const errorDetail = Astro.url.searchParams.get('detail')
-const errorMessages: Record<string, string> = {
-  'invalid-slug':
-    'El identificador no es válido. Usa solo letras minúsculas, números, guion y guion bajo (3 a 50 caracteres).',
-  'slug-taken': 'Ese identificador ya está en uso por otra empresa.',
-  'admin-email-invalid': 'El correo del administrador no es válido.',
-  'missing-fields': 'Completa todos los campos obligatorios.',
-  'weak-password': 'La contraseña debe tener al menos 12 caracteres.',
-  'server-error': 'No se pudo crear la empresa.',
-}
-const errorMessage = errorFlag ? errorMessages[errorFlag] : ''
 const prefillSlug = Astro.url.searchParams.get('slug') ?? ''
 const prefillName = Astro.url.searchParams.get('name') ?? ''
 ---
@@ -35,15 +23,6 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           y se registra al administrador inicial.
         </p>
       </div>
-
-      {errorMessage && (
-        <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" id="banner-server-error">
-          <div class="font-medium">{errorMessage}</div>
-          {errorDetail && (
-            <pre class="mt-2 whitespace-pre-wrap break-words text-xs text-red-800/90">{errorDetail}</pre>
-          )}
-        </div>
-      )}
 
       <!-- Stepper -->
       <ol class="wizard-steps mb-6">
@@ -67,6 +46,16 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         action="/api/superadmin/tenants/create"
         class="space-y-5 bg-white border border-gray-200 rounded-lg p-6"
         novalidate
+        data-saconfirm
+        data-sa-title="Confirmar creación de empresa"
+        data-sa-message="Vamos a crear el esquema, aplicar las migraciones y registrar al administrador inicial. Esta acción no se puede deshacer fácilmente."
+        data-sa-confirm-label="Crear empresa"
+        data-sa-tone="primary"
+        data-sa-loading-title="Aprovisionando empresa"
+        data-sa-loading-message="Estamos creando el esquema y aplicando migraciones. Puede tardar unos segundos."
+        data-sa-success-title="Empresa creada"
+        data-sa-success-message="La empresa fue aprovisionada correctamente."
+        data-sa-error-title="No se pudo crear la empresa"
       >
         <!-- ── Paso 1: Empresa ─────────────────────────────────────────── -->
         <fieldset class="wizard-fieldset" data-step="1">

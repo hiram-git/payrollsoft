@@ -1,0 +1,392 @@
+---
+/**
+ * Sistema de modales para /superadmin/*. Provee un único diálogo con
+ * tres estados (confirmar → esperar → resultado) y una API global en
+ * `window.saModal` que también intercepta cualquier <form> con el
+ * atributo `data-saconfirm` para envolver el envío con el flujo
+ * confirmación / espera / respuesta.
+ *
+ * Los proxies del lado web (apps/web/src/pages/api/superadmin/...) ya
+ * detectan el header `X-SA-Modal: 1` y responden JSON
+ *   { ok: true,  redirect?: string, message?: string }
+ *   { ok: false, error: string, detail?: string }
+ * en vez del redirect tradicional usado por el formulario clásico.
+ *
+ * Uso declarativo:
+ *   <form action="/api/..." method="POST"
+ *         data-saconfirm
+ *         data-sa-title="..."
+ *         data-sa-message="..."
+ *         data-sa-confirm-label="Crear"
+ *         data-sa-tone="primary|danger"
+ *         data-sa-loading-title="..."
+ *         data-sa-loading-message="..."
+ *         data-sa-success-title="..."
+ *         data-sa-success-message="...">
+ *
+ * Uso imperativo:
+ *   await window.saModal.confirm({ title, message })
+ *   window.saModal.loading({ title, message })
+ *   await window.saModal.success({ title, message, redirect })
+ *   await window.saModal.error({ title, message, detail })
+ *   window.saModal.close()
+ */
+---
+<div id="sa-modal-root" class="sa-modal-root" hidden aria-hidden="true">
+  <div class="sa-modal-backdrop" data-sa-backdrop></div>
+  <div class="sa-modal-card" role="dialog" aria-modal="true" aria-labelledby="sa-modal-title">
+    <div class="sa-modal-icon" data-sa-icon></div>
+    <h3 class="sa-modal-title" id="sa-modal-title" data-sa-title>Confirmar</h3>
+    <p class="sa-modal-body" data-sa-body></p>
+    <pre class="sa-modal-detail" data-sa-detail hidden></pre>
+    <div class="sa-modal-actions" data-sa-actions></div>
+  </div>
+</div>
+
+<style is:global>
+  .sa-modal-root {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+  }
+  .sa-modal-root[hidden] { display: none; }
+  .sa-modal-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(7,16,31,0.62);
+    backdrop-filter: blur(2px);
+  }
+  [data-theme='light'] .sa-modal-backdrop { background: rgba(12,20,36,0.45); }
+  .sa-modal-card {
+    position: relative;
+    width: 100%; max-width: 460px;
+    background: var(--ink-2);
+    border: 1px solid var(--rule);
+    border-radius: 10px;
+    padding: 22px 22px 18px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+    color: var(--fore);
+    font-family: var(--f-sans);
+    animation: saModalIn 140ms ease-out;
+  }
+  @keyframes saModalIn {
+    from { opacity: 0; transform: translateY(6px) scale(.98); }
+    to   { opacity: 1; transform: none; }
+  }
+  .sa-modal-icon {
+    width: 38px; height: 38px;
+    display: grid; place-items: center;
+    border-radius: 999px;
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+  .sa-modal-icon[data-tone='primary']  { background: var(--navy-soft); color: #cfd8ff; }
+  .sa-modal-icon[data-tone='danger']   { background: rgba(224,107,92,0.18); color: var(--err); }
+  .sa-modal-icon[data-tone='success']  { background: rgba(111,181,140,0.18); color: var(--ok); }
+  .sa-modal-icon[data-tone='loading']  { background: var(--ink-3); color: var(--mute-2); }
+  .sa-modal-icon[data-tone='warning']  { background: rgba(227,178,90,0.18); color: var(--warn); }
+  .sa-modal-icon svg { width: 18px; height: 18px; }
+  .sa-modal-icon[data-tone='loading'] svg { animation: saSpin 900ms linear infinite; }
+  @keyframes saSpin { to { transform: rotate(360deg); } }
+
+  .sa-modal-title {
+    margin: 0 0 6px;
+    font-family: var(--f-display);
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    color: var(--fore);
+  }
+  .sa-modal-body {
+    margin: 0;
+    font-size: 13.5px;
+    line-height: 1.55;
+    color: var(--fore-dim);
+  }
+  .sa-modal-detail {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 6px;
+    background: var(--ink-3);
+    border: 1px solid var(--rule);
+    font-family: var(--f-mono);
+    font-size: 11.5px;
+    color: var(--mute-2);
+    max-height: 180px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .sa-modal-actions {
+    display: flex; justify-content: flex-end; align-items: center;
+    gap: 8px; margin-top: 18px;
+  }
+  .sa-modal-btn {
+    appearance: none; cursor: pointer;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font: inherit; font-size: 13px; font-weight: 500;
+    border: 1px solid transparent;
+    transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  }
+  .sa-modal-btn[data-variant='ghost'] {
+    background: transparent;
+    color: var(--fore-dim);
+    border-color: var(--rule);
+  }
+  .sa-modal-btn[data-variant='ghost']:hover { background: var(--ink-3); color: var(--fore); }
+  .sa-modal-btn[data-variant='primary'] {
+    background: var(--navy);
+    color: #fff;
+  }
+  .sa-modal-btn[data-variant='primary']:hover { background: var(--navy-hi); }
+  .sa-modal-btn[data-variant='danger'] {
+    background: var(--err);
+    color: #1a0808;
+  }
+  .sa-modal-btn[data-variant='danger']:hover { filter: brightness(1.05); }
+  .sa-modal-btn:disabled { opacity: .55; cursor: not-allowed; }
+</style>
+
+<script is:inline>
+  (function () {
+    const root = document.getElementById('sa-modal-root');
+    if (!root) return;
+    const card    = root.querySelector('.sa-modal-card');
+    const iconEl  = root.querySelector('[data-sa-icon]');
+    const titleEl = root.querySelector('[data-sa-title]');
+    const bodyEl  = root.querySelector('[data-sa-body]');
+    const detailEl = root.querySelector('[data-sa-detail]');
+    const actionsEl = root.querySelector('[data-sa-actions]');
+    const backdrop  = root.querySelector('[data-sa-backdrop]');
+
+    const ICONS = {
+      primary:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>',
+      danger:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>',
+      success:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 4.5-5"/></svg>',
+      warning:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>',
+      loading:
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.22-8.56"/></svg>',
+    };
+
+    let onCloseCallback = null;
+    let escListener = null;
+
+    function open(tone) {
+      iconEl.dataset.tone = tone;
+      iconEl.innerHTML = ICONS[tone] || ICONS.primary;
+      root.hidden = false;
+      root.setAttribute('aria-hidden', 'false');
+      document.documentElement.style.overflow = 'hidden';
+      // Focus first action button for accessibility.
+      requestAnimationFrame(() => {
+        const btn = actionsEl.querySelector('button');
+        if (btn) btn.focus();
+      });
+    }
+
+    function close() {
+      root.hidden = true;
+      root.setAttribute('aria-hidden', 'true');
+      document.documentElement.style.overflow = '';
+      detailEl.hidden = true;
+      detailEl.textContent = '';
+      actionsEl.innerHTML = '';
+      if (escListener) {
+        document.removeEventListener('keydown', escListener);
+        escListener = null;
+      }
+      const cb = onCloseCallback;
+      onCloseCallback = null;
+      if (cb) cb();
+    }
+
+    function setBody(opts) {
+      titleEl.textContent = opts.title || '';
+      bodyEl.textContent = opts.message || '';
+      if (opts.detail) {
+        detailEl.hidden = false;
+        detailEl.textContent = opts.detail;
+      } else {
+        detailEl.hidden = true;
+        detailEl.textContent = '';
+      }
+    }
+
+    function makeBtn(label, variant) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sa-modal-btn';
+      b.dataset.variant = variant;
+      b.textContent = label;
+      return b;
+    }
+
+    function attachEsc(handler) {
+      if (escListener) document.removeEventListener('keydown', escListener);
+      escListener = (e) => { if (e.key === 'Escape') handler(); };
+      document.addEventListener('keydown', escListener);
+    }
+
+    function confirm(opts) {
+      return new Promise((resolve) => {
+        setBody(opts);
+        actionsEl.innerHTML = '';
+        const cancel = makeBtn(opts.cancelLabel || 'Cancelar', 'ghost');
+        const ok     = makeBtn(opts.confirmLabel || 'Confirmar', opts.tone === 'danger' ? 'danger' : 'primary');
+        cancel.addEventListener('click', () => { close(); resolve(false); });
+        ok.addEventListener('click',     () => { resolve(true); }); // caller decides next state
+        actionsEl.appendChild(cancel);
+        actionsEl.appendChild(ok);
+        backdrop.onclick = () => { close(); resolve(false); };
+        attachEsc(() => { close(); resolve(false); });
+        open(opts.tone === 'danger' ? 'danger' : opts.tone === 'warning' ? 'warning' : 'primary');
+      });
+    }
+
+    function loading(opts) {
+      setBody(opts || {});
+      titleEl.textContent = (opts && opts.title) || 'Procesando…';
+      bodyEl.textContent  = (opts && opts.message) || 'Por favor espera mientras se completa la operación.';
+      actionsEl.innerHTML = '';
+      backdrop.onclick = null;
+      if (escListener) { document.removeEventListener('keydown', escListener); escListener = null; }
+      open('loading');
+    }
+
+    function result(tone, opts) {
+      return new Promise((resolve) => {
+        setBody(opts);
+        actionsEl.innerHTML = '';
+        const ok = makeBtn(opts.primaryLabel || 'Aceptar', tone === 'success' ? 'primary' : 'ghost');
+        const handle = () => {
+          close();
+          if (opts.redirect) window.location.assign(opts.redirect);
+          resolve();
+        };
+        ok.addEventListener('click', handle);
+        actionsEl.appendChild(ok);
+        backdrop.onclick = handle;
+        attachEsc(handle);
+        open(tone);
+      });
+    }
+
+    const api = {
+      confirm,
+      loading,
+      success: (opts) => result('success', opts || {}),
+      error:   (opts) => result('danger',  opts || {}),
+      warning: (opts) => result('warning', opts || {}),
+      close,
+    };
+    window.saModal = api;
+
+    // ── Form interception ─────────────────────────────────────────────────
+    function readDataset(form, key, fallback) {
+      const v = form.dataset[key];
+      return (v == null || v === '') ? fallback : v;
+    }
+
+    async function submitForm(form) {
+      const title    = readDataset(form, 'saTitle',   '¿Confirmar acción?');
+      const message  = readDataset(form, 'saMessage', '');
+      const confirmLabel = readDataset(form, 'saConfirmLabel', 'Confirmar');
+      const tone     = readDataset(form, 'saTone', 'primary');
+      const loadingTitle = readDataset(form, 'saLoadingTitle',   'Procesando…');
+      const loadingMessage = readDataset(form, 'saLoadingMessage', 'Por favor espera unos segundos.');
+      const successTitle = readDataset(form, 'saSuccessTitle',   'Listo');
+      const successMessage = readDataset(form, 'saSuccessMessage', 'La operación se completó correctamente.');
+      const errorTitle   = readDataset(form, 'saErrorTitle',     'No se pudo completar la operación');
+
+      const proceed = await api.confirm({ title, message, confirmLabel, tone });
+      if (!proceed) return;
+
+      api.loading({ title: loadingTitle, message: loadingMessage });
+
+      let res;
+      try {
+        res = await fetch(form.action, {
+          method: form.method || 'POST',
+          body: new FormData(form),
+          headers: { 'X-SA-Modal': '1', Accept: 'application/json' },
+          credentials: 'same-origin',
+          redirect: 'follow',
+        });
+      } catch (err) {
+        await api.error({
+          title: errorTitle,
+          message: 'No se pudo conectar con el servidor.',
+          detail: String(err && err.message ? err.message : err),
+        });
+        return;
+      }
+
+      let payload = null;
+      try { payload = await res.json(); } catch { /* not JSON */ }
+
+      if (res.ok && payload && payload.ok) {
+        await api.success({
+          title: successTitle,
+          message: payload.message || successMessage,
+          redirect: payload.redirect || readDataset(form, 'saSuccessRedirect', null),
+        });
+        return;
+      }
+
+      const detail = payload && payload.detail ? payload.detail : (payload && payload.error) ? payload.error : `HTTP ${res.status}`;
+      const message2 = (payload && payload.error && typeof payload.error === 'string')
+        ? payload.error
+        : 'La acción no pudo completarse. Revisa el detalle.';
+      await api.error({ title: errorTitle, message: message2, detail });
+    }
+
+    function bindForms() {
+      document.querySelectorAll('form[data-saconfirm]').forEach((form) => {
+        if (form.__saBound) return;
+        form.__saBound = true;
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          submitForm(form);
+        });
+      });
+    }
+
+    bindForms();
+    // In case content is added dynamically (rare on SSR pages but cheap).
+    document.addEventListener('astro:page-load', bindForms);
+
+    // ── Auto-display from query string ───────────────────────────────────
+    function flashFromUrl() {
+      const url = new URL(window.location.href);
+      const flash  = url.searchParams.get('flash');
+      const error  = url.searchParams.get('error');
+      const detail = url.searchParams.get('detail');
+      if (!flash && !error) return;
+
+      const flashMessages = (window.SA_FLASH_MESSAGES) || {};
+      const errorMessages = (window.SA_ERROR_MESSAGES) || {};
+
+      // Strip query so a refresh doesn't replay the modal.
+      url.searchParams.delete('flash');
+      url.searchParams.delete('error');
+      url.searchParams.delete('detail');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : '') + url.hash);
+
+      if (flash && flashMessages[flash]) {
+        api.success({ title: flashMessages[flash].title || 'Listo', message: flashMessages[flash].message || '' });
+      } else if (error) {
+        const meta = errorMessages[error] || { title: 'Hubo un problema', message: 'La acción no pudo completarse.' };
+        api.error({ title: meta.title, message: meta.message, detail: detail || undefined });
+      }
+    }
+
+    flashFromUrl();
+  })();
+</script>
