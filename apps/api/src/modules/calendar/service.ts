@@ -12,8 +12,8 @@
  * is_workday=false. Re-running with overlapping inputs upserts, so the
  * /config/calendars wizard is safe to call again on the same period.
  */
-import { workCalendar } from '@payroll/db'
-import { and, asc, gte, lte, sql } from 'drizzle-orm'
+import { shifts, workCalendar } from '@payroll/db'
+import { and, asc, eq, gte, lte, sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: Drizzle generic
 type AnyDb = any
@@ -135,13 +135,34 @@ export async function initializeWorkCalendar(
   return { inserted, updated, rangeFrom: earliest, rangeTo: latest }
 }
 
+/**
+ * Each row carries the shift it points at (or `null` for non-workdays /
+ * unassigned days). The LEFT JOIN keeps the row visible even when its
+ * shift_id was nulled by an earlier `ON DELETE SET NULL`, which the UI
+ * surfaces as "active day without a shift" so the inconsistency is
+ * never silent.
+ */
 export async function listWorkCalendar(db: AnyDb, filter: { from?: string; to?: string } = {}) {
   const conds = []
   if (filter.from) conds.push(gte(workCalendar.date, filter.from))
   if (filter.to) conds.push(lte(workCalendar.date, filter.to))
   return db
-    .select()
+    .select({
+      id: workCalendar.id,
+      date: workCalendar.date,
+      isWorkday: workCalendar.isWorkday,
+      notes: workCalendar.notes,
+      shift: {
+        id: shifts.id,
+        name: shifts.name,
+        entryTime: shifts.entryTime,
+        lunchStartTime: shifts.lunchStartTime,
+        lunchEndTime: shifts.lunchEndTime,
+        exitTime: shifts.exitTime,
+      },
+    })
     .from(workCalendar)
+    .leftJoin(shifts, eq(shifts.id, workCalendar.shiftId))
     .where(conds.length > 0 ? and(...conds) : undefined)
     .orderBy(asc(workCalendar.date))
 }
