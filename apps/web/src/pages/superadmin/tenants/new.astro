@@ -231,18 +231,11 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
             <a href="/superadmin/tenants" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
             <button
               type="button"
-              id="btn-next"
-              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              id="btn-primary"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+              disabled
             >
               Siguiente →
-            </button>
-            <button
-              type="submit"
-              id="btn-submit"
-              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-              hidden
-            >
-              Crear Empresa
             </button>
           </div>
         </div>
@@ -341,9 +334,8 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
 
       const steps = Array.from(form.querySelectorAll('[data-step]'));
       const indicators = Array.from(document.querySelectorAll('[data-step-indicator]'));
-      const btnPrev   = document.getElementById('btn-prev');
-      const btnNext   = document.getElementById('btn-next');
-      const btnSubmit = document.getElementById('btn-submit');
+      const btnPrev    = document.getElementById('btn-prev');
+      const btnPrimary = document.getElementById('btn-primary');
 
       const fName         = document.getElementById('f-name');
       const fSlug         = document.getElementById('f-slug');
@@ -375,20 +367,13 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           el.classList.toggle('is-done',   idx <  n);
         });
         btnPrev.disabled = n === 1;
-        // On the final step we hide "Siguiente" entirely; the submit button
-        // is rendered (or not) by refreshSubmitVisibility() based on the
-        // overall validity of the form.
-        btnNext.hidden = n === 3;
-        if (n === 3) {
-          renderSummary();
-        } else {
-          btnSubmit.hidden = true;
-        }
-        refreshSubmitVisibility();
+        if (n === 3) renderSummary();
+        refreshPrimary();
       }
 
-      // Per-step validation only — used by "Siguiente". Reports inline
-      // through the native validity API and the slug feedback line.
+      // Per-step validation only — fires `reportValidity` so the user sees
+      // native browser hints when they hit "Siguiente" with empty/invalid
+      // fields. Used as the gate for advancing one step.
       function validateStep(n) {
         const inputs = steps.find((el) => Number(el.dataset.step) === n)
           .querySelectorAll('input[required], input[pattern]');
@@ -409,8 +394,27 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         return true;
       }
 
-      // Cross-step validity used to decide whether to render "Crear Empresa".
-      // Returns the list of human-readable reasons the form isn't ready yet.
+      // Silent step validity — same checks as `validateStep` minus the
+      // `reportValidity` side effect. Drives the disabled state of the
+      // primary button so we don't pop a tooltip on every keystroke.
+      function isStepValid(n) {
+        if (n === 1) {
+          if (!fName.checkValidity() || fName.value.trim().length === 0) return false;
+          if (!fSlug.checkValidity() || fSlug.value.trim().length === 0) return false;
+          if (!slugAvailable) return false;
+          if (fContactEmail.value && !fContactEmail.checkValidity()) return false;
+          return true;
+        }
+        if (n === 2) {
+          if (!fAdminName.checkValidity() || fAdminName.value.trim().length === 0) return false;
+          if (!fAdminEmail.checkValidity() || fAdminEmail.value.trim().length === 0) return false;
+          if (fAdminPwd.value.length < 12) return false;
+          return true;
+        }
+        return listAllProblems().length === 0;
+      }
+
+      // Cross-step validity used by step 3 to drive the validation banner.
       function listAllProblems() {
         const problems = [];
         if (!fName.checkValidity() || fName.value.trim().length === 0) {
@@ -436,28 +440,38 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         return problems;
       }
 
-      function refreshSubmitVisibility() {
-        if (current !== 3) {
-          btnSubmit.hidden = true;
-          if (validationBanner) validationBanner.classList.add('hidden');
-          return;
-        }
-        const problems = listAllProblems();
-        if (problems.length === 0) {
-          btnSubmit.hidden = false;
-          if (validationBanner) validationBanner.classList.add('hidden');
-        } else {
-          btnSubmit.hidden = true;
-          if (validationBanner && validationList) {
+      // Refreshes the single primary button: relabels it depending on the
+      // current step, switches between type=button and type=submit, and
+      // disables it whenever the step's fields are not yet valid. The
+      // step-3 validation banner is also driven from here so it only
+      // appears when sitting on the final step with pending issues.
+      function refreshPrimary() {
+        const valid = isStepValid(current);
+        btnPrimary.disabled = !valid;
+        if (current === 3) {
+          btnPrimary.textContent = 'Crear empresa';
+          btnPrimary.type = 'submit';
+          if (!valid && validationBanner && validationList) {
+            const problems = listAllProblems();
             validationList.innerHTML = problems
               .map((p) => `<li>${p.replace(/</g, '&lt;')}</li>`)
               .join('');
             validationBanner.classList.remove('hidden');
+          } else if (validationBanner) {
+            validationBanner.classList.add('hidden');
           }
+        } else {
+          btnPrimary.textContent = 'Siguiente →';
+          btnPrimary.type = 'button';
+          if (validationBanner) validationBanner.classList.add('hidden');
         }
       }
 
-      btnNext.addEventListener('click', () => {
+      btnPrimary.addEventListener('click', (e) => {
+        // On step 3 the button is type=submit; let the native submit fire
+        // (which the modal helper intercepts via data-saconfirm).
+        if (current === 3) return;
+        e.preventDefault();
         if (!validateStep(current)) return;
         showStep(Math.min(current + 1, 3));
       });
@@ -465,17 +479,18 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         showStep(Math.max(current - 1, 1));
       });
 
-      // Block "Enter" from submitting in steps 1 and 2.
+      // Block "Enter" from submitting in steps 1 and 2 — advance instead.
       form.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && current !== 3 && e.target.tagName === 'INPUT') {
           e.preventDefault();
-          btnNext.click();
+          if (!btnPrimary.disabled) btnPrimary.click();
         }
       });
 
-      // Re-check validity on any input — keeps the final button responsive
-      // when the user goes back to fix something, then forward again.
-      form.addEventListener('input', refreshSubmitVisibility);
+      // Live re-evaluation: every keystroke or change updates the primary
+      // button state so it enables itself the moment the step is complete.
+      form.addEventListener('input',  refreshPrimary);
+      form.addEventListener('change', refreshPrimary);
 
       // ── Slug derivation + availability check ─────────────────────────────
       function deriveSlug(name) {
@@ -506,7 +521,7 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         slugFeedback.textContent = 'Verificando…';
         slugFeedback.className = 'mt-1.5 text-xs is-busy';
         slugTimer = setTimeout(checkSlug, 350);
-        refreshSubmitVisibility();
+        refreshPrimary();
       }
 
       async function checkSlug() {
@@ -514,7 +529,7 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         if (!slug) {
           slugFeedback.textContent = 'Solo letras minúsculas, números, guion y guion bajo.';
           slugFeedback.className = 'mt-1.5 text-xs text-gray-500';
-          refreshSubmitVisibility();
+          refreshPrimary();
           return;
         }
         lastCheckedSlug = slug;
@@ -546,7 +561,7 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           slugFeedback.textContent = 'No se pudo verificar el identificador. Intenta de nuevo en unos segundos.';
           slugFeedback.className = 'mt-1.5 text-xs is-error';
         } finally {
-          refreshSubmitVisibility();
+          refreshPrimary();
         }
       }
 
@@ -588,20 +603,15 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
         document.getElementById('sum-admin-email').textContent = fAdminEmail.value.trim() || '—';
       }
 
-      // Lock the submit button on submit so the user can't double-click while
-      // provisioning runs (it can take a few seconds for the migrations).
+      // Block accidental submits before step 3 and re-validate on the
+      // final step. The modal helper takes over visual feedback once the
+      // form actually fires (data-saconfirm), so we don't tweak the
+      // button label here — the loading modal communicates progress.
       form.addEventListener('submit', (e) => {
-        if (current !== 3) {
+        if (current !== 3 || listAllProblems().length > 0) {
           e.preventDefault();
-          return;
+          refreshPrimary();
         }
-        if (listAllProblems().length > 0) {
-          e.preventDefault();
-          refreshSubmitVisibility();
-          return;
-        }
-        btnSubmit.disabled = true;
-        btnSubmit.textContent = 'Creando empresa…';
       });
 
       // Init
