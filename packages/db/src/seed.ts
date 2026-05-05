@@ -1,49 +1,71 @@
 /**
- * Seed script — creates demo data for local development and Railway
- * Usage: bun --env-file ../../.env src/seed.ts   (local)
- *        bun src/seed.ts                          (Railway — DATABASE_URL injected)
+ * Seed script — datos demo idempotentes para cualquier tenant.
  *
- * Requires migrations to have been applied first.
- * All inserts are idempotent (ON CONFLICT DO UPDATE / DO NOTHING).
+ * Modos:
  *
- * Creates:
- *  Public schema:
- *    - 1 super admin  (superadmin@payroll.dev / SuperAdmin123!)
- *    - 1 tenant       (slug: demo)
+ *   bun src/seed.ts
+ *      Default: siembra el tenant `demo` (super admin global, tenant
+ *      "Demo Company", admin@demo.com con tenant_admin) más todo el
+ *      catálogo demo (cargos, conceptos, etc.).
  *
- *  Tenant demo schema:
- *    - 1 usuario admin (admin@demo.com / Admin123!)
- *    - 1 función       (ADM - Administrativo)
- *    - 1 cargo         (EMP - Empleado General)
- *    - 2 departamentos (ADMIN → RRHH)
- *    - 1 horario       (Turno Regular 8-5)
- *    - 1 acreedor      (BN - Banco Nacional) + su concepto vinculado
- *    - 5 conceptos de nómina (SUELDO, SS, SE, SSP, SEP)
+ *   bun src/seed.ts --tenant=<slug> [--name="..."] [--admin-email=...]
+ *                   [--admin-password=...] [--admin-name="..."]
+ *      Siembra el tenant indicado. Si todavía no existe en
+ *      payroll_auth.tenants, lo crea junto al usuario admin con
+ *      tenant_admin. Si ya existe (por ejemplo creado vía el wizard
+ *      del super-admin), salta la creación de auth y solo siembra los
+ *      catálogos demo en su esquema.
+ *
+ *   bun src/seed.ts --tenant=<slug> --data-only
+ *      Fuerza el modo "solo datos demo" — útil cuando un tenant ya
+ *      tiene su admin y solo quieres poblar catálogos.
+ *
+ *   bun src/seed.ts --skip-super-admin
+ *      No toca payroll_auth.super_admins (útil en producción donde
+ *      el super-admin ya está provisionado fuera de banda).
+ *
+ * Todos los inserts son idempotentes (ON CONFLICT DO UPDATE / WHERE
+ * NOT EXISTS), así que correr el seeder múltiples veces es seguro.
  */
 import postgres from 'postgres'
+
+// ─── Argumentos CLI ──────────────────────────────────────────────────────────
+
+const args = process.argv.slice(2)
+function flag(name: string, fallback?: string): string | undefined {
+  const hit = args.find((a) => a === `--${name}` || a.startsWith(`--${name}=`))
+  if (!hit) return fallback
+  if (hit === `--${name}`) return ''
+  return hit.slice(`--${name}=`.length)
+}
+
+const TENANT_SLUG = flag('tenant', 'demo') ?? 'demo'
+const TENANT_NAME =
+  flag('name') ?? (TENANT_SLUG === 'demo' ? 'Demo Company' : capitalize(TENANT_SLUG))
+const USER_EMAIL =
+  flag('admin-email') ?? (TENANT_SLUG === 'demo' ? 'admin@demo.com' : `admin@${TENANT_SLUG}.com`)
+const USER_PASSWORD =
+  flag('admin-password') ?? (TENANT_SLUG === 'demo' ? 'Admin123!' : 'ChangeMe123!')
+const USER_NAME =
+  flag('admin-name') ?? (TENANT_SLUG === 'demo' ? 'Demo Admin' : `${TENANT_NAME} Admin`)
+const SKIP_SUPER_ADMIN = flag('skip-super-admin') !== undefined
+const DATA_ONLY = flag('data-only') !== undefined
+
+const SUPER_ADMIN_EMAIL = 'superadmin@payroll.dev'
+const SUPER_ADMIN_PASSWORD = 'SuperAdmin123!'
+const SUPER_ADMIN_NAME = 'Super Admin'
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+// ─── Conexiones ──────────────────────────────────────────────────────────────
 
 const url = process.env.DATABASE_URL
 if (!url) {
   console.error('DATABASE_URL is not set')
   process.exit(1)
 }
-
-const SUPER_ADMIN_EMAIL = 'superadmin@payroll.dev'
-const SUPER_ADMIN_PASSWORD = 'SuperAdmin123!'
-const SUPER_ADMIN_NAME = 'Super Admin'
-
-const TENANT_SLUG = 'demo'
-const TENANT_NAME = 'Demo Company'
-
-const USER_EMAIL = 'admin@demo.com'
-const USER_PASSWORD = 'Admin123!'
-const USER_NAME = 'Demo Admin'
-
-const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
-  algorithm: 'bcrypt',
-  cost: 12,
-})
-const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
 
 const publicSql = postgres(url, {
   prepare: false,
@@ -54,43 +76,79 @@ const tenantSql = postgres(url, {
   connection: { search_path: `tenant_${TENANT_SLUG},payroll_auth,public` },
 })
 
+// ─── Run ─────────────────────────────────────────────────────────────────────
+
+console.log(`▸ Sembrando tenant: ${TENANT_SLUG}${DATA_ONLY ? '  (solo catálogos)' : ''}`)
+
 try {
-  // ── Super admin ──────────────────────────────────────────────────────────────
-  await publicSql`
-    INSERT INTO payroll_auth.super_admins (email, password_hash, name)
-    VALUES (${SUPER_ADMIN_EMAIL}, ${superAdminHash}, ${SUPER_ADMIN_NAME})
-    ON CONFLICT (email) DO UPDATE
-      SET password_hash = EXCLUDED.password_hash,
-          name          = EXCLUDED.name
-  `
-  console.log(`✓ Super admin : ${SUPER_ADMIN_EMAIL}`)
+  // ── Super admin (opcional) ───────────────────────────────────────────────────
+  if (!SKIP_SUPER_ADMIN && !DATA_ONLY) {
+    const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
+      algorithm: 'bcrypt',
+      cost: 12,
+    })
+    await publicSql`
+      INSERT INTO payroll_auth.super_admins (email, password_hash, name)
+      VALUES (${SUPER_ADMIN_EMAIL}, ${superAdminHash}, ${SUPER_ADMIN_NAME})
+      ON CONFLICT (email) DO UPDATE
+        SET password_hash = EXCLUDED.password_hash,
+            name          = EXCLUDED.name
+    `
+    console.log(`✓ Super admin : ${SUPER_ADMIN_EMAIL}`)
+  }
 
   // ── Tenant ───────────────────────────────────────────────────────────────────
-  await publicSql`
-    INSERT INTO payroll_auth.tenants (slug, name, database_schema, status)
-    VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`}, 'ACTIVE')
-    ON CONFLICT (slug) DO UPDATE
-      SET name   = EXCLUDED.name,
-          status = 'ACTIVE'
+  // Si el tenant ya existe (creado vía wizard, p.ej.) no tocamos sus campos
+  // descriptivos. Solo nos aseguramos de que exista.
+  const [existingTenant] = await publicSql<{ id: string; status: string }[]>`
+    SELECT id, status FROM payroll_auth.tenants WHERE slug = ${TENANT_SLUG} LIMIT 1
   `
-  console.log(`✓ Tenant      : ${TENANT_SLUG}`)
+  const tenantPreexisting = !!existingTenant
 
-  // ── Tenant user ──────────────────────────────────────────────────────────────
-  const [userRow] = await tenantSql<{ id: string }[]>`
-    INSERT INTO users (email, password_hash, name, role, is_tenant_admin)
-    VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'}, true)
-    ON CONFLICT (email) DO UPDATE
-      SET password_hash    = EXCLUDED.password_hash,
-          name             = EXCLUDED.name,
-          role             = EXCLUDED.role,
-          is_tenant_admin  = true
-    RETURNING id
-  `
-  console.log(`✓ Usuario     : ${USER_EMAIL}`)
+  if (!tenantPreexisting && !DATA_ONLY) {
+    await publicSql`
+      INSERT INTO payroll_auth.tenants (slug, name, database_schema, status)
+      VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`}, 'ACTIVE')
+    `
+    console.log(`✓ Tenant      : ${TENANT_SLUG} (creado)`)
+  } else if (tenantPreexisting) {
+    console.log(`✓ Tenant      : ${TENANT_SLUG} (ya existía, omito recrear)`)
+  }
 
-  // ── System roles + permissions + tenant_admin assignment ─────────────────────
-  // These mirror SYSTEM_ROLES from @payroll/types, but inlined so the seed
-  // stays runnable from a Bun/Node CLI without bundling the package.
+  // ── Tenant user (solo si no es modo data-only y el tenant lo necesita) ──────
+  // Cuando el tenant fue creado por el wizard ya tiene su admin user;
+  // tocarlo sobrescribiría su contraseña, así que solo creamos el admin
+  // por defecto cuando el tenant fue recién provisionado por este seed.
+  let adminUserId: string | null = null
+  if (!DATA_ONLY && !tenantPreexisting) {
+    const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
+    const [userRow] = await tenantSql<{ id: string }[]>`
+      INSERT INTO users (email, password_hash, name, role, is_tenant_admin)
+      VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'}, true)
+      ON CONFLICT (email) DO UPDATE
+        SET password_hash    = EXCLUDED.password_hash,
+            name             = EXCLUDED.name,
+            role             = EXCLUDED.role,
+            is_tenant_admin  = true
+      RETURNING id
+    `
+    adminUserId = userRow.id
+    console.log(`✓ Usuario     : ${USER_EMAIL}`)
+  } else if (!DATA_ONLY) {
+    // Tenant pre-existente: ubicamos al admin actual para asignarle el rol
+    // tenant_admin si todavía no lo tiene.
+    const [row] = await tenantSql<{ id: string }[]>`
+      SELECT id FROM users WHERE is_tenant_admin = true LIMIT 1
+    `
+    adminUserId = row?.id ?? null
+    if (adminUserId) {
+      console.log('✓ Admin       : detectado (no se modifica su contraseña)')
+    }
+  }
+
+  // ── System roles + permissions ───────────────────────────────────────────────
+  // Los nuevos tenants creados vía el wizard ya traen estos roles, pero
+  // re-correr el seed es seguro y refresca permisos si el catálogo creció.
   type SystemRoleSeed = {
     code: 'tenant_admin' | 'hr' | 'accountant' | 'viewer'
     name: string
@@ -98,8 +156,6 @@ try {
     permissions: string[]
   }
 
-  // tenant_admin gets every tenant-scope code listed in the catalog so a
-  // future addition to permissions_catalog flows through automatically.
   const tenantAdminPerms = await tenantSql<{ code: string }[]>`
     SELECT code FROM payroll_auth.permissions_catalog WHERE scope = 'tenant'
   `
@@ -235,7 +291,6 @@ try {
     `
     roleIds.set(r.code, id)
 
-    // Re-grant from scratch so the seed is the authoritative source.
     await tenantSql`DELETE FROM role_permissions WHERE role_id = ${id}`
     if (r.permissions.length > 0) {
       const rows = r.permissions.map((code) => ({ role_id: id, permission_code: code }))
@@ -247,18 +302,26 @@ try {
   }
   console.log('✓ Roles       : tenant_admin, hr, accountant, viewer (con permisos)')
 
+  if (adminUserId) {
+    await tenantSql`
+      INSERT INTO user_roles (user_id, role_id)
+      VALUES (${adminUserId}, ${roleIds.get('tenant_admin')})
+      ON CONFLICT (user_id, role_id) DO NOTHING
+    `
+    await tenantSql`
+      UPDATE users SET permissions_version = permissions_version + 1
+       WHERE id = ${adminUserId}
+    `
+    console.log('✓ Asignación  : admin → tenant_admin')
+  }
+
+  // ── company_config singleton ────────────────────────────────────────────────
+  // Idempotente: solo inserta si no hay fila aún (mismo patrón que provisioning).
   await tenantSql`
-    INSERT INTO user_roles (user_id, role_id)
-    VALUES (${userRow.id}, ${roleIds.get('tenant_admin')})
-    ON CONFLICT (user_id, role_id) DO NOTHING
+    INSERT INTO company_config (company_name)
+    SELECT ${TENANT_NAME}
+     WHERE NOT EXISTS (SELECT 1 FROM company_config)
   `
-  // Force JWT refresh on next request so any old cookie picks up the
-  // new effective permissions.
-  await tenantSql`
-    UPDATE users SET permissions_version = permissions_version + 1
-     WHERE id = ${userRow.id}
-  `
-  console.log(`✓ Asignación  : ${USER_EMAIL} → tenant_admin`)
 
   // ── Función ──────────────────────────────────────────────────────────────────
   await tenantSql`
@@ -433,12 +496,21 @@ try {
   console.log('✓ Acumulados    : SALARIO_BASE, HORAS_EXTRAS, COMISIONES, BONIFICACIONES')
 
   console.log('\n✅  Seed completo!')
-  console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
-  console.log(`  Tenant user  : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)
+  if (!SKIP_SUPER_ADMIN && !DATA_ONLY) {
+    console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
+  }
+  if (!DATA_ONLY && !tenantPreexisting) {
+    console.log(`  Tenant user  : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)
+  } else {
+    console.log(`  Tenant slug  : ${TENANT_SLUG}`)
+  }
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err)
   if (msg.includes('does not exist') || msg.includes('no existe')) {
-    console.error('\n✗ Tablas no encontradas. Ejecuta las migraciones primero.')
+    console.error(
+      `\n✗ Tablas no encontradas en tenant_${TENANT_SLUG}. Aplica las migraciones primero:`
+    )
+    console.error(`    bun src/migrate.ts --tenant=${TENANT_SLUG}`)
   } else {
     console.error('✗ Seed falló:', msg)
   }
