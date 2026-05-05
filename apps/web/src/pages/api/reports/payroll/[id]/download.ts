@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { getIdentity } from '../../../../../lib/auth'
 import {
   fetchPayrollReportData,
   parsePayrollReportFilters,
@@ -33,6 +34,7 @@ export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
   const TENANT = resolveTenantSlugFromCookie(authCookie)
+  const identity = getIdentity(cookies)
 
   const { id } = params
   if (!id) return new Response('ID de planilla requerido', { status: 400 })
@@ -88,9 +90,15 @@ export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
     try {
       // Live re-render preserves the original generator's identity in
       // the footer so the report still answers "who produced this".
+      // If the row was never explicitly generated (typical in on_demand
+      // mode where the user hits Download directly), fall back to the
+      // current viewer so the footer still attributes the PDF.
       pdfBytes = await renderPayrollPdfBuffer({
         ...result.data,
-        generatedBy: { name: state.generatedByName, email: state.generatedByEmail },
+        generatedBy: {
+          name: state.generatedByName ?? identity?.name ?? null,
+          email: state.generatedByEmail ?? identity?.email ?? null,
+        },
       })
     } catch (err) {
       console.error('Payroll PDF render error:', err)
