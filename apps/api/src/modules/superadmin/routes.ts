@@ -1,8 +1,50 @@
+import { existsSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { superAdminAudit } from '@payroll/db'
 import { validateTenantSlug } from '@payroll/utils'
 import { Elysia, t } from 'elysia'
 import { publicDb } from '../../config/db'
 import { env } from '../../config/env'
+
+/**
+ * Locate packages/db/drizzle/tenant for the provisioning service.
+ * `provisionTenant` defaults to a path resolved via `import.meta.url`,
+ * which works from source but breaks once Bun bundles the API (the
+ * bundle's URL is apps/api/dist/... so the default points at
+ * apps/api/drizzle, which does not exist in the deploy image).
+ *
+ * Resolution order:
+ *   1. TENANT_MIGRATIONS_DIR env var (explicit override).
+ *   2. Common Railway/monorepo paths walked from cwd: the API is
+ *      typically launched from /app/apps/api, so packages/db lives
+ *      two directories up.
+ *   3. undefined → let provisionTenant fall back to its in-package
+ *      default (correct in dev / unbundled runs).
+ */
+function resolveTenantMigrationsFolder(): string | undefined {
+  if (env.TENANT_MIGRATIONS_DIR) return env.TENANT_MIGRATIONS_DIR
+  const cwd = process.cwd()
+  const candidates = [
+    resolve(cwd, 'packages/db/drizzle/tenant'),
+    resolve(cwd, '../../packages/db/drizzle/tenant'),
+    resolve(cwd, '../packages/db/drizzle/tenant'),
+    '/app/packages/db/drizzle/tenant',
+  ]
+  for (const candidate of candidates) {
+    if (existsSync(resolve(candidate, 'meta', '_journal.json'))) return candidate
+  }
+  return undefined
+}
+
+const TENANT_MIGRATIONS_FOLDER = resolveTenantMigrationsFolder()
+if (TENANT_MIGRATIONS_FOLDER) {
+  console.log(`[provisioning] tenant migrations dir: ${TENANT_MIGRATIONS_FOLDER}`)
+} else if (env.NODE_ENV === 'production') {
+  console.warn(
+    '[provisioning] TENANT_MIGRATIONS_DIR not set and no candidate found. ' +
+      'Tenant creation will fail in this deploy.'
+  )
+}
 import { hashPassword } from '../../lib/password'
 import { authPlugin, guardSuperAdmin } from '../../middleware/auth'
 import { jwtPlugin } from '../../middleware/auth'
@@ -126,6 +168,7 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
           passwordHash,
         },
         superAdminId: user?.userId,
+        tenantMigrationsFolder: TENANT_MIGRATIONS_FOLDER,
         log: (line) => console.log(`[provision ${body.slug}] ${line}`),
       })
 
