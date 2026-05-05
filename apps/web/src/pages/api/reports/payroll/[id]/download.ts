@@ -46,9 +46,13 @@ export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
 
   const stateJson = (await stateRes.json()) as { data: ReportState }
   const state = stateJson.data
-  if (state.status !== 'generated') {
-    return new Response('El reporte no ha sido generado', { status: 409 })
-  }
+  // No state gate here. The download path always serves a PDF:
+  //   - file_storage + valid pdfPath  → stream from R2.
+  //   - everything else (on_demand, or file_storage without an object yet,
+  //     or a row in 'not_generated' that was never explicitly created)
+  //     falls through to a live render.
+  // Refusing with 409 used to break the on_demand flow because the user
+  // can hit Download directly without going through Generate first.
 
   // Try the stored object first. We only treat keys that *don't* look like
   // legacy local filesystem paths (i.e. don't start with '/') as
