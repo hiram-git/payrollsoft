@@ -1,7 +1,10 @@
 /**
- * Stress seed — inserts a configurable number of employees into the demo
- * tenant for load testing. Override with the `STRESS_TOTAL` env var:
- *   STRESS_TOTAL=5000 bun --env-file ../../.env src/seed-stress.ts
+ * Stress seed — inserts a configurable number of employees into a tenant
+ * for load testing.
+ *
+ *   bun src/seed-stress.ts                       # tenant_demo, 500 empleados
+ *   bun src/seed-stress.ts --tenant=acme         # otro tenant
+ *   STRESS_TOTAL=5000 bun src/seed-stress.ts     # otro volumen
  *
  * Requires the base seed (seed.ts) to have run first so that
  * cargo, funcion, and departamento records exist.
@@ -10,7 +13,9 @@
  */
 import postgres from 'postgres'
 
-const TENANT_SLUG = 'demo'
+const args = process.argv.slice(2)
+const tenantFlag = args.find((a) => a.startsWith('--tenant='))
+const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : 'demo'
 const BATCH_SIZE = 500
 // Default tuned for end-to-end testing of the report pipeline (covers
 // pagination + render perf without taking forever to seed). Bump via
@@ -25,9 +30,11 @@ if (!url) {
 
 const sql = postgres(url, {
   prepare: false,
-  connection: { search_path: `tenant_${TENANT_SLUG},public` },
+  connection: { search_path: `tenant_${TENANT_SLUG},payroll_auth,public` },
   max: 10,
 })
+
+console.log(`▸ Stress seed → tenant_${TENANT_SLUG} (objetivo: ${TOTAL} empleados)`)
 
 // ── Name pools ────────────────────────────────────────────────────────────────
 const FIRST_NAMES = [

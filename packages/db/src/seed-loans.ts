@@ -1,7 +1,8 @@
 /**
  * seed-loans.ts — Seeds 10 acreedores + their concepts + 1-4 loans per active employee.
  *
- * Usage: bun --env-file ../../.env src/seed-loans.ts
+ *   bun src/seed-loans.ts                     # → tenant_demo
+ *   bun src/seed-loans.ts --tenant=acme       # → otro tenant
  *
  * Idempotent: deletes and recreates all loans associated with the seeded creditors.
  * Requires base seed (seed.ts) and employees (seed-stress.ts or manual inserts) to exist first.
@@ -21,14 +22,18 @@ if (!url) {
   process.exit(1)
 }
 
-const TENANT_SLUG = 'demo'
+const args = process.argv.slice(2)
+const tenantFlag = args.find((a) => a.startsWith('--tenant='))
+const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : 'demo'
 const BATCH_SIZE = 500
 
 const sql = postgres(url, {
   prepare: false,
-  connection: { search_path: `tenant_${TENANT_SLUG},public` },
+  connection: { search_path: `tenant_${TENANT_SLUG},payroll_auth,public` },
   max: 10,
 })
+
+console.log(`▸ Loans seed → tenant_${TENANT_SLUG}`)
 
 // ── Acreedores ────────────────────────────────────────────────────────────────
 
