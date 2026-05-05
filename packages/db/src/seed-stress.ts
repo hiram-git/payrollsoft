@@ -13,9 +13,12 @@
  */
 import postgres from 'postgres'
 
+// Tenant slug: CLI flag wins, env var as fallback (more reliable when
+// invoked through `bun run --filter` which doesn't always forward
+// argv after `--`). Default is `demo`.
 const args = process.argv.slice(2)
 const tenantFlag = args.find((a) => a.startsWith('--tenant='))
-const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : 'demo'
+const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : (process.env.SEED_TENANT ?? 'demo')
 const BATCH_SIZE = 500
 // Default tuned for end-to-end testing of the report pipeline (covers
 // pagination + render perf without taking forever to seed). Bump via

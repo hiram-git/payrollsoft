@@ -39,7 +39,10 @@ function flag(name: string, fallback?: string): string | undefined {
   return hit.slice(`--${name}=`.length)
 }
 
-const TENANT_SLUG = flag('tenant', 'demo') ?? 'demo'
+// CLI flag → env var → 'demo'. The env var fallback is the reliable
+// path when invoking through `bun run --filter`, which doesn't always
+// forward CLI args after `--`.
+const TENANT_SLUG = flag('tenant') ?? process.env.SEED_TENANT ?? 'demo'
 const TENANT_NAME =
   flag('name') ?? (TENANT_SLUG === 'demo' ? 'Demo Company' : capitalize(TENANT_SLUG))
 const USER_EMAIL =
