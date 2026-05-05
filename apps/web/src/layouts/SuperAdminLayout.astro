@@ -1,4 +1,5 @@
 ---
+import SuperAdminModals from '../components/SuperAdminModals.astro'
 /**
  * Lightweight shell for /superadmin/* pages. Borrows the design tokens
  * from AppLayout but skips the per-tenant chrome (no tenant pill, no
@@ -163,5 +164,6 @@ const userEmail = identity?.email ?? ''
       <main class="sa-content"><slot /></main>
     </div>
   </div>
+  <SuperAdminModals />
 </body>
 </html>

@@ -51,9 +51,6 @@ try {
 } catch {
   error = 'No se pudo conectar con el servidor.'
 }
-
-const flash = Astro.url.searchParams.get('flash')
-const errorFlag = Astro.url.searchParams.get('error')
 ---
 <SuperAdminLayout title={tenant?.name ?? 'Empresa'}>
   <div class="p-8 max-w-4xl">
@@ -78,17 +75,6 @@ const errorFlag = Astro.url.searchParams.get('error')
       </div>
     </div>
 
-    {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
-        Empresa creada. Esperando que termine la provisión…
-      </div>
-    )}
-    {flash === 'updated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Estado actualizado.</div>
-    )}
-    {flash === 'admin-reset' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Contraseña del administrador actualizada.</div>
-    )}
     {(tenant?.status === 'PROVISIONING' || provisioning?.state === 'running') && (
       <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
         <svg class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -97,30 +83,31 @@ const errorFlag = Astro.url.searchParams.get('error')
         Provisionando schema y aplicando migraciones — esta página se refrescará automáticamente.
       </div>
     )}
-    {errorFlag === 'no-admin' && (
-      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-        La empresa no tiene un administrador con <code class="font-mono">is_tenant_admin = true</code>.
-        Re-ejecutá el seed o marcá el flag manualmente antes de impersonar.
-      </div>
-    )}
-    {errorFlag === 'not-active' && (
-      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-        Solo se puede impersonar a empresas en estado <span class="font-mono">ACTIVE</span>.
-      </div>
-    )}
-    {errorFlag === 'server-error' && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
-        No se pudo aplicar la acción.
-        {Astro.url.searchParams.get('detail') && (
-          <span class="block mt-1 text-xs font-mono opacity-80">
-            {Astro.url.searchParams.get('detail')}
-          </span>
-        )}
-      </div>
-    )}
     {error && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
+
+    <script is:inline>
+      window.SA_FLASH_MESSAGES = {
+        created:       { title: 'Empresa creada',           message: 'La empresa fue aprovisionada correctamente. Esperando que termine la provisión…' },
+        updated:       { title: 'Estado actualizado',       message: 'El estado de la empresa fue actualizado.' },
+        'admin-reset': { title: 'Contraseña actualizada',   message: 'La contraseña del administrador fue restablecida.' },
+      };
+      window.SA_ERROR_MESSAGES = {
+        'no-admin': {
+          title: 'La empresa no tiene administrador',
+          message: 'No se encontró un usuario con is_tenant_admin = true. Re-ejecuta el seed o marca el flag manualmente antes de impersonar.',
+        },
+        'not-active': {
+          title: 'La empresa no está activa',
+          message: 'Solo se puede impersonar a empresas en estado ACTIVE.',
+        },
+        'server-error': {
+          title: 'No se pudo aplicar la acción',
+          message: 'Ocurrió un error al ejecutar la operación.',
+        },
+      };
+    </script>
 
     {tenant && (
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -166,7 +153,16 @@ const errorFlag = Astro.url.searchParams.get('error')
               <form
                 method="POST"
                 action={`/api/superadmin/tenants/${tenant.slug}/impersonate`}
-                onsubmit="return confirm('Vas a iniciar sesión como administrador de esta empresa durante 30 minutos. La acción queda registrada en auditoría.');"
+                data-saconfirm
+                data-sa-title="Entrar como administrador"
+                data-sa-message={`Vas a iniciar sesión como administrador de "${tenant.name}" durante 30 minutos. La acción queda registrada en auditoría.`}
+                data-sa-confirm-label="Iniciar sesión"
+                data-sa-tone="primary"
+                data-sa-loading-title="Iniciando sesión"
+                data-sa-loading-message="Generando token de impersonación…"
+                data-sa-success-title="Sesión iniciada"
+                data-sa-success-message="Te estamos llevando al panel del tenant."
+                data-sa-error-title="No se pudo iniciar la impersonación"
               >
                 <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700">
                   Entrar como administrador
@@ -174,19 +170,52 @@ const errorFlag = Astro.url.searchParams.get('error')
               </form>
             )}
             {tenant.status !== 'ACTIVE' && tenant.status !== 'ARCHIVED' && (
-              <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`}>
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/status`}
+                data-saconfirm
+                data-sa-title="Reactivar empresa"
+                data-sa-message={`Vas a reactivar "${tenant.name}". Sus usuarios podrán volver a iniciar sesión.`}
+                data-sa-confirm-label="Reactivar"
+                data-sa-tone="primary"
+                data-sa-loading-title="Reactivando empresa"
+                data-sa-success-title="Empresa reactivada"
+                data-sa-error-title="No se pudo reactivar la empresa"
+              >
                 <input type="hidden" name="status" value="ACTIVE" />
                 <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700">Reactivar</button>
               </form>
             )}
             {tenant.status === 'ACTIVE' && (
-              <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`}>
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/status`}
+                data-saconfirm
+                data-sa-title="Suspender empresa"
+                data-sa-message={`Vas a suspender "${tenant.name}". Los usuarios no podrán iniciar sesión hasta reactivarla.`}
+                data-sa-confirm-label="Suspender"
+                data-sa-tone="warning"
+                data-sa-loading-title="Suspendiendo empresa"
+                data-sa-success-title="Empresa suspendida"
+                data-sa-error-title="No se pudo suspender la empresa"
+              >
                 <input type="hidden" name="status" value="SUSPENDED" />
                 <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-gray-700 text-white hover:bg-gray-800">Suspender</button>
               </form>
             )}
             {tenant.status !== 'ARCHIVED' && (
-              <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/status`} onsubmit="return confirm('¿Archivar esta empresa? La acción es reversible solo cambiando el estado.');">
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/status`}
+                data-saconfirm
+                data-sa-title="Archivar empresa"
+                data-sa-message={`Vas a archivar "${tenant.name}". La acción solo es reversible cambiando el estado manualmente.`}
+                data-sa-confirm-label="Archivar"
+                data-sa-tone="danger"
+                data-sa-loading-title="Archivando empresa"
+                data-sa-success-title="Empresa archivada"
+                data-sa-error-title="No se pudo archivar la empresa"
+              >
                 <input type="hidden" name="status" value="ARCHIVED" />
                 <button type="submit" class="px-3 py-1.5 text-xs rounded-md border border-red-200 text-red-700 hover:bg-red-50">Archivar</button>
               </form>
@@ -195,7 +224,19 @@ const errorFlag = Astro.url.searchParams.get('error')
 
           <div class="border-t border-gray-200 mt-5 pt-5">
             <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">Restablecer contraseña del admin</h3>
-            <form method="POST" action={`/api/superadmin/tenants/${tenant.slug}/admin-reset`} class="flex flex-wrap items-end gap-2">
+            <form
+              method="POST"
+              action={`/api/superadmin/tenants/${tenant.slug}/admin-reset`}
+              class="flex flex-wrap items-end gap-2"
+              data-saconfirm
+              data-sa-title="Restablecer contraseña del administrador"
+              data-sa-message={`Vas a establecer una nueva contraseña para el administrador de "${tenant.name}". El usuario deberá iniciar sesión con esta clave en su próximo acceso.`}
+              data-sa-confirm-label="Establecer contraseña"
+              data-sa-tone="warning"
+              data-sa-loading-title="Actualizando contraseña"
+              data-sa-success-title="Contraseña actualizada"
+              data-sa-error-title="No se pudo restablecer la contraseña"
+            >
               <div>
                 <input type="password" name="password" required minlength="12" maxlength="256"
                   class="w-72 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"

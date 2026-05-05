@@ -3,14 +3,45 @@ import { getIdentity } from '../../../../lib/auth'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
+const ERROR_LABELS: Record<string, string> = {
+  'missing-fields': 'Completa todos los campos obligatorios.',
+  'weak-password': 'La contraseña debe tener al menos 12 caracteres.',
+  'invalid-slug':
+    'El identificador no es válido. Usa solo letras minúsculas, números, guion y guion bajo (3 a 50 caracteres).',
+  'slug-taken': 'Ese identificador ya está en uso por otra empresa.',
+  'admin-email-invalid': 'El correo del administrador no es válido.',
+  'server-error': 'No se pudo crear la empresa.',
+}
+
+function isModal(request: Request) {
+  return request.headers.get('x-sa-modal') === '1'
+}
+
+function jsonOk(data: { redirect: string; message?: string }) {
+  return new Response(JSON.stringify({ ok: true, ...data }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function jsonErr(error: string, opts?: { status?: number; detail?: string }) {
+  return new Response(JSON.stringify({ ok: false, error, detail: opts?.detail }), {
+    status: opts?.status ?? 400,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 /**
- * Form proxy for the "Provisionar empresa" wizard. Maps the API's
- * structured error codes (slug_taken, invalid_slug, ...) onto query-string
- * flags the form page knows how to render.
+ * Form proxy for the "Provisionar empresa" wizard. Returns JSON when the
+ * caller is the SuperAdmin modal helper (X-SA-Modal: 1) and falls back
+ * to redirects for traditional form submissions.
  */
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const identity = getIdentity(cookies)
-  if (!identity || identity.type !== 'super_admin') return redirect('/superadmin/login')
+  if (!identity || identity.type !== 'super_admin') {
+    if (isModal(request)) return jsonErr('No autorizado.', { status: 401 })
+    return redirect('/superadmin/login')
+  }
 
   const formData = await request.formData()
   const slug = ((formData.get('slug') as string | null) ?? '').trim().toLowerCase()
@@ -20,14 +51,16 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const adminEmail = ((formData.get('adminEmail') as string | null) ?? '').trim().toLowerCase()
   const adminPassword = (formData.get('adminPassword') as string | null) ?? ''
 
+  const qsBack = `slug=${encodeURIComponent(slug)}&name=${encodeURIComponent(name)}`
+
   if (!slug || !name || !adminName || !adminEmail || !adminPassword) {
+    if (isModal(request)) return jsonErr(ERROR_LABELS['missing-fields'])
     return redirect('/superadmin/tenants/new?error=missing-fields')
   }
   if (adminPassword.length < 12) {
+    if (isModal(request)) return jsonErr(ERROR_LABELS['weak-password'])
     return redirect('/superadmin/tenants/new?error=weak-password')
   }
-
-  const qsBack = `slug=${encodeURIComponent(slug)}&name=${encodeURIComponent(name)}`
 
   let res: Response
   try {
@@ -37,24 +70,26 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         'Content-Type': 'application/json',
         Cookie: `auth=${identity.raw}`,
       },
-      body: JSON.stringify({
-        slug,
-        name,
-        contactEmail,
-        adminEmail,
-        adminName,
-        adminPassword,
-      }),
+      body: JSON.stringify({ slug, name, contactEmail, adminEmail, adminName, adminPassword }),
     })
   } catch (err) {
     console.error('[superadmin/tenants/create] fetch failed:', err)
+    if (isModal(request)) {
+      return jsonErr(ERROR_LABELS['server-error'], {
+        status: 502,
+        detail: err instanceof Error ? err.message : String(err),
+      })
+    }
     return redirect(`/superadmin/tenants/new?error=server-error&${qsBack}`)
   }
 
   if (res.ok) {
-    // Land on the tenant detail page so the user watches provisioning
-    // transition from PROVISIONING → ACTIVE in real time. The detail
-    // page polls itself while state=running.
+    if (isModal(request)) {
+      return jsonOk({
+        redirect: `/superadmin/tenants/${slug}?flash=created`,
+        message: `La empresa "${name}" fue creada correctamente.`,
+      })
+    }
     return redirect(`/superadmin/tenants/${slug}?flash=created`)
   }
 
@@ -69,11 +104,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       detail = body.error.message
     }
   } catch {
-    // ignore — we'll fall through to a generic error
+    // ignore
   }
-
-  // Surface upstream detail so the wizard can show what actually failed
-  // instead of a generic "revisa auditoría" message that hides the cause.
   if (!detail) {
     try {
       detail = (await res.clone().text()).slice(0, 500)
@@ -91,11 +123,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
           ? 'admin-email-invalid'
           : 'server-error'
 
-  console.error('[superadmin/tenants/create] api error', {
-    status: res.status,
-    kind,
-    detail,
-  })
+  console.error('[superadmin/tenants/create] api error', { status: res.status, kind, detail })
+
+  if (isModal(request)) {
+    return jsonErr(ERROR_LABELS[errorFlag] ?? ERROR_LABELS['server-error'], {
+      status: res.status,
+      detail,
+    })
+  }
 
   const detailQs = detail ? `&detail=${encodeURIComponent(detail)}` : ''
   return redirect(`/superadmin/tenants/new?error=${errorFlag}&${qsBack}${detailQs}`)
