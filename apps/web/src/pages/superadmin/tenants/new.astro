@@ -8,6 +8,7 @@ if (!identity || identity.type !== 'super_admin') {
 }
 
 const errorFlag = Astro.url.searchParams.get('error')
+const errorDetail = Astro.url.searchParams.get('detail')
 const errorMessages: Record<string, string> = {
   'invalid-slug':
     'El identificador no es válido. Usa solo letras minúsculas, números, guion y guion bajo (3 a 50 caracteres).',
@@ -15,7 +16,7 @@ const errorMessages: Record<string, string> = {
   'admin-email-invalid': 'El correo del administrador no es válido.',
   'missing-fields': 'Completa todos los campos obligatorios.',
   'weak-password': 'La contraseña debe tener al menos 12 caracteres.',
-  'server-error': 'No se pudo crear la empresa. Revisa el detalle en auditoría.',
+  'server-error': 'No se pudo crear la empresa.',
 }
 const errorMessage = errorFlag ? errorMessages[errorFlag] : ''
 const prefillSlug = Astro.url.searchParams.get('slug') ?? ''
@@ -36,7 +37,12 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
       </div>
 
       {errorMessage && (
-        <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" id="banner-server-error">{errorMessage}</div>
+        <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" id="banner-server-error">
+          <div class="font-medium">{errorMessage}</div>
+          {errorDetail && (
+            <pre class="mt-2 whitespace-pre-wrap break-words text-xs text-red-800/90">{errorDetail}</pre>
+          )}
+        </div>
       )}
 
       <!-- Stepper -->

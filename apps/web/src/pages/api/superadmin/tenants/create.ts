@@ -59,11 +59,27 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   }
 
   let kind: string | undefined
+  let detail: string | undefined
   try {
-    const body = (await res.json()) as { error?: { kind?: string } | string }
-    kind = typeof body.error === 'object' && body.error ? body.error.kind : undefined
+    const body = (await res.json()) as {
+      error?: { kind?: string; message?: string } | string
+    }
+    if (typeof body.error === 'object' && body.error) {
+      kind = body.error.kind
+      detail = body.error.message
+    }
   } catch {
     // ignore — we'll fall through to a generic error
+  }
+
+  // Surface upstream detail so the wizard can show what actually failed
+  // instead of a generic "revisa auditoría" message that hides the cause.
+  if (!detail) {
+    try {
+      detail = (await res.clone().text()).slice(0, 500)
+    } catch {
+      // best effort
+    }
   }
 
   const errorFlag =
@@ -75,5 +91,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
           ? 'admin-email-invalid'
           : 'server-error'
 
-  return redirect(`/superadmin/tenants/new?error=${errorFlag}&${qsBack}`)
+  console.error('[superadmin/tenants/create] api error', {
+    status: res.status,
+    kind,
+    detail,
+  })
+
+  const detailQs = detail ? `&detail=${encodeURIComponent(detail)}` : ''
+  return redirect(`/superadmin/tenants/new?error=${errorFlag}&${qsBack}${detailQs}`)
 }

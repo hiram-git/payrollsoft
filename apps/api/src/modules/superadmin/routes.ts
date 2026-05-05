@@ -126,9 +126,11 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
           passwordHash,
         },
         superAdminId: user?.userId,
+        log: (line) => console.log(`[provision ${body.slug}] ${line}`),
       })
 
       if (!result.ok) {
+        console.error(`[provision ${body.slug}] failed`, result.error)
         const status =
           result.error.kind === 'slug_taken'
             ? 409
