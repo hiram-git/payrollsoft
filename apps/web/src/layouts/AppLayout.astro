@@ -594,9 +594,11 @@ const icons: Record<IconKey, string> = {
         display: flex;
         align-items: center;
         gap: 8px;
+        --tb-h: 34px;
       }
       .topbar-icon-btn {
-        width: 34px; height: 34px;
+        height: var(--tb-h);
+        width: var(--tb-h);
         display: grid;
         place-items: center;
         border: none;
@@ -606,22 +608,27 @@ const icons: Record<IconKey, string> = {
         border-radius: 6px;
         transition: background 140ms ease, color 140ms ease;
         text-decoration: none;
+        box-sizing: border-box;
       }
       .topbar-icon-btn:hover { background: var(--ink-4); color: var(--fore-dim); }
 
       /* Theme switch in topbar */
       .ts-wrap {
         display: inline-flex;
-        padding: 2px;
+        align-items: center;
+        height: var(--tb-h);
+        padding: 3px;
         background: var(--ink-3);
         border: 1px solid var(--rule);
         border-radius: 999px;
         position: relative;
+        box-sizing: border-box;
       }
       .ts-knob {
         position: absolute;
-        top: 2px;
-        width: 30px; height: 24px;
+        top: 3px;
+        bottom: 3px;
+        width: 30px;
         background: var(--ink-2);
         border: 1px solid var(--rule-hi);
         border-radius: 999px;
@@ -631,7 +638,8 @@ const icons: Record<IconKey, string> = {
       .ts-btn {
         position: relative;
         z-index: 2;
-        width: 30px; height: 24px;
+        width: 30px;
+        height: 100%;
         display: grid;
         place-items: center;
         border: none;
@@ -653,7 +661,8 @@ const icons: Record<IconKey, string> = {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        padding: 4px 10px 4px 10px;
+        height: var(--tb-h);
+        padding: 0 12px;
         border: 1px solid var(--rule);
         border-radius: 999px;
         background: var(--ink-3);
@@ -662,6 +671,7 @@ const icons: Record<IconKey, string> = {
         font-family: var(--f-sans);
         font-size: 12px;
         line-height: 1;
+        box-sizing: border-box;
         transition: border-color 140ms ease, background 140ms ease, color 140ms ease;
       }
       .type-pill:hover { border-color: var(--rule-hi); color: var(--fore-dim); }
@@ -755,13 +765,15 @@ const icons: Record<IconKey, string> = {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 4px 10px 4px 4px;
+        height: var(--tb-h);
+        padding: 0 12px 0 3px;
         border-radius: 999px;
         border: 1px solid var(--rule);
         background: var(--ink-3);
         cursor: pointer;
         transition: border-color 140ms ease;
         font-family: var(--f-sans);
+        box-sizing: border-box;
       }
       .avatar-pill:hover { border-color: var(--rule-hi); }
       .avatar-circle {
