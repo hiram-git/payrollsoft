@@ -150,8 +150,11 @@ const monthLabel = monthLabels[month - 1] ?? ''
         </button>
         {report && report.installmentCount > 0 && can(identity, 'reports:loans.view') && (
           <div class="justify-self-end flex items-center gap-2">
-            <a
-              href={`/api/reports/creditors/pdf?year=${year}&month=${month}`}
+            <button
+              type="button"
+              data-export="pdf"
+              data-export-url={`/api/reports/creditors/pdf?year=${year}&month=${month}`}
+              data-export-filename={`acreedores-${year}-${String(month).padStart(2, '0')}.pdf`}
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -160,9 +163,12 @@ const monthLabel = monthLabels[month - 1] ?? ''
                 <path d="M9 13h6M9 17h6M9 9h2"/>
               </svg>
               Exportar PDF
-            </a>
-            <a
-              href={`/api/reports/creditors/xlsx?year=${year}&month=${month}`}
+            </button>
+            <button
+              type="button"
+              data-export="xlsx"
+              data-export-url={`/api/reports/creditors/xlsx?year=${year}&month=${month}`}
+              data-export-filename={`acreedores-${year}-${String(month).padStart(2, '0')}.xlsx`}
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -171,7 +177,7 @@ const monthLabel = monthLabels[month - 1] ?? ''
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               Exportar Excel
-            </a>
+            </button>
           </div>
         )}
       </div>
@@ -264,4 +270,128 @@ const monthLabel = monthLabels[month - 1] ?? ''
       </>
     )}
   </div>
+
+  <script is:inline>
+    /**
+     * Orquesta el flujo confirmación → espera → resultado para los
+     * botones de exportación. El servidor genera el archivo y lo
+     * devuelve como binario; aquí lo bajamos como Blob y disparamos
+     * la descarga programáticamente para mantener el modal de espera
+     * arriba mientras dura la generación. Si el endpoint responde con
+     * un error, lo surface en el modal de error con el mensaje del API.
+     */
+    ;(function () {
+      const FORMAT_LABELS = {
+        pdf: { label: 'PDF', kind: 'PDF', mime: 'application/pdf' },
+        xlsx: {
+          label: 'Excel',
+          kind: 'Excel',
+          mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        },
+      }
+
+      function filenameFromHeader(header, fallback) {
+        if (!header) return fallback
+        const m = header.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i)
+        return m ? decodeURIComponent(m[1]) : fallback
+      }
+
+      async function runExport(btn) {
+        const format = btn.dataset.export
+        const url = btn.dataset.exportUrl
+        const fallbackName = btn.dataset.exportFilename || `reporte.${format}`
+        const meta = FORMAT_LABELS[format] || { label: format, kind: format, mime: 'application/octet-stream' }
+        if (!url || !window.saModal) {
+          window.location.href = url
+          return
+        }
+
+        const ok = await window.saModal.confirm({
+          title: `Generar reporte ${meta.kind}`,
+          message:
+            `Vamos a armar el reporte de acreedores en formato ${meta.kind} con las planillas cerradas del mes seleccionado. ` +
+            `Puede tardar unos segundos si hay muchos descuentos.`,
+          confirmLabel: `Generar ${meta.kind}`,
+        })
+        if (!ok) return
+
+        window.saModal.loading({
+          title: `Generando ${meta.kind}…`,
+          message: 'Compilando la información del mes y armando el archivo. Por favor espera.',
+        })
+
+        let res
+        try {
+          res = await fetch(url, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { Accept: meta.mime },
+          })
+        } catch (err) {
+          await window.saModal.error({
+            title: 'No se pudo conectar con el servidor',
+            message: 'Revisa tu conexión y vuelve a intentar.',
+            detail: err && err.message ? err.message : String(err),
+          })
+          return
+        }
+
+        if (!res.ok) {
+          let detail = `HTTP ${res.status}`
+          try {
+            const txt = await res.text()
+            if (txt) detail = txt.slice(0, 500)
+          } catch {
+            /* best-effort */
+          }
+          await window.saModal.error({
+            title: `No se pudo generar el ${meta.kind}`,
+            message: 'El servidor rechazó la solicitud. Revisa el detalle.',
+            detail,
+          })
+          return
+        }
+
+        let blob
+        try {
+          blob = await res.blob()
+        } catch (err) {
+          await window.saModal.error({
+            title: `No se pudo leer el ${meta.kind}`,
+            message: 'El archivo llegó pero no se pudo procesar.',
+            detail: err && err.message ? err.message : String(err),
+          })
+          return
+        }
+
+        const filename = filenameFromHeader(
+          res.headers.get('content-disposition'),
+          fallbackName
+        )
+
+        const objectUrl = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = objectUrl
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+        // Liberar el blob después del click; algunos navegadores
+        // necesitan el handle vivo durante el descenso del evento.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 1500)
+
+        await window.saModal.success({
+          title: `${meta.kind} generado`,
+          message: `Se descargó "${filename}".`,
+        })
+      }
+
+      document.querySelectorAll('button[data-export]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault()
+          runExport(btn)
+        })
+      })
+    })()
+  </script>
 </AppLayout>
