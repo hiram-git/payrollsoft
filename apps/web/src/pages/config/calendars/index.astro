@@ -307,7 +307,22 @@ const viewerYears = Array.from(new Set([...years, ...yearOptions])).sort((a, b) 
     )}
 
     {canInit && (
-      <form id="cal-wizard" method="POST" action="/api/calendar/initialize" class="space-y-6 bg-white border border-gray-200 rounded-lg p-6">
+      <form
+        id="cal-wizard"
+        method="POST"
+        action="/api/calendar/initialize"
+        class="space-y-6 bg-white border border-gray-200 rounded-lg p-6"
+        data-saconfirm
+        data-sa-title="Inicializar calendario"
+        data-sa-message="Vamos a generar las filas del calendario laboral según los turnos y el período seleccionados. Si ya existían días en el rango se actualizarán."
+        data-sa-confirm-label="Inicializar"
+        data-sa-tone="primary"
+        data-sa-loading-title="Inicializando calendario"
+        data-sa-loading-message="Generando los días y aplicando los turnos. Puede tardar unos segundos en años completos."
+        data-sa-success-title="Calendario inicializado"
+        data-sa-success-message="Se actualizaron los días del calendario laboral."
+        data-sa-error-title="No se pudo inicializar el calendario"
+      >
         <!-- Paso 1: Período -->
         <div>
           <h2 class="text-sm font-medium text-gray-700">1. Período</h2>

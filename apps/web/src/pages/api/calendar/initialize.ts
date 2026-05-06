@@ -14,9 +14,26 @@ type Shift = { id: string; name: string; weekdays: number[] }
  *   use so the operator doesn't have to seed them by hand.
  * - "custom" reuses whatever the user ticked in the wizard.
  */
+/**
+ * Wire the proxy as dual-mode: classic redirects for plain form
+ * submissions, JSON envelope when the modal helper sets the
+ * `X-SA-Modal: 1` header. Same logic, two response shapes.
+ */
+const isModal = (request: Request) => request.headers.get('x-sa-modal') === '1'
+
+function jsonResponse(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const identity = getIdentity(cookies)
-  if (!identity) return redirect('/login')
+  if (!identity) {
+    if (isModal(request)) return jsonResponse(401, { ok: false, error: 'No autorizado.' })
+    return redirect('/login')
+  }
   const tenant = identity.tenantSlug ?? 'demo'
   const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenant }
   const json = (extra: HeadersInit = {}) => ({
@@ -25,11 +42,16 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     ...extra,
   })
 
+  const fail = (status: number, detail: string) => {
+    if (isModal(request)) {
+      return jsonResponse(status, { ok: false, error: detail })
+    }
+    return redirect(`/config/calendars?error=1&detail=${encodeURIComponent(detail)}`)
+  }
+
   const form = await request.formData()
   const year = Number.parseInt(String(form.get('year') ?? ''), 10)
-  if (!Number.isInteger(year)) {
-    return redirect(`/config/calendars?error=1&detail=${encodeURIComponent('Año inválido')}`)
-  }
+  if (!Number.isInteger(year)) return fail(400, 'Año inválido.')
 
   const scope = String(form.get('scope') ?? 'full')
   const months =
@@ -40,9 +62,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
           .filter((n) => Number.isInteger(n) && n >= 1 && n <= 12)
       : undefined
   if (scope === 'months' && (!months || months.length === 0)) {
-    return redirect(
-      `/config/calendars?error=1&detail=${encodeURIComponent('Selecciona al menos un mes')}`
-    )
+    return fail(400, 'Selecciona al menos un mes.')
   }
 
   const schedule = String(form.get('schedule') ?? 'standard')
@@ -52,16 +72,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     if (schedule === 'custom') {
       shiftIds = form.getAll('customShiftIds').map((v) => String(v))
       if (shiftIds.length === 0) {
-        return redirect(
-          `/config/calendars?error=1&detail=${encodeURIComponent('Selecciona al menos un turno personalizado')}`
-        )
+        return fail(400, 'Selecciona al menos un turno personalizado.')
       }
     } else {
       shiftIds = await ensurePresetShifts(schedule, headers, json)
     }
   } catch (err) {
     const detail = err instanceof Error ? err.message : 'No se pudieron preparar los turnos'
-    return redirect(`/config/calendars?error=1&detail=${encodeURIComponent(detail)}`)
+    return fail(500, detail)
   }
 
   let res: Response
@@ -73,18 +91,44 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     })
   } catch (err) {
     console.error('[calendar/initialize] fetch failed:', err)
-    return redirect('/config/calendars?error=1&detail=server-error')
+    return fail(502, err instanceof Error ? err.message : 'server-error')
   }
 
   if (!res.ok) {
-    let detail = 'server-error'
+    let detail = `HTTP ${res.status}`
     try {
       const body = (await res.json()) as { error?: string; message?: string }
-      detail = body.message ?? body.error ?? 'server-error'
-    } catch {}
-    return redirect(`/config/calendars?error=1&detail=${encodeURIComponent(detail)}`)
+      detail = body.message ?? body.error ?? detail
+    } catch {
+      // best-effort
+    }
+    return fail(res.status, detail)
   }
 
+  // Surface the API's row counts in the success message so the user sees
+  // exactly how many days were touched, not a generic "ok".
+  let summary = ''
+  try {
+    const body = (await res.json()) as {
+      data?: { inserted?: number; updated?: number; rangeFrom?: string; rangeTo?: string }
+    }
+    const d = body.data ?? {}
+    if (d.rangeFrom && d.rangeTo) {
+      const inserted = d.inserted ?? 0
+      const updated = d.updated ?? 0
+      summary = `Rango ${d.rangeFrom} → ${d.rangeTo}. Insertados: ${inserted} · Actualizados: ${updated}.`
+    }
+  } catch {
+    // best-effort
+  }
+
+  if (isModal(request)) {
+    return jsonResponse(200, {
+      ok: true,
+      redirect: '/config/calendars',
+      message: summary || 'Calendario inicializado correctamente.',
+    })
+  }
   return redirect('/config/calendars?flash=initialized')
 }
 
