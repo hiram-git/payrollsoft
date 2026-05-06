@@ -57,7 +57,9 @@ const errorFlag = Astro.url.searchParams.get('error')
 const errorDetail = Astro.url.searchParams.get('detail')
 
 const currentYear = new Date().getFullYear()
-const yearOptions = [-1, 0, 1, 2].map((d) => currentYear + d)
+// ±10 años desde el actual: cubre cargas históricas y planificación futura
+// sin tener que mantener una lista a mano. Total: 21 opciones.
+const yearOptions = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i)
 
 const monthLabels = [
   'Enero',
