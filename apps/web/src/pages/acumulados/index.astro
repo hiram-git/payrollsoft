@@ -177,7 +177,7 @@ function buildUrl(extra: Record<string, string>) {
 ---
 
 <AppLayout title="Acumulados">
-  <div class="px-6 py-8 max-w-6xl mx-auto">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
 
     <!-- Header -->
     <div class="mb-6">
@@ -253,13 +253,13 @@ function buildUrl(extra: Record<string, string>) {
         <div class="flex flex-col justify-end gap-2">
           <button
             type="submit"
-            class="px-3 py-2 rounded-md bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+            class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
           >
             Filtrar
           </button>
           <a
             href="/acumulados"
-            class="px-3 py-2 rounded-md border border-gray-300 text-gray-600 text-xs text-center hover:bg-gray-50 transition-colors"
+            class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium text-center hover:bg-gray-50 transition-colors"
           >
             Limpiar
           </a>
@@ -283,13 +283,13 @@ function buildUrl(extra: Record<string, string>) {
     <div class="flex items-center gap-2 mb-4">
       <a
         href={buildUrl({ view: 'summary', page: '1' })}
-        class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filterView === 'summary' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+        class={`px-3.5 py-2 rounded-md text-sm font-medium transition-colors ${filterView === 'summary' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
       >
         Resumen
       </a>
       <a
         href={buildUrl({ view: 'detail', page: '1' })}
-        class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filterView === 'detail' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+        class={`px-3.5 py-2 rounded-md text-sm font-medium transition-colors ${filterView === 'detail' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
       >
         Detalle
       </a>
@@ -380,12 +380,12 @@ function buildUrl(extra: Record<string, string>) {
                   <p class="text-xs text-gray-500">{summaryTotal} conceptos · página {page} de {summaryTotalPages}</p>
                   <div class="flex gap-2">
                     {page > 1 && (
-                      <a href={buildUrl({ page: String(page - 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ page: String(page - 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         ← Anterior
                       </a>
                     )}
                     {page < summaryTotalPages && (
-                      <a href={buildUrl({ page: String(page + 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ page: String(page + 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         Siguiente →
                       </a>
                     )}
@@ -458,12 +458,12 @@ function buildUrl(extra: Record<string, string>) {
                   <p class="text-xs text-gray-500">{detailTotal} registros · página {page} de {detailPages}</p>
                   <div class="flex gap-2">
                     {page > 1 && (
-                      <a href={buildUrl({ view: 'detail', page: String(page - 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ view: 'detail', page: String(page - 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         ← Anterior
                       </a>
                     )}
                     {page < detailPages && (
-                      <a href={buildUrl({ view: 'detail', page: String(page + 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ view: 'detail', page: String(page + 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         Siguiente →
                       </a>
                     )}
@@ -561,6 +561,6 @@ function buildUrl(extra: Record<string, string>) {
 
 <style>
   .filter-input {
-    @apply w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white;
+    @apply w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent;
   }
 </style>
