@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { SYSTEM_ROLES, type SystemRoleCode } from '@payroll/types'
 import { tenantSchemaName, validateTenantSlug } from '@payroll/utils'
 import postgres from 'postgres'
+import { DEFAULT_CONCEPTS } from './default-concepts'
 import { runMigrations } from './migrator'
 
 export type ProvisionTenantInput = {
@@ -135,6 +136,7 @@ export async function provisionTenant(
         companyName: input.name,
         contactEmail: input.contactEmail ?? null,
       })
+      await seedDefaultConcepts(tenant)
     } finally {
       await tenant.end()
     }
@@ -281,4 +283,28 @@ async function seedCompanyConfig(
     SELECT ${data.companyName}, ${data.contactEmail}
      WHERE NOT EXISTS (SELECT 1 FROM company_config)
   `
+}
+
+/**
+ * Carga los conceptos canónicos (ISLR + sueldo, seguros sociales y
+ * educativos) para que la primera planilla de la empresa tenga las
+ * fórmulas armadas. Idempotente vía ON CONFLICT — re-provisionar no
+ * pisa los flags si el admin los editó después.
+ */
+async function seedDefaultConcepts(tenant: postgres.Sql): Promise<void> {
+  for (const c of DEFAULT_CONCEPTS) {
+    await tenant`
+      INSERT INTO concepts (
+        code, name, type, formula, is_active, unit,
+        print_details, prorates, allow_modify,
+        is_reference_value, use_amount_calc, allow_zero
+      )
+      VALUES (
+        ${c.code}, ${c.name}, ${c.type}, ${c.formula}, true, ${c.unit},
+        ${c.printDetails}, ${c.prorates}, ${c.allowModify},
+        ${c.isReferenceValue}, ${c.useAmountCalc}, ${c.allowZero}
+      )
+      ON CONFLICT (code) DO NOTHING
+    `
+  }
 }

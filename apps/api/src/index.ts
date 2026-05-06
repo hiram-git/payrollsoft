@@ -21,6 +21,7 @@ import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 import { payrollRoutes } from './modules/payroll/routes'
 import { positionsRoutes } from './modules/positions/routes'
+import { reportsRoutes } from './modules/reports/routes'
 import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
 import { superadminRoutes } from './modules/superadmin/routes'
 import { tenantUserRoutes } from './modules/users/routes'
@@ -66,6 +67,7 @@ const app = new Elysia()
   .use(loansRoutes)
   .use(creditorRoutes)
   .use(payrollRoutes)
+  .use(reportsRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen({ port: env.PORT, hostname: env.HOST })

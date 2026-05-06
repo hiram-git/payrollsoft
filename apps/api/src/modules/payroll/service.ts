@@ -258,7 +258,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         success: false as const,
         error: 'no_employees',
         message: payroll.payrollTypeId
-          ? 'No hay empleados asignados al tipo de nómina seleccionado'
+          ? 'No hay empleados asignados al tipo de planilla seleccionado'
           : 'No hay empleados activos para generar la planilla',
       }
     }
