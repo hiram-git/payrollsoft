@@ -213,6 +213,56 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
                 </dd>
               </div>
             </dl>
+
+            <!-- ── Seeds opcionales ──────────────────────────────────────────── -->
+            <div class="mt-6 rounded-lg border border-gray-200 bg-gray-50/50 p-5">
+              <p class="text-sm font-medium text-gray-800 mb-1">Datos de prueba (opcional)</p>
+              <p class="text-xs text-gray-500 mb-4">
+                Marca los seeds que quieras inicializar con la empresa. Se aplican una sola
+                vez por empresa — el sistema bloquea reaplicaciones desde la interfaz; revertir
+                requiere ejecutar SQL directo en la base.
+              </p>
+
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" name="seedEmployees" id="seed-employees" value="1" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <div class="flex-1">
+                    <span class="block text-sm font-medium text-gray-800">Empleados</span>
+                    <span class="block text-xs text-gray-500 mt-0.5">
+                      Genera empleados de prueba con cargos, funciones, departamentos y enganchados al tipo de planilla por defecto.
+                    </span>
+                    <div id="seed-employees-total-wrap" hidden class="mt-2 flex items-center gap-2">
+                      <label class="text-xs text-gray-600">Cantidad:</label>
+                      <input
+                        type="number"
+                        name="seedEmployeesTotal"
+                        id="seed-employees-total"
+                        min="1"
+                        max="10000"
+                        value="200"
+                        class="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                      />
+                      <span class="text-xs text-gray-500">(1–10 000)</span>
+                    </div>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" name="seedLoans" id="seed-loans" value="1" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled />
+                  <div class="flex-1">
+                    <span class="block text-sm font-medium text-gray-800">Préstamos</span>
+                    <span class="block text-xs text-gray-500 mt-0.5">
+                      10 acreedores (3 bancos + 7 financieras) y 1–4 préstamos quincenales por empleado activo.
+                      <span class="text-gray-400">Requiere el seed de Empleados.</span>
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <p class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                ⚠️ El sembrado puede tardar varios segundos según el volumen seleccionado.
+              </p>
+            </div>
           </div>
         </fieldset>
 
@@ -613,6 +663,24 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
           refreshPrimary();
         }
       });
+
+      // ── Seeds wiring ──────────────────────────────────────────────
+      // Loans depende de empleados (no se puede prestar sin empleados).
+      // El input numérico solo se muestra cuando employees está marcado.
+      const seedEmpCheck = document.getElementById('seed-employees');
+      const seedEmpTotalWrap = document.getElementById('seed-employees-total-wrap');
+      const seedLoansCheck = document.getElementById('seed-loans');
+      function refreshSeedsUi() {
+        if (!seedEmpCheck) return;
+        const empOn = seedEmpCheck.checked;
+        if (seedEmpTotalWrap) seedEmpTotalWrap.hidden = !empOn;
+        if (seedLoansCheck) {
+          seedLoansCheck.disabled = !empOn;
+          if (!empOn) seedLoansCheck.checked = false;
+        }
+      }
+      seedEmpCheck?.addEventListener('change', refreshSeedsUi);
+      refreshSeedsUi();
 
       // Init
       showStep(1);
