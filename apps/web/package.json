@@ -17,6 +17,7 @@
     "@payroll/types": "workspace:*",
     "@react-pdf/renderer": "^4.4.1",
     "astro": "^6.1.5",
+    "docx": "^9.6.1",
     "nodemailer": "^8.0.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
