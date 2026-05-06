@@ -487,7 +487,7 @@ export function PayrollPdf({
 
   const elaborador = {
     name: company?.elaboradoPor ?? '',
-    role: company?.cargoElaborador ?? 'Especialista en Nóminas',
+    role: company?.cargoElaborador ?? 'Especialista en Planilla',
   }
   const revisor = {
     name: company?.jefeRecursosHumanos ?? '',

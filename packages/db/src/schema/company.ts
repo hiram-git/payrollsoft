@@ -25,7 +25,7 @@ export const companyConfig = pgTable('company_config', {
   mailFromName: varchar('mail_from_name', { length: 255 }),
   // Payroll report signatures
   elaboradoPor: varchar('elaborado_por', { length: 255 }),
-  cargoElaborador: varchar('cargo_elaborador', { length: 255 }).default('Especialista en Nóminas'),
+  cargoElaborador: varchar('cargo_elaborador', { length: 255 }).default('Especialista en Planilla'),
   jefeRecursosHumanos: varchar('jefe_recursos_humanos', { length: 255 }),
   cargoJefeRrhh: varchar('cargo_jefe_rrhh', { length: 255 }).default('Jefe de Recursos Humanos'),
   // Logos — stored as base64 data URLs (suitable for small company logos up to ~200 KB)

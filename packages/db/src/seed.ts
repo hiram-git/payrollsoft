@@ -28,6 +28,7 @@
  * NOT EXISTS), así que correr el seeder múltiples veces es seguro.
  */
 import postgres from 'postgres'
+import { DEFAULT_CONCEPTS } from './default-concepts'
 
 // ─── Argumentos CLI ──────────────────────────────────────────────────────────
 
@@ -392,48 +393,34 @@ try {
   `
   console.log('✓ Acreedor    : BN - Banco Nacional')
 
-  // ── Conceptos de nómina ──────────────────────────────────────────────────────
-  const nominaConcepts = [
-    {
-      code: 'SUELDO',
-      name: 'Sueldo',
-      type: 'income',
-      formula: 'SALARIO*0.5',
-    },
-    {
-      code: 'SS',
-      name: 'Seguro Social',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.095',
-    },
-    {
-      code: 'SE',
-      name: 'Seguro Educativo',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.0975',
-    },
-    {
-      code: 'SSP',
-      name: 'Seguro Social Patronal',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.1325',
-    },
-    {
-      code: 'SEP',
-      name: 'Seguro Educativo Patronal',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.015',
-    },
-  ]
-
-  for (const c of nominaConcepts) {
+  // ── Conceptos de planilla ────────────────────────────────────────────────────
+  // Lista canónica compartida con `provisionTenant` (ver
+  // packages/db/src/default-concepts.ts) para que dev y producción sigan en
+  // sincronía. El seed pisa los flags con los valores canónicos para tener
+  // el mismo punto de partida en cada ejecución.
+  for (const c of DEFAULT_CONCEPTS) {
     await tenantSql`
-      INSERT INTO concepts (code, name, type, formula, is_active)
-      VALUES (${c.code}, ${c.name}, ${c.type}, ${c.formula}, true)
+      INSERT INTO concepts (
+        code, name, type, formula, is_active, unit,
+        print_details, prorates, allow_modify,
+        is_reference_value, use_amount_calc, allow_zero
+      )
+      VALUES (
+        ${c.code}, ${c.name}, ${c.type}, ${c.formula}, true, ${c.unit},
+        ${c.printDetails}, ${c.prorates}, ${c.allowModify},
+        ${c.isReferenceValue}, ${c.useAmountCalc}, ${c.allowZero}
+      )
       ON CONFLICT (code) DO UPDATE
-        SET name    = EXCLUDED.name,
-            type    = EXCLUDED.type,
-            formula = EXCLUDED.formula
+        SET name              = EXCLUDED.name,
+            type              = EXCLUDED.type,
+            formula           = EXCLUDED.formula,
+            unit              = EXCLUDED.unit,
+            print_details     = EXCLUDED.print_details,
+            prorates          = EXCLUDED.prorates,
+            allow_modify      = EXCLUDED.allow_modify,
+            is_reference_value = EXCLUDED.is_reference_value,
+            use_amount_calc   = EXCLUDED.use_amount_calc,
+            allow_zero        = EXCLUDED.allow_zero
     `
     console.log(`✓ Concepto    : ${c.code} - ${c.name}`)
   }

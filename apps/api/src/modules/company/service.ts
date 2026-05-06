@@ -63,7 +63,7 @@ export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigIn
     mailFromAddress: input.mailFromAddress ?? null,
     mailFromName: input.mailFromName ?? null,
     elaboradoPor: input.elaboradoPor ?? null,
-    cargoElaborador: input.cargoElaborador ?? 'Especialista en Nóminas',
+    cargoElaborador: input.cargoElaborador ?? 'Especialista en Planilla',
     jefeRecursosHumanos: input.jefeRecursosHumanos ?? null,
     cargoJefeRrhh: input.cargoJefeRrhh ?? 'Jefe de Recursos Humanos',
     logoEmpresa: input.logoEmpresa ?? null,
