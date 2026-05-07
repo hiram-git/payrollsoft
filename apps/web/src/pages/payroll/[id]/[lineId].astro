@@ -492,17 +492,14 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         padding: 0;
         border: none;
         background: transparent;
-        /* Asegura que el dropdown del combobox (max-h-56 = 14rem) quepa
-           dentro del dialog sin que el navegador active scroll lateral.
-           Reservamos el alto del header + form + dropdown con holgura. */
+        /* Sin scroll interno: dejamos que el dropdown del combobox
+           se superponga si hace falta. */
         overflow: visible;
       }
+      /* Alto fijo del card para que el dropdown del combobox
+         (max-h-56 = 14rem) quepa sin disparar overflow del dialog ni
+         hacer "saltar" el alto cuando aparece/desaparece. */
       .manual-concept-dialog > div {
-        min-height: 28rem;
-      }
-      /* Cuando el dropdown está abierto sumamos su alto al min-height
-         del card para que la lista nunca dispare overflow del dialog. */
-      .manual-concept-dialog[data-dropdown-open='true'] > div {
         min-height: 32rem;
       }
       .manual-concept-dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
@@ -586,20 +583,9 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
           .slice(0, 50)
       }
 
-      // El dialog padre (si existe) recibe data-dropdown-open=true
-      // para que su CSS sume el alto del listado al min-height del
-      // card y no se active scroll lateral.
-      const dialogEl = textInput?.closest('dialog')
-      function markDialog(open) {
-        if (!dialogEl) return
-        if (open) dialogEl.setAttribute('data-dropdown-open', 'true')
-        else dialogEl.removeAttribute('data-dropdown-open')
-      }
-
       function renderDropdown(items) {
         if (items.length === 0) {
           dropdown.classList.add('hidden')
-          markDialog(false)
           return
         }
         dropdown.innerHTML = items
@@ -624,7 +610,6 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
           })
           .join('')
         dropdown.classList.remove('hidden')
-        markDialog(true)
       }
 
       function pickConcept(li) {
@@ -633,7 +618,6 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         const typeLabel = TYPE_LABEL[li.dataset.type] || li.dataset.type
         meta.textContent = `Tipo: ${typeLabel} · Unidad: ${li.dataset.unit || 'monto'}`
         dropdown.classList.add('hidden')
-        markDialog(false)
       }
 
       dropdown.addEventListener('mousedown', (e) => e.preventDefault())
@@ -650,10 +634,7 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         renderDropdown(filterConcepts(textInput.value))
       })
       textInput.addEventListener('blur', () => {
-        setTimeout(() => {
-          dropdown.classList.add('hidden')
-          markDialog(false)
-        }, 100)
+        setTimeout(() => dropdown.classList.add('hidden'), 100)
       })
 
       // Si el usuario submitea sin haber elegido del dropdown, intentamos
