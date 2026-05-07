@@ -496,11 +496,12 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
            se superponga si hace falta. */
         overflow: visible;
       }
-      /* Alto fijo del card para que el dropdown del combobox
-         (max-h-56 = 14rem) quepa sin disparar overflow del dialog ni
-         hacer "saltar" el alto cuando aparece/desaparece. */
+      /* Alto fijo del card: ajustado al contenido real (header + form +
+         meta + footer) más el dropdown del combobox (max-h-56 = 14rem)
+         que vive en posición absoluta debajo del input. Suficiente para
+         que la lista quepa sin disparar overflow del dialog. */
       .manual-concept-dialog > div {
-        min-height: 32rem;
+        min-height: 26rem;
       }
       .manual-concept-dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
     </style>
@@ -546,6 +547,19 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         dialog.addEventListener('click', (e) => {
           if (e.target === dialog) closeDialog()
         })
+
+        // Al disparar submit en el form interno (data-saconfirm), el
+        // helper saModal abre su propio modal de confirmación. Si este
+        // dialog sigue abierto se ven solapados — cerramos el dialog
+        // en fase de captura para que saModal quede limpio en pantalla.
+        const innerForm = dialog.querySelector('form[data-saconfirm]')
+        innerForm?.addEventListener(
+          'submit',
+          () => {
+            closeDialog()
+          },
+          { capture: true }
+        )
       })()
     </script>
   )}
