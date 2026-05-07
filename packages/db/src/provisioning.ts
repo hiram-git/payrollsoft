@@ -25,6 +25,8 @@ import { tenantSchemaName, validateTenantSlug } from '@payroll/utils'
 import postgres from 'postgres'
 import { DEFAULT_CONCEPTS } from './default-concepts'
 import { runMigrations } from './migrator'
+import { type SeedEmployeesResult, seedEmployees } from './seeds/employees'
+import { type SeedLoansResult, seedLoans } from './seeds/loans'
 
 export type ProvisionTenantInput = {
   slug: string
@@ -42,13 +44,31 @@ export type ProvisionTenantInput = {
   tenantMigrationsFolder?: string
   /** Sink for progress logs. Defaults to console.log. */
   log?: (line: string) => void
+  /**
+   * Seeds opcionales a ejecutar después del bootstrap. Cada uno se
+   * marca como aplicado en `tenants.metadata.seeds.<code>` y no se
+   * vuelve a ejecutar desde la UI; revertir requiere acción directa
+   * en la base de datos.
+   */
+  seeds?: {
+    employees?: boolean
+    loans?: boolean
+    /** Cantidad de empleados a sembrar; default 200. */
+    employeesTotal?: number
+  }
 }
+
+export type SeedOutcome =
+  | { kind: 'employees'; ok: true; result: SeedEmployeesResult }
+  | { kind: 'loans'; ok: true; result: SeedLoansResult }
+  | { kind: 'employees' | 'loans'; ok: false; error: string }
 
 export type ProvisionedTenant = {
   tenantId: string
   slug: string
   schemaName: string
   adminUserId: string
+  seedsApplied: SeedOutcome[]
 }
 
 export type ProvisionTenantError =
@@ -124,6 +144,7 @@ export async function provisionTenant(
     })
 
     let adminUserId: string
+    const seedsApplied: SeedOutcome[] = []
     try {
       await tenant`CREATE SCHEMA IF NOT EXISTS ${tenant(schemaName)}`
       createdSchema = true
@@ -137,6 +158,39 @@ export async function provisionTenant(
         contactEmail: input.contactEmail ?? null,
       })
       await seedDefaultConcepts(tenant)
+
+      // ── Seeds opcionales ───────────────────────────────────────────
+      // Se ejecutan en orden (empleados antes que préstamos, porque
+      // loans depende de employees). Cada falla se registra pero no
+      // aborta la provisión: el tenant ya quedó usable y el operador
+      // ve el detalle en el banner de resultado.
+      if (input.seeds?.employees) {
+        try {
+          const result = await seedEmployees(tenant, {
+            total: input.seeds.employeesTotal,
+            log,
+          })
+          seedsApplied.push({ kind: 'employees', ok: true, result })
+        } catch (err) {
+          seedsApplied.push({
+            kind: 'employees',
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
+      if (input.seeds?.loans) {
+        try {
+          const result = await seedLoans(tenant, { log })
+          seedsApplied.push({ kind: 'loans', ok: true, result })
+        } catch (err) {
+          seedsApplied.push({
+            kind: 'loans',
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      }
     } finally {
       await tenant.end()
     }
@@ -156,13 +210,48 @@ export async function provisionTenant(
       await central`
         INSERT INTO payroll_auth.super_admin_audit (super_admin_id, tenant_id, action, payload)
         VALUES (${input.superAdminId}, ${tenantId}, 'tenant.create',
-                ${central.json({ slug, name: input.name })})
+                ${central.json({ slug, name: input.name, seeds: input.seeds ?? null })})
       `
+    }
+
+    // Persist the per-seed marker into tenants.metadata.seeds so the
+    // wizard / detail page can detect "already applied". Failures are
+    // recorded too so the operator can retry from the UI.
+    for (const outcome of seedsApplied) {
+      const entry: Record<string, unknown> = outcome.ok
+        ? {
+            applied_at: new Date().toISOString(),
+            applied_by: input.superAdminId ?? null,
+            stats: outcome.result,
+          }
+        : {
+            failed_at: new Date().toISOString(),
+            applied_by: input.superAdminId ?? null,
+            error: outcome.error,
+          }
+      await central`
+        UPDATE payroll_auth.tenants
+           SET metadata = jsonb_set(
+                 COALESCE(metadata, '{}'::jsonb),
+                 ${central.array(['seeds', outcome.kind])}::text[],
+                 ${central.json(entry)}::jsonb,
+                 true
+               ),
+               updated_at = now()
+         WHERE id = ${tenantId}
+      `
+      if (input.superAdminId) {
+        await central`
+          INSERT INTO payroll_auth.super_admin_audit (super_admin_id, tenant_id, action, payload)
+          VALUES (${input.superAdminId}, ${tenantId}, ${`tenant.seed.${outcome.kind}`},
+                  ${central.json(entry)})
+        `
+      }
     }
 
     return {
       ok: true,
-      tenant: { tenantId, slug, schemaName, adminUserId },
+      tenant: { tenantId, slug, schemaName, adminUserId, seedsApplied },
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
@@ -306,5 +395,119 @@ async function seedDefaultConcepts(tenant: postgres.Sql): Promise<void> {
       )
       ON CONFLICT (code) DO NOTHING
     `
+  }
+}
+
+// ── Aplicación post-creación de un seed individual ─────────────────────────
+
+export type ApplySeedResult =
+  | { ok: true; kind: 'employees'; result: SeedEmployeesResult }
+  | { ok: true; kind: 'loans'; result: SeedLoansResult }
+  | {
+      ok: false
+      kind: 'employees' | 'loans'
+      error: 'already_applied' | 'tenant_not_found' | 'failed'
+      message?: string
+    }
+
+/**
+ * Aplica un seed sobre un tenant que ya fue aprovisionado. Lee el flag
+ * `metadata.seeds.<code>.applied_at` y rechaza si ya tiene aplicación
+ * exitosa previa — la UI no permite revertir, solo intervención
+ * directa en BD puede limpiar la marca.
+ */
+export async function applySeedToTenant(
+  databaseUrl: string,
+  slug: string,
+  seedCode: 'employees' | 'loans',
+  options: { superAdminId?: string; employeesTotal?: number; log?: (line: string) => void } = {}
+): Promise<ApplySeedResult> {
+  const slugCheck = validateTenantSlug(slug)
+  if (!slugCheck.ok) {
+    return { ok: false, kind: seedCode, error: 'tenant_not_found', message: slugCheck.message }
+  }
+  const log = options.log ?? (() => {})
+
+  const central = postgres(databaseUrl, {
+    prepare: false,
+    connection: { search_path: 'payroll_auth,public' },
+    onnotice: () => {},
+  })
+
+  try {
+    const tenantRows = await central<{ id: string; metadata: Record<string, unknown> }[]>`
+      SELECT id, metadata FROM payroll_auth.tenants WHERE slug = ${slugCheck.slug} LIMIT 1
+    `
+    const tenantRow = tenantRows[0]
+    if (!tenantRow) {
+      return { ok: false, kind: seedCode, error: 'tenant_not_found' }
+    }
+    const meta = (tenantRow.metadata ?? {}) as Record<string, Record<string, unknown>>
+    const prior = meta.seeds?.[seedCode] as Record<string, unknown> | undefined
+    if (prior && typeof prior.applied_at === 'string') {
+      return { ok: false, kind: seedCode, error: 'already_applied' }
+    }
+
+    const tenant = postgres(databaseUrl, {
+      prepare: false,
+      connection: { search_path: `tenant_${slugCheck.slug},payroll_auth,public` },
+      onnotice: () => {},
+    })
+
+    let outcome: ApplySeedResult
+    try {
+      if (seedCode === 'employees') {
+        const result = await seedEmployees(tenant, {
+          total: options.employeesTotal,
+          log,
+        })
+        outcome = { ok: true, kind: 'employees', result }
+      } else {
+        const result = await seedLoans(tenant, { log })
+        outcome = { ok: true, kind: 'loans', result }
+      }
+    } catch (err) {
+      outcome = {
+        ok: false,
+        kind: seedCode,
+        error: 'failed',
+        message: err instanceof Error ? err.message : String(err),
+      }
+    } finally {
+      await tenant.end()
+    }
+
+    const entry: Record<string, unknown> = outcome.ok
+      ? {
+          applied_at: new Date().toISOString(),
+          applied_by: options.superAdminId ?? null,
+          stats: outcome.result,
+        }
+      : {
+          failed_at: new Date().toISOString(),
+          applied_by: options.superAdminId ?? null,
+          error: outcome.message,
+        }
+    await central`
+      UPDATE payroll_auth.tenants
+         SET metadata = jsonb_set(
+               COALESCE(metadata, '{}'::jsonb),
+               ${central.array(['seeds', seedCode])}::text[],
+               ${central.json(entry)}::jsonb,
+               true
+             ),
+             updated_at = now()
+       WHERE id = ${tenantRow.id}
+    `
+    if (options.superAdminId) {
+      await central`
+        INSERT INTO payroll_auth.super_admin_audit (super_admin_id, tenant_id, action, payload)
+        VALUES (${options.superAdminId}, ${tenantRow.id}, ${`tenant.seed.${seedCode}`},
+                ${central.json(entry)})
+      `
+    }
+    return outcome
+  } finally {
+    await central.end()
   }
 }

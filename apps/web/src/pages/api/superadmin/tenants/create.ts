@@ -51,6 +51,21 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const adminEmail = ((formData.get('adminEmail') as string | null) ?? '').trim().toLowerCase()
   const adminPassword = (formData.get('adminPassword') as string | null) ?? ''
 
+  // Seeds opcionales — checkboxes en el wizard. El input numérico
+  // `seedEmployeesTotal` viaja como string; se valida en el API
+  // contra el rango [1..10000].
+  const seedEmployees = formData.get('seedEmployees') === '1'
+  const seedLoans = formData.get('seedLoans') === '1'
+  const seedEmployeesTotalRaw = (formData.get('seedEmployeesTotal') as string | null) ?? ''
+  const seedEmployeesTotal = Number.parseInt(seedEmployeesTotalRaw, 10)
+  const seeds = {
+    employees: seedEmployees,
+    loans: seedLoans,
+    employeesTotal: Number.isFinite(seedEmployeesTotal)
+      ? Math.max(1, Math.min(10000, seedEmployeesTotal))
+      : undefined,
+  }
+
   const qsBack = `slug=${encodeURIComponent(slug)}&name=${encodeURIComponent(name)}`
 
   if (!slug || !name || !adminName || !adminEmail || !adminPassword) {
@@ -70,7 +85,15 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         'Content-Type': 'application/json',
         Cookie: `auth=${identity.raw}`,
       },
-      body: JSON.stringify({ slug, name, contactEmail, adminEmail, adminName, adminPassword }),
+      body: JSON.stringify({
+        slug,
+        name,
+        contactEmail,
+        adminEmail,
+        adminName,
+        adminPassword,
+        seeds: seedEmployees || seedLoans ? seeds : undefined,
+      }),
     })
   } catch (err) {
     console.error('[superadmin/tenants/create] fetch failed:', err)

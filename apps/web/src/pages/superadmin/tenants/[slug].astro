@@ -11,6 +11,16 @@ if (!identity || identity.type !== 'super_admin') {
 
 const slug = Astro.params.slug ?? ''
 
+type SeedEntry = {
+  applied_at?: string
+  applied_by?: string | null
+  failed_at?: string
+  error?: string
+  stats?: Record<string, unknown>
+}
+type TenantMetadata = {
+  seeds?: Record<string, SeedEntry>
+} & Record<string, unknown>
 type Tenant = {
   id: string
   slug: string
@@ -21,6 +31,7 @@ type Tenant = {
   createdAt: string
   updatedAt: string
   archivedAt: string | null
+  metadata?: TenantMetadata
 }
 type Provisioning = {
   state: 'pending' | 'running' | 'done' | 'failed'
@@ -244,6 +255,108 @@ try {
               </div>
               <button type="submit" class="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Establecer contraseña</button>
             </form>
+          </div>
+        </div>
+
+        <!-- Seeds aplicados -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Datos de prueba (seeds)</h2>
+          <p class="text-xs text-gray-500 mb-4">
+            Cada seed se aplica una sola vez por empresa. Una vez ejecutado correctamente, la
+            UI bloquea reaplicaciones; revertir requiere intervenir directamente en la base de
+            datos.
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(['employees', 'loans'] as const).map((code) => {
+              const seedMeta = tenant?.metadata?.seeds?.[code]
+              const isApplied = Boolean(seedMeta?.applied_at)
+              const failedAt = seedMeta?.failed_at
+              const labels: Record<string, { name: string; desc: string }> = {
+                employees: {
+                  name: 'Empleados',
+                  desc: 'Empleados de prueba con cargos, funciones y departamentos asignados.',
+                },
+                loans: {
+                  name: 'Préstamos',
+                  desc: '10 acreedores y 1–4 préstamos quincenales por empleado activo. Requiere haber sembrado empleados primero.',
+                },
+              }
+              const label = labels[code]
+              return (
+                <div class="border border-gray-200 rounded-lg p-4 flex flex-col gap-2">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-medium text-gray-900">{label.name}</p>
+                      <p class="text-xs text-gray-500 mt-0.5">{label.desc}</p>
+                    </div>
+                    {isApplied ? (
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5.8 4.5 8.2 9 3.4"/></svg>
+                        Aplicado
+                      </span>
+                    ) : failedAt ? (
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 flex-shrink-0">
+                        Falló
+                      </span>
+                    ) : (
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 flex-shrink-0">
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+
+                  {isApplied && seedMeta?.applied_at && (
+                    <p class="text-xs text-gray-400 font-mono">
+                      Aplicado: {new Date(seedMeta.applied_at).toLocaleString('es-PA')}
+                    </p>
+                  )}
+                  {failedAt && seedMeta?.error && (
+                    <pre class="text-xs text-red-700 font-mono whitespace-pre-wrap break-words bg-red-50 border border-red-200 rounded px-2 py-1.5">{seedMeta.error}</pre>
+                  )}
+
+                  {!isApplied && tenant?.status === 'ACTIVE' && (
+                    <form
+                      method="POST"
+                      action={`/api/superadmin/tenants/${tenant.slug}/seeds/${code}`}
+                      class="mt-1"
+                      data-saconfirm
+                      data-sa-title={`Aplicar seed: ${label.name}`}
+                      data-sa-message={`Vas a sembrar datos de prueba (${label.name}) en "${tenant.name}". Esta operación no puede revertirse desde la UI.`}
+                      data-sa-confirm-label="Aplicar seed"
+                      data-sa-tone="warning"
+                      data-sa-loading-title={`Aplicando seed: ${label.name}`}
+                      data-sa-loading-message="Generando datos. Puede tardar varios segundos."
+                      data-sa-success-title="Seed aplicado"
+                      data-sa-success-message={`Los datos de ${label.name} ya están disponibles.`}
+                      data-sa-error-title={`No se pudo aplicar el seed: ${label.name}`}
+                    >
+                      {code === 'employees' && (
+                        <div class="flex items-end gap-2 mb-2">
+                          <div>
+                            <label class="block text-xs text-gray-600 mb-1">Cantidad</label>
+                            <input
+                              type="number"
+                              name="employeesTotal"
+                              min="1"
+                              max="10000"
+                              value="200"
+                              class="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="submit"
+                        class="w-full px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        Aplicar seed
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       </div>

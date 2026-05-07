@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { superAdminAudit } from '@payroll/db'
+import { applySeedToTenant, superAdminAudit } from '@payroll/db'
 import { validateTenantSlug } from '@payroll/utils'
 import { Elysia, t } from 'elysia'
 import { publicDb } from '../../config/db'
@@ -170,6 +170,7 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
         superAdminId: user?.userId,
         tenantMigrationsFolder: TENANT_MIGRATIONS_FOLDER,
         log: (line) => console.log(`[provision ${body.slug}] ${line}`),
+        seeds: body.seeds,
       })
 
       if (!result.ok) {
@@ -196,6 +197,13 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
         adminEmail: t.String({ format: 'email' }),
         adminName: t.String({ minLength: 1, maxLength: 255 }),
         adminPassword: t.String({ minLength: 12, maxLength: 256 }),
+        seeds: t.Optional(
+          t.Object({
+            employees: t.Optional(t.Boolean()),
+            loans: t.Optional(t.Boolean()),
+            employeesTotal: t.Optional(t.Integer({ minimum: 1, maximum: 10000 })),
+          })
+        ),
       }),
     }
   )
@@ -297,6 +305,47 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
       body: t.Object({
         password: t.String({ minLength: 12, maxLength: 256 }),
       }),
+    }
+  )
+
+  // ── POST /superadmin/tenants/:slug/seeds/:code ─────────────────────────────
+  // Aplica un seed (employees | loans) sobre un tenant existente. La
+  // marca `metadata.seeds.<code>.applied_at` evita reaplicaciones desde
+  // la UI; revertir requiere intervención directa en BD.
+  .post(
+    '/tenants/:slug/seeds/:code',
+    async ({ params, body, user, set }) => {
+      if (!user) {
+        set.status = 401
+        return { success: false, error: 'Unauthorized' }
+      }
+      if (params.code !== 'employees' && params.code !== 'loans') {
+        set.status = 400
+        return { success: false, error: 'Seed inválido. Usa employees o loans.' }
+      }
+      const result = await applySeedToTenant(env.DATABASE_URL, params.slug, params.code, {
+        superAdminId: user.userId,
+        employeesTotal: body?.employeesTotal,
+        log: (line) => console.log(`[seed ${params.slug}/${params.code}] ${line}`),
+      })
+      if (!result.ok) {
+        set.status =
+          result.error === 'tenant_not_found' ? 404 : result.error === 'already_applied' ? 409 : 500
+        return {
+          success: false,
+          error: result.error,
+          message: result.message,
+        }
+      }
+      return { success: true, data: result }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      body: t.Optional(
+        t.Object({
+          employeesTotal: t.Optional(t.Integer({ minimum: 1, maximum: 10000 })),
+        })
+      ),
     }
   )
 

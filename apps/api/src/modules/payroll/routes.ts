@@ -8,6 +8,7 @@ import {
   markPayrollReportNotGeneratedService,
 } from './report-service'
 import {
+  addManualConceptToLineService,
   closePayrollService,
   createPayrollService,
   createThirteenthPayrollService,
@@ -18,6 +19,7 @@ import {
   listPayrollsService,
   regenerateEmployeeService,
   regeneratePayrollService,
+  removeManualConceptFromLineService,
   reopenPayrollService,
   revertPayrollService,
   updatePayrollService,
@@ -356,6 +358,67 @@ export const payrollRoutes = new Elysia({ prefix: '/payroll' })
     {
       beforeHandle: [guardAuth, guardPermission('payroll:recalculate')],
       params: t.Object({ id: t.String(), lineId: t.String() }),
+    }
+  )
+
+  // POST /payroll/:id/lines/:lineId/manual-concepts — agregar un
+  // concepto del catálogo a la línea con monto manual.
+  .post(
+    '/:id/lines/:lineId/manual-concepts',
+    async ({ db, params, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await addManualConceptToLineService(db, params.id, params.lineId, {
+        conceptId: body.conceptId,
+        amount: body.amount,
+      })
+      if (!result.success) {
+        set.status =
+          result.error === 'not_found' || result.error === 'concept_not_found'
+            ? 404
+            : result.error === 'concept_already_present'
+              ? 409
+              : 400
+        return { success: false, error: result.error, message: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:recalculate')],
+      params: t.Object({ id: t.String(), lineId: t.String() }),
+      body: t.Object({
+        conceptId: t.String({ minLength: 1 }),
+        amount: t.Number({ minimum: 0.01 }),
+      }),
+    }
+  )
+
+  // DELETE /payroll/:id/lines/:lineId/manual-concepts/:code — quitar
+  // un concepto manual previamente agregado.
+  .delete(
+    '/:id/lines/:lineId/manual-concepts/:code',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await removeManualConceptFromLineService(
+        db,
+        params.id,
+        params.lineId,
+        params.code
+      )
+      if (!result.success) {
+        set.status = result.error === 'not_found' ? 404 : 400
+        return { success: false, error: result.error, message: result.message }
+      }
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardPermission('payroll:recalculate')],
+      params: t.Object({ id: t.String(), lineId: t.String(), code: t.String() }),
     }
   )
 
