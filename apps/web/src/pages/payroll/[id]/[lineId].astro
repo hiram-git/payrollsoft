@@ -144,7 +144,7 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
             title="Agregar un concepto del catálogo a esta línea"
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Agregar concepto manual
+            Concepto
           </button>
         )}
         {isGenerated && (
@@ -404,8 +404,8 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
       id="manual-concept-dialog"
       class="manual-concept-dialog rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40 max-w-2xl w-full"
     >
-      <div class="border border-gray-200 rounded-lg bg-white overflow-hidden">
-        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <div class="rounded-lg bg-white border border-gray-200">
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between rounded-t-lg">
           <h3 class="text-sm font-semibold text-gray-800">Agregar concepto manual</h3>
           <div class="flex items-center gap-3">
             <span class="text-xs text-gray-500 font-mono">{manualCatalog.length} conceptos disponibles</span>
@@ -423,7 +423,7 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         <form
           method="POST"
           action={`/api/payroll/${id}/line/${lineId}`}
-          class="p-4 grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 items-end"
+          class="p-4"
           data-saconfirm
           data-sa-title="Agregar concepto manual"
           data-sa-message="Vamos a agregar el concepto seleccionado a esta línea con el monto fijo indicado. Los totales de la planilla se recalcularán."
@@ -435,44 +435,51 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
           data-sa-error-title="No se pudo agregar el concepto"
         >
           <input type="hidden" name="_method" value="ADD_MANUAL" />
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
-            <input type="hidden" name="conceptId" id="manual-concept-id" value="" />
-            <div class="relative">
-              <input
-                type="text"
-                id="manual-concept-search"
-                placeholder="Buscar por código o nombre…"
-                autocomplete="off"
-                required
-                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
-              />
-              <ul
-                id="manual-concept-dropdown"
-                class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto text-sm"
-                role="listbox"
-              ></ul>
+          <!-- Fila inputs: alineados horizontalmente.
+               Las metas/labels viven en su columna sin empujar el input. -->
+          <div class="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 items-start">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
+              <input type="hidden" name="conceptId" id="manual-concept-id" value="" />
+              <div class="relative">
+                <input
+                  type="text"
+                  id="manual-concept-search"
+                  placeholder="Buscar por código o nombre…"
+                  autocomplete="off"
+                  required
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                />
+                <ul
+                  id="manual-concept-dropdown"
+                  class="hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-xl max-h-56 overflow-y-auto text-sm"
+                  role="listbox"
+                ></ul>
+              </div>
             </div>
-            <p id="manual-concept-meta" class="mt-1 text-xs text-gray-400 font-mono">Selecciona un concepto del catálogo.</p>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+              <input
+                type="number"
+                name="amount"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-right tabular-nums"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">&nbsp;</label>
+              <button
+                type="submit"
+                class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Agregar
+              </button>
+            </div>
           </div>
-          <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Monto</label>
-            <input
-              type="number"
-              name="amount"
-              step="0.01"
-              min="0.01"
-              required
-              placeholder="0.00"
-              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-right tabular-nums"
-            />
-          </div>
-          <button
-            type="submit"
-            class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-          >
-            Agregar
-          </button>
+          <p id="manual-concept-meta" class="mt-2 text-xs text-gray-400 font-mono">Selecciona un concepto del catálogo.</p>
         </form>
         <p class="px-4 pb-3 text-xs text-gray-400">
           Por ahora solo se admite monto fijo y unidad por defecto del catálogo. El tipo (asignación o deducción) lo toma automáticamente del concepto seleccionado.
