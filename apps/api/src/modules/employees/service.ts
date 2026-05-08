@@ -1,5 +1,6 @@
 import {
   createEmployee,
+  customFieldValueHistory,
   deactivateEmployee,
   getCargoById,
   getDefaultPayrollType,
@@ -13,6 +14,7 @@ import {
   updateEmployee,
 } from '@payroll/db'
 import type { PaginationOptions } from '@payroll/db'
+import { desc, eq } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -136,7 +138,12 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
 
 // ─── Update ───────────────────────────────────────────────────────────────────
 
-export async function updateEmployeeService(db: AnyDb, id: string, input: EmployeeUpdateInput) {
+export async function updateEmployeeService(
+  db: AnyDb,
+  id: string,
+  input: EmployeeUpdateInput,
+  options: { changedBy?: string } = {}
+) {
   const existing = await getEmployee(db, id)
   if (!existing) {
     return { success: false as const, error: 'not_found', message: 'Employee not found' }
@@ -191,7 +198,20 @@ export async function updateEmployeeService(db: AnyDb, id: string, input: Employ
   }
 
   const previousPositionId = existing.positionId ?? null
+  // Capturar customFields previos para el diff de auditoría —
+  // cualquier cambio se persiste en custom_field_value_history.
+  const prevCustomFields = (existing.customFields ?? {}) as Record<string, unknown>
   const updated = await updateEmployee(db, id, patch)
+
+  if (input.customFields !== undefined) {
+    await recordCustomFieldHistory(
+      db,
+      id,
+      prevCustomFields,
+      (input.customFields ?? {}) as Record<string, unknown>,
+      options.changedBy ?? null
+    )
+  }
 
   if (input.payrollTypeIds !== undefined) {
     if (input.payrollTypeIds.length === 0) {
@@ -236,4 +256,67 @@ export async function deactivateEmployeeService(db: AnyDb, id: string) {
   // least one *active* employee references it.
   await recomputePositionStatus(db, existing.positionId ?? null)
   return { success: true as const, data: updated }
+}
+
+// ─── Custom field value history ───────────────────────────────────────────────
+
+/**
+ * Comparación deep-equal sencilla para detectar cambios reales en
+ * valores escalares + objetos/arrays vía JSON.stringify. Suficiente
+ * para los 4 tipos del catálogo (text/integer/float/date) que se
+ * almacenan como primitivos.
+ */
+function changed(a: unknown, b: unknown): boolean {
+  if (a === b) return false
+  if (a == null && b == null) return false
+  return JSON.stringify(a ?? null) !== JSON.stringify(b ?? null)
+}
+
+/**
+ * Diff de los dos diccionarios `customFields` (antes/después) e
+ * inserta una fila por cada código que cambió. Acepta valores
+ * añadidos (oldValue=null) y removidos (newValue=null).
+ */
+async function recordCustomFieldHistory(
+  db: AnyDb,
+  employeeId: string,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  changedBy: string | null
+): Promise<void> {
+  const codes = new Set<string>([...Object.keys(before), ...Object.keys(after)])
+  const rows: Array<{
+    employeeId: string
+    fieldCode: string
+    oldValue: unknown
+    newValue: unknown
+    changedBy: string | null
+  }> = []
+  for (const code of codes) {
+    const oldV = before[code] ?? null
+    const newV = after[code] ?? null
+    if (!changed(oldV, newV)) continue
+    rows.push({
+      employeeId,
+      fieldCode: code,
+      oldValue: oldV,
+      newValue: newV,
+      changedBy,
+    })
+  }
+  if (rows.length === 0) return
+  await db.insert(customFieldValueHistory).values(rows)
+}
+
+/**
+ * Lee el historial de cambios de campos adicionales para un empleado,
+ * ordenado del más reciente al más antiguo.
+ */
+export async function listCustomFieldHistoryService(db: AnyDb, employeeId: string, limit = 100) {
+  return db
+    .select()
+    .from(customFieldValueHistory)
+    .where(eq(customFieldValueHistory.employeeId, employeeId))
+    .orderBy(desc(customFieldValueHistory.changedAt))
+    .limit(Math.max(1, Math.min(500, limit)))
 }

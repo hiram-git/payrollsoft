@@ -183,6 +183,13 @@
       "when": 1762128005000,
       "tag": "0026_custom_field_definitions",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1762128006000,
+      "tag": "0027_custom_field_value_history",
+      "breakpoints": true
     }
   ]
 }

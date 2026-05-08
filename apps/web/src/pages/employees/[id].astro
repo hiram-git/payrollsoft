@@ -68,6 +68,15 @@ type CustomFieldDefinition = {
   defaultValue: unknown
   sortOrder: number
 }
+type CustomFieldHistoryEntry = {
+  id: string
+  employeeId: string
+  fieldCode: string
+  oldValue: unknown
+  newValue: unknown
+  changedBy: string | null
+  changedAt: string
+}
 
 let emp: Employee | null = null
 let cargos: CatalogItem[] = []
@@ -77,6 +86,7 @@ let positions: Position[] = []
 let loans: Loan[] = []
 let payrollTypes: PayrollType[] = []
 let customFieldDefs: CustomFieldDefinition[] = []
+let cfHistory: CustomFieldHistoryEntry[] = []
 let tipoInstitucion = 'privada'
 
 try {
@@ -124,6 +134,16 @@ try {
   if (cfRes.ok) {
     const cfJson = (await cfRes.json()) as { data: CustomFieldDefinition[] }
     customFieldDefs = (cfJson.data ?? []).filter((d) => d.isActive)
+  }
+
+  // Historial de cambios de campos adicionales (más reciente primero).
+  if (emp) {
+    const histRes = await fetch(`${API_URL}/employees/${emp.id}/custom-fields/history?limit=200`, {
+      headers,
+    })
+    if (histRes.ok) {
+      cfHistory = ((await histRes.json()) as { data: CustomFieldHistoryEntry[] }).data ?? []
+    }
   }
 } catch {
   return Astro.redirect('/employees')
@@ -227,6 +247,11 @@ const freqLabel: Record<string, string> = {
         {customFieldDefs.length > 0 && (
           <button type="button" class="tab-btn" data-tab="adicionales" onclick="switchTab('adicionales', this)">
             Campos adicionales
+          </button>
+        )}
+        {customFieldDefs.length > 0 && (
+          <button type="button" class="tab-btn" data-tab="historial" onclick="switchTab('historial', this)">
+            Historial
           </button>
         )}
       </div>
@@ -535,6 +560,64 @@ const freqLabel: Record<string, string> = {
                 )
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      <!-- TAB: Historial de campos adicionales -->
+      {customFieldDefs.length > 0 && (
+        <div id="tab-historial" style="display:none">
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-1">Historial de campos adicionales</h3>
+            <p class="text-xs text-gray-500 mb-4">
+              Cada cambio en los valores de campos adicionales queda registrado aquí (append-only).
+              {cfHistory.length} {cfHistory.length === 1 ? 'cambio' : 'cambios'} registrados.
+            </p>
+            {cfHistory.length === 0 ? (
+              <p class="text-sm text-gray-400 py-6 text-center">
+                Aún no hay cambios registrados para este empleado.
+              </p>
+            ) : (
+              <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-gray-200 bg-gray-50">
+                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Cuándo</th>
+                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Campo</th>
+                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Anterior</th>
+                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Nuevo</th>
+                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Por</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cfHistory.map((h) => {
+                      const def = customFieldDefs.find((d) => d.code === h.fieldCode)
+                      const fmtVal = (v: unknown) => {
+                        if (v == null || v === '') return '—'
+                        if (typeof v === 'object') return JSON.stringify(v)
+                        return String(v)
+                      }
+                      return (
+                        <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                          <td class="px-3 py-2 text-xs text-gray-500 font-mono whitespace-nowrap">
+                            {new Date(h.changedAt).toLocaleString('es-PA')}
+                          </td>
+                          <td class="px-3 py-2">
+                            <div class="font-mono text-xs text-gray-700">{h.fieldCode}</div>
+                            {def && <div class="text-xs text-gray-500">{def.name}</div>}
+                          </td>
+                          <td class="px-3 py-2 text-xs text-gray-600">{fmtVal(h.oldValue)}</td>
+                          <td class="px-3 py-2 text-xs text-gray-900 font-medium">{fmtVal(h.newValue)}</td>
+                          <td class="px-3 py-2 text-xs text-gray-400 font-mono">
+                            {h.changedBy ? h.changedBy.slice(0, 8) : '—'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

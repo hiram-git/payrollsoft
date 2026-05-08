@@ -39,6 +39,25 @@ export const customFieldDefinitions = pgTable('custom_field_definitions', {
 export type CustomFieldDefinition = typeof customFieldDefinitions.$inferSelect
 export type NewCustomFieldDefinition = typeof customFieldDefinitions.$inferInsert
 
+/**
+ * Historial de cambios de valores de campos adicionales por empleado.
+ * Append-only: cada cambio inserta una fila con el valor anterior,
+ * el nuevo y quién lo modificó. Permite auditar fácil sin tocar el
+ * jsonb del empleado.
+ */
+export const customFieldValueHistory = pgTable('custom_field_value_history', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  employeeId: uuid('employee_id').notNull(),
+  fieldCode: varchar('field_code', { length: 50 }).notNull(),
+  oldValue: jsonb('old_value'),
+  newValue: jsonb('new_value'),
+  changedBy: uuid('changed_by'),
+  changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export type CustomFieldValueHistory = typeof customFieldValueHistory.$inferSelect
+export type NewCustomFieldValueHistory = typeof customFieldValueHistory.$inferInsert
+
 export const CUSTOM_FIELD_TYPES = ['text', 'integer', 'float', 'date'] as const
 export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number]
 
