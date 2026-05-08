@@ -30,6 +30,50 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
   const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
+  // Recoger campos adicionales del form (prefijo cf_<code>) y serializar
+  // según su tipo. El proxy consulta el catálogo activo para saber qué
+  // tipo cast aplicar, evitando sorpresas en el motor de fórmulas.
+  type CustomFieldDef = {
+    code: string
+    fieldType: 'text' | 'integer' | 'float' | 'date'
+    isActive: boolean
+  }
+  let customFields: Record<string, unknown> | undefined
+  try {
+    const defsRes = await fetch(`${API_URL}/custom-fields`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
+    })
+    if (defsRes.ok) {
+      const defs = ((await defsRes.json()) as { data: CustomFieldDef[] }).data ?? []
+      const collected: Record<string, unknown> = {}
+      let touched = false
+      for (const def of defs) {
+        if (!def.isActive) continue
+        const key = `cf_${def.code}`
+        if (!form.has(key)) continue
+        touched = true
+        const raw = (form.get(key) as string | null)?.trim() ?? ''
+        if (raw === '') {
+          collected[def.code] = null
+          continue
+        }
+        if (def.fieldType === 'integer') {
+          const n = Number.parseInt(raw, 10)
+          collected[def.code] = Number.isFinite(n) ? n : null
+        } else if (def.fieldType === 'float') {
+          const n = Number(raw)
+          collected[def.code] = Number.isFinite(n) ? n : null
+        } else {
+          // text + date: stored as string
+          collected[def.code] = raw
+        }
+      }
+      if (touched) customFields = collected
+    }
+  } catch {
+    // best-effort: si el catálogo no responde, no sobreescribimos custom_fields
+  }
+
   const body: Record<string, unknown> = {
     code: g('code'),
     firstName: g('firstName'),
@@ -46,6 +90,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
+    ...(customFields !== undefined ? { customFields } : {}),
   }
 
   if (

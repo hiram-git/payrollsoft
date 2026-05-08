@@ -5,6 +5,7 @@ import {
   createEmployeeService,
   deactivateEmployeeService,
   getEmployeeService,
+  listCustomFieldHistoryService,
   listEmployeesService,
   updateEmployeeService,
 } from './service'
@@ -130,16 +131,26 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
   // ── POST /employees ──────────────────────────────────────────────────────────
   .post(
     '/',
-    async ({ db, body, set }) => {
+    async ({ db, body, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
 
       try {
-        const result = await createEmployeeService(db, body)
+        const result = await createEmployeeService(db, body, {
+          userPermissions: new Set(user?.permissions ?? []),
+          isSuperAdmin: user?.type === 'super_admin',
+        })
         if (!result.success) {
-          set.status = result.error === 'code_taken' ? 409 : 400
+          set.status =
+            result.error === 'code_taken'
+              ? 409
+              : result.error === 'custom_field_required'
+                ? 422
+                : result.error === 'custom_field_forbidden'
+                  ? 403
+                  : 400
           return { success: false, error: result.message }
         }
         set.status = 201
@@ -159,16 +170,27 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
   // ── PUT /employees/:id ───────────────────────────────────────────────────────
   .put(
     '/:id',
-    async ({ db, params, body, set }) => {
+    async ({ db, params, body, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
 
       try {
-        const result = await updateEmployeeService(db, params.id, body)
+        const result = await updateEmployeeService(db, params.id, body, {
+          changedBy: user?.userId,
+          userPermissions: new Set(user?.permissions ?? []),
+          isSuperAdmin: user?.type === 'super_admin',
+        })
         if (!result.success) {
-          set.status = result.error === 'not_found' ? 404 : 409
+          set.status =
+            result.error === 'not_found'
+              ? 404
+              : result.error === 'custom_field_required'
+                ? 422
+                : result.error === 'custom_field_forbidden'
+                  ? 403
+                  : 409
           return { success: false, error: result.message }
         }
         return { success: true, data: result.data }
@@ -207,5 +229,30 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
     {
       beforeHandle: [guardAuth, guardPermission('employees:delete')],
       params: t.Object({ id: t.String() }),
+    }
+  )
+
+  // GET /employees/:id/custom-fields/history — historial de cambios
+  // de campos adicionales para el empleado, del más reciente al más
+  // antiguo. Solo lectura; el writer es el PUT del propio empleado.
+  .get(
+    '/:id/custom-fields/history',
+    async ({ db, params, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const limit = query.limit ? Number.parseInt(query.limit, 10) : undefined
+      const data = await listCustomFieldHistoryService(
+        db,
+        params.id,
+        Number.isFinite(limit) ? limit : 100
+      )
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardPermission('employees:read')],
+      params: t.Object({ id: t.String() }),
+      query: t.Object({ limit: t.Optional(t.String()) }),
     }
   )

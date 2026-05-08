@@ -1,5 +1,6 @@
 import type { FormulaContext } from '../types'
 import { ACUMULADOS } from './acumulados'
+import { CAMPOADICIONAL } from './campo-adicional'
 import { CONCEPTO } from './concepto'
 import { CUOTA_ACREEDOR } from './cuota'
 import { DIAS } from './dias'
@@ -20,6 +21,9 @@ export const FUNCTIONS: Record<string, FunctionHandler> = {
 
   // Payroll concepts
   CONCEPTO,
+
+  // Campos adicionales del empleado (tenant-defined custom_field_definitions)
+  CAMPOADICIONAL,
 
   // Attendance & days
   DIAS,

@@ -1,0 +1,166 @@
+---
+import PermissionGate from '../../../components/PermissionGate.astro'
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'settings:company.read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type CustomField = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  fieldType: 'text' | 'integer' | 'float' | 'date'
+  isRequired: boolean
+  isActive: boolean
+  sortOrder: number
+  createdAt: string
+}
+
+const TYPE_LABELS: Record<string, string> = {
+  text: 'Texto',
+  integer: 'Entero',
+  float: 'Decimal',
+  date: 'Fecha',
+}
+const TYPE_TONE: Record<string, string> = {
+  text: 'bg-blue-50 text-blue-700',
+  integer: 'bg-emerald-50 text-emerald-700',
+  float: 'bg-amber-50 text-amber-700',
+  date: 'bg-violet-50 text-violet-700',
+}
+
+let fields: CustomField[] = []
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/custom-fields`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { data: CustomField[] }
+    fields = json.data ?? []
+  } else {
+    error = `No se pudo cargar el catálogo (HTTP ${res.status}).`
+  }
+} catch (err) {
+  error = err instanceof Error ? err.message : 'No se pudo conectar con el servidor.'
+}
+
+const flash = Astro.url.searchParams.get('flash')
+---
+
+<AppLayout title="Campos adicionales">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Campos adicionales</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Define campos extra para los empleados (talla, dependientes, fechas, valores numéricos para fórmulas).
+          {fields.length} {fields.length === 1 ? 'campo' : 'campos'} en el catálogo.
+        </p>
+      </div>
+      <PermissionGate require="settings:company.update">
+        <div class="flex items-center gap-2">
+          <a
+            href="/config/custom-fields/bulk"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Carga masiva
+          </a>
+          <a
+            href="/config/custom-fields/new"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Nuevo campo
+          </a>
+        </div>
+      </PermissionGate>
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Campo creado correctamente.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Campo actualizado.</div>
+    )}
+    {flash === 'deleted' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Campo desactivado.</div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      {fields.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm text-gray-500">Aún no has definido campos adicionales.</p>
+          <p class="text-xs text-gray-400 mt-1">Crea el primero con el botón de arriba para extender el formulario de empleados.</p>
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-gray-200 bg-gray-50">
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-20">Orden</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Código</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+              <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+              <th class="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {fields.map((f) => (
+              <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${!f.isActive ? 'opacity-60' : ''}`}>
+                <td class="px-4 py-3.5 font-mono text-xs text-gray-500 tabular-nums">{f.sortOrder}</td>
+                <td class="px-4 py-3.5 font-mono text-xs text-gray-700">{f.code}</td>
+                <td class="px-4 py-3.5">
+                  <div class="font-medium text-gray-900">{f.name}</div>
+                  {f.description && <div class="text-xs text-gray-500 mt-0.5">{f.description}</div>}
+                </td>
+                <td class="px-4 py-3.5">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${TYPE_TONE[f.fieldType] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {TYPE_LABELS[f.fieldType] ?? f.fieldType}
+                  </span>
+                  {f.isRequired && (
+                    <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700 border border-red-200">
+                      Obligatorio
+                    </span>
+                  )}
+                </td>
+                <td class="px-4 py-3.5">
+                  {f.isActive ? (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">Activo</span>
+                  ) : (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactivo</span>
+                  )}
+                </td>
+                <td class="px-4 py-3.5 text-right">
+                  <a href={`/config/custom-fields/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900">Editar →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+
+    <p class="mt-4 text-xs text-gray-400">
+      Los valores por empleado se guardan en <code class="font-mono">employees.custom_fields</code> (jsonb). Este catálogo solo
+      define qué campos existen y de qué tipo son. La integración con el formulario de empleados y el motor de cálculo de
+      planilla (<code class="font-mono">CAMPOADICIONAL("code")</code>) se entregará en la siguiente fase.
+    </p>
+  </div>
+</AppLayout>

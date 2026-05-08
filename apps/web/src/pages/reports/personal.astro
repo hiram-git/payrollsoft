@@ -12,6 +12,12 @@ const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 // directly, so the URL doesn't need any query-string scoping.
 const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 
+type CustomFieldDef = {
+  code: string
+  name: string
+  fieldType: 'text' | 'integer' | 'float' | 'date'
+  isActive: boolean
+}
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 type ApiEmployee = {
   id: string
@@ -27,6 +33,21 @@ type ApiEmployee = {
 }
 
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
+
+// Cargar el catálogo de campos adicionales activos para que el usuario
+// pueda elegir cuáles incluir como columnas en el .xlsx. La API filtra
+// por readPermission, así que aquí ya viene depurado.
+let customFieldDefs: CustomFieldDef[] = []
+try {
+  const res = await fetch(`${API_URL}/custom-fields`, { headers })
+  if (res.ok) {
+    customFieldDefs = (((await res.json()) as { data: CustomFieldDef[] }).data ?? []).filter(
+      (d) => d.isActive
+    )
+  }
+} catch {
+  /* la página sigue funcionando sin la lista */
+}
 
 // Resolve the active type's display name (best-effort; the page still
 // works without it — we just won't show the chip).
@@ -117,15 +138,26 @@ const downloadUrl = `/api/reports/personnel/download${
           Genera el PDF con todos los empleados activos asociados al tipo de planilla seleccionado en la barra superior.
         </p>
       </div>
-      <a
-        data-personnel-pdf
-        href={downloadUrl}
-        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
-        title="Descargar reporte de personal en PDF"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
-        Personal PDF
-      </a>
+      <div class="flex items-center gap-2">
+        <a
+          id="personnelXlsx"
+          href={`/api/reports/personnel/xlsx${activeTypeId ? `?payrollTypeId=${activeTypeId}` : ''}`}
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+          title="Descargar listado en Excel (incluye campos adicionales seleccionados)"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          Excel
+        </a>
+        <a
+          data-personnel-pdf
+          href={downloadUrl}
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
+          title="Descargar reporte de personal en PDF"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+          Personal PDF
+        </a>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5 mt-6">
@@ -142,6 +174,32 @@ const downloadUrl = `/api/reports/personnel/download${
         <p class="text-xl font-semibold text-gray-900 tabular-nums">{fmtMoney(totalSalary)}</p>
       </div>
     </div>
+
+    {customFieldDefs.length > 0 && (
+      <div class="mb-5 rounded-xl border border-gray-200 bg-white p-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-sm font-semibold text-gray-800">Campos adicionales en el Excel</h2>
+            <p class="text-xs text-gray-500">
+              Selecciona qué campos del catálogo se incluyen como columnas extra al descargar el .xlsx.
+              El PDF mantiene siempre las columnas estándar.
+            </p>
+          </div>
+          <div class="text-xs text-gray-400">
+            <span id="cfCount">0</span> de {customFieldDefs.length} seleccionados
+          </div>
+        </div>
+        <div class="mt-3 flex flex-wrap gap-2">
+          {customFieldDefs.map((cf) => (
+            <label class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-gray-200 bg-gray-50 text-xs hover:bg-gray-100 cursor-pointer">
+              <input type="checkbox" data-cf-pick value={cf.code} class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <span class="font-medium text-gray-700">{cf.name}</span>
+              <span class="font-mono text-gray-400">{cf.code}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    )}
 
     {error && (
       <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
@@ -210,4 +268,24 @@ const downloadUrl = `/api/reports/personnel/download${
       })
     })
   }
+
+  // Mantener el href del Excel sincronizado con los checkboxes elegidos.
+  const xlsxLink = document.getElementById('personnelXlsx') as HTMLAnchorElement | null
+  const counter = document.getElementById('cfCount')
+  const picks = document.querySelectorAll<HTMLInputElement>('[data-cf-pick]')
+
+  function syncLink() {
+    if (!xlsxLink) return
+    const url = new URL(xlsxLink.href, window.location.origin)
+    const selected = Array.from(picks)
+      .filter((c) => c.checked)
+      .map((c) => c.value)
+    if (selected.length > 0) url.searchParams.set('fields', selected.join(','))
+    else url.searchParams.delete('fields')
+    xlsxLink.href = url.pathname + (url.search ? url.search : '')
+    if (counter) counter.textContent = String(selected.length)
+  }
+
+  for (const c of picks) c.addEventListener('change', syncLink)
+  syncLink()
 </script>
