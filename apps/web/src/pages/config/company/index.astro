@@ -34,7 +34,7 @@ type CompanyConfig = {
   logoEmpresa: string | null
   logoIzquierdoReportes: string | null
   logoDerechoReportes: string | null
-  payrollReportMode: 'on_demand' | 'file_storage' | string
+  payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' | string
   updatedAt: string
 }
 
@@ -317,8 +317,11 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
                 <option value="on_demand" selected={v('payrollReportMode', 'on_demand') === 'on_demand'}>
                   Bajo demanda — el PDF se renderiza cada vez (sin almacenamiento)
                 </option>
+                <option value="local_storage" selected={v('payrollReportMode', 'on_demand') === 'local_storage'}>
+                  Almacenamiento local — se guarda en disco del servidor (STORAGE_DIR)
+                </option>
                 <option value="file_storage" selected={v('payrollReportMode', 'on_demand') === 'file_storage'}>
-                  Almacenamiento en archivo — se genera una sola vez y se guarda en R2 (descargas instantáneas)
+                  Nube (S3 / R2) — se sube a un bucket S3-compatible (descargas instantáneas)
                 </option>
               </select>
               <p class="text-xs text-gray-500 mt-2 leading-relaxed">
@@ -326,9 +329,14 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
                 y no requiere infraestructura — recomendado para empresas chicas
                 o cuando los datos cambian seguido.
                 <br />
-                <span class="font-semibold">Almacenamiento en archivo</span>
-                renderiza el PDF la primera vez, lo sube a Cloudflare R2 y las
-                descargas siguientes son inmediatas. Requiere las variables
+                <span class="font-semibold">Almacenamiento local</span> guarda
+                el PDF en el directorio <code class="font-mono text-[11px]">STORAGE_DIR</code>
+                del servidor (por defecto <code class="font-mono text-[11px]">/tmp/payrollsoft-storage</code>).
+                Indicado para instalaciones on-prem o entornos sin object storage remoto.
+                <br />
+                <span class="font-semibold">Nube</span> renderiza el PDF la
+                primera vez, lo sube a Cloudflare R2 / S3 y las descargas
+                siguientes son inmediatas. Requiere las variables
                 <code class="font-mono text-[11px]">R2_ENDPOINT</code>,
                 <code class="font-mono text-[11px]">R2_ACCESS_KEY_ID</code>,
                 <code class="font-mono text-[11px]">R2_SECRET_ACCESS_KEY</code> y

@@ -56,9 +56,11 @@ let lines: PayrollLine[] = []
 let linesTotal = 0
 let linesTotalPages = 1
 // Per-tenant lifecycle for the Planilla PDF: 'on_demand' renders every
-// download (no state machine, single button); 'file_storage' persists
-// to R2 and is driven by the payroll_reports state machine.
-let payrollReportMode: 'on_demand' | 'file_storage' = 'on_demand'
+// download (no state machine, single button); 'file_storage' (R2/S3) y
+// 'local_storage' (disco) comparten la misma UX de generar / descargar /
+// regenerar — la diferencia entre ellos es solo el destino físico del
+// archivo, transparente para el usuario.
+let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
 
 try {
   const params = new URLSearchParams({
@@ -94,6 +96,7 @@ try {
     }
     const mode = companyJson.data?.payrollReportMode
     if (mode === 'file_storage') payrollReportMode = 'file_storage'
+    else if (mode === 'local_storage') payrollReportMode = 'local_storage'
   }
 } catch {
   return Astro.redirect('/payroll')
@@ -185,6 +188,22 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 
         <!-- Action buttons -->
         <div class="flex items-center gap-2 flex-shrink-0">
+          {(isGenerated || isClosed) && (
+            <span
+              class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                payrollReportMode === 'on_demand'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : payrollReportMode === 'local_storage'
+                    ? 'bg-violet-50 text-violet-700 border-violet-200'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}
+              title="Modo de almacenamiento del PDF (configurable en Configuración → Empresa)"
+            >
+              {payrollReportMode === 'on_demand' && 'Bajo demanda'}
+              {payrollReportMode === 'local_storage' && 'Disco local'}
+              {payrollReportMode === 'file_storage' && 'Nube (S3/R2)'}
+            </span>
+          )}
           {(isGenerated || isClosed) && payrollReportMode === 'on_demand' && (
             <a
               data-planilla-pdf
@@ -196,7 +215,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
               Planilla PDF
             </a>
           )}
-          {(isGenerated || isClosed) && payrollReportMode === 'file_storage' && (
+          {(isGenerated || isClosed) && (payrollReportMode === 'file_storage' || payrollReportMode === 'local_storage') && (
             <div id="report-dropdown" class="relative inline-block text-left" data-payroll-id={id}>
               <button
                 id="btn-report-dropdown"

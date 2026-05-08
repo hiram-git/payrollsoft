@@ -20,15 +20,16 @@ type ReportState = {
 }
 
 /**
- * Stream the Planilla PDF to the browser. Strategy is dictated by the
- * tenant's `payrollReportMode`:
+ * Stream the Planilla PDF to the browser. La estrategia depende del
+ * `payrollReportMode` del tenant:
  *
- *   file_storage + valid pdfPath → fetch from R2 and stream (instant).
- *   on_demand                    → re-render live and stream.
+ *   file_storage  + pdfPath válido → leer desde R2/S3 y streamear.
+ *   local_storage + pdfPath válido → leer desde disco y streamear.
+ *   on_demand                      → siempre renderizar al vuelo.
  *
- * If the stored object is missing (e.g. the tenant just switched modes,
- * or the row carries a legacy local /tmp/... path) we fall back to a
- * live render instead of failing — the user still gets their PDF.
+ * Si el objeto persistido no se encuentra (cambio de modo, archivo
+ * borrado del bucket, etc.) caemos a render en vivo en lugar de
+ * romper la descarga — el usuario igual recibe su PDF.
  */
 export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
@@ -41,28 +42,30 @@ export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
 
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
 
-  const stateRes = await fetch(`${API_URL}/payroll/${id}/report`, { headers })
+  const [stateRes, companyRes] = await Promise.all([
+    fetch(`${API_URL}/payroll/${id}/report`, { headers }),
+    fetch(`${API_URL}/company`, { headers }),
+  ])
   if (stateRes.status === 401) return redirect('/login')
   if (stateRes.status === 404) return new Response('Planilla no encontrada', { status: 404 })
   if (!stateRes.ok) return new Response('Error al consultar el estado del reporte', { status: 500 })
 
   const stateJson = (await stateRes.json()) as { data: ReportState }
   const state = stateJson.data
-  // No state gate here. The download path always serves a PDF:
-  //   - file_storage + valid pdfPath  → stream from R2.
-  //   - everything else (on_demand, or file_storage without an object yet,
-  //     or a row in 'not_generated' that was never explicitly created)
-  //     falls through to a live render.
-  // Refusing with 409 used to break the on_demand flow because the user
-  // can hit Download directly without going through Generate first.
 
-  // Try the stored object first. We only treat keys that *don't* look like
-  // legacy local filesystem paths (i.e. don't start with '/') as
-  // R2-addressable; anything else is silently ignored and the download
-  // falls through to a live render.
+  let payrollReportMode: string | null = null
+  if (companyRes.ok) {
+    const cj = (await companyRes.json()) as {
+      data: { payrollReportMode?: string | null } | null
+    }
+    payrollReportMode = cj.data?.payrollReportMode ?? null
+  }
+
+  // Try the stored object first. Solo usamos el storage si el modo lo
+  // soporta y el pdfPath no es una ruta local-legacy absoluta (`/tmp/...`).
   let pdfBytes: Uint8Array | null = null
   if (state.pdfPath && !state.pdfPath.startsWith('/')) {
-    const storage = getReportStorage('file_storage')
+    const storage = getReportStorage(payrollReportMode)
     if (storage) {
       try {
         pdfBytes = await storage.get(state.pdfPath)

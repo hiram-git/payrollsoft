@@ -32,19 +32,20 @@ function decodeJwtPayload(token: string): { name?: string; email?: string } | nu
 
 /**
  * Render the Planilla PDF and reconcile the payroll_reports row with the
- * outcome. The persistence strategy is dictated entirely by the tenant's
- * `company_config.payroll_report_mode`:
+ * outcome. La estrategia de persistencia depende del
+ * `company_config.payroll_report_mode` del tenant:
  *
- *   on_demand    → render the bytes (validates the report can be produced
- *                   without errors), discard them, mark the row as
- *                   generated. Future downloads re-render live.
- *   file_storage → render, upload to R2 under a tenant-scoped key, store
- *                   the key as `pdf_path`. Future downloads stream the
- *                   stored object instantly.
+ *   on_demand     → renderiza, descarta los bytes y marca la fila como
+ *                    generada. Las descargas posteriores re-renderizan.
+ *   file_storage  → renderiza, sube a R2/S3 bajo una key tenant-scoped
+ *                    y guarda esa key en `pdf_path`. Descargas siguientes
+ *                    streamean el objeto guardado.
+ *   local_storage → idéntico al anterior pero el almacenamiento es disco
+ *                    bajo `STORAGE_DIR`. Útil para deploys on-prem.
  *
- * Switching modes mid-life is safe — the row's status stays correct
- * regardless, and the download endpoint falls back to live rendering
- * whenever it can't read the stored object.
+ * Cambiar de modo en caliente es seguro — el estado de la fila queda
+ * consistente y el endpoint de descarga cae a render en vivo siempre que
+ * no logre leer el objeto persistido.
  */
 export const POST: APIRoute = async ({ params, cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value

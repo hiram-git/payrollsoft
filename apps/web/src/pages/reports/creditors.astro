@@ -77,9 +77,21 @@ type ReportData = {
 
 let report: ReportData | null = null
 let error = ''
+let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
 
 try {
-  const res = await fetch(`${API_URL}/reports/creditors?year=${year}&month=${month}`, { headers })
+  const [res, companyRes] = await Promise.all([
+    fetch(`${API_URL}/reports/creditors?year=${year}&month=${month}`, { headers }),
+    fetch(`${API_URL}/company`, { headers }),
+  ])
+  if (companyRes.ok) {
+    const cj = (await companyRes.json()) as {
+      data: { payrollReportMode?: string | null } | null
+    }
+    const mode = cj.data?.payrollReportMode
+    if (mode === 'file_storage') payrollReportMode = 'file_storage'
+    else if (mode === 'local_storage') payrollReportMode = 'local_storage'
+  }
   if (res.status === 401) return Astro.redirect('/login')
   if (res.ok) {
     const json = (await res.json()) as { data: ReportData }
@@ -116,7 +128,23 @@ const monthLabel = monthLabels[month - 1] ?? ''
 <AppLayout title={`Acreedores · ${monthLabel} ${year}`}>
   <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
     <div class="mb-6">
-      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Reporte de acreedores</h1>
+      <div class="flex items-center gap-2 flex-wrap">
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Reporte de acreedores</h1>
+        <span
+          class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+            payrollReportMode === 'on_demand'
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : payrollReportMode === 'local_storage'
+                ? 'bg-violet-50 text-violet-700 border-violet-200'
+                : 'bg-blue-50 text-blue-700 border-blue-200'
+          }`}
+          title="Modo de almacenamiento del PDF — configurable en Configuración → Empresa"
+        >
+          {payrollReportMode === 'on_demand' && 'Bajo demanda'}
+          {payrollReportMode === 'local_storage' && 'Disco local'}
+          {payrollReportMode === 'file_storage' && 'Nube (S3/R2)'}
+        </span>
+      </div>
       <p class="text-sm text-gray-500 mt-0.5">
         Total a transferir o emitir cheque por acreedor en el mes seleccionado.
         Suma todas las planillas <span class="font-mono">closed</span> cuyo período cierra dentro del mes.
@@ -162,7 +190,7 @@ const monthLabel = monthLabels[month - 1] ?? ''
                 <polyline points="14 2 14 8 20 8"/>
                 <path d="M9 13h6M9 17h6M9 9h2"/>
               </svg>
-              Exportar PDF
+              {payrollReportMode === 'on_demand' ? 'Generar PDF' : 'Descargar PDF'}
             </button>
             <button
               type="button"
