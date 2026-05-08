@@ -131,16 +131,26 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
   // ── POST /employees ──────────────────────────────────────────────────────────
   .post(
     '/',
-    async ({ db, body, set }) => {
+    async ({ db, body, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
 
       try {
-        const result = await createEmployeeService(db, body)
+        const result = await createEmployeeService(db, body, {
+          userPermissions: new Set(user?.permissions ?? []),
+          isSuperAdmin: user?.type === 'super_admin',
+        })
         if (!result.success) {
-          set.status = result.error === 'code_taken' ? 409 : 400
+          set.status =
+            result.error === 'code_taken'
+              ? 409
+              : result.error === 'custom_field_required'
+                ? 422
+                : result.error === 'custom_field_forbidden'
+                  ? 403
+                  : 400
           return { success: false, error: result.message }
         }
         set.status = 201
@@ -169,9 +179,18 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
       try {
         const result = await updateEmployeeService(db, params.id, body, {
           changedBy: user?.userId,
+          userPermissions: new Set(user?.permissions ?? []),
+          isSuperAdmin: user?.type === 'super_admin',
         })
         if (!result.success) {
-          set.status = result.error === 'not_found' ? 404 : 409
+          set.status =
+            result.error === 'not_found'
+              ? 404
+              : result.error === 'custom_field_required'
+                ? 422
+                : result.error === 'custom_field_forbidden'
+                  ? 403
+                  : 409
           return { success: false, error: result.message }
         }
         return { success: true, data: result.data }

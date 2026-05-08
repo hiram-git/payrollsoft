@@ -1,5 +1,7 @@
+import { findMissingRequired } from '@payroll/core'
 import {
   createEmployee,
+  customFieldDefinitions,
   customFieldValueHistory,
   deactivateEmployee,
   getCargoById,
@@ -39,6 +41,69 @@ export type EmployeeCreateInput = {
 }
 
 export type EmployeeUpdateInput = Partial<EmployeeCreateInput>
+
+// ─── Custom field dependency validation ──────────────────────────────────────
+
+/**
+ * Lee las definiciones activas y corre el evaluador de dependencias
+ * para confirmar que todos los campos `required` (y `visible`) tengan
+ * valor en el payload combinado. Devuelve los códigos faltantes — cuando
+ * está vacío, el patch es válido.
+ */
+async function findMissingRequiredCustomFields(
+  db: AnyDb,
+  values: Record<string, unknown>
+): Promise<string[]> {
+  const defs = await db
+    .select()
+    .from(customFieldDefinitions)
+    .where(eq(customFieldDefinitions.isActive, true))
+  return findMissingRequired(
+    defs as Array<Parameters<typeof findMissingRequired>[0][number]>,
+    values
+  )
+}
+
+/**
+ * Detecta campos cuyo `validationRules.writePermission` el usuario no
+ * posee y que aparecerían modificados en el patch. Devuelve la lista
+ * de códigos no permitidos para que el caller pueda rechazar la op.
+ *
+ * `userPermissions` viene tipado laxo para evitar enredo con el catálogo
+ * de PermissionCode aquí (la API ya garantiza que los strings son del
+ * catálogo en otras partes).
+ */
+async function findForbiddenCustomFieldWrites(
+  db: AnyDb,
+  before: Record<string, unknown>,
+  after: Record<string, unknown>,
+  userPermissions: ReadonlySet<string>,
+  isSuperAdmin: boolean
+): Promise<string[]> {
+  if (isSuperAdmin) return []
+  // biome-ignore lint/suspicious/noExplicitAny: drizzle row
+  const defs: any[] = await db.select().from(customFieldDefinitions)
+  const blocked: string[] = []
+  for (const def of defs) {
+    const rules = def.validationRules
+    const perm =
+      rules &&
+      typeof rules === 'object' &&
+      typeof (rules as Record<string, unknown>).writePermission === 'string'
+        ? ((rules as Record<string, unknown>).writePermission as string)
+        : null
+    if (!perm || perm.length === 0) continue
+    if (userPermissions.has(perm)) continue
+    const wasSet = Object.prototype.hasOwnProperty.call(before, def.code)
+    const willSet = Object.prototype.hasOwnProperty.call(after, def.code)
+    if (!wasSet && !willSet) continue
+    const beforeVal = before[def.code] ?? null
+    const afterVal = after[def.code] ?? null
+    if (JSON.stringify(beforeVal) === JSON.stringify(afterVal)) continue
+    blocked.push(def.code)
+  }
+  return blocked
+}
 
 // ─── Catalog resolution ───────────────────────────────────────────────────────
 
@@ -88,7 +153,11 @@ export function getEmployeeService(db: AnyDb, id: string) {
 
 // ─── Create ───────────────────────────────────────────────────────────────────
 
-export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInput) {
+export async function createEmployeeService(
+  db: AnyDb,
+  input: EmployeeCreateInput,
+  options: { userPermissions?: ReadonlySet<string>; isSuperAdmin?: boolean } = {}
+) {
   const existingCode = await getEmployeeByCode(db, input.code)
   if (existingCode) {
     return {
@@ -99,6 +168,31 @@ export async function createEmployeeService(db: AnyDb, input: EmployeeCreateInpu
   }
 
   const { position, department } = await resolveCatalogNames(db, input)
+
+  if (input.customFields !== undefined) {
+    const missing = await findMissingRequiredCustomFields(db, input.customFields ?? {})
+    if (missing.length > 0) {
+      return {
+        success: false as const,
+        error: 'custom_field_required',
+        message: `Falta(n) campo(s) obligatorio(s): ${missing.join(', ')}`,
+      }
+    }
+    const forbidden = await findForbiddenCustomFieldWrites(
+      db,
+      {},
+      (input.customFields ?? {}) as Record<string, unknown>,
+      options.userPermissions ?? new Set(),
+      options.isSuperAdmin ?? false
+    )
+    if (forbidden.length > 0) {
+      return {
+        success: false as const,
+        error: 'custom_field_forbidden',
+        message: `No tienes permiso para escribir: ${forbidden.join(', ')}`,
+      }
+    }
+  }
 
   const employee = await createEmployee(db, {
     code: input.code.trim().toUpperCase(),
@@ -142,7 +236,11 @@ export async function updateEmployeeService(
   db: AnyDb,
   id: string,
   input: EmployeeUpdateInput,
-  options: { changedBy?: string } = {}
+  options: {
+    changedBy?: string
+    userPermissions?: ReadonlySet<string>
+    isSuperAdmin?: boolean
+  } = {}
 ) {
   const existing = await getEmployee(db, id)
   if (!existing) {
@@ -201,6 +299,37 @@ export async function updateEmployeeService(
   // Capturar customFields previos para el diff de auditoría —
   // cualquier cambio se persiste en custom_field_value_history.
   const prevCustomFields = (existing.customFields ?? {}) as Record<string, unknown>
+
+  // Si el payload trae customFields, validar dependencias contra el
+  // estado MERGEADO con lo que ya tenía el empleado: los campos no
+  // tocados deben permanecer disponibles para satisfacer "required-if".
+  if (input.customFields !== undefined) {
+    const incoming = (input.customFields ?? {}) as Record<string, unknown>
+    const merged = { ...prevCustomFields, ...incoming }
+    const missing = await findMissingRequiredCustomFields(db, merged)
+    if (missing.length > 0) {
+      return {
+        success: false as const,
+        error: 'custom_field_required',
+        message: `Falta(n) campo(s) obligatorio(s): ${missing.join(', ')}`,
+      }
+    }
+    const forbidden = await findForbiddenCustomFieldWrites(
+      db,
+      prevCustomFields,
+      merged,
+      options.userPermissions ?? new Set(),
+      options.isSuperAdmin ?? false
+    )
+    if (forbidden.length > 0) {
+      return {
+        success: false as const,
+        error: 'custom_field_forbidden',
+        message: `No tienes permiso para escribir: ${forbidden.join(', ')}`,
+      }
+    }
+  }
+
   const updated = await updateEmployee(db, id, patch)
 
   if (input.customFields !== undefined) {

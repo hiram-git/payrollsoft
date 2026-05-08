@@ -23,6 +23,25 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const defaultValueRaw = ((form.get('defaultValue') as string | null) ?? '').trim()
   const defaultValue = defaultValueRaw.length > 0 ? defaultValueRaw : null
 
+  const dependsOnJson = ((form.get('dependsOnJson') as string | null) ?? '').trim()
+  let dependsOn: unknown[] = []
+  if (dependsOnJson) {
+    try {
+      const parsed = JSON.parse(dependsOnJson)
+      if (Array.isArray(parsed)) {
+        dependsOn = parsed.filter((r) => {
+          if (!r || typeof r !== 'object') return false
+          const rec = r as Record<string, unknown>
+          return typeof rec.field === 'string' && rec.field.length > 0 && rec.op && rec.effect
+        })
+      }
+    } catch {
+      /* ignore — el catálogo recién creado puede no traer reglas */
+    }
+  }
+  const readPermission = ((form.get('readPermission') as string | null) ?? '').trim() || null
+  const writePermission = ((form.get('writePermission') as string | null) ?? '').trim() || null
+
   const back = (flag: string, detail?: string) => {
     const qs = new URLSearchParams({ error: flag })
     if (detail) qs.set('detail', detail.slice(0, 400))
@@ -53,6 +72,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         isRequired,
         sortOrder,
         defaultValue,
+        validationRules: { dependsOn, readPermission, writePermission },
       }),
     })
   } catch (err) {

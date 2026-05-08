@@ -12,6 +12,18 @@ const tenantSlug = identity.tenantSlug ?? 'demo'
 const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
 const id = Astro.params.id ?? ''
 
+type DependencyRule = {
+  field: string
+  op: 'eq' | 'ne' | 'gt' | 'lt' | 'gte' | 'lte' | 'in' | 'empty' | 'notEmpty'
+  value?: unknown
+  values?: unknown[]
+  effect: 'required' | 'visible' | 'readonly'
+}
+type ValidationRules = {
+  dependsOn?: DependencyRule[]
+  readPermission?: string | null
+  writePermission?: string | null
+} & Record<string, unknown>
 type CustomField = {
   id: string
   code: string
@@ -22,22 +34,54 @@ type CustomField = {
   defaultValue: unknown
   sortOrder: number
   isActive: boolean
+  validationRules?: ValidationRules | null
+}
+
+type UsageConcept = {
+  id: string
+  code: string
+  name: string
+  type: string
+  formula: string
+  isActive: boolean
 }
 
 let field: CustomField | null = null
 let error = ''
+let allFields: { code: string; name: string; fieldType: string }[] = []
+let usage: UsageConcept[] = []
 
 try {
-  const res = await fetch(`${API_URL}/custom-fields/${id}`, { headers })
+  const [res, listRes, usageRes] = await Promise.all([
+    fetch(`${API_URL}/custom-fields/${id}`, { headers }),
+    fetch(`${API_URL}/custom-fields`, { headers }),
+    fetch(`${API_URL}/custom-fields/${id}/usage`, { headers }),
+  ])
   if (res.status === 404) return Astro.redirect('/config/custom-fields')
   if (res.ok) {
     field = ((await res.json()) as { data: CustomField }).data
   } else {
     error = `No se pudo cargar el campo (HTTP ${res.status}).`
   }
+  if (listRes.ok) {
+    const all = ((await listRes.json()) as { data: CustomField[] }).data ?? []
+    allFields = all
+      .filter((f) => f.code !== id && f.code !== field?.code)
+      .map((f) => ({ code: f.code, name: f.name, fieldType: f.fieldType }))
+  }
+  if (usageRes.ok) {
+    const j = (await usageRes.json()) as {
+      data: { referencingConcepts: UsageConcept[] }
+    }
+    usage = j.data?.referencingConcepts ?? []
+  }
 } catch (err) {
   error = err instanceof Error ? err.message : 'No se pudo conectar.'
 }
+
+const dependencies = (field?.validationRules?.dependsOn ?? []) as DependencyRule[]
+const readPermission = field?.validationRules?.readPermission ?? ''
+const writePermission = field?.validationRules?.writePermission ?? ''
 
 const editable = can(identity, 'settings:company.update')
 const errorFlag = Astro.url.searchParams.get('error') ?? ''
@@ -64,6 +108,9 @@ const errorDetail = Astro.url.searchParams.get('detail') ?? ''
       </div>
     )}
 
+    {field && (
+      <script type="application/json" id="depCatalog" set:html={JSON.stringify(allFields)}></script>
+    )}
     {field && (
       <form method="POST" action={`/api/config/custom-fields/${field.id}`} class="space-y-5">
         <input type="hidden" name="_method" value="UPDATE" />
@@ -156,6 +203,113 @@ const errorDetail = Astro.url.searchParams.get('detail') ?? ''
           </label>
         </section>
 
+        <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 class="text-sm font-medium text-gray-900">Dependencias</h2>
+            <p class="text-xs text-gray-500 mt-1">
+              Las reglas hacen que este campo sea obligatorio, visible o de solo lectura
+              dependiendo del valor de otro campo. Si añades varias reglas con el mismo efecto, todas
+              deben cumplirse para que el efecto se active (AND).
+            </p>
+          </div>
+          <input type="hidden" name="dependsOnJson" id="dependsOnJson" value={JSON.stringify(dependencies)} />
+          <div id="depRows" class="space-y-2"></div>
+          {editable && (
+            <button type="button" id="depAdd" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50">
+              + Agregar regla
+            </button>
+          )}
+          <p class="text-xs text-gray-400 pt-2 border-t border-gray-100">
+            Ejemplo: <span class="font-mono">campo "hijos" obligatorio si "estado_civil" = "casado"</span>.
+          </p>
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-medium text-gray-900">Uso en fórmulas</h2>
+            <span class="text-xs text-gray-400">
+              {usage.length} {usage.length === 1 ? 'concepto referencia' : 'conceptos referencian'} este campo
+            </span>
+          </div>
+          <p class="text-xs text-gray-500">
+            Búsqueda automática de <code class="font-mono">CAMPOADICIONAL("{field.code}")</code> en las
+            fórmulas del catálogo de conceptos. Si desactivas este campo, las fórmulas seguirán
+            evaluando como <code class="font-mono">0</code> para los empleados que no tengan valor.
+          </p>
+          {usage.length === 0 ? (
+            <p class="text-xs text-gray-400 italic py-2">
+              Ningún concepto utiliza este campo todavía. Puedes referenciarlo desde
+              <a href="/config/concepts" class="text-blue-600 hover:underline ml-1">Configuración → Conceptos</a>.
+            </p>
+          ) : (
+            <div class="overflow-x-auto -mx-2">
+              <table class="w-full text-xs">
+                <thead>
+                  <tr class="border-b border-gray-200 bg-gray-50">
+                    <th class="text-left px-3 py-2 font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
+                    <th class="text-left px-3 py-2 font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                    <th class="text-left px-3 py-2 font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                    <th class="text-left px-3 py-2 font-medium text-gray-500 uppercase tracking-wide">Fórmula</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {usage.map((c) => (
+                    <tr class="border-b border-gray-100 last:border-0">
+                      <td class="px-3 py-2">
+                        <div class="font-mono text-gray-700">{c.code}</div>
+                        <div class="text-gray-500">{c.name}</div>
+                      </td>
+                      <td class="px-3 py-2 text-gray-600">{c.type}</td>
+                      <td class="px-3 py-2">
+                        {c.isActive ? (
+                          <span class="inline-flex px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Activo</span>
+                        ) : (
+                          <span class="inline-flex px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Inactivo</span>
+                        )}
+                      </td>
+                      <td class="px-3 py-2 font-mono text-[11px] text-gray-700 break-all">{c.formula}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <h2 class="text-sm font-medium text-gray-900">Permisos por campo</h2>
+          <p class="text-xs text-gray-500 -mt-2">
+            Restringe quién puede leer o escribir el valor de este campo. Si dejas el permiso vacío,
+            cualquier usuario autorizado para empleados podrá usarlo.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Permiso para leer</label>
+              <input
+                type="text"
+                name="readPermission"
+                maxlength="100"
+                value={readPermission}
+                disabled={!editable}
+                placeholder="ej. employees:read"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Permiso para escribir</label>
+              <input
+                type="text"
+                name="writePermission"
+                maxlength="100"
+                value={writePermission}
+                disabled={!editable}
+                placeholder="ej. employees:update"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              />
+            </div>
+          </div>
+        </section>
+
         {editable && (
           <div class="flex items-center justify-between pt-2 border-t border-gray-200">
             <form method="POST" action={`/api/config/custom-fields/${field.id}`} style="display:inline"
@@ -187,4 +341,153 @@ const errorDetail = Astro.url.searchParams.get('detail') ?? ''
       </form>
     )}
   </div>
+
+  <script is:inline>
+    ;(function () {
+      const json = document.getElementById('dependsOnJson')
+      const catalogEl = document.getElementById('depCatalog')
+      const rowsEl = document.getElementById('depRows')
+      const addBtn = document.getElementById('depAdd')
+      if (!json || !rowsEl || !catalogEl) return
+      const catalog = JSON.parse(catalogEl.textContent || '[]')
+      let rules
+      try {
+        rules = JSON.parse(json.value || '[]')
+      } catch {
+        rules = []
+      }
+
+      const OPS = [
+        ['eq', '='],
+        ['ne', '≠'],
+        ['gt', '>'],
+        ['lt', '<'],
+        ['gte', '≥'],
+        ['lte', '≤'],
+        ['in', 'en lista'],
+        ['empty', 'vacío'],
+        ['notEmpty', 'no vacío'],
+      ]
+      const EFFECTS = [
+        ['required', 'Obligatorio'],
+        ['visible', 'Visible'],
+        ['readonly', 'Solo lectura'],
+      ]
+
+      function render() {
+        rowsEl.innerHTML = ''
+        rules.forEach((rule, idx) => {
+          const row = document.createElement('div')
+          row.className = 'flex items-center gap-2 flex-wrap'
+          const fieldSel = document.createElement('select')
+          fieldSel.className = 'px-2 py-1.5 text-xs border border-gray-300 rounded-md font-mono'
+          fieldSel.innerHTML = '<option value="">Campo origen…</option>'
+          for (const f of catalog) {
+            const opt = document.createElement('option')
+            opt.value = f.code
+            opt.textContent = `${f.code} (${f.name})`
+            if (rule.field === f.code) opt.selected = true
+            fieldSel.appendChild(opt)
+          }
+          fieldSel.addEventListener('change', (e) => {
+            rule.field = e.target.value
+            sync()
+          })
+
+          const opSel = document.createElement('select')
+          opSel.className = 'px-2 py-1.5 text-xs border border-gray-300 rounded-md'
+          for (const [v, l] of OPS) {
+            const opt = document.createElement('option')
+            opt.value = v
+            opt.textContent = l
+            if (rule.op === v) opt.selected = true
+            opSel.appendChild(opt)
+          }
+          opSel.addEventListener('change', (e) => {
+            rule.op = e.target.value
+            render()
+          })
+
+          const valInput = document.createElement('input')
+          valInput.type = 'text'
+          valInput.className = 'px-2 py-1.5 text-xs border border-gray-300 rounded-md flex-1 min-w-[120px]'
+          valInput.placeholder = rule.op === 'in' ? 'a, b, c' : 'Valor'
+          valInput.value =
+            rule.op === 'in'
+              ? Array.isArray(rule.values)
+                ? rule.values.join(', ')
+                : ''
+              : rule.value == null
+                ? ''
+                : String(rule.value)
+          if (rule.op === 'empty' || rule.op === 'notEmpty') {
+            valInput.disabled = true
+            valInput.placeholder = '—'
+            valInput.value = ''
+          }
+          valInput.addEventListener('input', (e) => {
+            const v = e.target.value
+            if (rule.op === 'in') {
+              rule.values = v
+                .split(',')
+                .map((s) => s.trim())
+                .filter(Boolean)
+              delete rule.value
+            } else {
+              rule.value = v
+              delete rule.values
+            }
+            sync()
+          })
+
+          const effSel = document.createElement('select')
+          effSel.className = 'px-2 py-1.5 text-xs border border-gray-300 rounded-md'
+          for (const [v, l] of EFFECTS) {
+            const opt = document.createElement('option')
+            opt.value = v
+            opt.textContent = '→ ' + l
+            if (rule.effect === v) opt.selected = true
+            effSel.appendChild(opt)
+          }
+          effSel.addEventListener('change', (e) => {
+            rule.effect = e.target.value
+            sync()
+          })
+
+          const rmBtn = document.createElement('button')
+          rmBtn.type = 'button'
+          rmBtn.className = 'px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded'
+          rmBtn.textContent = '✕'
+          rmBtn.title = 'Quitar regla'
+          rmBtn.addEventListener('click', () => {
+            rules.splice(idx, 1)
+            sync()
+            render()
+          })
+
+          row.append(fieldSel, opSel, valInput, effSel, rmBtn)
+          rowsEl.appendChild(row)
+        })
+        if (rules.length === 0) {
+          const empty = document.createElement('p')
+          empty.className = 'text-xs text-gray-400 italic'
+          empty.textContent = 'Sin reglas. Este campo siempre se comporta según los valores estáticos.'
+          rowsEl.appendChild(empty)
+        }
+      }
+
+      function sync() {
+        json.value = JSON.stringify(rules)
+      }
+
+      if (addBtn) {
+        addBtn.addEventListener('click', () => {
+          rules.push({ field: '', op: 'eq', value: '', effect: 'required' })
+          sync()
+          render()
+        })
+      }
+      render()
+    })()
+  </script>
 </AppLayout>

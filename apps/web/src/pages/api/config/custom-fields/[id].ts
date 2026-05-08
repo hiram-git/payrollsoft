@@ -75,6 +75,25 @@ export const POST: APIRoute = async ({ request, cookies, redirect, params }) => 
   const defaultValueRaw = ((form.get('defaultValue') as string | null) ?? '').trim()
   const defaultValue = defaultValueRaw.length > 0 ? defaultValueRaw : null
 
+  const dependsOnJson = ((form.get('dependsOnJson') as string | null) ?? '').trim()
+  let dependsOn: unknown[] = []
+  if (dependsOnJson) {
+    try {
+      const parsed = JSON.parse(dependsOnJson)
+      if (Array.isArray(parsed)) {
+        dependsOn = parsed.filter((r) => {
+          if (!r || typeof r !== 'object') return false
+          const rec = r as Record<string, unknown>
+          return typeof rec.field === 'string' && rec.field.length > 0 && rec.op && rec.effect
+        })
+      }
+    } catch {
+      return fail(400, 'Reglas de dependencia con formato inválido.')
+    }
+  }
+  const readPermission = ((form.get('readPermission') as string | null) ?? '').trim() || null
+  const writePermission = ((form.get('writePermission') as string | null) ?? '').trim() || null
+
   if (!name) return fail(400, 'El nombre es obligatorio.')
   if (!VALID_TYPES.has(fieldType)) return fail(400, `Tipo inválido: ${fieldType}`)
 
@@ -91,6 +110,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect, params }) => 
         isActive,
         sortOrder,
         defaultValue,
+        validationRules: { dependsOn, readPermission, writePermission },
       }),
     })
   } catch (err) {

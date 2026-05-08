@@ -1,3 +1,4 @@
+import { findMissingRequired } from '@payroll/core'
 import type { APIRoute } from 'astro'
 import * as XLSX from 'xlsx'
 import { getIdentity } from '../../../../lib/auth'
@@ -11,6 +12,8 @@ type CustomFieldDef = {
   name: string
   fieldType: 'text' | 'integer' | 'float' | 'date'
   isActive: boolean
+  isRequired: boolean
+  validationRules?: { dependsOn?: unknown[] } | null
 }
 type Employee = {
   id: string
@@ -246,6 +249,20 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     // Merge con el customFields existente: el patch SOLO sobreescribe
     // las claves presentes en la fila, lo demás se preserva.
     const merged = { ...(emp.customFields ?? {}), ...patch }
+
+    // Validar dependencias antes de tocar la API: si el merge deja
+    // algún campo "obligatorio-condicional" vacío, fallamos local.
+    const missing = findMissingRequired(activeDefs, merged)
+    if (missing.length > 0) {
+      failed++
+      outcomes.push({
+        rowNumber,
+        employeeCode: code,
+        status: 'failed',
+        message: `Campo(s) obligatorio(s) por dependencia sin valor: ${missing.join(', ')}`,
+      })
+      continue
+    }
 
     let res: Response
     try {

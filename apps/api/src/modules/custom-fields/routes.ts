@@ -17,10 +17,17 @@
  *   - read   → cualquier autenticado del tenant
  *   - write  → settings:company.update
  */
-import { CUSTOM_FIELD_TYPES, customFieldDefinitions } from '@payroll/db'
+import { CUSTOM_FIELD_TYPES, concepts, customFieldDefinitions } from '@payroll/db'
+import type { PermissionCode } from '@payroll/types'
 import { and, asc, eq } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
+import {
+  type AuthUser,
+  authPlugin,
+  guardAuth,
+  guardPermission,
+  userHasPermissions,
+} from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 
 // biome-ignore lint/suspicious/noExplicitAny: Drizzle generic
@@ -34,6 +41,24 @@ const CodePattern = t.String({
   pattern: '^[a-z][a-z0-9_]*$',
 })
 
+const DependencyRule = t.Object({
+  field: t.String({ minLength: 1, maxLength: 50 }),
+  op: t.Union([
+    t.Literal('eq'),
+    t.Literal('ne'),
+    t.Literal('gt'),
+    t.Literal('lt'),
+    t.Literal('gte'),
+    t.Literal('lte'),
+    t.Literal('in'),
+    t.Literal('empty'),
+    t.Literal('notEmpty'),
+  ]),
+  value: t.Optional(t.Any()),
+  values: t.Optional(t.Array(t.Any())),
+  effect: t.Union([t.Literal('required'), t.Literal('visible'), t.Literal('readonly')]),
+})
+
 const ValidationRules = t.Optional(
   t.Object({
     minLength: t.Optional(t.Integer({ minimum: 0 })),
@@ -41,6 +66,9 @@ const ValidationRules = t.Optional(
     min: t.Optional(t.Number()),
     max: t.Optional(t.Number()),
     pattern: t.Optional(t.String({ maxLength: 200 })),
+    dependsOn: t.Optional(t.Array(DependencyRule)),
+    readPermission: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+    writePermission: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
   })
 )
 
@@ -74,6 +102,37 @@ async function listAll(db: AnyDb) {
     .orderBy(asc(customFieldDefinitions.sortOrder), asc(customFieldDefinitions.name))
 }
 
+/**
+ * Read `validationRules.readPermission` con tolerancia a tipos. Devuelve
+ * el código de permiso requerido o `null` si el campo está abierto.
+ */
+export function readReadPermission(rules: unknown): PermissionCode | null {
+  if (!rules || typeof rules !== 'object') return null
+  const v = (rules as Record<string, unknown>).readPermission
+  return typeof v === 'string' && v.length > 0 ? (v as PermissionCode) : null
+}
+
+export function readWritePermission(rules: unknown): PermissionCode | null {
+  if (!rules || typeof rules !== 'object') return null
+  const v = (rules as Record<string, unknown>).writePermission
+  return typeof v === 'string' && v.length > 0 ? (v as PermissionCode) : null
+}
+
+/**
+ * Filtra del listado las definiciones cuya `readPermission` el usuario
+ * no posee. Mantiene cualquier definición sin restricción declarada.
+ */
+function filterByReadPermission<T extends { validationRules?: unknown }>(
+  rows: T[],
+  user: AuthUser | null
+): T[] {
+  return rows.filter((row) => {
+    const perm = readReadPermission(row.validationRules)
+    if (!perm) return true
+    return userHasPermissions(user, [perm])
+  })
+}
+
 async function getById(db: AnyDb, id: string) {
   const rows = await db
     .select()
@@ -98,12 +157,18 @@ export const customFieldsRoutes = new Elysia({ prefix: '/custom-fields' })
 
   .get(
     '/',
-    async ({ db, set }) => {
+    async ({ db, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const data = await listAll(db)
+      const all = await listAll(db)
+      // Si el usuario es admin del catálogo (settings:company.update),
+      // entrega todo —  la pantalla de configuración necesita ver
+      // los campos restringidos para poder editarlos.
+      const data = userHasPermissions(user, ['settings:company.update'])
+        ? all
+        : filterByReadPermission(all, user)
       return { success: true, data }
     },
     { beforeHandle: [guardAuth, guardTenantMatchesToken] }
@@ -111,7 +176,7 @@ export const customFieldsRoutes = new Elysia({ prefix: '/custom-fields' })
 
   .get(
     '/:id',
-    async ({ db, params, set }) => {
+    async ({ db, user, params, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
@@ -120,6 +185,11 @@ export const customFieldsRoutes = new Elysia({ prefix: '/custom-fields' })
       if (!row) {
         set.status = 404
         return { success: false, error: 'Custom field not found' }
+      }
+      const perm = readReadPermission(row.validationRules)
+      if (perm && !userHasPermissions(user, [perm])) {
+        set.status = 403
+        return { success: false, error: 'Forbidden: missing read permission for this field' }
       }
       return { success: true, data: row }
     },
@@ -208,6 +278,53 @@ export const customFieldsRoutes = new Elysia({ prefix: '/custom-fields' })
       ],
       params: t.Object({ id: t.String() }),
       body: UpdateBody,
+    }
+  )
+
+  // ── GET /custom-fields/:id/usage ────────────────────────────────────────
+  // Devuelve las fórmulas de conceptos que referencian este campo a través
+  // de CAMPOADICIONAL("code"). Útil para evitar desactivar un campo que
+  // todavía alimenta cálculos.
+  .get(
+    '/:id/usage',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const def = await getById(db, params.id)
+      if (!def) {
+        set.status = 404
+        return { success: false, error: 'Custom field not found' }
+      }
+      // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
+      const allConcepts: any[] = await db.select().from(concepts)
+      // Comilla simple o doble + el code exacto. Permitimos espacios
+      // alrededor del paréntesis y la coma para no perder usos válidos.
+      const escaped = def.code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const re = new RegExp(`CAMPOADICIONAL\\s*\\(\\s*["']${escaped}["']\\s*[,)]`, 'i')
+      const referencing = allConcepts
+        .filter((c) => typeof c.formula === 'string' && re.test(c.formula))
+        .map((c) => ({
+          id: c.id as string,
+          code: c.code as string,
+          name: c.name as string,
+          type: c.type as string,
+          formula: c.formula as string,
+          isActive: !!c.isActive,
+        }))
+      return {
+        success: true,
+        data: {
+          fieldCode: def.code,
+          fieldName: def.name,
+          referencingConcepts: referencing,
+        },
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken],
+      params: t.Object({ id: t.String() }),
     }
   )
 

@@ -67,6 +67,17 @@ type CustomFieldDefinition = {
   isActive: boolean
   defaultValue: unknown
   sortOrder: number
+  validationRules?: {
+    dependsOn?: Array<{
+      field: string
+      op: string
+      value?: unknown
+      values?: unknown[]
+      effect: 'required' | 'visible' | 'readonly'
+    }>
+    readPermission?: string | null
+    writePermission?: string | null
+  } | null
 }
 type CustomFieldHistoryEntry = {
   id: string
@@ -508,7 +519,7 @@ const freqLabel: Record<string, string> = {
                 const inputName = `cf_${cf.code}`
                 const value = cfValue(cf.code)
                 return (
-                  <div>
+                  <div data-cf-row={cf.code}>
                     <label class="block text-sm font-medium text-gray-700 mb-1">
                       {cf.name}
                       {cf.isRequired && <span class="text-red-500 ml-0.5">*</span>}
@@ -669,6 +680,102 @@ const freqLabel: Record<string, string> = {
     font-weight: 600;
   }
 </style>
+
+<script type="application/json" id="cfDefs" set:html={JSON.stringify(customFieldDefs)}></script>
+
+<script is:inline>
+  ;(function () {
+    const defsEl = document.getElementById('cfDefs')
+    if (!defsEl) return
+    let defs
+    try {
+      defs = JSON.parse(defsEl.textContent || '[]')
+    } catch {
+      return
+    }
+    if (!Array.isArray(defs) || defs.length === 0) return
+
+    function readDeps(def) {
+      const rules = def.validationRules && Array.isArray(def.validationRules.dependsOn)
+        ? def.validationRules.dependsOn
+        : []
+      return rules.filter((r) => r && typeof r === 'object' && r.field && r.op && r.effect)
+    }
+    function isEmpty(v) {
+      if (v == null) return true
+      if (typeof v === 'string') return v.trim() === ''
+      return false
+    }
+    function toNum(v) {
+      if (v == null || v === '') return null
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    function evalRule(r, values) {
+      const v = values[r.field]
+      switch (r.op) {
+        case 'eq': return String(v ?? '') === String(r.value ?? '')
+        case 'ne': return String(v ?? '') !== String(r.value ?? '')
+        case 'gt': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a > b }
+        case 'lt': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a < b }
+        case 'gte': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a >= b }
+        case 'lte': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a <= b }
+        case 'in': return Array.isArray(r.values) && r.values.some((x) => String(x) === String(v ?? ''))
+        case 'empty': return isEmpty(v)
+        case 'notEmpty': return !isEmpty(v)
+        default: return false
+      }
+    }
+    function readValues() {
+      const out = {}
+      for (const def of defs) {
+        const el = document.querySelector('[name="cf_' + def.code + '"]')
+        out[def.code] = el ? el.value : ''
+      }
+      return out
+    }
+    function applyState() {
+      const values = readValues()
+      for (const def of defs) {
+        const rules = readDeps(def)
+        const row = document.querySelector('[data-cf-row="' + def.code + '"]')
+        const input = document.querySelector('[name="cf_' + def.code + '"]')
+        if (!row || !input) continue
+        const visRules = rules.filter((r) => r.effect === 'visible')
+        const reqRules = rules.filter((r) => r.effect === 'required')
+        const roRules = rules.filter((r) => r.effect === 'readonly')
+        const visible = visRules.length === 0 ? true : visRules.every((r) => evalRule(r, values))
+        const required = !!def.isRequired || (reqRules.length > 0 && reqRules.every((r) => evalRule(r, values)))
+        const readonly = roRules.length > 0 && roRules.every((r) => evalRule(r, values))
+        row.style.display = visible ? '' : 'none'
+        if (required && visible) input.setAttribute('required', 'required')
+        else input.removeAttribute('required')
+        if (readonly) input.setAttribute('readonly', 'readonly')
+        else input.removeAttribute('readonly')
+        if (!visible) input.value = ''
+        // Toggle the asterisk on the label so the user sees state changes.
+        const lbl = row.querySelector('label')
+        if (lbl) {
+          const star = lbl.querySelector('.cf-required-star')
+          if (required && !star) {
+            const sp = document.createElement('span')
+            sp.className = 'cf-required-star text-red-500 ml-0.5'
+            sp.textContent = '*'
+            lbl.appendChild(sp)
+          } else if (!required && star) {
+            star.remove()
+          }
+        }
+      }
+    }
+    for (const def of defs) {
+      const el = document.querySelector('[name="cf_' + def.code + '"]')
+      if (el) el.addEventListener('input', applyState)
+      if (el) el.addEventListener('change', applyState)
+    }
+    applyState()
+  })()
+</script>
 
 <script is:inline>
   function switchTab(tab, btn) {
