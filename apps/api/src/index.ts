@@ -16,6 +16,7 @@ import { funcionesRoutes } from './modules/catalogs/funciones/routes'
 import { partidasRoutes } from './modules/catalogs/partidas/routes'
 import { companyRoutes } from './modules/company/routes'
 import { creditorRoutes } from './modules/creditors/routes'
+import { customFieldsRoutes } from './modules/custom-fields/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
@@ -66,6 +67,7 @@ const app = new Elysia()
   .use(attendanceRoutes)
   .use(loansRoutes)
   .use(creditorRoutes)
+  .use(customFieldsRoutes)
   .use(payrollRoutes)
   .use(reportsRoutes)
 

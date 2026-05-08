@@ -1,0 +1,190 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'settings:company.read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const id = Astro.params.id ?? ''
+
+type CustomField = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  fieldType: 'text' | 'integer' | 'float' | 'date'
+  isRequired: boolean
+  defaultValue: unknown
+  sortOrder: number
+  isActive: boolean
+}
+
+let field: CustomField | null = null
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/custom-fields/${id}`, { headers })
+  if (res.status === 404) return Astro.redirect('/config/custom-fields')
+  if (res.ok) {
+    field = ((await res.json()) as { data: CustomField }).data
+  } else {
+    error = `No se pudo cargar el campo (HTTP ${res.status}).`
+  }
+} catch (err) {
+  error = err instanceof Error ? err.message : 'No se pudo conectar.'
+}
+
+const editable = can(identity, 'settings:company.update')
+const errorFlag = Astro.url.searchParams.get('error') ?? ''
+const errorDetail = Astro.url.searchParams.get('detail') ?? ''
+---
+
+<AppLayout title={field?.name ?? 'Campo'}>
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <a href="/config/custom-fields" class="text-xs text-gray-500 hover:text-gray-900">← Volver al catálogo</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">{field?.name ?? '—'}</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Código: <span class="font-mono">{field?.code}</span>
+      </p>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+    {errorFlag && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        No se pudo guardar el campo.
+        {errorDetail && <pre class="mt-2 whitespace-pre-wrap break-words text-xs font-mono opacity-80">{errorDetail}</pre>}
+      </div>
+    )}
+
+    {field && (
+      <form method="POST" action={`/api/config/custom-fields/${field.id}`} class="space-y-5">
+        <input type="hidden" name="_method" value="UPDATE" />
+        <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <h2 class="text-sm font-medium text-gray-900">Identificación</h2>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre</label>
+              <input
+                type="text"
+                name="name"
+                required
+                minlength="1"
+                maxlength="255"
+                value={field.name}
+                disabled={!editable}
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Código</label>
+              <input
+                type="text"
+                value={field.code}
+                disabled
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono bg-gray-50 text-gray-500"
+              />
+              <p class="mt-1.5 text-xs text-gray-500">El código no se puede cambiar.</p>
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Descripción</label>
+              <textarea
+                name="description"
+                maxlength="2000"
+                rows="2"
+                disabled={!editable}
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              >{field.description ?? ''}</textarea>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <h2 class="text-sm font-medium text-gray-900">Tipo y validación</h2>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo de dato</label>
+              <select
+                name="fieldType"
+                disabled={!editable}
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              >
+                <option value="text" selected={field.fieldType === 'text'}>Texto</option>
+                <option value="integer" selected={field.fieldType === 'integer'}>Número entero</option>
+                <option value="float" selected={field.fieldType === 'float'}>Número decimal</option>
+                <option value="date" selected={field.fieldType === 'date'}>Fecha</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Orden</label>
+              <input
+                type="number"
+                name="sortOrder"
+                min="0"
+                max="9999"
+                value={field.sortOrder}
+                disabled={!editable}
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Valor por defecto</label>
+              <input
+                type="text"
+                name="defaultValue"
+                maxlength="255"
+                value={field.defaultValue == null ? '' : String(field.defaultValue)}
+                disabled={!editable}
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50"
+              />
+            </div>
+          </div>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="isRequired" value="1" checked={field.isRequired} disabled={!editable} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Obligatorio
+          </label>
+          <label class="flex items-center gap-2 text-sm text-gray-700">
+            <input type="checkbox" name="isActive" value="1" checked={field.isActive} disabled={!editable} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Activo
+          </label>
+        </section>
+
+        {editable && (
+          <div class="flex items-center justify-between pt-2 border-t border-gray-200">
+            <form method="POST" action={`/api/config/custom-fields/${field.id}`} style="display:inline"
+              data-saconfirm
+              data-sa-title="Desactivar campo"
+              data-sa-message={`Vas a desactivar el campo "${field.name}". No se eliminarán los valores ya guardados en empleados.`}
+              data-sa-confirm-label="Desactivar"
+              data-sa-tone="danger"
+              data-sa-loading-title="Desactivando"
+              data-sa-success-title="Campo desactivado"
+              data-sa-error-title="No se pudo desactivar"
+            >
+              <input type="hidden" name="_method" value="DELETE" />
+              <button type="submit" class="px-3 py-1.5 text-xs rounded-md border border-red-200 text-red-700 hover:bg-red-50">
+                Desactivar campo
+              </button>
+            </form>
+            <div class="flex items-center gap-2">
+              <a href="/config/custom-fields" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        )}
+      </form>
+    )}
+  </div>
+</AppLayout>

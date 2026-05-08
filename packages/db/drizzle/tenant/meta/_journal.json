@@ -176,6 +176,13 @@
       "when": 1762128004000,
       "tag": "0025_shifts_weekdays_and_work_calendar",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1762128005000,
+      "tag": "0026_custom_field_definitions",
+      "breakpoints": true
     }
   ]
 }
