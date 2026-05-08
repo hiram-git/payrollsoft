@@ -57,6 +57,17 @@ type Loan = {
   isActive: boolean
   createdAt: string
 }
+type CustomFieldDefinition = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  fieldType: 'text' | 'integer' | 'float' | 'date'
+  isRequired: boolean
+  isActive: boolean
+  defaultValue: unknown
+  sortOrder: number
+}
 
 let emp: Employee | null = null
 let cargos: CatalogItem[] = []
@@ -65,6 +76,7 @@ let departamentos: Departamento[] = []
 let positions: Position[] = []
 let loans: Loan[] = []
 let payrollTypes: PayrollType[] = []
+let customFieldDefs: CustomFieldDefinition[] = []
 let tipoInstitucion = 'privada'
 
 try {
@@ -104,8 +116,27 @@ try {
     const lRes = await fetch(`${API_URL}/loans?employeeId=${emp.id}`, { headers })
     if (lRes.ok) loans = ((await lRes.json()) as { data: Loan[] }).data ?? []
   }
+
+  // Active custom field definitions, ordered by the catalog's sortOrder.
+  // Inactive ones se ocultan del formulario pero no se borran del jsonb,
+  // así que valores históricos quedan disponibles vía CAMPOADICIONAL().
+  const cfRes = await fetch(`${API_URL}/custom-fields`, { headers })
+  if (cfRes.ok) {
+    const cfJson = (await cfRes.json()) as { data: CustomFieldDefinition[] }
+    customFieldDefs = (cfJson.data ?? []).filter((d) => d.isActive)
+  }
 } catch {
   return Astro.redirect('/employees')
+}
+
+// `customFields` jsonb del empleado — diccionario code→valor.
+const empCustomFields = ((emp as unknown as { customFields?: Record<string, unknown> } | null)
+  ?.customFields ?? {}) as Record<string, unknown>
+function cfValue(code: string): string {
+  const v = empCustomFields[code]
+  if (v == null) return ''
+  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  return String(v)
 }
 
 if (!emp) return Astro.redirect('/employees')
@@ -191,6 +222,11 @@ const freqLabel: Record<string, string> = {
         {payrollTypes.length > 0 && (
           <button type="button" class="tab-btn" data-tab="nomina" onclick="switchTab('nomina', this)">
             Tipos de Planilla
+          </button>
+        )}
+        {customFieldDefs.length > 0 && (
+          <button type="button" class="tab-btn" data-tab="adicionales" onclick="switchTab('adicionales', this)">
+            Campos adicionales
           </button>
         )}
       </div>
@@ -425,6 +461,79 @@ const freqLabel: Record<string, string> = {
                   <span class="text-sm text-gray-700">{pt.name}</span>
                 </label>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <!-- TAB: Campos adicionales (custom_field_definitions) -->
+      {customFieldDefs.length > 0 && (
+        <div id="tab-adicionales" style="display:none">
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-1">Campos adicionales</h3>
+            <p class="text-xs text-gray-500 mb-4">
+              Definidos en <a href="/config/custom-fields" class="text-blue-600 hover:underline">Configuración → Campos
+              adicionales</a>. Los valores numéricos se pueden referenciar en fórmulas con
+              <code class="font-mono">CAMPOADICIONAL("código")</code>.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {customFieldDefs.map((cf) => {
+                const baseClass =
+                  'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent'
+                const inputName = `cf_${cf.code}`
+                const value = cfValue(cf.code)
+                return (
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      {cf.name}
+                      {cf.isRequired && <span class="text-red-500 ml-0.5">*</span>}
+                    </label>
+                    {cf.fieldType === 'integer' && (
+                      <input
+                        type="number"
+                        step="1"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        class={baseClass}
+                      />
+                    )}
+                    {cf.fieldType === 'float' && (
+                      <input
+                        type="number"
+                        step="0.01"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        class={baseClass}
+                      />
+                    )}
+                    {cf.fieldType === 'date' && (
+                      <input
+                        type="date"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        class={baseClass}
+                      />
+                    )}
+                    {cf.fieldType === 'text' && (
+                      <input
+                        type="text"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        maxlength="255"
+                        class={baseClass}
+                      />
+                    )}
+                    <p class="mt-1 text-xs text-gray-400 font-mono">
+                      {cf.code}
+                      {cf.description && <span class="text-gray-500"> · {cf.description}</span>}
+                    </p>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
