@@ -28,7 +28,39 @@ export type DefaultConcept = {
   isReferenceValue: boolean
   useAmountCalc: boolean
   allowZero: boolean
+  /**
+   * Si se proveen, el concepto solo entra en planillas cuya frecuencia
+   * (`payrolls.frequency`) coincide con uno de estos códigos. Vacío =
+   * el concepto se procesa en cualquier frecuencia.
+   */
+  frequencyCodes?: string[]
+  /**
+   * Idem para el tipo de planilla (`payrolls.type`). Útil para
+   * conceptos como XIII_MES que solo deben entrar en planillas
+   * `thirteenth` y nunca en regulares.
+   */
+  payrollTypeCodes?: string[]
 }
+
+/**
+ * Fórmula del XIII Mes (Decimotercer Mes) panameño.
+ *
+ * Convención: 1/12 del total devengado por el empleado en el cuatrimestre
+ * que cubre cada pago (Dec 16 → Apr 15, Apr 16 → Aug 15, Aug 16 → Dec 15).
+ * Los códigos del primer argumento de ACUMULADOS son los `concept_code`
+ * que las planillas regulares depositan en `payroll_acumulados`. Si el
+ * tenant no tiene alguno de ellos, ACUMULADOS() devuelve 0 sin romper.
+ *
+ * `dias_trabajados` se preserva como variable informativa para el
+ * operador (no afecta el monto). El motor toma `INIPERIODO` y
+ * `FINPERIODO` de la cabecera de la planilla XIII, que el endpoint
+ * `POST /payroll/thirteenth` ya calcula vía `determinarPeriodoTrimestral`.
+ */
+const XIII_MES_FORMULA = [
+  'dias_trabajados = ANTIGUEDAD_DIAS',
+  'acumulados = ACUMULADOS("SUELDO,HORAS_EXTRAS,COMISIONES,BONIFICACIONES", FICHA, INIPERIODO, FINPERIODO)',
+  'monto = acumulados/12',
+].join('\n')
 
 const ISLR_FORMULA = [
   'salario_anual = SALARIO*13',
@@ -49,6 +81,62 @@ const ISLR_FORMULA = [
 ].join('\n')
 
 export const DEFAULT_CONCEPTS: DefaultConcept[] = [
+  {
+    code: 'HORAS_EXTRAS',
+    name: 'Horas Extras',
+    type: 'income',
+    formula: '',
+    unit: 'amount',
+    printDetails: true,
+    prorates: false,
+    allowModify: true,
+    isReferenceValue: false,
+    useAmountCalc: true,
+    allowZero: false,
+  },
+  {
+    code: 'COMISIONES',
+    name: 'Comisiones',
+    type: 'income',
+    formula: '',
+    unit: 'amount',
+    printDetails: true,
+    prorates: false,
+    allowModify: true,
+    isReferenceValue: false,
+    useAmountCalc: true,
+    allowZero: false,
+  },
+  {
+    code: 'BONIFICACIONES',
+    name: 'Bonificaciones',
+    type: 'income',
+    formula: '',
+    unit: 'amount',
+    printDetails: true,
+    prorates: false,
+    allowModify: true,
+    isReferenceValue: false,
+    useAmountCalc: true,
+    allowZero: false,
+  },
+  {
+    code: 'XIII_MES',
+    name: 'Decimotercer Mes',
+    type: 'income',
+    formula: XIII_MES_FORMULA,
+    unit: 'amount',
+    printDetails: true,
+    prorates: false,
+    allowModify: false,
+    isReferenceValue: false,
+    useAmountCalc: false,
+    allowZero: false,
+    // Solo se procesa cuando la planilla tiene type=thirteenth y
+    // frequency=thirteenth — el motor filtra vía concept_*_links.
+    payrollTypeCodes: ['thirteenth'],
+    frequencyCodes: ['thirteenth'],
+  },
   {
     code: 'ISLR',
     name: 'IMPUESTO SOBRE LA RENTA',

@@ -132,6 +132,13 @@ function resolveVariable(name: string, ctx: FormulaContext): number | string | u
     // Dates as YYYYMMDD
     FECHAINICIO: toYMD(ctx.period.start),
     FECHAFIN: toYMD(ctx.period.end),
+    // Aliases for ACUMULADOS() date-range form: la fórmula del XIII Mes
+    // usa INIPERIODO/FINPERIODO para tomar el período de la cabecera de
+    // la planilla (Dec 16→Apr 15, Apr 16→Aug 15, Aug 16→Dec 15).
+    INIPERIODO: toYMD(ctx.period.start),
+    FINPERIODO: toYMD(ctx.period.end),
+    INICIO_PERIODO_XIII: toYMD(ctx.period.start),
+    FIN_PERIODO_XIII: toYMD(ctx.period.end),
     FECHAPAGO: paymentDateYMD,
     // Representation expenses (from custom fields, default 0)
     GASTOS_REP: Number(ctx.employee.customFields?.gastos_rep ?? 0),

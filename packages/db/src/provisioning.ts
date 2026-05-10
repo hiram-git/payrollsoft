@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url'
 import { SYSTEM_ROLES, type SystemRoleCode } from '@payroll/types'
 import { tenantSchemaName, validateTenantSlug } from '@payroll/utils'
 import postgres from 'postgres'
-import { DEFAULT_CONCEPTS } from './default-concepts'
+import { DEFAULT_CONCEPTS, type DefaultConcept } from './default-concepts'
 import { runMigrations } from './migrator'
 import { type SeedEmployeesResult, seedEmployees } from './seeds/employees'
 import { type SeedLoansResult, seedLoans } from './seeds/loans'
@@ -394,6 +394,53 @@ async function seedDefaultConcepts(tenant: postgres.Sql): Promise<void> {
         ${c.isReferenceValue}, ${c.useAmountCalc}, ${c.allowZero}
       )
       ON CONFLICT (code) DO NOTHING
+    `
+    await linkDefaultConcept(tenant, c)
+  }
+}
+
+/**
+ * Vincula el concepto a las frecuencias y tipos de planilla declarados
+ * en `DefaultConcept.frequencyCodes` / `payrollTypeCodes`. La resolución
+ * es por code → id contra los catálogos `concept_frequencies` y
+ * `concept_payroll_types` (que ya seedeamos antes que los conceptos).
+ *
+ * Idempotente: las tablas link tienen PK compuesta (concept_id, *_id),
+ * así que ON CONFLICT DO NOTHING preserva los links que el admin
+ * pudo haber agregado a mano después.
+ */
+async function linkDefaultConcept(tenant: postgres.Sql, c: DefaultConcept): Promise<void> {
+  if (!c.frequencyCodes?.length && !c.payrollTypeCodes?.length) return
+  const [conceptRow] = await tenant<{ id: string }[]>`
+    SELECT id FROM concepts WHERE code = ${c.code} LIMIT 1
+  `
+  if (!conceptRow) return
+  const conceptId = conceptRow.id
+
+  for (const freqCode of c.frequencyCodes ?? []) {
+    // Crea el código si la migración base no lo trae (la 0006 siembra
+    // 'xiii_mes' pero el motor espera 'thirteenth'; toleramos ambos).
+    await tenant`
+      INSERT INTO concept_frequencies (code, name, sort_order)
+      VALUES (${freqCode}, ${freqCode}, 99)
+      ON CONFLICT (code) DO NOTHING
+    `
+    await tenant`
+      INSERT INTO concept_frequency_links (concept_id, frequency_id)
+      SELECT ${conceptId}::uuid, id FROM concept_frequencies WHERE code = ${freqCode}
+      ON CONFLICT DO NOTHING
+    `
+  }
+  for (const typeCode of c.payrollTypeCodes ?? []) {
+    await tenant`
+      INSERT INTO concept_payroll_types (code, name, sort_order)
+      VALUES (${typeCode}, ${typeCode}, 99)
+      ON CONFLICT (code) DO NOTHING
+    `
+    await tenant`
+      INSERT INTO concept_payroll_type_links (concept_id, payroll_type_id)
+      SELECT ${conceptId}::uuid, id FROM concept_payroll_types WHERE code = ${typeCode}
+      ON CONFLICT DO NOTHING
     `
   }
 }

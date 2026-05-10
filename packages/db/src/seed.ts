@@ -485,6 +485,35 @@ try {
   }
   console.log('✓ Acumulados    : SALARIO_BASE, HORAS_EXTRAS, COMISIONES, BONIFICACIONES')
 
+  // ── Vínculos de conceptos a frecuencias / tipos de planilla ─────────────────
+  // Los catálogos ya existen en este punto; resolvemos los IDs por code y
+  // poblamos las tablas link para los conceptos que tienen restricciones
+  // declaradas (XIII_MES → solo planillas type/frequency = 'thirteenth').
+  for (const c of DEFAULT_CONCEPTS) {
+    if (!c.frequencyCodes?.length && !c.payrollTypeCodes?.length) continue
+    for (const freqCode of c.frequencyCodes ?? []) {
+      await tenantSql`
+        INSERT INTO concept_frequency_links (concept_id, frequency_id)
+        SELECT c.id, f.id
+        FROM concepts c, concept_frequencies f
+        WHERE c.code = ${c.code} AND f.code = ${freqCode}
+        ON CONFLICT DO NOTHING
+      `
+    }
+    for (const typeCode of c.payrollTypeCodes ?? []) {
+      await tenantSql`
+        INSERT INTO concept_payroll_type_links (concept_id, payroll_type_id)
+        SELECT c.id, t.id
+        FROM concepts c, concept_payroll_types t
+        WHERE c.code = ${c.code} AND t.code = ${typeCode}
+        ON CONFLICT DO NOTHING
+      `
+    }
+    console.log(
+      `✓ Concepto link : ${c.code} → freq=[${c.frequencyCodes?.join(',') ?? ''}] type=[${c.payrollTypeCodes?.join(',') ?? ''}]`
+    )
+  }
+
   console.log('\n✅  Seed completo!')
   if (!SKIP_SUPER_ADMIN && !DATA_ONLY) {
     console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
