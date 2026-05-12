@@ -32,11 +32,11 @@ export type CompanyConfigInput = {
   logoEmpresa?: string | null
   logoIzquierdoReportes?: string | null
   logoDerechoReportes?: string | null
-  /** 'on_demand' | 'file_storage' — see schema for semantics. */
+  /** 'on_demand' | 'file_storage' | 'local_storage' — see schema for semantics. */
   payrollReportMode?: string
 }
 
-const VALID_REPORT_MODES = new Set(['on_demand', 'file_storage'])
+const VALID_REPORT_MODES = new Set(['on_demand', 'file_storage', 'local_storage'])
 
 export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigInput) {
   const existing = await getCompanyConfig(db)

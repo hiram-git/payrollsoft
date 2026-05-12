@@ -49,6 +49,23 @@ try {
   /* la página sigue funcionando sin la lista */
 }
 
+// Modo de almacenamiento del PDF, idéntico al usado por la planilla.
+// Cambia el texto del botón principal y el badge del header.
+let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
+try {
+  const res = await fetch(`${API_URL}/company`, { headers })
+  if (res.ok) {
+    const json = (await res.json()) as {
+      data: { payrollReportMode?: string | null } | null
+    }
+    const mode = json.data?.payrollReportMode
+    if (mode === 'file_storage') payrollReportMode = 'file_storage'
+    else if (mode === 'local_storage') payrollReportMode = 'local_storage'
+  }
+} catch {
+  /* defaults to on_demand */
+}
+
 // Resolve the active type's display name (best-effort; the page still
 // works without it — we just won't show the chip).
 let activePayrollType: PayrollType | null = null
@@ -122,7 +139,7 @@ const downloadUrl = `/api/reports/personnel/download${
 
     <div class="flex items-start justify-between mb-2 gap-4 flex-wrap">
       <div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <h1 class="text-2xl font-bold text-gray-900">Reporte de Personal</h1>
           {activePayrollType && (
             <span
@@ -133,6 +150,20 @@ const downloadUrl = `/api/reports/personnel/download${
               {activePayrollType.name}
             </span>
           )}
+          <span
+            class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+              payrollReportMode === 'on_demand'
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : payrollReportMode === 'local_storage'
+                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}
+            title="Modo de almacenamiento del PDF — configurable en Configuración → Empresa"
+          >
+            {payrollReportMode === 'on_demand' && 'Bajo demanda'}
+            {payrollReportMode === 'local_storage' && 'Disco local'}
+            {payrollReportMode === 'file_storage' && 'Nube (S3/R2)'}
+          </span>
         </div>
         <p class="text-sm text-gray-500 mt-0.5">
           Genera el PDF con todos los empleados activos asociados al tipo de planilla seleccionado en la barra superior.
@@ -152,10 +183,14 @@ const downloadUrl = `/api/reports/personnel/download${
           data-personnel-pdf
           href={downloadUrl}
           class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
-          title="Descargar reporte de personal en PDF"
+          title={
+            payrollReportMode === 'on_demand'
+              ? 'Generar el reporte de personal en PDF al vuelo'
+              : 'Descargar la última versión persistida del reporte (regenera si no existe)'
+          }
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
-          Personal PDF
+          {payrollReportMode === 'on_demand' ? 'Generar PDF' : 'Descargar PDF'}
         </a>
       </div>
     </div>

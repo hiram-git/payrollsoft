@@ -1,9 +1,9 @@
 -- Seed 4 baseline organizational payroll types (idempotent)
 INSERT INTO "concept_payroll_types" ("id", "code", "name", "sort_order")
 VALUES
-  (gen_random_uuid(), 'REGULAR',                 'Nómina Regular',          1),
-  (gen_random_uuid(), 'TRANSITORIA',             'Nómina Transitoria',      2),
-  (gen_random_uuid(), 'CONTINGENCIA',            'Nómina Contingencia',     3),
+  (gen_random_uuid(), 'REGULAR',                 'Regular',                 1),
+  (gen_random_uuid(), 'TRANSITORIA',             'Transitoria',             2),
+  (gen_random_uuid(), 'CONTINGENCIA',            'Contingencia',            3),
   (gen_random_uuid(), 'SERVICIOS_PROFESIONALES', 'Servicios Profesionales', 4)
 ON CONFLICT (code) DO NOTHING;
 
