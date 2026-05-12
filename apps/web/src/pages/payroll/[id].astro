@@ -228,7 +228,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
             </button>
             <div
               id="report-dropdown-panel"
-              class="hidden absolute right-0 mt-1 w-72 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg z-20"
+              class="acciones-menu hidden absolute right-0 mt-1 w-72 origin-top-right rounded-lg border shadow-lg z-20"
               role="menu"
             >
               <ul class="py-1 text-sm">
@@ -237,7 +237,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                     <a
                       data-planilla-pdf
                       href={`/api/reports/payroll/${id}/download`}
-                      class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-start gap-2"
+                      class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                       role="menuitem"
                     >
                       <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -245,7 +245,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       </span>
                       <span class="flex-1">
                         <span class="block font-medium">Descargar Planilla PDF</span>
-                        <span class="block text-xs text-gray-500 leading-snug mt-0.5">El PDF se renderiza al vuelo cada vez.</span>
+                        <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">El PDF se renderiza al vuelo cada vez.</span>
                       </span>
                     </a>
                   </li>
@@ -256,7 +256,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       <button
                         type="button"
                         data-report-action="generate"
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                       >
                         <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -265,7 +265,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium" data-label>Generar PDF</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Renderiza el PDF y lo guarda.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Renderiza el PDF y lo guarda.</span>
                           <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
                         </span>
                       </button>
@@ -274,7 +274,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       <button
                         type="button"
                         data-report-action="download"
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                       >
                         <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -283,7 +283,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium" data-label>Descargar PDF</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Baja la última versión persistida.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Baja la última versión persistida.</span>
                         </span>
                       </button>
                     </li>
@@ -291,7 +291,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                       <button
                         type="button"
                         data-report-action="regenerate"
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                       >
                         <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -300,7 +300,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium" data-label>Regenerar PDF</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Sobreescribe el PDF actual. No re-calcula la planilla.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Sobreescribe el PDF actual. No re-calcula la planilla.</span>
                           <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
                         </span>
                       </button>
@@ -309,12 +309,12 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                 )}
                 {(isGenerated || isClosed) && (
                   <>
-                    <li role="none" class="border-t border-gray-100 mt-1 pt-1">
+                    <li role="none" class="acciones-menu-divider">
                       <button
                         type="button"
                         data-send-comprobantes
                         data-payroll-id={id}
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-wait flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                         title="Enviar el comprobante PDF a cada empleado por correo"
                       >
@@ -323,14 +323,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium">Enviar comprobantes</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Envía el PDF de cada empleado por correo.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Envía el PDF de cada empleado por correo.</span>
                         </span>
                       </button>
                     </li>
                     <li role="none">
                       <a
                         href={`/api/payroll/${id}/xlsx`}
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                         title="Descargar la planilla en Excel"
                       >
@@ -339,14 +339,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium">Descargar Excel</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Hoja con detalle por empleado.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Hoja con detalle por empleado.</span>
                         </span>
                       </a>
                     </li>
                     <li role="none">
                       <a
                         href="/reports/payroll"
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                         title="Ver todos los reportes de planilla"
                       >
@@ -355,14 +355,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium">Más reportes</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Catálogo completo de reportes de planilla.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Catálogo completo de reportes de planilla.</span>
                         </span>
                       </a>
                     </li>
                   </>
                 )}
                 {isCreated && !isProcessing && (
-                  <li role="none" class="border-t border-gray-100 mt-1 pt-1">
+                  <li role="none" class="acciones-menu-divider">
                     <form id="form-generate" method="POST" action={`/api/payroll/${id}`}>
                       <input type="hidden" name="_method" value="GENERATE" />
                       <button
@@ -374,7 +374,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         data-confirm-label="Generar"
                         data-confirm-style="primary"
                         data-show-loading="true"
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                       >
                         <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -382,14 +382,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium">Generar planilla</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Calcula las líneas para todos los empleados activos.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Calcula las líneas para todos los empleados activos.</span>
                         </span>
                       </button>
                     </form>
                   </li>
                 )}
                 {isClosed && (
-                  <li role="none" class="border-t border-gray-100 mt-1 pt-1">
+                  <li role="none" class="acciones-menu-divider">
                     <form id="form-reopen" method="POST" action={`/api/payroll/${id}`}>
                       <input type="hidden" name="_method" value="REOPEN" />
                       <button
@@ -401,7 +401,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         data-confirm-label="Reabrir"
                         data-confirm-style="primary"
                         data-show-loading="true"
-                        class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-start gap-2"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                       >
                         <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -409,14 +409,14 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium">Reabrir planilla</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Vuelve al estado Generada.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Vuelve al estado Generada.</span>
                         </span>
                       </button>
                     </form>
                   </li>
                 )}
                 {isCreated && (
-                  <li role="none" class="border-t border-gray-100 mt-1 pt-1">
+                  <li role="none" class="acciones-menu-divider">
                     <form id="form-delete" method="POST" action={`/api/payroll/${id}`}>
                       <input type="hidden" name="_method" value="DELETE" />
                       <button
@@ -427,7 +427,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         data-body="¿Eliminar esta planilla? Esta acción es irreversible y no podrá deshacerse."
                         data-confirm-label="Eliminar"
                         data-confirm-style="danger"
-                        class="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 flex items-start gap-2"
+                        class="acciones-menu-item acciones-menu-item-danger w-full text-left px-3 py-2 flex items-start gap-2"
                         role="menuitem"
                       >
                         <span class="w-4 h-4 mt-0.5 shrink-0">
@@ -435,7 +435,7 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
                         </span>
                         <span class="flex-1">
                           <span class="block font-medium">Eliminar planilla</span>
-                          <span class="block text-xs text-gray-500 leading-snug mt-0.5">Acción irreversible. Solo disponible mientras esté en estado Creada.</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Acción irreversible. Solo disponible mientras esté en estado Creada.</span>
                         </span>
                       </button>
                     </form>
@@ -716,6 +716,56 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     0%   { transform: translateX(-100%); width: 40%; }
     50%  { width: 70%; }
     100% { transform: translateX(300%); width: 40%; }
+  }
+
+  /*
+   * Dropdown "Acciones" — usa CSS custom properties del sistema para
+   * heredar el tema activo. Las clases Tailwind por sí solas usan
+   * `bg-white` / `text-gray-700` / `hover:bg-blue-50` que en modo
+   * oscuro quedan luminosas y sin contraste suficiente en el hover.
+   */
+  .acciones-menu {
+    background: var(--ink-2);
+    border-color: var(--rule);
+    color: var(--fore-dim);
+  }
+  .acciones-menu-item {
+    color: var(--fore-dim);
+    transition: background-color 120ms, color 120ms;
+  }
+  .acciones-menu-item:hover,
+  .acciones-menu-item:focus-visible {
+    background: var(--ink-4);
+    color: var(--fore);
+  }
+  .acciones-menu-item:disabled {
+    color: var(--mute);
+    cursor: not-allowed;
+  }
+  .acciones-menu-item .acciones-menu-hint {
+    color: var(--mute);
+  }
+  .acciones-menu-item:hover .acciones-menu-hint,
+  .acciones-menu-item:focus-visible .acciones-menu-hint {
+    color: var(--fore-dim);
+  }
+  .acciones-menu-divider {
+    border-top: 1px solid var(--rule);
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+  .acciones-menu-item-danger {
+    color: #ef4444;
+  }
+  .acciones-menu-item-danger:hover,
+  .acciones-menu-item-danger:focus-visible {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+  }
+  [data-theme='light'] .acciones-menu-item-danger:hover,
+  [data-theme='light'] .acciones-menu-item-danger:focus-visible {
+    background: #fef2f2;
+    color: #b91c1c;
   }
 </style>
 
