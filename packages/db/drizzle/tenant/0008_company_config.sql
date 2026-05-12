@@ -17,7 +17,7 @@ CREATE TABLE "company_config" (
 	"mail_from_address" varchar(255),
 	"mail_from_name" varchar(255),
 	"elaborado_por" varchar(255),
-	"cargo_elaborador" varchar(255) DEFAULT 'Especialista en Nóminas',
+	"cargo_elaborador" varchar(255) DEFAULT 'Especialista en Planilla',
 	"jefe_recursos_humanos" varchar(255),
 	"cargo_jefe_rrhh" varchar(255) DEFAULT 'Jefe de Recursos Humanos',
 	"logo_empresa" text,
