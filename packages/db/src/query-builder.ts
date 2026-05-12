@@ -328,7 +328,15 @@ export async function listPayrolls(
       .select()
       .from(payrolls)
       .where(where)
-      .orderBy(desc(payrolls.periodStart))
+      .orderBy(
+        // "Más reciente primero": ordenamos por periodEnd primero (la
+        // fecha más representativa del cierre de la planilla), luego
+        // periodStart como desempate, y por último createdAt para
+        // estabilizar filas con el mismo período.
+        desc(payrolls.periodEnd),
+        desc(payrolls.periodStart),
+        desc(payrolls.createdAt)
+      )
       .limit(limit)
       .offset(offset),
     db.select({ total: count() }).from(payrolls).where(where),
