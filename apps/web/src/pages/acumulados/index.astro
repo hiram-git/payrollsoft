@@ -327,7 +327,7 @@ function buildUrl(extra: Record<string, string>) {
           </div>
         )}
 
-        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="acu-card border rounded-lg overflow-hidden">
           {summaryRows.length === 0 ? (
             <div class="py-16 text-center">
               <p class="text-sm text-gray-400">No hay acumulados para los filtros seleccionados</p>
@@ -335,9 +335,9 @@ function buildUrl(extra: Record<string, string>) {
             </div>
           ) : (
             <>
-              <table class="w-full text-sm">
+              <table class="acu-table w-full text-sm">
                 <thead>
-                  <tr class="border-b border-gray-200 bg-gray-50">
+                  <tr class="border-b">
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
@@ -347,7 +347,7 @@ function buildUrl(extra: Record<string, string>) {
                 </thead>
                 <tbody>
                   {pagedSummaryRows.map((r, i) => (
-                    <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                    <tr class={`border-b last:border-0 ${i % 2 !== 0 ? 'acu-row-stripe' : ''}`}>
                       <td class="px-4 py-3">
                         <a
                           href={buildUrl({ view: 'detail', employeeId: r.employeeId, page: '1' })}
@@ -401,16 +401,16 @@ function buildUrl(extra: Record<string, string>) {
     <!-- ── DETAIL VIEW ──────────────────────────────────────────────────────── -->
     {filterView === 'detail' && (
       <>
-        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="acu-card border rounded-lg overflow-hidden">
           {detailRows.length === 0 ? (
             <div class="py-16 text-center">
               <p class="text-sm text-gray-400">No hay registros para los filtros seleccionados</p>
             </div>
           ) : (
             <>
-              <table class="w-full text-sm">
+              <table class="acu-table w-full text-sm">
                 <thead>
-                  <tr class="border-b border-gray-200 bg-gray-50">
+                  <tr class="border-b">
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planilla</th>
@@ -420,7 +420,7 @@ function buildUrl(extra: Record<string, string>) {
                 </thead>
                 <tbody>
                   {detailRows.map((r, i) => (
-                    <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                    <tr class={`border-b last:border-0 ${i % 2 !== 0 ? 'acu-row-stripe' : ''}`}>
                       <td class="px-4 py-3">
                         <span class="font-medium text-gray-900">{r.lastName ?? '—'}, {r.firstName ?? '—'}</span>
                         <p class="text-xs text-gray-400 font-mono">{r.employeeCode ?? '—'}</p>
@@ -562,5 +562,38 @@ function buildUrl(extra: Record<string, string>) {
 <style>
   .filter-input {
     @apply w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent;
+  }
+
+  /*
+   * Tablas de acumulados — usa las CSS custom properties del sistema
+   * para que el striping de filas impares no resalte tanto en modo
+   * oscuro (la combinación tailwind `bg-gray-50/50` sobre `bg-white`
+   * fija dejaba el contraste demasiado alto en dark theme).
+   */
+  .acu-card {
+    background: var(--ink-2);
+    border-color: var(--rule);
+    color: var(--fore-dim);
+  }
+  .acu-table thead tr {
+    background: var(--ink-3);
+    border-color: var(--rule);
+    color: var(--mute-2);
+  }
+  .acu-table tbody tr {
+    border-color: var(--rule);
+    background: var(--ink-2);
+    transition: background-color 120ms;
+  }
+  .acu-table tbody tr.acu-row-stripe {
+    /* Tint sutil: en oscuro va a `--ink-3`, en claro a `--ink-4`. */
+    background: var(--ink-3);
+  }
+  [data-theme='light'] .acu-table tbody tr.acu-row-stripe {
+    background: #f9fafb;
+  }
+  .acu-table tbody tr:hover {
+    background: var(--ink-4);
+    color: var(--fore);
   }
 </style>
