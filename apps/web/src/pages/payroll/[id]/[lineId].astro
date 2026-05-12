@@ -148,17 +148,23 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
           </button>
         )}
         {isGenerated && (
-          <form id="form-regenerate" method="POST" action={`/api/payroll/${id}/line/${lineId}`}>
+          <form
+            method="POST"
+            action={`/api/payroll/${id}/line/${lineId}`}
+            data-saconfirm
+            data-sa-title="Regenerar empleado"
+            data-sa-message={`¿Recalcular los conceptos de ${employeeName}? Los valores actuales serán reemplazados.`}
+            data-sa-confirm-label="Regenerar"
+            data-sa-tone="warning"
+            data-sa-loading-title="Regenerando línea"
+            data-sa-loading-message="Recalculando conceptos del empleado…"
+            data-sa-success-title="Línea regenerada"
+            data-sa-success-message="Los conceptos se recalcularon correctamente."
+            data-sa-error-title="No se pudo regenerar"
+          >
             <input type="hidden" name="_method" value="REGENERATE" />
             <button
-              type="button"
-              data-confirm
-              data-form="form-regenerate"
-              data-title="Regenerar empleado"
-              data-body={`¿Recalcular los conceptos de ${employeeName}? Los valores actuales serán reemplazados.`}
-              data-confirm-label="Regenerar"
-              data-confirm-style="warning"
-              data-show-loading="true"
+              type="submit"
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
