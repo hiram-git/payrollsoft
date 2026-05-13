@@ -23,6 +23,7 @@ type ValidationRules = {
   dependsOn?: DependencyRule[]
   readPermission?: string | null
   writePermission?: string | null
+  includeInCreditorsReport?: boolean
 } & Record<string, unknown>
 type CustomField = {
   id: string
@@ -82,6 +83,7 @@ try {
 const dependencies = (field?.validationRules?.dependsOn ?? []) as DependencyRule[]
 const readPermission = field?.validationRules?.readPermission ?? ''
 const writePermission = field?.validationRules?.writePermission ?? ''
+const includeInCreditorsReport = field?.validationRules?.includeInCreditorsReport === true
 
 const editable = can(identity, 'settings:company.update')
 const errorFlag = Astro.url.searchParams.get('error') ?? ''
@@ -308,6 +310,32 @@ const errorDetail = Astro.url.searchParams.get('detail') ?? ''
               />
             </div>
           </div>
+        </section>
+
+        <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
+          <h2 class="text-sm font-medium text-gray-900">Visibilidad en reportes</h2>
+          <p class="text-xs text-gray-500 -mt-2">
+            Marca aquí los reportes donde este campo debe aparecer como columna adicional al
+            descargarlo o visualizarlo.
+          </p>
+          <label class="flex items-start gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              name="includeInCreditorsReport"
+              value="1"
+              checked={includeInCreditorsReport}
+              disabled={!editable}
+              class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span>
+              <span class="block font-medium">Incluir en el reporte de acreedores</span>
+              <span class="block text-xs text-gray-500">
+                Cuando esté activo, el valor del campo se agrega como columna en
+                <a href="/reports/creditors" class="text-blue-600 hover:underline">/reports/creditors</a>
+                (tabla web, XLSX y PDF mensual).
+              </span>
+            </span>
+          </label>
         </section>
 
         {editable && (

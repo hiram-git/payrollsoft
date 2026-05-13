@@ -1,6 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
 import { can, getIdentity } from '../../lib/auth'
+import {
+  type CreditorsCustomFieldDef,
+  formatCustomFieldValue,
+  loadCreditorsExtras,
+} from '../../lib/reports/creditors-extra-columns'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
@@ -78,12 +83,17 @@ type ReportData = {
 let report: ReportData | null = null
 let error = ''
 let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
+let extraDefs: CreditorsCustomFieldDef[] = []
+let cfByEmployee: Map<string, Record<string, unknown>> = new Map()
 
 try {
-  const [res, companyRes] = await Promise.all([
+  const [res, companyRes, extras] = await Promise.all([
     fetch(`${API_URL}/reports/creditors?year=${year}&month=${month}`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
+    loadCreditorsExtras(API_URL, headers),
   ])
+  extraDefs = extras.defs
+  cfByEmployee = extras.customFieldsByEmployee
   if (companyRes.ok) {
     const cj = (await companyRes.json()) as {
       data: { payrollReportMode?: string | null } | null
@@ -268,26 +278,39 @@ const monthLabel = monthLabels[month - 1] ?? ''
                         <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Planilla</th>
                         <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Período</th>
                         <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
+                        {extraDefs.map((def) => (
+                          <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide" title={def.code}>
+                            {def.name}
+                          </th>
+                        ))}
                         <th class="text-right px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Monto</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {c.details.map((d) => (
-                        <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                          <td class="px-4 py-2.5">
-                            <div class="text-gray-900">{d.lastName}, {d.firstName}</div>
-                            <div class="text-xs text-gray-400 font-mono">{d.employeeCode}</div>
-                          </td>
-                          <td class="px-4 py-2.5">
-                            <a href={`/payroll/${d.payrollId}`} class="text-gray-700 hover:text-blue-600 transition-colors">{d.payrollName}</a>
-                          </td>
-                          <td class="px-4 py-2.5 font-mono text-xs text-gray-500">
-                            {fmtDate(d.periodStart)} → {fmtDate(d.periodEnd)}
-                          </td>
-                          <td class="px-4 py-2.5 font-mono text-xs text-gray-700">{d.conceptCode}</td>
-                          <td class="px-4 py-2.5 text-right tabular-nums text-red-600 font-medium">−B/. {fmt(d.amount)}</td>
-                        </tr>
-                      ))}
+                      {c.details.map((d) => {
+                        const cf = cfByEmployee.get(d.employeeId) ?? {}
+                        return (
+                          <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td class="px-4 py-2.5">
+                              <div class="text-gray-900">{d.lastName}, {d.firstName}</div>
+                              <div class="text-xs text-gray-400 font-mono">{d.employeeCode}</div>
+                            </td>
+                            <td class="px-4 py-2.5">
+                              <a href={`/payroll/${d.payrollId}`} class="text-gray-700 hover:text-blue-600 transition-colors">{d.payrollName}</a>
+                            </td>
+                            <td class="px-4 py-2.5 font-mono text-xs text-gray-500">
+                              {fmtDate(d.periodStart)} → {fmtDate(d.periodEnd)}
+                            </td>
+                            <td class="px-4 py-2.5 font-mono text-xs text-gray-700">{d.conceptCode}</td>
+                            {extraDefs.map((def) => (
+                              <td class="px-4 py-2.5 text-xs text-gray-700">
+                                {String(formatCustomFieldValue(def, cf[def.code]) ?? '') || '—'}
+                              </td>
+                            ))}
+                            <td class="px-4 py-2.5 text-right tabular-nums text-red-600 font-medium">−B/. {fmt(d.amount)}</td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

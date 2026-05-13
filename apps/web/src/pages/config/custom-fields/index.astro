@@ -68,6 +68,15 @@ const flash = Astro.url.searchParams.get('flash')
       </div>
       <PermissionGate require="settings:company.update">
         <div class="flex items-center gap-2">
+          <button
+            type="button"
+            id="assign-all-trigger"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+            title="Asignar el mismo valor de un campo a todos los empleados activos"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Asignar a todos
+          </button>
           <a
             href="/config/custom-fields/bulk"
             class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
@@ -163,4 +172,187 @@ const flash = Astro.url.searchParams.get('flash')
       planilla (<code class="font-mono">CAMPOADICIONAL("code")</code>) se entregará en la siguiente fase.
     </p>
   </div>
+
+  <!-- Modal "Asignar a todos" — disponible para usuarios con permiso
+       de catálogo (el botón ya está dentro de un PermissionGate). -->
+  <dialog id="assign-all-dialog" class="rounded-lg p-0 w-full max-w-md backdrop:bg-black/50">
+    <form id="assign-all-form" class="bg-white">
+      <div class="px-5 py-4 border-b border-gray-200">
+        <h2 class="text-base font-semibold text-gray-900">Asignar valor a todos los empleados</h2>
+        <p class="text-xs text-gray-500 mt-1">
+          Elige un campo del catálogo y el valor a asignar. Se aplica solo a empleados
+          activos. Por defecto respeta valores ya guardados.
+        </p>
+      </div>
+      <div class="px-5 py-4 space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Campo</label>
+          <select
+            name="fieldCode"
+            id="assign-all-field"
+            required
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+          >
+            <option value="">Selecciona un campo…</option>
+            {fields.filter((f) => f.isActive).map((f) => (
+              <option value={f.code} data-type={f.fieldType}>
+                {f.name} ({f.code} · {f.fieldType})
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Valor a asignar</label>
+          <input
+            type="text"
+            name="value"
+            id="assign-all-value"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+            placeholder="Texto / número / YYYY-MM-DD"
+          />
+          <p class="mt-1 text-[11px] text-gray-500" id="assign-all-hint">
+            Dejarlo vacío equivale a limpiar el valor.
+          </p>
+        </div>
+        <label class="flex items-start gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            name="overwrite"
+            value="1"
+            class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span>
+            <span class="block font-medium">Sobrescribir el valor existente</span>
+            <span class="block text-xs text-gray-500">
+              Si está apagado, solo se asigna a empleados sin valor todavía.
+            </span>
+          </span>
+        </label>
+        <div id="assign-all-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+        <div id="assign-all-result" class="hidden text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2"></div>
+      </div>
+      <div class="px-5 py-3 border-t border-gray-200 flex items-center justify-end gap-2 bg-gray-50">
+        <button
+          type="button"
+          id="assign-all-cancel"
+          class="px-3.5 py-2 text-sm text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        >Cerrar</button>
+        <button
+          type="submit"
+          id="assign-all-submit"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-wait"
+        >
+          <span data-label>Asignar</span>
+        </button>
+      </div>
+    </form>
+  </dialog>
+
+  <script is:inline>
+    ;(function () {
+      const dialog = document.getElementById('assign-all-dialog')
+      const trigger = document.getElementById('assign-all-trigger')
+      const cancel = document.getElementById('assign-all-cancel')
+      const form = document.getElementById('assign-all-form')
+      const fieldSel = document.getElementById('assign-all-field')
+      const valueInput = document.getElementById('assign-all-value')
+      const hint = document.getElementById('assign-all-hint')
+      const errorEl = document.getElementById('assign-all-error')
+      const resultEl = document.getElementById('assign-all-result')
+      const submitBtn = document.getElementById('assign-all-submit')
+      if (!dialog || !trigger || !cancel || !form || !fieldSel || !valueInput) return
+
+      function showError(msg) {
+        errorEl.classList.remove('hidden')
+        errorEl.textContent = msg
+        resultEl.classList.add('hidden')
+      }
+      function showResult(summary, rows) {
+        errorEl.classList.add('hidden')
+        const failed = rows.filter((r) => r.status === 'failed').slice(0, 3)
+        const failTail = failed.length === 0
+          ? ''
+          : '\nErrores: ' + failed.map((r) => r.employeeCode + ' — ' + (r.message || '')).join(' · ')
+        resultEl.classList.remove('hidden')
+        resultEl.textContent =
+          'Campo: ' + summary.fieldName + ' · Total: ' + summary.total +
+          ' · Actualizados: ' + summary.updated +
+          ' · Omitidos: ' + summary.skipped +
+          ' · Errores: ' + summary.failed + failTail
+      }
+      function reset() {
+        errorEl.classList.add('hidden')
+        resultEl.classList.add('hidden')
+        form.reset()
+        valueInput.type = 'text'
+        valueInput.placeholder = 'Texto / número / YYYY-MM-DD'
+      }
+      function open() {
+        reset()
+        if (typeof dialog.showModal === 'function') dialog.showModal()
+        else dialog.setAttribute('open', 'open')
+      }
+      function close() {
+        if (typeof dialog.close === 'function') dialog.close()
+        else dialog.removeAttribute('open')
+      }
+
+      trigger.addEventListener('click', open)
+      cancel.addEventListener('click', close)
+
+      fieldSel.addEventListener('change', () => {
+        const opt = fieldSel.selectedOptions[0]
+        const t = opt ? opt.dataset.type : ''
+        valueInput.value = ''
+        if (t === 'integer') {
+          valueInput.type = 'number'
+          valueInput.step = '1'
+          valueInput.placeholder = 'Ej. 3'
+          hint.textContent = 'Número entero. Vacío = limpiar el valor.'
+        } else if (t === 'float') {
+          valueInput.type = 'number'
+          valueInput.step = '0.01'
+          valueInput.placeholder = 'Ej. 1500.50'
+          hint.textContent = 'Número decimal. Vacío = limpiar el valor.'
+        } else if (t === 'date') {
+          valueInput.type = 'date'
+          valueInput.placeholder = ''
+          hint.textContent = 'Fecha (YYYY-MM-DD). Vacío = limpiar el valor.'
+        } else {
+          valueInput.type = 'text'
+          valueInput.placeholder = 'Texto…'
+          hint.textContent = 'Texto libre. Vacío = limpiar el valor.'
+        }
+      })
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        if (!fieldSel.value) {
+          showError('Selecciona un campo del catálogo.')
+          return
+        }
+        const data = new FormData(form)
+        submitBtn.disabled = true
+        const labelEl = submitBtn.querySelector('[data-label]')
+        if (labelEl) labelEl.textContent = 'Procesando…'
+        try {
+          const res = await fetch('/api/config/custom-fields/assign-all', {
+            method: 'POST',
+            body: data,
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            showError(json.error || 'HTTP ' + res.status)
+          } else {
+            showResult(json.summary, json.rows || [])
+          }
+        } catch (err) {
+          showError(err && err.message ? err.message : String(err))
+        } finally {
+          submitBtn.disabled = false
+          if (labelEl) labelEl.textContent = 'Asignar'
+        }
+      })
+    })()
+  </script>
 </AppLayout>
