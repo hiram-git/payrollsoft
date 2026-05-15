@@ -62,7 +62,8 @@ La interfaz usa variables CSS semánticas (`--ink`, `--fore`, `--navy`, `--ok`, 
 payrollsoft/
 ├── apps/
 │   ├── api/          — API REST (Elysia + Bun, puerto 3000)
-│   └── web/          — Frontend SSR (Astro + Tailwind, puerto 4321)
+│   ├── web/          — Frontend SSR (Astro + Tailwind, puerto 4321)
+│   └── desktop/      — Shell de escritorio (Tauri 2) que envuelve el web app
 └── packages/
     ├── core/         — Motor de fórmulas + lógica de planilla (sin dependencias externas)
     └── db/           — Drizzle ORM, schema, query builder, migraciones
@@ -111,7 +112,65 @@ bun --env-file=../../.env src/migrate.ts --all-tenants
 
 ---
 
+## Aplicación de escritorio (Tauri 2)
+
+Además del acceso por navegador, el proyecto incluye un wrapper de
+escritorio en `apps/desktop/` construido con Tauri 2. Es un shell
+delgado: abre una ventana nativa que carga la URL del web app, así que
+**ambos canales conviven** — el navegador sigue funcionando sin
+cambios y la app de escritorio es una entrega adicional.
+
+### Habilitar el escritorio
+
+Se controla con dos variables nuevas en el `.env` de la raíz:
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `DESKTOP_ENABLED` | `false` | Gate de arranque. Sólo si es `true`/`1`/`yes`/`on` la ventana se abre; con cualquier otro valor el binario imprime un aviso y sale sin compilar Rust. |
+| `DESKTOP_URL` | `http://localhost:4321` | URL que carga la ventana. En dev apunta al Astro local; en producción al host público. |
+
+Ambas se leen **en runtime**, así que el mismo instalador
+(`.dmg` / `.msi` / `.AppImage`) se repunta editando el `.env` sin
+rebuild.
+
+### Levantar en desarrollo
+
+Requiere [prerequisitos de Tauri](https://tauri.app/start/prerequisites/)
+en la máquina (Rust toolchain y libs nativas: `webkit2gtk` en Linux,
+WebView2 en Windows, nada extra en macOS).
+
+```bash
+# 1. .env en la raíz
+DESKTOP_ENABLED=true
+DESKTOP_URL=http://localhost:4321
+
+# 2. Levanta el web app en una terminal
+bun --filter @payroll/web dev
+
+# 3. Lanza la ventana en otra terminal
+bun --filter @payroll/desktop dev
+```
+
+El script `bun run dev` de la raíz (que corre `--filter='*' dev`)
+respeta el gate: si `DESKTOP_ENABLED` no es truthy, el workspace de
+escritorio se salta sin tocar el toolchain de Rust, así que los
+contribuidores que sólo trabajan en web/api no se ven afectados.
+
+### Empaquetar
+
+```bash
+bun --filter @payroll/desktop build
+```
+
+Los instaladores quedan en `apps/desktop/src-tauri/target/release/bundle/`.
+Ver [`apps/desktop/README.md`](./apps/desktop/README.md) para detalles
+de iconos, permisos y notas de extensión (comandos JS↔Rust, acceso
+filesystem, etc.).
+
+---
+
 ## Documentación adicional
 
 - [`PROJECT-STATUS.md`](./PROJECT-STATUS.md) — Estado actual de cada módulo, notas técnicas y referencia de la API
 - [`IMPLEMENTATION-PLAN.md`](./IMPLEMENTATION-PLAN.md) — Plan de fases, tareas completadas y pendientes
+- [`apps/desktop/README.md`](./apps/desktop/README.md) — Detalles del shell de escritorio (Tauri 2)
