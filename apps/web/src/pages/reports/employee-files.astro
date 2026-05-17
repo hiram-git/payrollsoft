@@ -129,66 +129,128 @@ const xlsxUrl = `/api/reports/employee-files/xlsx?${params.toString()}`
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
 
-    <form method="GET" action="/reports/employee-files" class="bg-white border border-gray-200 rounded-lg p-4 mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <!-- Filtros con checkboxes: cada uno se enciende a demanda y el
+         control aparece solo si está activo. Por defecto solo está
+         activo el rango de fechas; el resto se suma con un click. -->
+    <form method="GET" action="/reports/employee-files" class="bg-white border border-gray-200 rounded-lg p-4 mb-6 space-y-4">
       <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Desde</label>
-        <input type="date" name="from" value={from} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+        <p class="text-xs font-medium text-gray-500 mb-2">Filtros activos</p>
+        <div class="flex flex-wrap gap-3">
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" data-filter-toggle="dateRange" checked class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Rango de fechas
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" data-filter-toggle="typeId" checked={!!filterTypeId} class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Tipo
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" data-filter-toggle="subtypeId" checked={!!filterSubtypeId} class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Subtipo
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" data-filter-toggle="departamentoId" checked={!!filterDepartamentoId} class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Departamento
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" data-filter-toggle="funcionId" checked={!!filterFuncionId} class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Función
+          </label>
+          <label class="inline-flex items-center gap-1.5 text-xs text-gray-700">
+            <input type="checkbox" data-filter-toggle="cargoId" checked={!!filterCargoId} class="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+            Cargo
+          </label>
+        </div>
       </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Hasta</label>
-        <input type="date" name="to" value={to} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
-        <select name="typeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
-          <option value="">Todos</option>
-          {types.map((t) => (
-            <option value={t.id} selected={String(t.id) === filterTypeId}>{t.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Subtipo</label>
-        <select name="subtypeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" disabled={subtypes.length === 0}>
-          <option value="">Todos</option>
-          {subtypes.map((s) => (
-            <option value={s.id} selected={String(s.id) === filterSubtypeId}>{s.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Departamento</label>
-        <select name="departamentoId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
-          <option value="">Todos</option>
-          {departamentos.map((d) => (
-            <option value={d.id} selected={d.id === filterDepartamentoId}>{d.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Función</label>
-        <select name="funcionId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
-          <option value="">Todas</option>
-          {funciones.map((f) => (
-            <option value={f.id} selected={f.id === filterFuncionId}>{f.name}</option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label class="block text-xs font-medium text-gray-500 mb-1">Cargo</label>
-        <select name="cargoId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
-          <option value="">Todos</option>
-          {cargos.map((c) => (
-            <option value={c.id} selected={c.id === filterCargoId}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-      <div class="flex items-end">
-        <button type="submit" class="w-full px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
-          Aplicar filtros
-        </button>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 border-t border-gray-100 pt-4">
+        <div data-filter-group="dateRange">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Desde</label>
+          <input type="date" name="from" value={from} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+        </div>
+        <div data-filter-group="dateRange">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Hasta</label>
+          <input type="date" name="to" value={to} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+        </div>
+        <div data-filter-group="typeId">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+          <select name="typeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+            <option value="">Todos</option>
+            {types.map((t) => (
+              <option value={t.id} selected={String(t.id) === filterTypeId}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+        <div data-filter-group="subtypeId">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Subtipo</label>
+          <select name="subtypeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" disabled={subtypes.length === 0}>
+            <option value="">Todos</option>
+            {subtypes.map((s) => (
+              <option value={s.id} selected={String(s.id) === filterSubtypeId}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        <div data-filter-group="departamentoId">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Departamento</label>
+          <select name="departamentoId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+            <option value="">Todos</option>
+            {departamentos.map((d) => (
+              <option value={d.id} selected={d.id === filterDepartamentoId}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+        <div data-filter-group="funcionId">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Función</label>
+          <select name="funcionId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+            <option value="">Todas</option>
+            {funciones.map((f) => (
+              <option value={f.id} selected={f.id === filterFuncionId}>{f.name}</option>
+            ))}
+          </select>
+        </div>
+        <div data-filter-group="cargoId">
+          <label class="block text-xs font-medium text-gray-500 mb-1">Cargo</label>
+          <select name="cargoId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+            <option value="">Todos</option>
+            {cargos.map((c) => (
+              <option value={c.id} selected={c.id === filterCargoId}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button type="submit" class="w-full px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+            Aplicar filtros
+          </button>
+        </div>
       </div>
     </form>
+
+    <script is:inline>
+      ;(function () {
+        // Cada checkbox `data-filter-toggle="<key>"` controla la
+        // visibilidad de los `[data-filter-group="<key>"]`. Al
+        // apagarse, además limpiamos el valor del control interno
+        // para que no quede arrastrado en el GET.
+        const toggles = document.querySelectorAll('[data-filter-toggle]')
+        function apply(toggle) {
+          const key = toggle.dataset.filterToggle
+          const visible = toggle.checked
+          document.querySelectorAll('[data-filter-group="' + key + '"]').forEach((el) => {
+            el.style.display = visible ? '' : 'none'
+            if (!visible) {
+              el.querySelectorAll('input, select').forEach((inp) => {
+                if (inp.tagName === 'SELECT') inp.value = ''
+                else if (inp.type !== 'date') inp.value = ''
+              })
+            }
+          })
+        }
+        toggles.forEach((t) => {
+          apply(t)
+          t.addEventListener('change', () => apply(t))
+        })
+      })()
+    </script>
 
     {report && (
       <>
