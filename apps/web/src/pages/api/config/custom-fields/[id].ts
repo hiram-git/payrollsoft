@@ -93,6 +93,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect, params }) => 
   }
   const readPermission = ((form.get('readPermission') as string | null) ?? '').trim() || null
   const writePermission = ((form.get('writePermission') as string | null) ?? '').trim() || null
+  const includeInCreditorsReport = form.get('includeInCreditorsReport') === '1'
 
   if (!name) return fail(400, 'El nombre es obligatorio.')
   if (!VALID_TYPES.has(fieldType)) return fail(400, `Tipo inválido: ${fieldType}`)
@@ -110,7 +111,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect, params }) => 
         isActive,
         sortOrder,
         defaultValue,
-        validationRules: { dependsOn, readPermission, writePermission },
+        validationRules: {
+          dependsOn,
+          readPermission,
+          writePermission,
+          includeInCreditorsReport,
+        },
       }),
     })
   } catch (err) {

@@ -7,6 +7,10 @@ import {
   type PdfCompany,
   type PdfCreditorsReport,
 } from '../../../../lib/pdf/creditors-pdf'
+import {
+  formatCustomFieldValue,
+  loadCreditorsExtras,
+} from '../../../../lib/reports/creditors-extra-columns'
 import { getReportStorage, isPersistentMode } from '../../../../lib/reports/storage'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
@@ -96,12 +100,26 @@ export const GET: APIRoute = async ({ request, cookies }) => {
   }
 
   if (!bytes) {
+    // Construir columnas extra (campos adicionales marcados para
+    // incluirse en el reporte de acreedores). Si no hay ninguna activa,
+    // `extraColumns` queda vacío y el PDF se renderiza igual que antes.
+    const { defs: extraDefs, customFieldsByEmployee } = await loadCreditorsExtras(API_URL, headers)
+    const extraColumns = extraDefs.map((def) => {
+      const valuesByEmployee: Record<string, string> = {}
+      for (const [empId, cf] of customFieldsByEmployee) {
+        const formatted = formatCustomFieldValue(def, cf[def.code])
+        valuesByEmployee[empId] = formatted === '' ? '—' : String(formatted)
+      }
+      return { name: def.name, valuesByEmployee }
+    })
+
     let buffer: Buffer
     try {
       const element = React.createElement(CreditorsPdf, {
         report,
         company,
         generatedBy: identity ? { name: identity.name, email: identity.email } : null,
+        extraColumns,
       })
       // biome-ignore lint/suspicious/noExplicitAny: library typing gap
       buffer = await renderToBuffer(element as any)

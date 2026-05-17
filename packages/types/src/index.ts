@@ -133,6 +133,10 @@ export const PERMISSION_CODES = [
   'settings:company.read',
   'settings:company.update',
   'audit:read',
+  // Employee files (expedientes)
+  'employee_files:read',
+  'employee_files:write',
+  'employee_files:delete',
   // Global (super-admin only)
   'tenants:create',
   'tenants:read',

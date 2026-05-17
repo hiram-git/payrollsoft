@@ -41,6 +41,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   }
   const readPermission = ((form.get('readPermission') as string | null) ?? '').trim() || null
   const writePermission = ((form.get('writePermission') as string | null) ?? '').trim() || null
+  const includeInCreditorsReport = form.get('includeInCreditorsReport') === '1'
 
   const back = (flag: string, detail?: string) => {
     const qs = new URLSearchParams({ error: flag })
@@ -72,7 +73,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         isRequired,
         sortOrder,
         defaultValue,
-        validationRules: { dependsOn, readPermission, writePermission },
+        validationRules: {
+          dependsOn,
+          readPermission,
+          writePermission,
+          includeInCreditorsReport,
+        },
       }),
     })
   } catch (err) {

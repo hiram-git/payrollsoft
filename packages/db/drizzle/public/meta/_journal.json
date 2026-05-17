@@ -29,6 +29,13 @@
       "when": 1762128002000,
       "tag": "0003_super_admin_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762128003000,
+      "tag": "0004_employee_files_permissions",
+      "breakpoints": true
     }
   ]
 }
