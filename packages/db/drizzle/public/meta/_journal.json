@@ -36,6 +36,13 @@
       "when": 1762128003000,
       "tag": "0004_employee_files_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1762128004000,
+      "tag": "0005_employee_files_approve_permission",
+      "breakpoints": true
     }
   ]
 }

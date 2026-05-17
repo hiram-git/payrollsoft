@@ -74,6 +74,11 @@ export const employeeFiles = pgTable(
     documentNumber: varchar('document_number', { length: 120 }).notNull(),
     observations: text('observations'),
     extraFields: jsonb('extra_fields').notNull().default({}),
+    /** Estado del workflow: 'pending' | 'approved' | 'rejected'. */
+    approvalStatus: varchar('approval_status', { length: 20 }).notNull().default('approved'),
+    approvedBy: uuid('approved_by'),
+    approvedAt: timestamp('approved_at', { withTimezone: true }),
+    rejectionReason: text('rejection_reason'),
     createdBy: uuid('created_by'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -118,9 +123,27 @@ export const employeeFileAttachments = pgTable(
   })
 )
 
+/**
+ * Catálogo de reglas de aprobación. Cada fila declara qué rol
+ * (`approver_role`) puede aprobar expedientes de un determinado
+ * (typeId, subtypeId). Si `subtypeId` es null, la regla aplica a
+ * todos los subtipos del tipo; una regla más específica con
+ * `subtypeId` definido prevalece sobre la genérica.
+ */
+export const employeeFileApprovalRules = pgTable('employee_file_approval_rules', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  typeId: integer('type_id').notNull(),
+  subtypeId: integer('subtype_id'),
+  approverRole: varchar('approver_role', { length: 50 }).notNull(),
+  isActive: integer('is_active').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export type EmployeeFileType = typeof employeeFileTypes.$inferSelect
 export type EmployeeFileSubtype = typeof employeeFileSubtypes.$inferSelect
 export type EmployeeFile = typeof employeeFiles.$inferSelect
 export type NewEmployeeFile = typeof employeeFiles.$inferInsert
 export type EmployeeFileAttachment = typeof employeeFileAttachments.$inferSelect
 export type NewEmployeeFileAttachment = typeof employeeFileAttachments.$inferInsert
+export type EmployeeFileApprovalRule = typeof employeeFileApprovalRules.$inferSelect
+export type NewEmployeeFileApprovalRule = typeof employeeFileApprovalRules.$inferInsert

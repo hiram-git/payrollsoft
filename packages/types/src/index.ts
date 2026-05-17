@@ -137,6 +137,7 @@ export const PERMISSION_CODES = [
   'employee_files:read',
   'employee_files:write',
   'employee_files:delete',
+  'employee_files:approve',
   // Global (super-admin only)
   'tenants:create',
   'tenants:read',
