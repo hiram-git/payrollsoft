@@ -34,12 +34,16 @@ CREATE INDEX IF NOT EXISTS employee_files_pending_idx
 -- Si hay rule para (typeId, subtypeId=null) se aplica a TODOS los
 -- subtipos del tipo. Si hay otra rule más específica con subtypeId
 -- definido, esa prevalece (más específica gana).
+-- `is_active` se modela como integer (0/1) para mantener la
+-- convención del resto del módulo (employee_file_types,
+-- employee_file_subtypes). Los queries del service comparan
+-- contra `= 1`, y el Drizzle schema lo refleja como `integer`.
 CREATE TABLE IF NOT EXISTS employee_file_approval_rules (
   id              uuid          DEFAULT gen_random_uuid() PRIMARY KEY,
   type_id         integer       NOT NULL REFERENCES employee_file_types(id) ON DELETE CASCADE,
   subtype_id      integer       REFERENCES employee_file_subtypes(id) ON DELETE CASCADE,
   approver_role   varchar(50)   NOT NULL,
-  is_active       boolean       NOT NULL DEFAULT true,
+  is_active       integer       NOT NULL DEFAULT 1,
   created_at      timestamptz   NOT NULL DEFAULT now()
 );
 --> statement-breakpoint

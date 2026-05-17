@@ -218,6 +218,13 @@
       "when": 1762128010000,
       "tag": "0031_employee_files_approvals",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1762128011000,
+      "tag": "0032_fix_approval_rules_is_active",
+      "breakpoints": true
     }
   ]
 }
