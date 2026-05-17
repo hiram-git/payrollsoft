@@ -30,6 +30,8 @@ type FileRow = {
   documentNumber: string
   observations: string | null
   extraFields: Record<string, unknown>
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  rejectionReason: string | null
   createdAt: string
 }
 type TypeRow = { id: number; code: string; name: string }
@@ -290,12 +292,23 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
                     <tbody>
                       {g.rows.map((f) => {
                         const s = subtypeById.get(f.subtypeId)
+                        const status = f.approvalStatus ?? 'approved'
                         return (
                           <tr class="border-b last:border-0 transition-colors">
                             <td class="px-5 py-3 font-mono text-xs ef-cell-mono whitespace-nowrap w-44">{f.documentNumber}</td>
                             <td class="px-5 py-3 ef-cell whitespace-nowrap w-28">{fmtDate(f.documentDate)}</td>
                             <td class="px-5 py-3 ef-cell">{s?.name ?? '—'}</td>
-                            <td class="px-5 py-3 text-xs ef-cell-mute truncate max-w-sm" title={f.observations ?? ''}>
+                            <td class="px-5 py-3 whitespace-nowrap">
+                              <span class={`ef-status-badge ef-status-${status}`}>
+                                {status === 'pending' ? 'Pendiente' : status === 'approved' ? 'Aprobado' : 'Rechazado'}
+                              </span>
+                              {status === 'rejected' && f.rejectionReason && (
+                                <span class="ml-2 text-[11px] ef-cell-mute" title={f.rejectionReason}>
+                                  ({f.rejectionReason.length > 30 ? `${f.rejectionReason.slice(0, 30)}…` : f.rejectionReason})
+                                </span>
+                              )}
+                            </td>
+                            <td class="px-5 py-3 text-xs ef-cell-mute truncate max-w-xs" title={f.observations ?? ''}>
                               {f.observations ?? '—'}
                             </td>
                             <td class="px-5 py-3 text-right whitespace-nowrap">
@@ -670,6 +683,22 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
       transition: color 120ms;
     }
     .ef-action:hover { color: var(--fore); }
+
+    .ef-status-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .ef-status-pending  { background: rgba(245, 158, 11, 0.18); color: #fbbf24; }
+    .ef-status-approved { background: rgba(16, 185, 129, 0.18); color: #34d399; }
+    .ef-status-rejected { background: rgba(239, 68, 68, 0.18);  color: #f87171; }
+    [data-theme='light'] .ef-status-pending  { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .ef-status-approved { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .ef-status-rejected { background: #fee2e2; color: #991b1b; }
 
     /* Modo claro — override de la paleta blanca para tarjetas/encabezados. */
     [data-theme='light'] .ef-card           { background: #ffffff; }

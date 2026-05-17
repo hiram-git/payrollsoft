@@ -211,17 +211,20 @@ export async function createWithCorrelative(
     const sequence = maxSeq + 1
     const documentNumber = formatDocumentNumber(input.typeId, input.subtypeId, year, sequence)
 
-    // ¿El (tipo, subtipo) requiere aprobación? Si hay regla activa,
-    // el expediente nace en `pending`; si no, `approved` por default.
-    const ruleCount = await tx.execute(sql`
-      SELECT COUNT(*)::int AS c
-      FROM employee_file_approval_rules
-      WHERE is_active = 1
-        AND type_id = ${input.typeId}
-        AND (subtype_id = ${input.subtypeId} OR subtype_id IS NULL)
+    // ¿El subtipo requiere aprobación? El flag declarativo
+    // `requires_approval` en `employee_file_subtypes` es el gate.
+    // Las reglas en `employee_file_approval_rules` solo declaran
+    // _quién_ aprueba (rol), no _si_ se requiere aprobación.
+    const subtypeRows = await tx.execute(sql`
+      SELECT requires_approval
+      FROM employee_file_subtypes
+      WHERE id = ${input.subtypeId}
+      LIMIT 1
     `)
-    const needsApproval = Number((ruleCount as Array<{ c: number }>)[0]?.c ?? 0) > 0
-    const initialStatus = needsApproval ? 'pending' : 'approved'
+    const subtypeRequires =
+      Number((subtypeRows as Array<{ requires_approval: number }>)[0]?.requires_approval ?? 0) === 1
+    const initialStatus = subtypeRequires ? 'pending' : 'approved'
+    const needsApproval = subtypeRequires
 
     const [row] = await tx
       .insert(employeeFiles)
@@ -439,13 +442,19 @@ export async function deleteAttachmentById(db: AnyDb, attachmentId: string): Pro
 // ─── Workflow de aprobaciones ────────────────────────────────────────────
 
 /**
- * Lista los expedientes en estado `pending` cuyas reglas declaran
- * un rol que el usuario actual tiene. Si `userRoles` está vacío
- * devuelve []. tenant_admin recibe todos los pendientes (la regla
- * más amplia gana: si el admin tiene ese rol, lo ve todo).
+ * Lista los expedientes en estado `pending` que el usuario puede
+ * aprobar dados sus roles. La regla:
+ *
+ *   1. Si hay un `employee_file_approval_rules` activo que matchea
+ *      el (type, subtype), el approver_role manda.
+ *   2. Si NO hay regla, el fallback es `tenant_admin`.
+ *
+ * `tenant_admin` siempre ve todos los pendientes — actúa como
+ * aprobador universal.
  */
 export async function listPendingApprovals(db: AnyDb, userRoles: string[]): Promise<unknown[]> {
   if (userRoles.length === 0) return []
+  const isAdmin = userRoles.includes('tenant_admin')
   // biome-ignore lint/suspicious/noExplicitAny: drizzle rows
   const rows: any[] = await db.execute(sql`
     SELECT ef.*,
@@ -459,12 +468,15 @@ export async function listPendingApprovals(db: AnyDb, userRoles: string[]): Prom
     JOIN employee_file_subtypes s ON s.id = ef.subtype_id
     JOIN employees e ON e.id = ef.employee_id
     WHERE ef.approval_status = 'pending'
-      AND EXISTS (
-        SELECT 1 FROM employee_file_approval_rules r
-        WHERE r.is_active = 1
-          AND r.type_id = ef.type_id
-          AND (r.subtype_id = ef.subtype_id OR r.subtype_id IS NULL)
-          AND r.approver_role = ANY(${userRoles})
+      AND (
+        ${isAdmin}::boolean = true
+        OR EXISTS (
+          SELECT 1 FROM employee_file_approval_rules r
+          WHERE r.is_active = 1
+            AND r.type_id = ef.type_id
+            AND (r.subtype_id = ef.subtype_id OR r.subtype_id IS NULL)
+            AND r.approver_role = ANY(${userRoles})
+        )
       )
     ORDER BY ef.created_at ASC
   `)
@@ -516,6 +528,112 @@ export async function rejectEmployeeFile(
     })
     .where(eq(employeeFiles.id, id))
   return { success: true }
+}
+
+// ─── CRUD de catálogo (tipos y subtipos) ─────────────────────────────────
+
+export async function listAllTypes(db: AnyDb) {
+  return db
+    .select()
+    .from(employeeFileTypes)
+    .orderBy(employeeFileTypes.sortOrder, employeeFileTypes.name)
+}
+
+export async function listAllSubtypes(db: AnyDb, typeId?: number) {
+  const q = db.select().from(employeeFileSubtypes)
+  const rows = typeId
+    ? await q
+        .where(eq(employeeFileSubtypes.typeId, typeId))
+        .orderBy(employeeFileSubtypes.sortOrder, employeeFileSubtypes.name)
+    : await q.orderBy(
+        employeeFileSubtypes.typeId,
+        employeeFileSubtypes.sortOrder,
+        employeeFileSubtypes.name
+      )
+  return rows
+}
+
+export async function createType(
+  db: AnyDb,
+  input: {
+    code: string
+    name: string
+    description?: string | null
+    sortOrder?: number
+    requiresApproval?: number
+  }
+): Promise<{ id: number }> {
+  const [row] = await db
+    .insert(employeeFileTypes)
+    .values({
+      code: input.code,
+      name: input.name,
+      description: input.description ?? null,
+      sortOrder: input.sortOrder ?? 0,
+      requiresApproval: input.requiresApproval ?? 0,
+    })
+    .returning()
+  return { id: row.id as number }
+}
+
+export async function updateType(
+  db: AnyDb,
+  id: number,
+  input: {
+    name?: string
+    description?: string | null
+    sortOrder?: number
+    requiresApproval?: number
+    isActive?: number
+  }
+): Promise<boolean> {
+  const res = await db
+    .update(employeeFileTypes)
+    .set(input)
+    .where(eq(employeeFileTypes.id, id))
+    .returning()
+  return res.length > 0
+}
+
+export async function createSubtype(
+  db: AnyDb,
+  input: {
+    typeId: number
+    code: string
+    name: string
+    sortOrder?: number
+    requiresApproval?: number
+  }
+): Promise<{ id: number }> {
+  const [row] = await db
+    .insert(employeeFileSubtypes)
+    .values({
+      typeId: input.typeId,
+      code: input.code,
+      name: input.name,
+      sortOrder: input.sortOrder ?? 0,
+      requiresApproval: input.requiresApproval ?? 0,
+    })
+    .returning()
+  return { id: row.id as number }
+}
+
+export async function updateSubtype(
+  db: AnyDb,
+  id: number,
+  input: {
+    name?: string
+    sortOrder?: number
+    requiresApproval?: number
+    isActive?: number
+  }
+): Promise<boolean> {
+  const res = await db
+    .update(employeeFileSubtypes)
+    .set(input)
+    .where(eq(employeeFileSubtypes.id, id))
+    .returning()
+  return res.length > 0
 }
 
 // ─── Reglas de aprobación ────────────────────────────────────────────────

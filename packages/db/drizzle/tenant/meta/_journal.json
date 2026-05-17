@@ -225,6 +225,13 @@
       "when": 1762128011000,
       "tag": "0032_fix_approval_rules_is_active",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1762128012000,
+      "tag": "0033_employee_files_requires_approval",
+      "breakpoints": true
     }
   ]
 }

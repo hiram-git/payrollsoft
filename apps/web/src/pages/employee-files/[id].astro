@@ -12,6 +12,7 @@ const tenantSlug = identity.tenantSlug ?? 'demo'
 const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
 const canWrite = can(identity, 'employee_files:write')
 const canDelete = can(identity, 'employee_files:delete')
+const canApprove = can(identity, 'employee_files:approve')
 
 const id = Astro.params.id ?? ''
 
@@ -33,6 +34,10 @@ type FileDetail = {
   documentNumber: string
   observations: string | null
   extraFields: Record<string, unknown>
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  approvedBy: string | null
+  approvedAt: string | null
+  rejectionReason: string | null
   createdAt: string
   updatedAt: string
   attachments: Attachment[]
@@ -182,6 +187,55 @@ const fileFields = fieldDefs.filter((f) => f.type === 'file')
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
 
+    {detail && (
+      <div class={`mb-5 rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${
+        detail.approvalStatus === 'pending'
+          ? 'bg-amber-50 border-amber-200'
+          : detail.approvalStatus === 'approved'
+            ? 'bg-green-50 border-green-200'
+            : 'bg-red-50 border-red-200'
+      }`}>
+        <div class="flex items-center gap-3">
+          <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+            detail.approvalStatus === 'pending'
+              ? 'bg-amber-100 text-amber-800'
+              : detail.approvalStatus === 'approved'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-red-100 text-red-700'
+          }`}>
+            {detail.approvalStatus === 'pending' ? 'Pendiente de aprobación' : detail.approvalStatus === 'approved' ? 'Aprobado' : 'Rechazado'}
+          </span>
+          {detail.approvalStatus !== 'pending' && detail.approvedAt && (
+            <span class="text-xs text-gray-600">
+              {detail.approvalStatus === 'approved' ? 'Aprobado' : 'Rechazado'} el{' '}
+              {new Date(detail.approvedAt).toLocaleString('es-PA')}
+            </span>
+          )}
+          {detail.approvalStatus === 'rejected' && detail.rejectionReason && (
+            <span class="text-xs text-red-700 italic">— {detail.rejectionReason}</span>
+          )}
+        </div>
+        {canApprove && detail.approvalStatus === 'pending' && (
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              id="ef-detail-approve"
+              data-id={detail.id}
+              data-doc={detail.documentNumber}
+              class="px-3.5 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700"
+            >Aprobar</button>
+            <button
+              type="button"
+              id="ef-detail-reject"
+              data-id={detail.id}
+              data-doc={detail.documentNumber}
+              class="px-3.5 py-1.5 rounded-md border border-red-300 text-red-700 bg-white text-xs font-medium hover:bg-red-50"
+            >Rechazar</button>
+          </div>
+        )}
+      </div>
+    )}
+
     {detail && employee && (
       <div class="space-y-5">
         <!-- Identificación -->
@@ -314,4 +368,71 @@ const fileFields = fieldDefs.filter((f) => f.type === 'file')
       </div>
     )}
   </div>
+
+  <script is:inline>
+    ;(function () {
+      const sa = window.saModal
+      const approveBtn = document.getElementById('ef-detail-approve')
+      const rejectBtn = document.getElementById('ef-detail-reject')
+
+      async function approve(id, doc) {
+        if (!sa) return
+        const ok = await sa.confirm({
+          title: 'Aprobar expediente',
+          message: `Vas a aprobar el expediente ${doc}. ¿Continuar?`,
+          confirmLabel: 'Aprobar',
+          tone: 'primary',
+        })
+        if (!ok) return
+        sa.loading({ title: 'Aprobando', message: 'Procesando…' })
+        try {
+          const res = await fetch(`/api/employee-files/approve?id=${id}`, {
+            method: 'POST',
+            headers: { 'X-SA-Modal': '1' },
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            await sa.error({ title: 'No se pudo aprobar', message: json.error || 'HTTP ' + res.status })
+          } else {
+            await sa.success({
+              title: 'Expediente aprobado',
+              redirect: window.location.pathname,
+            })
+          }
+        } catch (err) {
+          await sa.error({ title: 'Error de red', message: String(err) })
+        }
+      }
+      async function reject(id, doc) {
+        if (!sa) return
+        const reason = window.prompt(`Razón del rechazo del expediente ${doc}:`, '')
+        if (reason == null) return
+        if (reason.trim().length < 3) {
+          await sa.error({ title: 'Razón requerida', message: 'Escribe al menos 3 caracteres.' })
+          return
+        }
+        sa.loading({ title: 'Rechazando', message: 'Procesando…' })
+        try {
+          const res = await fetch(`/api/employee-files/reject?id=${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+            body: JSON.stringify({ reason: reason.trim() }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            await sa.error({ title: 'No se pudo rechazar', message: json.error || 'HTTP ' + res.status })
+          } else {
+            await sa.success({
+              title: 'Expediente rechazado',
+              redirect: window.location.pathname,
+            })
+          }
+        } catch (err) {
+          await sa.error({ title: 'Error de red', message: String(err) })
+        }
+      }
+      if (approveBtn) approveBtn.addEventListener('click', () => approve(approveBtn.dataset.id, approveBtn.dataset.doc))
+      if (rejectBtn) rejectBtn.addEventListener('click', () => reject(rejectBtn.dataset.id, rejectBtn.dataset.doc))
+    })()
+  </script>
 </AppLayout>

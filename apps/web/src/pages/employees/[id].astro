@@ -100,6 +100,24 @@ let customFieldDefs: CustomFieldDefinition[] = []
 let cfHistory: CustomFieldHistoryEntry[] = []
 let tipoInstitucion = 'privada'
 
+type FileRow = {
+  id: string
+  typeId: number
+  subtypeId: number
+  documentNumber: string
+  documentDate: string
+  observations: string | null
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  rejectionReason: string | null
+  approvedAt: string | null
+  createdAt: string
+}
+type FileType = { id: number; code: string; name: string }
+type FileSubtype = { id: number; code: string; name: string; typeId: number }
+let efFiles: FileRow[] = []
+let efTypes: FileType[] = []
+const efSubtypes: FileSubtype[] = []
+
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [empRes, cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
@@ -156,8 +174,50 @@ try {
       cfHistory = ((await histRes.json()) as { data: CustomFieldHistoryEntry[] }).data ?? []
     }
   }
+
+  // Expedientes del empleado — agrupados por tipo en el tab.
+  if (emp) {
+    const [efRes, tRes] = await Promise.all([
+      fetch(`${API_URL}/employee-files?employeeId=${emp.id}`, { headers }),
+      fetch(`${API_URL}/employee-files/types`, { headers }),
+    ])
+    if (efRes.ok) efFiles = ((await efRes.json()) as { data: FileRow[] }).data ?? []
+    if (tRes.ok) efTypes = ((await tRes.json()) as { data: FileType[] }).data ?? []
+    // Subtipos para mapear nombres — solo para los tipos que el empleado tiene.
+    const distinctTypeIds = Array.from(new Set(efFiles.map((f) => f.typeId)))
+    for (const tid of distinctTypeIds) {
+      try {
+        const sres = await fetch(`${API_URL}/employee-files/types/${tid}/subtypes`, { headers })
+        if (sres.ok) {
+          const subs = ((await sres.json()) as { data: FileSubtype[] }).data ?? []
+          efSubtypes.push(...subs.map((s) => ({ ...s, typeId: tid })))
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
 } catch {
   return Astro.redirect('/employees')
+}
+
+const efTypeById = new Map(efTypes.map((t) => [t.id, t]))
+const efSubtypeById = new Map(efSubtypes.map((s) => [s.id, s]))
+const efFilesByType = new Map<number, FileRow[]>()
+for (const f of efFiles) {
+  const arr = efFilesByType.get(f.typeId) ?? []
+  arr.push(f)
+  efFilesByType.set(f.typeId, arr)
+}
+const efTypesWithFiles = Array.from(efFilesByType.keys())
+  .map((tid) => ({ type: efTypeById.get(tid), rows: efFilesByType.get(tid) ?? [] }))
+  .filter((g): g is { type: FileType; rows: FileRow[] } => Boolean(g.type))
+  .sort((a, b) => a.type.name.localeCompare(b.type.name, 'es'))
+
+function fmtFileDate(s: string): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
 }
 
 // `customFields` jsonb del empleado — diccionario code→valor.
@@ -265,6 +325,9 @@ const freqLabel: Record<string, string> = {
             Historial
           </button>
         )}
+        <button type="button" class="tab-btn" data-tab="expedientes" onclick="switchTab('expedientes', this)">
+          Expedientes{efFiles.length > 0 ? ` (${efFiles.length})` : ''}
+        </button>
       </div>
 
       <!-- TAB: Datos Personales -->
@@ -632,6 +695,90 @@ const freqLabel: Record<string, string> = {
           </div>
         </div>
       )}
+
+      <!-- TAB: Expedientes -->
+      <div id="tab-expedientes" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Expedientes del empleado</h3>
+              <p class="text-xs text-gray-500">
+                {efFiles.length} {efFiles.length === 1 ? 'registro' : 'registros'} — estudios, permisos, licencias, etc.
+              </p>
+            </div>
+            <a href={`/employee-files?employeeId=${id}`} class="text-sm text-blue-600 hover:underline">
+              Abrir módulo →
+            </a>
+          </div>
+
+          {efFiles.length === 0 ? (
+            <p class="text-sm text-gray-400 py-8 text-center">
+              Sin expedientes para este empleado todavía.{' '}
+              <a href={`/employee-files?employeeId=${id}`} class="text-blue-600 hover:underline">Crear el primero</a>.
+            </p>
+          ) : (
+            <div class="space-y-4">
+              {efTypesWithFiles.map((g) => (
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                    {g.type.name}
+                    <span class="ml-1.5 text-gray-400 normal-case font-normal">
+                      · {g.rows.length} {g.rows.length === 1 ? 'expediente' : 'expedientes'}
+                    </span>
+                  </h4>
+                  <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="w-full text-sm">
+                      <thead>
+                        <tr class="border-b border-gray-200 bg-gray-50">
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Número</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Subtipo</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Observaciones</th>
+                          <th class="px-3 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.rows.map((f) => {
+                          const s = efSubtypeById.get(f.subtypeId)
+                          const status = f.approvalStatus ?? 'approved'
+                          const statusLabel = status === 'pending' ? 'Pendiente' : status === 'approved' ? 'Aprobado' : 'Rechazado'
+                          const statusClass = status === 'pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : status === 'approved'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          return (
+                            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                              <td class="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{f.documentNumber}</td>
+                              <td class="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">{fmtFileDate(f.documentDate)}</td>
+                              <td class="px-3 py-2 text-xs text-gray-700">{s?.name ?? '—'}</td>
+                              <td class="px-3 py-2 whitespace-nowrap">
+                                <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass}`}>{statusLabel}</span>
+                                {status === 'rejected' && f.rejectionReason && (
+                                  <div class="text-[10px] text-gray-500 mt-0.5" title={f.rejectionReason}>
+                                    {f.rejectionReason.length > 40 ? `${f.rejectionReason.slice(0, 40)}…` : f.rejectionReason}
+                                  </div>
+                                )}
+                              </td>
+                              <td class="px-3 py-2 text-xs text-gray-500 truncate max-w-xs" title={f.observations ?? ''}>
+                                {f.observations ?? '—'}
+                              </td>
+                              <td class="px-3 py-2 text-right whitespace-nowrap">
+                                <a href={`/employee-files/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900">Ver</a>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
 
       <!-- Actions -->
       <div class="flex justify-between mt-2">
