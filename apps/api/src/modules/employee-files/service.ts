@@ -1,4 +1,5 @@
 import {
+  employeeFileApprovalRules,
   employeeFileAttachments,
   employeeFileSubtypes,
   employeeFileTypes,
@@ -210,6 +211,18 @@ export async function createWithCorrelative(
     const sequence = maxSeq + 1
     const documentNumber = formatDocumentNumber(input.typeId, input.subtypeId, year, sequence)
 
+    // ¿El (tipo, subtipo) requiere aprobación? Si hay regla activa,
+    // el expediente nace en `pending`; si no, `approved` por default.
+    const ruleCount = await tx.execute(sql`
+      SELECT COUNT(*)::int AS c
+      FROM employee_file_approval_rules
+      WHERE is_active = 1
+        AND type_id = ${input.typeId}
+        AND (subtype_id = ${input.subtypeId} OR subtype_id IS NULL)
+    `)
+    const needsApproval = Number((ruleCount as Array<{ c: number }>)[0]?.c ?? 0) > 0
+    const initialStatus = needsApproval ? 'pending' : 'approved'
+
     const [row] = await tx
       .insert(employeeFiles)
       .values({
@@ -222,6 +235,9 @@ export async function createWithCorrelative(
         documentNumber,
         observations: input.observations ?? null,
         extraFields: filtered.values,
+        approvalStatus: initialStatus,
+        approvedBy: needsApproval ? null : (options.createdBy ?? null),
+        approvedAt: needsApproval ? null : new Date(),
         createdBy: options.createdBy ?? null,
       })
       .returning()
@@ -418,4 +434,120 @@ export async function deleteAttachmentById(db: AnyDb, attachmentId: string): Pro
   }
   await db.delete(employeeFileAttachments).where(eq(employeeFileAttachments.id, attachmentId))
   return true
+}
+
+// ─── Workflow de aprobaciones ────────────────────────────────────────────
+
+/**
+ * Lista los expedientes en estado `pending` cuyas reglas declaran
+ * un rol que el usuario actual tiene. Si `userRoles` está vacío
+ * devuelve []. tenant_admin recibe todos los pendientes (la regla
+ * más amplia gana: si el admin tiene ese rol, lo ve todo).
+ */
+export async function listPendingApprovals(db: AnyDb, userRoles: string[]): Promise<unknown[]> {
+  if (userRoles.length === 0) return []
+  // biome-ignore lint/suspicious/noExplicitAny: drizzle rows
+  const rows: any[] = await db.execute(sql`
+    SELECT ef.*,
+           t.name AS type_name,
+           s.name AS subtype_name,
+           e.code AS employee_code,
+           e.first_name AS employee_first_name,
+           e.last_name AS employee_last_name
+    FROM employee_files ef
+    JOIN employee_file_types t ON t.id = ef.type_id
+    JOIN employee_file_subtypes s ON s.id = ef.subtype_id
+    JOIN employees e ON e.id = ef.employee_id
+    WHERE ef.approval_status = 'pending'
+      AND EXISTS (
+        SELECT 1 FROM employee_file_approval_rules r
+        WHERE r.is_active = 1
+          AND r.type_id = ef.type_id
+          AND (r.subtype_id = ef.subtype_id OR r.subtype_id IS NULL)
+          AND r.approver_role = ANY(${userRoles})
+      )
+    ORDER BY ef.created_at ASC
+  `)
+  return rows
+}
+
+export async function approveEmployeeFile(
+  db: AnyDb,
+  id: string,
+  userId: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const [existing] = await db.select().from(employeeFiles).where(eq(employeeFiles.id, id)).limit(1)
+  if (!existing) return { success: false, error: 'Expediente no encontrado.' }
+  if (existing.approvalStatus !== 'pending') {
+    return { success: false, error: `El expediente ya está ${existing.approvalStatus}.` }
+  }
+  await db
+    .update(employeeFiles)
+    .set({
+      approvalStatus: 'approved',
+      approvedBy: userId,
+      approvedAt: new Date(),
+      rejectionReason: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(employeeFiles.id, id))
+  return { success: true }
+}
+
+export async function rejectEmployeeFile(
+  db: AnyDb,
+  id: string,
+  userId: string,
+  reason: string
+): Promise<{ success: true } | { success: false; error: string }> {
+  const [existing] = await db.select().from(employeeFiles).where(eq(employeeFiles.id, id)).limit(1)
+  if (!existing) return { success: false, error: 'Expediente no encontrado.' }
+  if (existing.approvalStatus !== 'pending') {
+    return { success: false, error: `El expediente ya está ${existing.approvalStatus}.` }
+  }
+  await db
+    .update(employeeFiles)
+    .set({
+      approvalStatus: 'rejected',
+      approvedBy: userId,
+      approvedAt: new Date(),
+      rejectionReason: reason.trim() || 'Sin razón especificada.',
+      updatedAt: new Date(),
+    })
+    .where(eq(employeeFiles.id, id))
+  return { success: true }
+}
+
+// ─── Reglas de aprobación ────────────────────────────────────────────────
+
+export async function listApprovalRules(db: AnyDb) {
+  return db
+    .select()
+    .from(employeeFileApprovalRules)
+    .where(eq(employeeFileApprovalRules.isActive, 1))
+}
+
+export async function upsertApprovalRule(
+  db: AnyDb,
+  input: { typeId: number; subtypeId: number | null; approverRole: string }
+): Promise<{ id: string }> {
+  const [row] = await db
+    .insert(employeeFileApprovalRules)
+    .values({
+      typeId: input.typeId,
+      subtypeId: input.subtypeId,
+      approverRole: input.approverRole,
+    })
+    .onConflictDoNothing()
+    .returning()
+  return { id: row?.id ?? '' }
+}
+
+export async function deactivateApprovalRule(db: AnyDb, id: string): Promise<boolean> {
+  const res = await db
+    .update(employeeFileApprovalRules)
+    .set({ isActive: 0 })
+    .where(eq(employeeFileApprovalRules.id, id))
+    .returning()
+  return res.length > 0
 }

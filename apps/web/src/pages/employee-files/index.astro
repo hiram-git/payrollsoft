@@ -533,14 +533,37 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
       })
       dateEl.addEventListener('change', refreshNumberPreview)
 
-      // Submit AJAX para no perder la página y mostrar errores inline.
+      // Submit con flujo saModal: confirmar → loading → resultado.
+      // El helper global `window.saModal` está definido en Modals.astro
+      // del AppLayout. Devuelve true si el usuario confirma.
       form.addEventListener('submit', async (e) => {
         e.preventDefault()
         errorEl.classList.add('hidden')
         const data = new FormData(form)
-        const labelEl = submitBtn.querySelector('[data-label]')
-        submitBtn.disabled = true
-        if (labelEl) labelEl.textContent = 'Guardando…'
+        const typeSel2 = document.getElementById('ef-type')
+        const subSel2 = document.getElementById('ef-subtype')
+        const typeLabel = typeSel2.selectedOptions[0]?.text || ''
+        const subLabel = subSel2.selectedOptions[0]?.text || ''
+        const sa = window.saModal
+        // Confirmar primero.
+        if (sa && typeof sa.confirm === 'function') {
+          const okConfirm = await sa.confirm({
+            title: 'Registrar expediente',
+            message: 'Vas a crear un expediente' +
+              (typeLabel ? ' de tipo "' + typeLabel + '"' : '') +
+              (subLabel ? ' / "' + subLabel + '"' : '') +
+              '. ¿Continuar?',
+            confirmLabel: 'Registrar',
+            tone: 'primary',
+          })
+          if (!okConfirm) return
+          sa.loading({ title: 'Guardando expediente', message: 'Procesando datos y adjuntos…' })
+        } else {
+          // Fallback si Modals.astro no está montado por alguna razón.
+          submitBtn.disabled = true
+          const labelEl = submitBtn.querySelector('[data-label]')
+          if (labelEl) labelEl.textContent = 'Guardando…'
+        }
         try {
           const res = await fetch('/api/employee-files/save', {
             method: 'POST',
@@ -549,17 +572,36 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
           })
           const json = await res.json().catch(() => ({}))
           if (!res.ok || json.ok === false) {
-            errorEl.textContent = json.error || ('HTTP ' + res.status)
+            const msg = json.error || 'HTTP ' + res.status
+            if (sa && typeof sa.error === 'function') {
+              await sa.error({ title: 'No se pudo registrar', message: msg })
+            }
+            errorEl.textContent = msg
             errorEl.classList.remove('hidden')
           } else {
-            // Redirige al mismo workspace con flash → SSR refresca la lista.
-            window.location.href = json.redirect || ('/employee-files?employeeId=' + data.get('employeeId') + '&flash=created')
+            const redirectUrl =
+              json.redirect ||
+              '/employee-files?employeeId=' + data.get('employeeId') + '&flash=created'
+            if (sa && typeof sa.success === 'function') {
+              await sa.success({
+                title: 'Expediente registrado',
+                message: json.message || 'El expediente se guardó correctamente.',
+                redirect: redirectUrl,
+              })
+            } else {
+              window.location.href = redirectUrl
+            }
           }
         } catch (err) {
-          errorEl.textContent = err && err.message ? err.message : String(err)
+          const msg = err && err.message ? err.message : String(err)
+          if (sa && typeof sa.error === 'function') {
+            await sa.error({ title: 'Error de red', message: msg })
+          }
+          errorEl.textContent = msg
           errorEl.classList.remove('hidden')
         } finally {
           submitBtn.disabled = false
+          const labelEl = submitBtn.querySelector('[data-label]')
           if (labelEl) labelEl.textContent = 'Crear expediente'
         }
       })

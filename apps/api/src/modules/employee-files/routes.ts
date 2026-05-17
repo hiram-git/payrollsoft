@@ -23,16 +23,22 @@ import { getFieldsFor } from './dynamic-fields'
 import {
   type EmployeeFileInput,
   type FormFile,
+  approveEmployeeFile,
   createWithCorrelative,
+  deactivateApprovalRule,
   deleteAttachmentById,
   deleteEmployeeFile,
   getAttachmentById,
   getById,
   getSubtypes,
   getTypes,
+  listApprovalRules,
   listByEmployee,
+  listPendingApprovals,
   previewNextNumber,
+  rejectEmployeeFile,
   updateExisting,
+  upsertApprovalRule,
 } from './service'
 import { readAttachment } from './storage'
 
@@ -451,6 +457,128 @@ export const employeeFilesRoutes = new Elysia({ prefix: '/employee-files' })
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:delete')],
+      params: t.Object({ id: t.String() }),
+    }
+  )
+
+  // ── Workflow de aprobaciones ───────────────────────────────────────────
+  .get(
+    '/approvals/pending',
+    async ({ db, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      // El JWT lleva el role del usuario (un único role hoy en
+      // payload; cuando exista el multi-role real se reemplaza).
+      const roles: string[] = []
+      if (user?.role) roles.push(String(user.role))
+      const data = await listPendingApprovals(db, roles)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+    }
+  )
+
+  .post(
+    '/:id/approve',
+    async ({ db, params, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await approveEmployeeFile(db, params.id, user?.userId ?? '')
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      params: t.Object({ id: t.String() }),
+    }
+  )
+
+  .post(
+    '/:id/reject',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await rejectEmployeeFile(db, params.id, user?.userId ?? '', body?.reason ?? '')
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({ reason: t.Optional(t.String()) }),
+    }
+  )
+
+  // ── Catálogo de reglas (configuración del workflow) ────────────────────
+  .get(
+    '/approval-rules',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listApprovalRules(db)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+    }
+  )
+
+  .post(
+    '/approval-rules',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await upsertApprovalRule(db, {
+        typeId: body.typeId,
+        subtypeId: body.subtypeId ?? null,
+        approverRole: body.approverRole,
+      })
+      set.status = 201
+      return { success: true, data: result }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      body: t.Object({
+        typeId: t.Integer(),
+        subtypeId: t.Optional(t.Nullable(t.Integer())),
+        approverRole: t.String({ minLength: 1, maxLength: 50 }),
+      }),
+    }
+  )
+
+  .delete(
+    '/approval-rules/:id',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const ok = await deactivateApprovalRule(db, params.id)
+      if (!ok) {
+        set.status = 404
+        return { success: false, error: 'Regla no encontrada' }
+      }
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
       params: t.Object({ id: t.String() }),
     }
   )
