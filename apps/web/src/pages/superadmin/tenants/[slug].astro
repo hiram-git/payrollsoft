@@ -272,7 +272,7 @@ try {
               const seedMeta = tenant?.metadata?.seeds?.[code]
               const isApplied = Boolean(seedMeta?.applied_at)
               const failedAt = seedMeta?.failed_at
-              const labels: Record<string, { name: string; desc: string }> = {
+              const labels = {
                 employees: {
                   name: 'Empleados',
                   desc: 'Empleados de prueba con cargos, funciones y departamentos asignados.',
@@ -281,7 +281,7 @@ try {
                   name: 'Préstamos',
                   desc: '10 acreedores y 1–4 préstamos quincenales por empleado activo. Requiere haber sembrado empleados primero.',
                 },
-              }
+              } as const
               const label = labels[code]
               return (
                 <div class="border border-gray-200 rounded-lg p-4 flex flex-col gap-2">
