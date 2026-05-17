@@ -61,6 +61,10 @@ async function parseFormData(req: Request): Promise<{
 
   for (const [key, value] of form.entries()) {
     if (value instanceof File) {
+      // Inputs `type="file"` sin archivo elegido igual viajan en el
+      // multipart como `File` con `size=0` y `name=""`. Los ignoramos
+      // para que no se conviertan en adjuntos vacíos.
+      if (value.size === 0 || !value.name) continue
       const bytes = new Uint8Array(await value.arrayBuffer())
       if (key === 'attachments') {
         files.push({
@@ -276,15 +280,27 @@ export const employeeFilesRoutes = new Elysia({ prefix: '/employee-files' })
           error: 'employeeId, typeId, subtypeId y documentDate son obligatorios',
         }
       }
-      const result = await createWithCorrelative(db, tenantSlug, input, parsed.files, {
-        createdBy: user?.userId ?? null,
-      })
-      if (!result.success) {
-        set.status = result.error === 'validation' ? 422 : 400
-        return { success: false, error: result.message }
+      try {
+        const result = await createWithCorrelative(db, tenantSlug, input, parsed.files, {
+          createdBy: user?.userId ?? null,
+        })
+        if (!result.success) {
+          set.status = result.error === 'validation' ? 422 : 400
+          return { success: false, error: result.message }
+        }
+        set.status = 201
+        return { success: true, data: result.data }
+      } catch (err) {
+        // El service hace I/O a disco + transacciones; cualquier crash
+        // imprevisto (volumen lleno, FK rota, etc) se devuelve con un
+        // mensaje legible en lugar de un 500 silencioso.
+        console.error('[employee-files] create failed:', err)
+        set.status = 500
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Error interno al guardar el expediente.',
+        }
       }
-      set.status = 201
-      return { success: true, data: result.data }
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:write')],
@@ -317,14 +333,23 @@ export const employeeFilesRoutes = new Elysia({ prefix: '/employee-files' })
         set.status = 400
         return { success: false, error: 'typeId, subtypeId y documentDate son obligatorios' }
       }
-      const result = await updateExisting(db, tenantSlug, params.id, input, parsed.files, {
-        changedBy: user?.userId ?? null,
-      })
-      if (!result.success) {
-        set.status = result.error === 'not_found' ? 404 : 422
-        return { success: false, error: result.message }
+      try {
+        const result = await updateExisting(db, tenantSlug, params.id, input, parsed.files, {
+          changedBy: user?.userId ?? null,
+        })
+        if (!result.success) {
+          set.status = result.error === 'not_found' ? 404 : 422
+          return { success: false, error: result.message }
+        }
+        return { success: true, data: result.data }
+      } catch (err) {
+        console.error('[employee-files] update failed:', err)
+        set.status = 500
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Error interno al actualizar el expediente.',
+        }
       }
-      return { success: true, data: result.data }
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:write')],
