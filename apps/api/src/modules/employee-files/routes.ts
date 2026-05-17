@@ -24,6 +24,8 @@ import {
   type EmployeeFileInput,
   type FormFile,
   approveEmployeeFile,
+  createSubtype,
+  createType,
   createWithCorrelative,
   deactivateApprovalRule,
   deleteAttachmentById,
@@ -32,12 +34,16 @@ import {
   getById,
   getSubtypes,
   getTypes,
+  listAllSubtypes,
+  listAllTypes,
   listApprovalRules,
   listByEmployee,
   listPendingApprovals,
   previewNextNumber,
   rejectEmployeeFile,
   updateExisting,
+  updateSubtype,
+  updateType,
   upsertApprovalRule,
 } from './service'
 import { readAttachment } from './storage'
@@ -519,6 +525,167 @@ export const employeeFilesRoutes = new Elysia({ prefix: '/employee-files' })
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
       params: t.Object({ id: t.String() }),
       body: t.Object({ reason: t.Optional(t.String()) }),
+    }
+  )
+
+  // ── CRUD de tipos (configuración) ──────────────────────────────────────
+  // Devuelve TODOS los tipos (incluso is_active=0) — el listado abierto
+  // en /types ya filtra solo activos para los formularios.
+  .get(
+    '/admin/types',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listAllTypes(db)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+    }
+  )
+
+  .post(
+    '/admin/types',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      try {
+        const data = await createType(db, body)
+        set.status = 201
+        return { success: true, data }
+      } catch (err) {
+        set.status = 422
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'No se pudo crear el tipo.',
+        }
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      body: t.Object({
+        code: t.String({ minLength: 1, maxLength: 60 }),
+        name: t.String({ minLength: 1, maxLength: 120 }),
+        description: t.Optional(t.Nullable(t.String())),
+        sortOrder: t.Optional(t.Integer()),
+        requiresApproval: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
+      }),
+    }
+  )
+
+  .put(
+    '/admin/types/:id',
+    async ({ db, params, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const id = Number.parseInt(params.id, 10)
+      if (!Number.isFinite(id)) {
+        set.status = 400
+        return { success: false, error: 'id inválido' }
+      }
+      const ok = await updateType(db, id, body)
+      if (!ok) {
+        set.status = 404
+        return { success: false, error: 'Tipo no encontrado' }
+      }
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+        description: t.Optional(t.Nullable(t.String())),
+        sortOrder: t.Optional(t.Integer()),
+        requiresApproval: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
+        isActive: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
+      }),
+    }
+  )
+
+  // ── CRUD de subtipos (configuración) ───────────────────────────────────
+  .get(
+    '/admin/subtypes',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const typeId = intOrNull(query.typeId) ?? undefined
+      const data = await listAllSubtypes(db, typeId)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      query: t.Object({ typeId: t.Optional(t.String()) }),
+    }
+  )
+
+  .post(
+    '/admin/subtypes',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      try {
+        const data = await createSubtype(db, body)
+        set.status = 201
+        return { success: true, data }
+      } catch (err) {
+        set.status = 422
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'No se pudo crear el subtipo.',
+        }
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      body: t.Object({
+        typeId: t.Integer(),
+        code: t.String({ minLength: 1, maxLength: 60 }),
+        name: t.String({ minLength: 1, maxLength: 160 }),
+        sortOrder: t.Optional(t.Integer()),
+        requiresApproval: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
+      }),
+    }
+  )
+
+  .put(
+    '/admin/subtypes/:id',
+    async ({ db, params, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const id = Number.parseInt(params.id, 10)
+      if (!Number.isFinite(id)) {
+        set.status = 400
+        return { success: false, error: 'id inválido' }
+      }
+      const ok = await updateSubtype(db, id, body)
+      if (!ok) {
+        set.status = 404
+        return { success: false, error: 'Subtipo no encontrado' }
+      }
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:approve')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        name: t.Optional(t.String({ minLength: 1, maxLength: 160 })),
+        sortOrder: t.Optional(t.Integer()),
+        requiresApproval: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
+        isActive: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
+      }),
     }
   )
 

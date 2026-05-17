@@ -28,6 +28,12 @@ export const employeeFileTypes = pgTable('employee_file_types', {
   description: text('description'),
   sortOrder: integer('sort_order').notNull().default(0),
   isActive: integer('is_active').notNull().default(1),
+  /**
+   * Hint del CRUD: cuando se crea un subtipo nuevo bajo este tipo,
+   * pre-rellenar `requires_approval` con este valor. La decisión real
+   * de si un expediente nace `pending` se toma a nivel de subtipo.
+   */
+  requiresApproval: integer('requires_approval').notNull().default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
@@ -40,6 +46,14 @@ export const employeeFileSubtypes = pgTable(
     name: varchar('name', { length: 160 }).notNull(),
     sortOrder: integer('sort_order').notNull().default(0),
     isActive: integer('is_active').notNull().default(1),
+    /**
+     * Si `1`, los expedientes que se creen con este subtipo nacen
+     * en `approval_status='pending'` y necesitan ser aprobados por
+     * un usuario con un rol declarado en `employee_file_approval_rules`
+     * (o por `tenant_admin` si no hay regla específica).
+     * Si `0`, los expedientes se autoaprueban al crearse.
+     */
+    requiresApproval: integer('requires_approval').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
