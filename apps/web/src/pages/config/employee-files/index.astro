@@ -1,0 +1,532 @@
+---
+/**
+ * Configuración del módulo de expedientes — tipos, subtipos y reglas
+ * de aprobación.
+ *
+ * El flag `requires_approval` en el subtipo es el gate del workflow:
+ * los expedientes creados con un subtipo marcado nacen en
+ * `approval_status='pending'` y necesitan ser aprobados. Las reglas
+ * de la sección inferior declaran QUÉ rol puede aprobar; si no hay
+ * regla, el fallback es `tenant_admin`.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:approve')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type TypeRow = {
+  id: number
+  code: string
+  name: string
+  description: string | null
+  sortOrder: number
+  isActive: number
+  requiresApproval: number
+}
+type SubtypeRow = {
+  id: number
+  typeId: number
+  code: string
+  name: string
+  sortOrder: number
+  isActive: number
+  requiresApproval: number
+}
+type RuleRow = {
+  id: string
+  typeId: number
+  subtypeId: number | null
+  approverRole: string
+  isActive: number
+}
+
+let types: TypeRow[] = []
+let subtypes: SubtypeRow[] = []
+let rules: RuleRow[] = []
+
+try {
+  const [tRes, sRes, rRes] = await Promise.all([
+    fetch(`${API_URL}/employee-files/admin/types`, { headers }),
+    fetch(`${API_URL}/employee-files/admin/subtypes`, { headers }),
+    fetch(`${API_URL}/employee-files/approval-rules`, { headers }),
+  ])
+  if (tRes.status === 401) return Astro.redirect('/login')
+  if (tRes.ok) types = ((await tRes.json()) as { data: TypeRow[] }).data ?? []
+  if (sRes.ok) subtypes = ((await sRes.json()) as { data: SubtypeRow[] }).data ?? []
+  if (rRes.ok) rules = ((await rRes.json()) as { data: RuleRow[] }).data ?? []
+} catch {
+  /* vacío si la API no responde */
+}
+
+const subtypesByType = new Map<number, SubtypeRow[]>()
+for (const s of subtypes) {
+  const arr = subtypesByType.get(s.typeId) ?? []
+  arr.push(s)
+  subtypesByType.set(s.typeId, arr)
+}
+
+const flash = Astro.url.searchParams.get('flash') ?? ''
+const errorMsg = Astro.url.searchParams.get('error') ?? ''
+
+const ROLE_OPTIONS = [
+  { value: 'tenant_admin', label: 'Administrador del tenant' },
+  { value: 'hr', label: 'Recursos Humanos' },
+  { value: 'accountant', label: 'Contador' },
+  { value: 'viewer', label: 'Solo lectura' },
+]
+---
+
+<AppLayout title="Configuración · Expedientes">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold tracking-tight cfg-title">Configuración de expedientes</h1>
+      <p class="text-sm mt-0.5 cfg-subtitle">
+        Tipos, subtipos y reglas de aprobación. Marca un subtipo como
+        "requiere aprobación" para que los expedientes creados con él
+        queden <strong>pendientes</strong> hasta que un aprobador autorizado los apruebe.
+      </p>
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Registro creado.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Cambios guardados.</div>
+    )}
+    {flash === 'deleted' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Eliminado.</div>
+    )}
+    {errorMsg && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{errorMsg}</div>
+    )}
+
+    <!-- ── Tipos + subtipos anidados ─────────────────────────────────────── -->
+    <section class="cfg-card border rounded-lg overflow-hidden mb-6">
+      <header class="cfg-section-header px-5 py-3 border-b flex items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-semibold cfg-heading">Tipos de expediente</h2>
+          <p class="text-xs cfg-hint mt-0.5">{types.length} tipos · {subtypes.length} subtipos</p>
+        </div>
+        <button type="button" id="cfg-new-type-btn" class="text-xs cfg-link">+ Nuevo tipo</button>
+      </header>
+
+      <!-- Form de nuevo tipo (oculto por default) -->
+      <form
+        id="cfg-new-type-form"
+        method="POST"
+        action="/api/employee-files/admin?op=type-create"
+        class="hidden p-5 border-b cfg-rule"
+      >
+        <input type="hidden" name="_redirect" value="/config/employee-files" />
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Código *</label>
+            <input type="text" name="code" required maxlength="60" placeholder="ej. capacitacion" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+          </div>
+          <div class="md:col-span-4">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Nombre *</label>
+            <input type="text" name="name" required maxlength="120" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+          </div>
+          <div class="md:col-span-4">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Descripción</label>
+            <input type="text" name="description" maxlength="200" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+          </div>
+          <div class="md:col-span-1">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Orden</label>
+            <input type="number" name="sortOrder" value="0" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+          </div>
+          <div class="md:col-span-1 flex items-center justify-center">
+            <label class="inline-flex items-center gap-1.5 text-xs cfg-label mt-5">
+              <input type="checkbox" name="requiresApproval" value="1" class="rounded" />
+              <span>Aprob.</span>
+            </label>
+          </div>
+        </div>
+        <div class="flex items-center justify-end gap-2 mt-4">
+          <button type="button" class="cfg-btn-link px-3 py-2 text-sm" data-cancel="new-type">Cancelar</button>
+          <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Crear tipo</button>
+        </div>
+      </form>
+
+      {types.length === 0 ? (
+        <div class="p-10 text-center">
+          <p class="text-sm cfg-mute">No hay tipos registrados. Crea el primero arriba.</p>
+        </div>
+      ) : (
+        <div class="cfg-divide">
+          {types.map((t) => {
+            const subs = subtypesByType.get(t.id) ?? []
+            return (
+              <details class="cfg-type-block" open={subs.length > 0 ? true : false}>
+                <summary class="cfg-type-summary px-5 py-3 flex items-center justify-between gap-3 cursor-pointer select-none">
+                  <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <svg class="cfg-chevron w-4 h-4 cfg-mute flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="text-xs font-mono cfg-cell-mono">{t.code}</span>
+                    <span class="text-sm font-medium cfg-heading truncate">{t.name}</span>
+                    <span class="text-xs cfg-mute">· {subs.length} {subs.length === 1 ? 'subtipo' : 'subtipos'}</span>
+                    {t.requiresApproval === 1 && (
+                      <span class="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide cfg-badge-approval">aprobación</span>
+                    )}
+                    {t.isActive === 0 && (
+                      <span class="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide cfg-badge-inactive">inactivo</span>
+                    )}
+                  </div>
+                </summary>
+
+                <!-- Edit form del tipo -->
+                <form method="POST" action={`/api/employee-files/admin?op=type-update&id=${t.id}`} class="px-5 py-4 cfg-rule border-t">
+                  <input type="hidden" name="_redirect" value="/config/employee-files" />
+                  <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <div class="md:col-span-5">
+                      <label class="block text-xs font-medium cfg-label mb-1.5">Nombre</label>
+                      <input type="text" name="name" value={t.name} required maxlength="120" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+                    </div>
+                    <div class="md:col-span-4">
+                      <label class="block text-xs font-medium cfg-label mb-1.5">Descripción</label>
+                      <input type="text" name="description" value={t.description ?? ''} maxlength="200" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+                    </div>
+                    <div class="md:col-span-1">
+                      <label class="block text-xs font-medium cfg-label mb-1.5">Orden</label>
+                      <input type="number" name="sortOrder" value={t.sortOrder} class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+                    </div>
+                    <div class="md:col-span-1 flex items-center">
+                      <label class="inline-flex items-center gap-1.5 text-xs cfg-label">
+                        <input type="checkbox" name="requiresApproval" value="1" checked={t.requiresApproval === 1} class="rounded" />
+                        <span>Aprob.</span>
+                      </label>
+                    </div>
+                    <div class="md:col-span-1 flex items-center">
+                      <label class="inline-flex items-center gap-1.5 text-xs cfg-label">
+                        <input type="checkbox" name="isActive" value="1" checked={t.isActive === 1} class="rounded" />
+                        <span>Activo</span>
+                      </label>
+                    </div>
+                  </div>
+                  <div class="flex items-center justify-end mt-3">
+                    <button type="submit" class="px-3.5 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">Guardar tipo</button>
+                  </div>
+                </form>
+
+                <!-- Subtipos -->
+                <div class="cfg-subtypes border-t cfg-rule">
+                  <div class="cfg-subtypes-header px-5 py-2 border-b cfg-rule flex items-center justify-between">
+                    <span class="text-xs font-semibold uppercase tracking-wide cfg-label">Subtipos</span>
+                    <button type="button" class="text-xs cfg-link" data-toggle-subtype-form={t.id}>+ Nuevo subtipo</button>
+                  </div>
+
+                  <!-- Form nuevo subtipo (oculto) -->
+                  <form
+                    method="POST"
+                    action="/api/employee-files/admin?op=subtype-create"
+                    class="hidden px-5 py-4 border-b cfg-rule cfg-new-subtype-form"
+                    data-subtype-form={t.id}
+                  >
+                    <input type="hidden" name="typeId" value={t.id} />
+                    <input type="hidden" name="_redirect" value="/config/employee-files" />
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                      <div class="md:col-span-3">
+                        <label class="block text-xs font-medium cfg-label mb-1.5">Código *</label>
+                        <input type="text" name="code" required maxlength="60" placeholder="ej. seminario" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+                      </div>
+                      <div class="md:col-span-6">
+                        <label class="block text-xs font-medium cfg-label mb-1.5">Nombre *</label>
+                        <input type="text" name="name" required maxlength="160" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+                      </div>
+                      <div class="md:col-span-1">
+                        <label class="block text-xs font-medium cfg-label mb-1.5">Orden</label>
+                        <input type="number" name="sortOrder" value="0" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+                      </div>
+                      <div class="md:col-span-2 flex items-center">
+                        <label class="inline-flex items-center gap-1.5 text-xs cfg-label mt-5">
+                          <input type="checkbox" name="requiresApproval" value="1" checked={t.requiresApproval === 1} class="rounded" />
+                          <span>Requiere aprobación</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div class="flex items-center justify-end gap-2 mt-3">
+                      <button type="button" class="cfg-btn-link px-3 py-1.5 text-xs" data-cancel-subtype={t.id}>Cancelar</button>
+                      <button type="submit" class="px-3.5 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">Crear subtipo</button>
+                    </div>
+                  </form>
+
+                  {subs.length === 0 ? (
+                    <div class="px-5 py-6 text-center">
+                      <p class="text-xs cfg-mute">Sin subtipos.</p>
+                    </div>
+                  ) : (
+                    <table class="cfg-table w-full text-sm">
+                      <tbody>
+                        {subs.map((s) => (
+                          <tr class="border-b last:border-0 cfg-rule">
+                            <td class="px-5 py-3 align-top w-full">
+                              <form method="POST" action={`/api/employee-files/admin?op=subtype-update&id=${s.id}`}>
+                                <input type="hidden" name="_redirect" value="/config/employee-files" />
+                                <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                                  <div class="md:col-span-2 text-xs font-mono cfg-cell-mono">{s.code}</div>
+                                  <div class="md:col-span-5">
+                                    <input type="text" name="name" value={s.name} required maxlength="160" class="cfg-input w-full px-2 py-1.5 text-sm rounded-md" />
+                                  </div>
+                                  <div class="md:col-span-1">
+                                    <input type="number" name="sortOrder" value={s.sortOrder} title="Orden" class="cfg-input w-full px-2 py-1.5 text-sm rounded-md" />
+                                  </div>
+                                  <div class="md:col-span-2 flex items-center">
+                                    <label class="inline-flex items-center gap-1.5 text-xs cfg-label">
+                                      <input type="checkbox" name="requiresApproval" value="1" checked={s.requiresApproval === 1} class="rounded" />
+                                      <span>Aprob.</span>
+                                    </label>
+                                  </div>
+                                  <div class="md:col-span-1 flex items-center">
+                                    <label class="inline-flex items-center gap-1.5 text-xs cfg-label">
+                                      <input type="checkbox" name="isActive" value="1" checked={s.isActive === 1} class="rounded" />
+                                      <span>Activo</span>
+                                    </label>
+                                  </div>
+                                  <div class="md:col-span-1 text-right">
+                                    <button type="submit" title="Guardar" class="px-2 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">✓</button>
+                                  </div>
+                                </div>
+                              </form>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </details>
+            )
+          })}
+        </div>
+      )}
+    </section>
+
+    <!-- ── Reglas de aprobación ──────────────────────────────────────────── -->
+    <section class="cfg-card border rounded-lg overflow-hidden">
+      <header class="cfg-section-header px-5 py-3 border-b flex items-center justify-between gap-2">
+        <div>
+          <h2 class="text-sm font-semibold cfg-heading">Reglas de aprobación</h2>
+          <p class="text-xs cfg-hint mt-0.5">
+            Asigna qué rol aprueba cada (tipo, subtipo). Si no hay regla y el subtipo requiere aprobación,
+            el aprobador por defecto es <strong>tenant_admin</strong>.
+          </p>
+        </div>
+      </header>
+
+      <!-- Form nueva regla -->
+      <form method="POST" action="/api/employee-files/admin?op=rule-create" class="px-5 py-4 border-b cfg-rule">
+        <input type="hidden" name="_redirect" value="/config/employee-files" />
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+          <div class="md:col-span-4">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Tipo *</label>
+            <select name="typeId" id="rule-type" required class="cfg-input w-full px-3 py-2 text-sm rounded-md">
+              <option value="">Selecciona…</option>
+              {types.map((t) => <option value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div class="md:col-span-4">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Subtipo (opcional)</label>
+            <select name="subtypeId" id="rule-subtype" class="cfg-input w-full px-3 py-2 text-sm rounded-md" disabled>
+              <option value="">Todos los subtipos del tipo</option>
+            </select>
+          </div>
+          <div class="md:col-span-3">
+            <label class="block text-xs font-medium cfg-label mb-1.5">Rol aprobador *</label>
+            <select name="approverRole" required class="cfg-input w-full px-3 py-2 text-sm rounded-md">
+              <option value="">Selecciona…</option>
+              {ROLE_OPTIONS.map((r) => <option value={r.value}>{r.label}</option>)}
+            </select>
+          </div>
+          <div class="md:col-span-1">
+            <button type="submit" class="w-full px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">+ Regla</button>
+          </div>
+        </div>
+      </form>
+
+      {rules.length === 0 ? (
+        <div class="p-10 text-center">
+          <p class="text-sm cfg-mute">No hay reglas configuradas. Sin reglas, todo pendiente lo aprueba <strong>tenant_admin</strong>.</p>
+        </div>
+      ) : (
+        <table class="cfg-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Tipo</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Subtipo</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Aprobador</th>
+              <th class="px-5 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rules.map((r) => {
+              const tt = types.find((x) => x.id === r.typeId)
+              const ss = r.subtypeId == null ? null : subtypes.find((x) => x.id === r.subtypeId)
+              const roleLabel = ROLE_OPTIONS.find((o) => o.value === r.approverRole)?.label ?? r.approverRole
+              return (
+                <tr class="border-b last:border-0 cfg-rule">
+                  <td class="px-5 py-3 cfg-cell">{tt?.name ?? `#${r.typeId}`}</td>
+                  <td class="px-5 py-3 cfg-cell">{ss?.name ?? <span class="cfg-mute italic">todos</span>}</td>
+                  <td class="px-5 py-3 cfg-cell font-mono text-xs">{roleLabel}</td>
+                  <td class="px-5 py-3 text-right">
+                    <form
+                      method="POST"
+                      action={`/api/employee-files/admin?op=rule-delete&id=${r.id}`}
+                      data-saconfirm
+                      data-sa-title="Eliminar regla"
+                      data-sa-message="Vas a desactivar esta regla. Sin ella, ese (tipo, subtipo) será aprobado solo por tenant_admin."
+                      data-sa-confirm-label="Eliminar"
+                      data-sa-tone="danger"
+                      style="display:inline"
+                    >
+                      <input type="hidden" name="_redirect" value="/config/employee-files" />
+                      <button type="submit" class="text-xs text-red-600 hover:underline">Eliminar</button>
+                    </form>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <script type="application/json" id="cfg-subtypes-catalog" set:html={JSON.stringify(subtypes)}></script>
+
+  <script is:inline>
+    ;(function () {
+      // Toggle del form de nuevo tipo
+      const newTypeBtn = document.getElementById('cfg-new-type-btn')
+      const newTypeForm = document.getElementById('cfg-new-type-form')
+      if (newTypeBtn && newTypeForm) {
+        newTypeBtn.addEventListener('click', () => newTypeForm.classList.toggle('hidden'))
+        const cancel = newTypeForm.querySelector('[data-cancel="new-type"]')
+        if (cancel) cancel.addEventListener('click', () => newTypeForm.classList.add('hidden'))
+      }
+
+      // Toggle de forms de nuevo subtipo por tipo
+      document.querySelectorAll('[data-toggle-subtype-form]').forEach((btn) => {
+        const typeId = btn.getAttribute('data-toggle-subtype-form')
+        const form = document.querySelector(`[data-subtype-form="${typeId}"]`)
+        if (!form) return
+        btn.addEventListener('click', () => form.classList.toggle('hidden'))
+        const cancel = form.querySelector(`[data-cancel-subtype="${typeId}"]`)
+        if (cancel) cancel.addEventListener('click', () => form.classList.add('hidden'))
+      })
+
+      // Filtrar subtipos según el tipo elegido en el form de reglas
+      const allSubs = JSON.parse(document.getElementById('cfg-subtypes-catalog')?.textContent || '[]')
+      const ruleType = document.getElementById('rule-type')
+      const ruleSubtype = document.getElementById('rule-subtype')
+      if (ruleType && ruleSubtype) {
+        ruleType.addEventListener('change', () => {
+          const tid = parseInt(ruleType.value, 10)
+          if (!tid) {
+            ruleSubtype.innerHTML = '<option value="">Todos los subtipos del tipo</option>'
+            ruleSubtype.disabled = true
+            return
+          }
+          const subs = allSubs.filter((s) => s.typeId === tid)
+          ruleSubtype.innerHTML = '<option value="">Todos los subtipos del tipo</option>' +
+            subs.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')
+          ruleSubtype.disabled = false
+        })
+      }
+    })()
+  </script>
+
+  <style>
+    .cfg-title       { color: var(--fore); }
+    .cfg-subtitle    { color: var(--fore-dim); }
+    .cfg-heading     { color: var(--fore); }
+    .cfg-label       { color: var(--fore-dim); }
+    .cfg-hint        { color: var(--mute-2); }
+    .cfg-mute        { color: var(--mute); }
+    .cfg-cell        { color: var(--fore-dim); }
+    .cfg-cell-mono   { color: var(--fore-dim); }
+
+    .cfg-card {
+      background: var(--ink-2);
+      border-color: var(--rule);
+      color: var(--fore-dim);
+    }
+    .cfg-section-header,
+    .cfg-subtypes-header {
+      background: var(--ink-3);
+      border-color: var(--rule);
+    }
+
+    .cfg-rule { border-color: var(--rule); }
+    .cfg-divide > *:not(:last-child) { border-bottom: 1px solid var(--rule); }
+
+    .cfg-type-summary:hover { background: var(--ink-4); }
+    .cfg-type-block[open] .cfg-chevron { transform: rotate(90deg); }
+    .cfg-chevron { transition: transform 120ms; }
+
+    .cfg-subtypes { background: var(--ink-2); }
+
+    .cfg-input {
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      color: var(--fore);
+    }
+    .cfg-input:focus { border-color: var(--rule-hi); outline: none; }
+    .cfg-input::placeholder { color: var(--mute); }
+    .cfg-input:disabled {
+      background: var(--ink-3);
+      color: var(--mute-2);
+      cursor: not-allowed;
+    }
+
+    .cfg-link {
+      color: #60a5fa;
+    }
+    .cfg-link:hover { text-decoration: underline; }
+    .cfg-btn-link {
+      background: transparent;
+      color: var(--fore-dim);
+    }
+    .cfg-btn-link:hover { color: var(--fore); }
+
+    .cfg-badge-approval {
+      background: rgba(96, 165, 250, 0.18);
+      color: #60a5fa;
+    }
+    .cfg-badge-inactive {
+      background: rgba(156, 163, 175, 0.18);
+      color: var(--mute);
+    }
+
+    .cfg-table thead tr {
+      background: var(--ink-3);
+      border-color: var(--rule);
+      color: var(--mute-2);
+    }
+    .cfg-table tbody tr {
+      background: var(--ink-2);
+      border-color: var(--rule);
+    }
+    .cfg-table tbody tr:hover { background: var(--ink-4); }
+
+    /* Modo claro */
+    [data-theme='light'] .cfg-card { background: #ffffff; }
+    [data-theme='light'] .cfg-section-header,
+    [data-theme='light'] .cfg-subtypes-header { background: #f9fafb; }
+    [data-theme='light'] .cfg-subtypes { background: #ffffff; }
+    [data-theme='light'] .cfg-type-summary:hover { background: #f3f4f6; }
+    [data-theme='light'] .cfg-input { background: #ffffff; }
+    [data-theme='light'] .cfg-input:disabled { background: #f3f4f6; }
+    [data-theme='light'] .cfg-link { color: #2563eb; }
+    [data-theme='light'] .cfg-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .cfg-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .cfg-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .cfg-badge-approval { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .cfg-badge-inactive { background: #f3f4f6; color: #6b7280; }
+  </style>
+</AppLayout>

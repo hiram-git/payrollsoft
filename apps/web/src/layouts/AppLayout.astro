@@ -194,6 +194,11 @@ const navAll: NavEntry[] = [
       { href: '/config/users', label: 'Usuarios', require: 'users:read' },
       { href: '/config/roles', label: 'Roles y permisos', require: 'roles:read' },
       { href: '/config/calendars', label: 'Calendarios', require: 'settings:company.read' },
+      {
+        href: '/config/employee-files',
+        label: 'Expedientes',
+        require: 'employee_files:approve',
+      },
     ],
   },
 ]
