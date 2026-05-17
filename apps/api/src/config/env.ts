@@ -12,6 +12,10 @@ const envSchema = z.object({
   // default resolves to the wrong directory). In dev the source-tree
   // default works without this var.
   TENANT_MIGRATIONS_DIR: z.string().optional(),
+  // Raíz de archivos persistidos en disco (reportes PDF en modo
+  // `local_storage`, adjuntos de expedientes). Default `/tmp/...` para
+  // que un clon recién bajado funcione sin setup.
+  STORAGE_DIR: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

@@ -18,6 +18,7 @@ import { companyRoutes } from './modules/company/routes'
 import { creditorRoutes } from './modules/creditors/routes'
 import { customFieldsRoutes } from './modules/custom-fields/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
+import { employeeFilesRoutes } from './modules/employee-files/routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 import { payrollRoutes } from './modules/payroll/routes'
@@ -68,6 +69,7 @@ const app = new Elysia()
   .use(loansRoutes)
   .use(creditorRoutes)
   .use(customFieldsRoutes)
+  .use(employeeFilesRoutes)
   .use(payrollRoutes)
   .use(reportsRoutes)
 
