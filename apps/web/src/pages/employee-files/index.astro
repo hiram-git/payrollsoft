@@ -37,9 +37,6 @@ type SubtypeRow = { id: number; code: string; name: string; typeId: number }
 
 const employeeId = (Astro.url.searchParams.get('employeeId') ?? '').trim()
 
-// Búsqueda de empleados — el endpoint cap-ea limit a 100; con 100
-// activos cubrimos la mayoría de empresas; búsquedas más finas se
-// hacen tipeando en el combobox (filtro client-side sobre el set).
 let employees: Employee[] = []
 try {
   const res = await fetch(`${API_URL}/employees?limit=100&isActive=true`, { headers })
@@ -63,16 +60,10 @@ if (employeeId) {
       fetch(`${API_URL}/employee-files?employeeId=${employeeId}`, { headers }),
       fetch(`${API_URL}/employee-files/types`, { headers }),
     ])
-    if (empRes.ok) {
-      selectedEmployee = ((await empRes.json()) as { data: Employee }).data
-    }
-    if (listRes.ok) {
-      files = ((await listRes.json()) as { data: FileRow[] }).data ?? []
-    }
-    if (typesRes.ok) {
-      types = ((await typesRes.json()) as { data: TypeRow[] }).data ?? []
-    }
-    // Subtipos: una sola llamada por tipo presente en los expedientes
+    if (empRes.ok) selectedEmployee = ((await empRes.json()) as { data: Employee }).data
+    if (listRes.ok) files = ((await listRes.json()) as { data: FileRow[] }).data ?? []
+    if (typesRes.ok) types = ((await typesRes.json()) as { data: TypeRow[] }).data ?? []
+
     const distinctTypeIds = Array.from(new Set(files.map((f) => f.typeId)))
     for (const tid of distinctTypeIds) {
       try {
@@ -99,28 +90,31 @@ function fmtDate(s: string): string {
   return `${d}-${m}-${y}`
 }
 
+// Agrupar expedientes por tipo para mostrar categorizados en el listado.
+const filesByType = new Map<number, FileRow[]>()
+for (const f of files) {
+  const arr = filesByType.get(f.typeId) ?? []
+  arr.push(f)
+  filesByType.set(f.typeId, arr)
+}
+const typesWithFiles = Array.from(filesByType.keys())
+  .map((tid) => ({ type: typeById.get(tid), rows: filesByType.get(tid) ?? [] }))
+  .filter((g): g is { type: TypeRow; rows: FileRow[] } => Boolean(g.type))
+  .sort((a, b) => a.type.name.localeCompare(b.type.name, 'es'))
+
+const today = new Date().toISOString().slice(0, 10)
 const flash = Astro.url.searchParams.get('flash')
+const errorMsg = Astro.url.searchParams.get('error') ?? ''
 ---
 
 <AppLayout title="Expedientes de empleados">
   <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
-    <div class="flex items-start justify-between gap-3 flex-wrap mb-6">
-      <div>
-        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Expedientes de empleados</h1>
-        <p class="text-sm text-gray-500 mt-0.5">
-          Busca un empleado para ver y administrar sus expedientes (estudios académicos,
-          permisos, amonestaciones, licencias, etc).
-        </p>
-      </div>
-      {selectedEmployee && canWrite && (
-        <a
-          href={`/employee-files/new?employeeId=${selectedEmployee.id}`}
-          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Nuevo expediente
-        </a>
-      )}
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Expedientes de empleados</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Busca un empleado y registra sus expedientes (estudios, permisos, licencias, etc.)
+        directamente en esta vista, categorizados por tipo y subtipo.
+      </p>
     </div>
 
     {flash === 'created' && (
@@ -131,6 +125,9 @@ const flash = Astro.url.searchParams.get('flash')
     )}
     {flash === 'deleted' && (
       <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Expediente eliminado.</div>
+    )}
+    {errorMsg && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{errorMsg}</div>
     )}
 
     <form method="GET" action="/employee-files" class="bg-white border border-gray-200 rounded-lg p-4 mb-6">
@@ -154,93 +151,194 @@ const flash = Astro.url.searchParams.get('flash')
             role="listbox"
           ></ul>
         </div>
-        <button
-          type="submit"
-          class="px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-        >
-          Ver expedientes
+        <button type="submit" class="px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+          Seleccionar
         </button>
         {selectedEmployee && (
-          <a
-            href="/employee-files"
-            class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-          >
+          <a href="/employee-files" class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors">
             Limpiar
           </a>
         )}
       </div>
-      <p class="mt-2 text-xs text-gray-400">
-        Solo se listan empleados activos. Selecciona uno de la lista al tipear.
-      </p>
+      <p class="mt-2 text-xs text-gray-400">Solo empleados activos. Tipea para filtrar y elige uno de la lista.</p>
     </form>
 
     {!selectedEmployee && (
       <div class="bg-white border border-gray-200 rounded-lg p-10 text-center">
-        <p class="text-sm text-gray-500">Selecciona un empleado arriba para ver sus expedientes.</p>
+        <p class="text-sm text-gray-500">Selecciona un empleado arriba para registrar y consultar expedientes.</p>
       </div>
     )}
 
     {selectedEmployee && (
-      <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
-          <div>
-            <p class="text-xs uppercase text-gray-400 tracking-wide">Empleado</p>
-            <p class="text-sm font-semibold text-gray-900">
-              {selectedEmployee.lastName}, {selectedEmployee.firstName}
-              <span class="text-gray-400 font-mono text-xs ml-2">{selectedEmployee.code}</span>
-            </p>
-          </div>
-          <div class="text-xs text-gray-500">
-            {files.length} {files.length === 1 ? 'expediente' : 'expedientes'}
-          </div>
-        </div>
-        {files.length === 0 ? (
-          <div class="py-14 text-center">
-            <p class="text-sm text-gray-400">Este empleado no tiene expedientes registrados aún.</p>
-            {canWrite && (
-              <a
-                href={`/employee-files/new?employeeId=${selectedEmployee.id}`}
-                class="inline-flex items-center gap-1 mt-3 text-sm text-blue-600 hover:underline"
-              >+ Crear el primero</a>
-            )}
-          </div>
-        ) : (
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-gray-200 bg-gray-50">
-                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Número</th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Subtipo</th>
-                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Observaciones</th>
-                <th class="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((f) => {
-                const t = typeById.get(f.typeId)
-                const s = subtypeById.get(f.subtypeId)
-                return (
-                  <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                    <td class="px-4 py-3 font-mono text-xs text-gray-700">{f.documentNumber}</td>
-                    <td class="px-4 py-3 text-gray-700">{fmtDate(f.documentDate)}</td>
-                    <td class="px-4 py-3 text-gray-700">{t?.name ?? '—'}</td>
-                    <td class="px-4 py-3 text-gray-700">{s?.name ?? '—'}</td>
-                    <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title={f.observations ?? ''}>
-                      {f.observations ?? '—'}
-                    </td>
-                    <td class="px-4 py-3 text-right whitespace-nowrap">
-                      <a href={`/employee-files/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900 mr-3">Ver →</a>
-                      {canWrite && (
-                        <a href={`/employee-files/${f.id}/edit`} class="text-xs text-gray-500 hover:text-gray-900">Editar</a>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+      <div class="space-y-6">
+
+        <!-- ── Crear nuevo expediente — inline ─────────────────────────────── -->
+        {canWrite && (
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
+              <div>
+                <h2 class="text-sm font-semibold text-gray-800">Registrar nuevo expediente</h2>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  Para {selectedEmployee.lastName}, {selectedEmployee.firstName}
+                  <span class="ml-1 text-gray-400 font-mono">{selectedEmployee.code}</span>
+                </p>
+              </div>
+              <button
+                type="button"
+                id="ef-toggle"
+                class="text-xs text-blue-600 hover:underline"
+                aria-expanded="false"
+              >+ Mostrar formulario</button>
+            </header>
+
+            <form
+              id="ef-form"
+              method="POST"
+              action="/api/employee-files/save"
+              enctype="multipart/form-data"
+              class="hidden p-5 space-y-4"
+            >
+              <input type="hidden" name="employeeId" value={selectedEmployee.id} />
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo</label>
+                  <select id="ef-type" name="typeId" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                    <option value="">Selecciona…</option>
+                    {types.map((t) => (
+                      <option value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Subtipo</label>
+                  <select id="ef-subtype" name="subtypeId" required disabled class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md disabled:bg-gray-50">
+                    <option value="">Selecciona un tipo primero</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha</label>
+                  <input type="date" id="ef-date" name="documentDate" required value={today} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Número (vista previa)</label>
+                <input type="text" id="ef-number-preview" value="Se asigna automáticamente" disabled class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono bg-gray-50 text-gray-500" />
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Observaciones</label>
+                <textarea name="observations" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" placeholder="Notas adicionales (opcional)"></textarea>
+              </div>
+
+              <!-- Campos dinámicos del tipo+subtipo elegido -->
+              <div id="ef-dynamic-wrap" class="hidden border-t border-gray-100 pt-4">
+                <p class="text-xs font-medium text-gray-600 mb-2">Datos específicos del tipo seleccionado</p>
+                <div id="ef-dynamic-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-4">
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Adjuntos adicionales</label>
+                <input
+                  type="file"
+                  name="attachments"
+                  multiple
+                  accept="application/pdf,image/jpeg,image/png,image/gif"
+                  class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <p class="mt-1 text-[11px] text-gray-500">PDFs o imágenes hasta 5 MB cada uno.</p>
+              </div>
+
+              <div id="ef-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+
+              <div class="flex items-center justify-end gap-2 pt-2">
+                <button type="button" id="ef-cancel" class="px-3.5 py-2 text-sm text-gray-600 hover:text-gray-900">
+                  Cancelar
+                </button>
+                <button type="submit" id="ef-submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-wait">
+                  <span data-label>Crear expediente</span>
+                </button>
+              </div>
+            </form>
+          </section>
         )}
+
+        <!-- ── Listado existente — agrupado por tipo ───────────────────────── -->
+        <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+          <header class="px-5 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold text-gray-800">Expedientes registrados</h2>
+            <span class="text-xs text-gray-500">
+              {files.length} {files.length === 1 ? 'registro' : 'registros'}
+            </span>
+          </header>
+
+          {files.length === 0 ? (
+            <div class="py-12 text-center">
+              <p class="text-sm text-gray-400">Sin expedientes para este empleado todavía.</p>
+              {canWrite && (
+                <p class="text-xs text-gray-400 mt-1">Usa el formulario de arriba para crear el primero.</p>
+              )}
+            </div>
+          ) : (
+            <div class="divide-y divide-gray-100">
+              {typesWithFiles.map((g) => (
+                <div>
+                  <div class="px-5 py-2.5 bg-gray-50/60 border-b border-gray-100">
+                    <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                      {g.type.name}
+                      <span class="ml-2 text-gray-400 normal-case">
+                        · {g.rows.length} {g.rows.length === 1 ? 'expediente' : 'expedientes'}
+                      </span>
+                    </h3>
+                  </div>
+                  <table class="w-full text-sm">
+                    <tbody>
+                      {g.rows.map((f) => {
+                        const s = subtypeById.get(f.subtypeId)
+                        return (
+                          <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                            <td class="px-5 py-3 font-mono text-xs text-gray-600 whitespace-nowrap w-44">{f.documentNumber}</td>
+                            <td class="px-5 py-3 text-gray-700 whitespace-nowrap w-28">{fmtDate(f.documentDate)}</td>
+                            <td class="px-5 py-3 text-gray-700">{s?.name ?? '—'}</td>
+                            <td class="px-5 py-3 text-xs text-gray-500 truncate max-w-sm" title={f.observations ?? ''}>
+                              {f.observations ?? '—'}
+                            </td>
+                            <td class="px-5 py-3 text-right whitespace-nowrap">
+                              <a href={`/employee-files/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900 mr-3">Ver</a>
+                              {canWrite && (
+                                <a href={`/employee-files/${f.id}/edit`} class="text-xs text-gray-500 hover:text-gray-900 mr-3">Editar</a>
+                              )}
+                              {canDelete && (
+                                <form
+                                  method="POST"
+                                  action="/api/employee-files/delete"
+                                  data-saconfirm
+                                  data-sa-title="Eliminar expediente"
+                                  data-sa-message={`Vas a eliminar el expediente ${f.documentNumber}. Esta acción no se puede deshacer.`}
+                                  data-sa-confirm-label="Eliminar"
+                                  data-sa-tone="danger"
+                                  data-sa-loading-title="Eliminando"
+                                  data-sa-success-title="Expediente eliminado"
+                                  data-sa-error-title="No se pudo eliminar"
+                                  style="display:inline"
+                                >
+                                  <input type="hidden" name="id" value={f.id} />
+                                  <input type="hidden" name="employeeId" value={selectedEmployee.id} />
+                                  <button type="submit" class="text-xs text-red-600 hover:underline">Eliminar</button>
+                                </form>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     )}
   </div>
@@ -257,10 +355,7 @@ const flash = Astro.url.searchParams.get('flash')
       const employees = JSON.parse(catalogEl.textContent || '[]')
 
       function show(items) {
-        if (items.length === 0) {
-          dropdown.classList.add('hidden')
-          return
-        }
+        if (items.length === 0) { dropdown.classList.add('hidden'); return }
         dropdown.innerHTML = items.slice(0, 30).map((e) => (
           '<li class="px-3 py-2 cursor-pointer hover:bg-gray-50" role="option" ' +
           'data-id="' + e.id + '" data-label="' + e.lastName + ', ' + e.firstName + ' (' + e.code + ')">' +
@@ -270,21 +365,13 @@ const flash = Astro.url.searchParams.get('flash')
         )).join('')
         dropdown.classList.remove('hidden')
       }
-
-      input.addEventListener('focus', () => {
-        if (input.value.length === 0) show(employees)
-      })
+      input.addEventListener('focus', () => { if (input.value.length === 0) show(employees) })
       input.addEventListener('input', () => {
         hidden.value = ''
         const q = input.value.trim().toLowerCase()
-        if (q.length === 0) {
-          show(employees)
-          return
-        }
-        const filtered = employees.filter((e) => {
-          const hay = (e.lastName + ' ' + e.firstName + ' ' + e.code + ' ' + (e.idNumber || '')).toLowerCase()
-          return hay.includes(q)
-        })
+        const filtered = q.length === 0
+          ? employees
+          : employees.filter((e) => (e.lastName + ' ' + e.firstName + ' ' + e.code + ' ' + (e.idNumber || '')).toLowerCase().includes(q))
         show(filtered)
       })
       dropdown.addEventListener('mousedown', (e) => {
@@ -295,8 +382,185 @@ const flash = Astro.url.searchParams.get('flash')
         dropdown.classList.add('hidden')
       })
       document.addEventListener('click', (e) => {
-        if (!dropdown.contains(e.target) && e.target !== input) {
-          dropdown.classList.add('hidden')
+        if (!dropdown.contains(e.target) && e.target !== input) dropdown.classList.add('hidden')
+      })
+    })()
+  </script>
+
+  <!-- Lógica del formulario de creación inline -->
+  <script is:inline>
+    ;(function () {
+      const form = document.getElementById('ef-form')
+      const toggle = document.getElementById('ef-toggle')
+      const cancel = document.getElementById('ef-cancel')
+      if (!form || !toggle || !cancel) return
+
+      const typeSel = document.getElementById('ef-type')
+      const subtypeSel = document.getElementById('ef-subtype')
+      const dateEl = document.getElementById('ef-date')
+      const numberPreview = document.getElementById('ef-number-preview')
+      const dynWrap = document.getElementById('ef-dynamic-wrap')
+      const dynFields = document.getElementById('ef-dynamic-fields')
+      const errorEl = document.getElementById('ef-error')
+      const submitBtn = document.getElementById('ef-submit')
+
+      function openForm() {
+        form.classList.remove('hidden')
+        toggle.textContent = '− Ocultar formulario'
+        toggle.setAttribute('aria-expanded', 'true')
+        typeSel.focus()
+      }
+      function closeForm() {
+        form.classList.add('hidden')
+        toggle.textContent = '+ Mostrar formulario'
+        toggle.setAttribute('aria-expanded', 'false')
+        errorEl.classList.add('hidden')
+      }
+      toggle.addEventListener('click', () => {
+        if (form.classList.contains('hidden')) openForm()
+        else closeForm()
+      })
+      cancel.addEventListener('click', () => {
+        form.reset()
+        dynWrap.classList.add('hidden')
+        dynFields.innerHTML = ''
+        subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>'
+        subtypeSel.disabled = true
+        numberPreview.value = 'Se asigna automáticamente'
+        closeForm()
+      })
+
+      const subtypesCache = new Map()
+      const fieldsCache = new Map()
+
+      async function loadSubtypes(typeId) {
+        if (!typeId) {
+          subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>'
+          subtypeSel.disabled = true
+          return
+        }
+        if (!subtypesCache.has(typeId)) {
+          const res = await fetch('/api/employee-files/proxy?path=' + encodeURIComponent('types/' + typeId + '/subtypes'))
+          const json = await res.json().catch(() => ({}))
+          subtypesCache.set(typeId, json.data || [])
+        }
+        const subs = subtypesCache.get(typeId)
+        subtypeSel.innerHTML = '<option value="">Selecciona…</option>' +
+          subs.map((s) => '<option value="' + s.id + '">' + s.name + '</option>').join('')
+        subtypeSel.disabled = false
+      }
+
+      function renderField(def, prefix) {
+        const id = 'ef-fld-' + def.name
+        const name = prefix + '_' + def.name
+        const req = def.required ? 'required' : ''
+        const ro = def.readonly ? 'readonly' : ''
+        const placeholder = def.placeholder ? 'placeholder="' + def.placeholder + '"' : ''
+        const value = def.default != null ? String(def.default) : ''
+        const wrap = (inner, full) =>
+          '<div' + (full ? ' class="md:col-span-2"' : '') + '>' +
+          '<label class="block text-xs font-medium text-gray-600 mb-1.5" for="' + id + '">' +
+          def.label + (def.required ? ' <span class="text-red-500">*</span>' : '') +
+          '</label>' + inner + '</div>'
+        const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900'
+        switch (def.type) {
+          case 'textarea':
+            return wrap('<textarea id="' + id + '" name="' + name + '" rows="2" ' + req + ' ' + ro + ' ' + placeholder + ' class="' + cls + '">' + value + '</textarea>', true)
+          case 'select': {
+            const opts = (def.options || []).map((o) =>
+              '<option value="' + o.value + '"' + (value === o.value ? ' selected' : '') + '>' + o.label + '</option>'
+            ).join('')
+            return wrap('<select id="' + id + '" name="' + name + '" ' + req + ' ' + ro + ' class="' + cls + '"><option value="">Selecciona…</option>' + opts + '</select>', false)
+          }
+          case 'file':
+            return wrap('<input id="' + id + '" type="file" name="' + name + '" ' + req + ' accept="' + (def.accept || '') + '" class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />', true)
+          case 'number': {
+            const step = def.step != null ? 'step="' + def.step + '"' : ''
+            return wrap('<input id="' + id + '" type="number" name="' + name + '" ' + req + ' ' + ro + ' ' + step + ' ' + placeholder + ' value="' + value + '" class="' + cls + '" />', false)
+          }
+          case 'datetime':
+            return wrap('<input id="' + id + '" type="datetime-local" name="' + name + '" ' + req + ' ' + ro + ' value="' + value + '" class="' + cls + '" />', false)
+          case 'date':
+            return wrap('<input id="' + id + '" type="date" name="' + name + '" ' + req + ' ' + ro + ' value="' + value + '" class="' + cls + '" />', false)
+          default:
+            return wrap('<input id="' + id + '" type="text" name="' + name + '" ' + req + ' ' + ro + ' ' + placeholder + ' value="' + value + '" class="' + cls + '" />', false)
+        }
+      }
+
+      async function loadFields(typeId, subtypeId) {
+        if (!typeId || !subtypeId) {
+          dynWrap.classList.add('hidden')
+          dynFields.innerHTML = ''
+          return
+        }
+        const key = typeId + '/' + subtypeId
+        if (!fieldsCache.has(key)) {
+          const res = await fetch('/api/employee-files/proxy?path=' + encodeURIComponent('fields?typeId=' + typeId + '&subtypeId=' + subtypeId))
+          const json = await res.json().catch(() => ({}))
+          fieldsCache.set(key, json.data?.fields || [])
+        }
+        const fields = fieldsCache.get(key)
+        if (fields.length === 0) {
+          dynWrap.classList.add('hidden')
+          dynFields.innerHTML = ''
+          return
+        }
+        dynFields.innerHTML = fields.map((f) => renderField(f, f.type === 'file' ? 'file' : 'extra')).join('')
+        dynWrap.classList.remove('hidden')
+      }
+
+      async function refreshNumberPreview() {
+        const typeId = typeSel.value, subtypeId = subtypeSel.value, date = dateEl.value
+        if (!typeId || !subtypeId || !date) {
+          numberPreview.value = 'Se asigna automáticamente'
+          return
+        }
+        try {
+          const res = await fetch('/api/employee-files/proxy?path=' + encodeURIComponent('next-number?typeId=' + typeId + '&subtypeId=' + subtypeId + '&documentDate=' + date))
+          const json = await res.json().catch(() => ({}))
+          numberPreview.value = json.data?.documentNumber || '—'
+        } catch { numberPreview.value = '—' }
+      }
+
+      typeSel.addEventListener('change', async () => {
+        await loadSubtypes(typeSel.value)
+        await loadFields(typeSel.value, subtypeSel.value)
+        await refreshNumberPreview()
+      })
+      subtypeSel.addEventListener('change', async () => {
+        await loadFields(typeSel.value, subtypeSel.value)
+        await refreshNumberPreview()
+      })
+      dateEl.addEventListener('change', refreshNumberPreview)
+
+      // Submit AJAX para no perder la página y mostrar errores inline.
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        errorEl.classList.add('hidden')
+        const data = new FormData(form)
+        const labelEl = submitBtn.querySelector('[data-label]')
+        submitBtn.disabled = true
+        if (labelEl) labelEl.textContent = 'Guardando…'
+        try {
+          const res = await fetch('/api/employee-files/save', {
+            method: 'POST',
+            body: data,
+            headers: { 'X-SA-Modal': '1' },
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            errorEl.textContent = json.error || ('HTTP ' + res.status)
+            errorEl.classList.remove('hidden')
+          } else {
+            // Redirige al mismo workspace con flash → SSR refresca la lista.
+            window.location.href = json.redirect || ('/employee-files?employeeId=' + data.get('employeeId') + '&flash=created')
+          }
+        } catch (err) {
+          errorEl.textContent = err && err.message ? err.message : String(err)
+          errorEl.classList.remove('hidden')
+        } finally {
+          submitBtn.disabled = false
+          if (labelEl) labelEl.textContent = 'Crear expediente'
         }
       })
     })()
