@@ -185,16 +185,26 @@ export async function createWithCorrelative(
 
   const year = Number.parseInt(input.documentDate.slice(0, 4), 10)
 
-  // Transacción + FOR UPDATE para no chocar bajo concurrencia.
+  // Transacción + advisory lock para serializar el cálculo del
+  // correlativo bajo concurrencia. PostgreSQL no permite combinar
+  // FOR UPDATE con MAX() en una misma query (las funciones de
+  // agregación reducen el set y no hay filas que bloquear), así que
+  // usamos `pg_advisory_xact_lock` con un hash de la combinación
+  // (typeId, subtypeId, year) — sólo dos transacciones que tocan la
+  // misma combinación esperan; el resto pasa sin contención.
   // biome-ignore lint/suspicious/noExplicitAny: drizzle transaction generic
   const result = await db.transaction(async (tx: any) => {
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(
+        hashtextextended(${`ef:${input.typeId}:${input.subtypeId}:${year}`}, 0)
+      )
+    `)
     const lockRows = await tx.execute(sql`
       SELECT COALESCE(MAX(document_sequence), 0) AS max_seq
       FROM employee_files
       WHERE type_id = ${input.typeId}
         AND subtype_id = ${input.subtypeId}
         AND document_year = ${year}
-      FOR UPDATE
     `)
     const maxSeq = Number((lockRows as Array<{ max_seq: number }>)[0]?.max_seq ?? 0)
     const sequence = maxSeq + 1
@@ -282,13 +292,17 @@ export async function updateExisting(
     let documentYear = existing.documentYear as number
 
     if (needsRenum) {
+      await tx.execute(sql`
+        SELECT pg_advisory_xact_lock(
+          hashtextextended(${`ef:${input.typeId}:${input.subtypeId}:${newYear}`}, 0)
+        )
+      `)
       const lockRows = await tx.execute(sql`
         SELECT COALESCE(MAX(document_sequence), 0) AS max_seq
         FROM employee_files
         WHERE type_id = ${input.typeId}
           AND subtype_id = ${input.subtypeId}
           AND document_year = ${newYear}
-        FOR UPDATE
       `)
       const maxSeq = Number((lockRows as Array<{ max_seq: number }>)[0]?.max_seq ?? 0)
       documentSequence = maxSeq + 1
