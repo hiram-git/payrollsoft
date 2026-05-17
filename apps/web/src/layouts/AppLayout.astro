@@ -116,6 +116,11 @@ const navAll: NavEntry[] = [
       { href: '/employees', label: 'Empleados', require: 'employees:read' },
       { href: '/employees/import', label: 'Importar empleados', require: 'employees:create' },
       { href: '/employee-files', label: 'Expedientes', require: 'employee_files:read' },
+      {
+        href: '/employee-files/approvals',
+        label: 'Aprobaciones',
+        require: 'employee_files:approve',
+      },
       { href: '/personal/baja', label: 'De Baja', require: 'employees:read' },
       { href: '/personal/documentos', label: 'Documentos', require: 'employees:read' },
     ],

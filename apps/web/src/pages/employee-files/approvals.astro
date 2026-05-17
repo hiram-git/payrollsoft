@@ -1,0 +1,275 @@
+---
+/**
+ * Bandeja de aprobaciones de expedientes.
+ *
+ * Lista todos los expedientes en `approval_status='pending'` cuyo
+ * (tipo, subtipo) declara como aprobador alguno de los roles del
+ * usuario actual. `tenant_admin` los ve todos (aprobador universal).
+ *
+ * Acciones inline: Aprobar / Rechazar (con razón) — vía saModal.
+ */
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:approve')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type PendingRow = {
+  id: string
+  type_id: number
+  subtype_id: number
+  document_number: string
+  document_date: string
+  observations: string | null
+  created_at: string
+  type_name: string
+  subtype_name: string
+  employee_code: string
+  employee_first_name: string
+  employee_last_name: string
+}
+
+let pending: PendingRow[] = []
+try {
+  const res = await fetch(`${API_URL}/employee-files/approvals/pending`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) pending = ((await res.json()) as { data: PendingRow[] }).data ?? []
+} catch {
+  /* vacío */
+}
+
+function fmtDate(s: string): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+
+function fmtAge(iso: string): string {
+  const ts = new Date(iso).getTime()
+  if (!ts) return '—'
+  const diff = Date.now() - ts
+  const days = Math.floor(diff / (24 * 3600 * 1000))
+  if (days >= 1) return `hace ${days} ${days === 1 ? 'día' : 'días'}`
+  const hours = Math.floor(diff / (3600 * 1000))
+  if (hours >= 1) return `hace ${hours} ${hours === 1 ? 'hora' : 'horas'}`
+  const mins = Math.floor(diff / (60 * 1000))
+  return mins <= 1 ? 'recién' : `hace ${mins} min`
+}
+
+const flash = Astro.url.searchParams.get('flash') ?? ''
+---
+
+<AppLayout title="Aprobaciones de expedientes">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-end justify-between gap-2">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight apv-title">Aprobaciones pendientes</h1>
+        <p class="text-sm mt-0.5 apv-subtitle">
+          Expedientes esperando tu decisión. {pending.length} {pending.length === 1 ? 'pendiente' : 'pendientes'}.
+        </p>
+      </div>
+      <a href="/employee-files" class="apv-btn-secondary px-3.5 py-2 rounded-md border text-sm font-medium transition-colors">
+        Volver a expedientes
+      </a>
+    </div>
+
+    {flash === 'approved' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Expediente aprobado.</div>
+    )}
+    {flash === 'rejected' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Expediente rechazado.</div>
+    )}
+
+    <section class="apv-card border rounded-lg overflow-hidden">
+      {pending.length === 0 ? (
+        <div class="py-16 text-center">
+          <svg class="mx-auto w-12 h-12 apv-mute mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+          <p class="text-sm apv-subtitle">Sin expedientes pendientes — todo al día.</p>
+        </div>
+      ) : (
+        <table class="apv-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Documento</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Tipo / Subtipo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Fecha</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Solicitado</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pending.map((p) => (
+              <tr class="border-b last:border-0 apv-rule">
+                <td class="px-5 py-3 align-top">
+                  <div class="font-mono text-xs apv-cell">{p.document_number}</div>
+                  {p.observations && (
+                    <div class="text-xs apv-mute mt-1 max-w-xs truncate" title={p.observations}>{p.observations}</div>
+                  )}
+                </td>
+                <td class="px-5 py-3 align-top">
+                  <div class="text-sm apv-cell">{p.employee_last_name}, {p.employee_first_name}</div>
+                  <div class="text-xs apv-mute font-mono">{p.employee_code}</div>
+                </td>
+                <td class="px-5 py-3 align-top">
+                  <div class="text-sm apv-cell">{p.type_name}</div>
+                  <div class="text-xs apv-mute">{p.subtype_name}</div>
+                </td>
+                <td class="px-5 py-3 align-top text-sm apv-cell whitespace-nowrap">{fmtDate(p.document_date)}</td>
+                <td class="px-5 py-3 align-top text-xs apv-mute whitespace-nowrap">{fmtAge(p.created_at)}</td>
+                <td class="px-5 py-3 align-top text-right whitespace-nowrap">
+                  <a href={`/employee-files/${p.id}`} class="apv-action mr-3">Ver</a>
+                  <button type="button" class="apv-btn-approve mr-2" data-approve-id={p.id} data-doc={p.document_number}>
+                    Aprobar
+                  </button>
+                  <button type="button" class="apv-btn-reject" data-reject-id={p.id} data-doc={p.document_number}>
+                    Rechazar
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const sa = window.saModal
+      async function approve(id, doc) {
+        if (!sa) return
+        const ok = await sa.confirm({
+          title: 'Aprobar expediente',
+          message: `Vas a aprobar el expediente ${doc}. ¿Continuar?`,
+          confirmLabel: 'Aprobar',
+          tone: 'primary',
+        })
+        if (!ok) return
+        sa.loading({ title: 'Aprobando', message: 'Procesando…' })
+        try {
+          const res = await fetch(`/api/employee-files/approve?id=${id}`, {
+            method: 'POST',
+            headers: { 'X-SA-Modal': '1' },
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            await sa.error({ title: 'No se pudo aprobar', message: json.error || 'HTTP ' + res.status })
+          } else {
+            await sa.success({
+              title: 'Expediente aprobado',
+              message: 'El estado quedó como aprobado.',
+              redirect: '/employee-files/approvals?flash=approved',
+            })
+          }
+        } catch (err) {
+          await sa.error({ title: 'Error de red', message: String(err) })
+        }
+      }
+      async function reject(id, doc) {
+        if (!sa) return
+        // Reusa el prompt nativo para capturar la razón (saModal no
+        // tiene prompt todavía). Si está vacío, no procede.
+        const reason = window.prompt(`Razón del rechazo del expediente ${doc}:`, '')
+        if (reason == null) return
+        if (reason.trim().length < 3) {
+          await sa.error({ title: 'Razón requerida', message: 'Escribe al menos 3 caracteres explicando el rechazo.' })
+          return
+        }
+        sa.loading({ title: 'Rechazando', message: 'Procesando…' })
+        try {
+          const res = await fetch(`/api/employee-files/reject?id=${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+            body: JSON.stringify({ reason: reason.trim() }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            await sa.error({ title: 'No se pudo rechazar', message: json.error || 'HTTP ' + res.status })
+          } else {
+            await sa.success({
+              title: 'Expediente rechazado',
+              message: 'El estado quedó como rechazado.',
+              redirect: '/employee-files/approvals?flash=rejected',
+            })
+          }
+        } catch (err) {
+          await sa.error({ title: 'Error de red', message: String(err) })
+        }
+      }
+      document.querySelectorAll('[data-approve-id]').forEach((btn) => {
+        btn.addEventListener('click', () => approve(btn.getAttribute('data-approve-id'), btn.getAttribute('data-doc')))
+      })
+      document.querySelectorAll('[data-reject-id]').forEach((btn) => {
+        btn.addEventListener('click', () => reject(btn.getAttribute('data-reject-id'), btn.getAttribute('data-doc')))
+      })
+    })()
+  </script>
+
+  <style>
+    .apv-title    { color: var(--fore); }
+    .apv-subtitle { color: var(--fore-dim); }
+    .apv-cell     { color: var(--fore-dim); }
+    .apv-mute     { color: var(--mute); }
+    .apv-card {
+      background: var(--ink-2);
+      border-color: var(--rule);
+    }
+    .apv-rule { border-color: var(--rule); }
+    .apv-btn-secondary {
+      background: var(--ink-2);
+      border-color: var(--rule);
+      color: var(--fore-dim);
+    }
+    .apv-btn-secondary:hover { background: var(--ink-4); color: var(--fore); }
+    .apv-action {
+      font-size: 0.75rem;
+      color: var(--mute-2);
+    }
+    .apv-action:hover { color: var(--fore); }
+    .apv-btn-approve {
+      padding: 0.375rem 0.875rem;
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: #16a34a;
+      color: white;
+    }
+    .apv-btn-approve:hover { background: #15803d; }
+    .apv-btn-reject {
+      padding: 0.375rem 0.875rem;
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: var(--ink-3);
+      color: #f87171;
+      border: 1px solid var(--rule);
+    }
+    .apv-btn-reject:hover { background: rgba(248, 113, 113, 0.12); }
+    .apv-table thead tr {
+      background: var(--ink-3);
+      border-color: var(--rule);
+      color: var(--mute-2);
+    }
+    .apv-table tbody tr {
+      background: var(--ink-2);
+      border-color: var(--rule);
+    }
+    .apv-table tbody tr:hover { background: var(--ink-4); }
+
+    [data-theme='light'] .apv-card { background: #ffffff; }
+    [data-theme='light'] .apv-btn-secondary { background: #ffffff; }
+    [data-theme='light'] .apv-btn-secondary:hover { background: #f3f4f6; }
+    [data-theme='light'] .apv-btn-reject { background: #ffffff; color: #dc2626; }
+    [data-theme='light'] .apv-btn-reject:hover { background: #fef2f2; }
+    [data-theme='light'] .apv-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .apv-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .apv-table tbody tr:hover { background: #f9fafb; }
+  </style>
+</AppLayout>
