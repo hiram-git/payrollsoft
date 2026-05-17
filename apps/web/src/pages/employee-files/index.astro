@@ -110,8 +110,8 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
 <AppLayout title="Expedientes de empleados">
   <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
     <div class="mb-6">
-      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Expedientes de empleados</h1>
-      <p class="text-sm text-gray-500 mt-0.5">
+      <h1 class="text-xl font-semibold tracking-tight ef-title">Expedientes de empleados</h1>
+      <p class="text-sm mt-0.5 ef-subtitle">
         Busca un empleado y registra sus expedientes (estudios, permisos, licencias, etc.)
         directamente en esta vista, categorizados por tipo y subtipo.
       </p>
@@ -130,8 +130,8 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{errorMsg}</div>
     )}
 
-    <form method="GET" action="/employee-files" class="bg-white border border-gray-200 rounded-lg p-4 mb-6">
-      <label class="block text-xs font-medium text-gray-600 mb-1.5" for="emp-search">Empleado</label>
+    <form method="GET" action="/employee-files" class="ef-card border rounded-lg p-4 mb-6">
+      <label class="block text-xs font-medium ef-label mb-1.5" for="emp-search">Empleado</label>
       <div class="flex items-center gap-2">
         <div class="relative flex-1">
           <input
@@ -142,12 +142,12 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
             value={selectedEmployee
               ? `${selectedEmployee.lastName}, ${selectedEmployee.firstName} (${selectedEmployee.code})`
               : ''}
-            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+            class="ef-input w-full px-3 py-2 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
           />
           <input type="hidden" name="employeeId" id="emp-id" value={selectedEmployee?.id ?? ''} />
           <ul
             id="emp-dropdown"
-            class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto text-sm"
+            class="ef-dropdown hidden absolute z-20 left-0 right-0 mt-1 rounded-md shadow-lg max-h-56 overflow-y-auto text-sm"
             role="listbox"
           ></ul>
         </div>
@@ -155,17 +155,17 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
           Seleccionar
         </button>
         {selectedEmployee && (
-          <a href="/employee-files" class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors">
+          <a href="/employee-files" class="ef-btn-secondary px-3.5 py-2 rounded-md border text-sm font-medium transition-colors">
             Limpiar
           </a>
         )}
       </div>
-      <p class="mt-2 text-xs text-gray-400">Solo empleados activos. Tipea para filtrar y elige uno de la lista.</p>
+      <p class="mt-2 text-xs ef-hint">Solo empleados activos. Tipea para filtrar y elige uno de la lista.</p>
     </form>
 
     {!selectedEmployee && (
-      <div class="bg-white border border-gray-200 rounded-lg p-10 text-center">
-        <p class="text-sm text-gray-500">Selecciona un empleado arriba para registrar y consultar expedientes.</p>
+      <div class="ef-card border rounded-lg p-10 text-center">
+        <p class="text-sm ef-subtitle">Selecciona un empleado arriba para registrar y consultar expedientes.</p>
       </div>
     )}
 
@@ -174,21 +174,15 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
 
         <!-- ── Crear nuevo expediente — inline ─────────────────────────────── -->
         {canWrite && (
-          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-            <header class="px-5 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
+          <section class="ef-card border rounded-lg overflow-hidden">
+            <header class="ef-section-header px-5 py-3 border-b flex items-center justify-between gap-2">
               <div>
-                <h2 class="text-sm font-semibold text-gray-800">Registrar nuevo expediente</h2>
-                <p class="text-xs text-gray-500 mt-0.5">
+                <h2 class="text-sm font-semibold ef-heading">Registrar nuevo expediente</h2>
+                <p class="text-xs ef-hint mt-0.5">
                   Para {selectedEmployee.lastName}, {selectedEmployee.firstName}
-                  <span class="ml-1 text-gray-400 font-mono">{selectedEmployee.code}</span>
+                  <span class="ml-1 ef-mute font-mono">{selectedEmployee.code}</span>
                 </p>
               </div>
-              <button
-                type="button"
-                id="ef-toggle"
-                class="text-xs text-blue-600 hover:underline"
-                aria-expanded="false"
-              >+ Mostrar formulario</button>
             </header>
 
             <form
@@ -196,14 +190,14 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
               method="POST"
               action="/api/employee-files/save"
               enctype="multipart/form-data"
-              class="hidden p-5 space-y-4"
+              class="p-5 space-y-4"
             >
               <input type="hidden" name="employeeId" value={selectedEmployee.id} />
 
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo</label>
-                  <select id="ef-type" name="typeId" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                  <label class="block text-xs font-medium ef-label mb-1.5">Tipo</label>
+                  <select id="ef-type" name="typeId" required class="ef-input w-full px-3 py-2 text-sm rounded-md">
                     <option value="">Selecciona…</option>
                     {types.map((t) => (
                       <option value={t.id}>{t.name}</option>
@@ -211,50 +205,50 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Subtipo</label>
-                  <select id="ef-subtype" name="subtypeId" required disabled class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md disabled:bg-gray-50">
+                  <label class="block text-xs font-medium ef-label mb-1.5">Subtipo</label>
+                  <select id="ef-subtype" name="subtypeId" required disabled class="ef-input w-full px-3 py-2 text-sm rounded-md">
                     <option value="">Selecciona un tipo primero</option>
                   </select>
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha</label>
-                  <input type="date" id="ef-date" name="documentDate" required value={today} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                  <label class="block text-xs font-medium ef-label mb-1.5">Fecha</label>
+                  <input type="date" id="ef-date" name="documentDate" required value={today} class="ef-input w-full px-3 py-2 text-sm rounded-md" />
                 </div>
               </div>
 
               <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1.5">Número (vista previa)</label>
-                <input type="text" id="ef-number-preview" value="Se asigna automáticamente" disabled class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono bg-gray-50 text-gray-500" />
+                <label class="block text-xs font-medium ef-label mb-1.5">Número (vista previa)</label>
+                <input type="text" id="ef-number-preview" value="Se asigna automáticamente" disabled class="ef-input ef-input-readonly w-full px-3 py-2 text-sm rounded-md font-mono" />
               </div>
 
               <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1.5">Observaciones</label>
-                <textarea name="observations" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" placeholder="Notas adicionales (opcional)"></textarea>
+                <label class="block text-xs font-medium ef-label mb-1.5">Observaciones</label>
+                <textarea name="observations" rows="2" class="ef-input w-full px-3 py-2 text-sm rounded-md" placeholder="Notas adicionales (opcional)"></textarea>
               </div>
 
               <!-- Campos dinámicos del tipo+subtipo elegido -->
-              <div id="ef-dynamic-wrap" class="hidden border-t border-gray-100 pt-4">
-                <p class="text-xs font-medium text-gray-600 mb-2">Datos específicos del tipo seleccionado</p>
+              <div id="ef-dynamic-wrap" class="hidden ef-divider pt-4">
+                <p class="text-xs font-medium ef-label mb-2">Datos específicos del tipo seleccionado</p>
                 <div id="ef-dynamic-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
               </div>
 
-              <div class="border-t border-gray-100 pt-4">
-                <label class="block text-xs font-medium text-gray-600 mb-1.5">Adjuntos adicionales</label>
+              <div class="ef-divider pt-4">
+                <label class="block text-xs font-medium ef-label mb-1.5">Adjuntos adicionales</label>
                 <input
                   type="file"
                   name="attachments"
                   multiple
                   accept="application/pdf,image/jpeg,image/png,image/gif"
-                  class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                  class="ef-file block w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
-                <p class="mt-1 text-[11px] text-gray-500">PDFs o imágenes hasta 5 MB cada uno.</p>
+                <p class="mt-1 text-[11px] ef-hint">PDFs o imágenes hasta 5 MB cada uno.</p>
               </div>
 
               <div id="ef-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
 
               <div class="flex items-center justify-end gap-2 pt-2">
-                <button type="button" id="ef-cancel" class="px-3.5 py-2 text-sm text-gray-600 hover:text-gray-900">
-                  Cancelar
+                <button type="button" id="ef-cancel" class="ef-btn-link px-3.5 py-2 text-sm">
+                  Limpiar
                 </button>
                 <button type="submit" id="ef-submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-wait">
                   <span data-label>Crear expediente</span>
@@ -265,49 +259,49 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
         )}
 
         <!-- ── Listado existente — agrupado por tipo ───────────────────────── -->
-        <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
-          <header class="px-5 py-3 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-2">
-            <h2 class="text-sm font-semibold text-gray-800">Expedientes registrados</h2>
-            <span class="text-xs text-gray-500">
+        <section class="ef-card border rounded-lg overflow-hidden">
+          <header class="ef-section-header px-5 py-3 border-b flex items-center justify-between gap-2">
+            <h2 class="text-sm font-semibold ef-heading">Expedientes registrados</h2>
+            <span class="text-xs ef-hint">
               {files.length} {files.length === 1 ? 'registro' : 'registros'}
             </span>
           </header>
 
           {files.length === 0 ? (
             <div class="py-12 text-center">
-              <p class="text-sm text-gray-400">Sin expedientes para este empleado todavía.</p>
+              <p class="text-sm ef-mute">Sin expedientes para este empleado todavía.</p>
               {canWrite && (
-                <p class="text-xs text-gray-400 mt-1">Usa el formulario de arriba para crear el primero.</p>
+                <p class="text-xs ef-mute mt-1">Usa el formulario de arriba para crear el primero.</p>
               )}
             </div>
           ) : (
-            <div class="divide-y divide-gray-100">
+            <div class="ef-divide">
               {typesWithFiles.map((g) => (
                 <div>
-                  <div class="px-5 py-2.5 bg-gray-50/60 border-b border-gray-100">
-                    <h3 class="text-xs font-semibold text-gray-700 uppercase tracking-wide">
+                  <div class="ef-group-header px-5 py-2.5 border-b">
+                    <h3 class="text-xs font-semibold ef-heading uppercase tracking-wide">
                       {g.type.name}
-                      <span class="ml-2 text-gray-400 normal-case">
+                      <span class="ml-2 ef-mute normal-case">
                         · {g.rows.length} {g.rows.length === 1 ? 'expediente' : 'expedientes'}
                       </span>
                     </h3>
                   </div>
-                  <table class="w-full text-sm">
+                  <table class="ef-table w-full text-sm">
                     <tbody>
                       {g.rows.map((f) => {
                         const s = subtypeById.get(f.subtypeId)
                         return (
-                          <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                            <td class="px-5 py-3 font-mono text-xs text-gray-600 whitespace-nowrap w-44">{f.documentNumber}</td>
-                            <td class="px-5 py-3 text-gray-700 whitespace-nowrap w-28">{fmtDate(f.documentDate)}</td>
-                            <td class="px-5 py-3 text-gray-700">{s?.name ?? '—'}</td>
-                            <td class="px-5 py-3 text-xs text-gray-500 truncate max-w-sm" title={f.observations ?? ''}>
+                          <tr class="border-b last:border-0 transition-colors">
+                            <td class="px-5 py-3 font-mono text-xs ef-cell-mono whitespace-nowrap w-44">{f.documentNumber}</td>
+                            <td class="px-5 py-3 ef-cell whitespace-nowrap w-28">{fmtDate(f.documentDate)}</td>
+                            <td class="px-5 py-3 ef-cell">{s?.name ?? '—'}</td>
+                            <td class="px-5 py-3 text-xs ef-cell-mute truncate max-w-sm" title={f.observations ?? ''}>
                               {f.observations ?? '—'}
                             </td>
                             <td class="px-5 py-3 text-right whitespace-nowrap">
-                              <a href={`/employee-files/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900 mr-3">Ver</a>
+                              <a href={`/employee-files/${f.id}`} class="ef-action mr-3">Ver</a>
                               {canWrite && (
-                                <a href={`/employee-files/${f.id}/edit`} class="text-xs text-gray-500 hover:text-gray-900 mr-3">Editar</a>
+                                <a href={`/employee-files/${f.id}/edit`} class="ef-action mr-3">Editar</a>
                               )}
                               {canDelete && (
                                 <form
@@ -357,10 +351,10 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
       function show(items) {
         if (items.length === 0) { dropdown.classList.add('hidden'); return }
         dropdown.innerHTML = items.slice(0, 30).map((e) => (
-          '<li class="px-3 py-2 cursor-pointer hover:bg-gray-50" role="option" ' +
+          '<li class="ef-dropdown-item px-3 py-2 cursor-pointer" role="option" ' +
           'data-id="' + e.id + '" data-label="' + e.lastName + ', ' + e.firstName + ' (' + e.code + ')">' +
-          '<div class="text-gray-900">' + e.lastName + ', ' + e.firstName + '</div>' +
-          '<div class="text-xs text-gray-500 font-mono">' + e.code + ' · ' + (e.idNumber || '—') + '</div>' +
+          '<div class="ef-dropdown-primary">' + e.lastName + ', ' + e.firstName + '</div>' +
+          '<div class="text-xs ef-dropdown-secondary font-mono">' + e.code + ' · ' + (e.idNumber || '—') + '</div>' +
           '</li>'
         )).join('')
         dropdown.classList.remove('hidden')
@@ -391,9 +385,8 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
   <script is:inline>
     ;(function () {
       const form = document.getElementById('ef-form')
-      const toggle = document.getElementById('ef-toggle')
       const cancel = document.getElementById('ef-cancel')
-      if (!form || !toggle || !cancel) return
+      if (!form || !cancel) return
 
       const typeSel = document.getElementById('ef-type')
       const subtypeSel = document.getElementById('ef-subtype')
@@ -404,22 +397,6 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
       const errorEl = document.getElementById('ef-error')
       const submitBtn = document.getElementById('ef-submit')
 
-      function openForm() {
-        form.classList.remove('hidden')
-        toggle.textContent = '− Ocultar formulario'
-        toggle.setAttribute('aria-expanded', 'true')
-        typeSel.focus()
-      }
-      function closeForm() {
-        form.classList.add('hidden')
-        toggle.textContent = '+ Mostrar formulario'
-        toggle.setAttribute('aria-expanded', 'false')
-        errorEl.classList.add('hidden')
-      }
-      toggle.addEventListener('click', () => {
-        if (form.classList.contains('hidden')) openForm()
-        else closeForm()
-      })
       cancel.addEventListener('click', () => {
         form.reset()
         dynWrap.classList.add('hidden')
@@ -427,7 +404,7 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
         subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>'
         subtypeSel.disabled = true
         numberPreview.value = 'Se asigna automáticamente'
-        closeForm()
+        errorEl.classList.add('hidden')
       })
 
       const subtypesCache = new Map()
@@ -459,10 +436,10 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
         const value = def.default != null ? String(def.default) : ''
         const wrap = (inner, full) =>
           '<div' + (full ? ' class="md:col-span-2"' : '') + '>' +
-          '<label class="block text-xs font-medium text-gray-600 mb-1.5" for="' + id + '">' +
+          '<label class="block text-xs font-medium ef-label mb-1.5" for="' + id + '">' +
           def.label + (def.required ? ' <span class="text-red-500">*</span>' : '') +
           '</label>' + inner + '</div>'
-        const cls = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900'
+        const cls = 'ef-input w-full px-3 py-2 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900'
         switch (def.type) {
           case 'textarea':
             return wrap('<textarea id="' + id + '" name="' + name + '" rows="2" ' + req + ' ' + ro + ' ' + placeholder + ' class="' + cls + '">' + value + '</textarea>', true)
@@ -473,7 +450,7 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
             return wrap('<select id="' + id + '" name="' + name + '" ' + req + ' ' + ro + ' class="' + cls + '"><option value="">Selecciona…</option>' + opts + '</select>', false)
           }
           case 'file':
-            return wrap('<input id="' + id + '" type="file" name="' + name + '" ' + req + ' accept="' + (def.accept || '') + '" class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />', true)
+            return wrap('<input id="' + id + '" type="file" name="' + name + '" ' + req + ' accept="' + (def.accept || '') + '" class="ef-file block w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />', true)
           case 'number': {
             const step = def.step != null ? 'step="' + def.step + '"' : ''
             return wrap('<input id="' + id + '" type="number" name="' + name + '" ' + req + ' ' + ro + ' ' + step + ' ' + placeholder + ' value="' + value + '" class="' + cls + '" />', false)
@@ -607,4 +584,106 @@ const errorMsg = Astro.url.searchParams.get('error') ?? ''
       })
     })()
   </script>
+
+  <style>
+    .ef-title       { color: var(--fore); }
+    .ef-subtitle    { color: var(--fore-dim); }
+    .ef-heading     { color: var(--fore); }
+    .ef-label       { color: var(--fore-dim); }
+    .ef-hint        { color: var(--mute-2); }
+    .ef-mute        { color: var(--mute); }
+
+    .ef-card {
+      background: var(--ink-2);
+      border-color: var(--rule);
+      color: var(--fore-dim);
+    }
+
+    .ef-section-header {
+      background: var(--ink-3);
+      border-color: var(--rule);
+    }
+    .ef-group-header {
+      background: var(--ink-3);
+      border-color: var(--rule);
+    }
+
+    .ef-divider     { border-top: 1px solid var(--rule); }
+    .ef-divide > div + div { border-top: 1px solid var(--rule); }
+
+    .ef-input {
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+      color: var(--fore);
+    }
+    .ef-input:focus { border-color: var(--rule-hi); }
+    .ef-input::placeholder { color: var(--mute); }
+    .ef-input:disabled,
+    .ef-input-readonly {
+      background: var(--ink-3);
+      color: var(--mute-2);
+      cursor: not-allowed;
+    }
+    .ef-file { color: var(--fore-dim); }
+
+    .ef-btn-secondary {
+      background: var(--ink-2);
+      border-color: var(--rule);
+      color: var(--fore-dim);
+    }
+    .ef-btn-secondary:hover {
+      background: var(--ink-4);
+      color: var(--fore);
+    }
+    .ef-btn-link {
+      background: transparent;
+      color: var(--fore-dim);
+    }
+    .ef-btn-link:hover { color: var(--fore); }
+
+    .ef-dropdown {
+      background: var(--ink-2);
+      border: 1px solid var(--rule);
+    }
+    .ef-dropdown-item:hover { background: var(--ink-4); }
+    .ef-dropdown-primary    { color: var(--fore); }
+    .ef-dropdown-secondary  { color: var(--mute-2); }
+
+    .ef-table thead tr {
+      background: var(--ink-3);
+      border-color: var(--rule);
+      color: var(--mute-2);
+    }
+    .ef-table tbody tr {
+      background: var(--ink-2);
+      border-color: var(--rule);
+      transition: background-color 120ms;
+    }
+    .ef-table tbody tr:hover { background: var(--ink-4); }
+    .ef-cell        { color: var(--fore-dim); }
+    .ef-cell-mono   { color: var(--fore-dim); }
+    .ef-cell-mute   { color: var(--mute-2); }
+
+    .ef-action {
+      font-size: 0.75rem;
+      color: var(--mute-2);
+      transition: color 120ms;
+    }
+    .ef-action:hover { color: var(--fore); }
+
+    /* Modo claro — override de la paleta blanca para tarjetas/encabezados. */
+    [data-theme='light'] .ef-card           { background: #ffffff; }
+    [data-theme='light'] .ef-section-header { background: #f9fafb; }
+    [data-theme='light'] .ef-group-header   { background: #f9fafb; }
+    [data-theme='light'] .ef-input          { background: #ffffff; }
+    [data-theme='light'] .ef-input:disabled,
+    [data-theme='light'] .ef-input-readonly { background: #f3f4f6; }
+    [data-theme='light'] .ef-btn-secondary  { background: #ffffff; }
+    [data-theme='light'] .ef-btn-secondary:hover { background: #f3f4f6; }
+    [data-theme='light'] .ef-dropdown       { background: #ffffff; }
+    [data-theme='light'] .ef-dropdown-item:hover { background: #f3f4f6; }
+    [data-theme='light'] .ef-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .ef-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .ef-table tbody tr:hover { background: #f9fafb; }
+  </style>
 </AppLayout>
