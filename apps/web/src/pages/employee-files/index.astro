@@ -1,0 +1,304 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canWrite = can(identity, 'employee_files:write')
+const canDelete = can(identity, 'employee_files:delete')
+
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  idNumber: string | null
+  isActive: boolean
+}
+type FileRow = {
+  id: string
+  employeeId: string
+  typeId: number
+  subtypeId: number
+  documentDate: string
+  documentNumber: string
+  observations: string | null
+  extraFields: Record<string, unknown>
+  createdAt: string
+}
+type TypeRow = { id: number; code: string; name: string }
+type SubtypeRow = { id: number; code: string; name: string; typeId: number }
+
+const employeeId = (Astro.url.searchParams.get('employeeId') ?? '').trim()
+
+// Búsqueda de empleados — el endpoint cap-ea limit a 100; con 100
+// activos cubrimos la mayoría de empresas; búsquedas más finas se
+// hacen tipeando en el combobox (filtro client-side sobre el set).
+let employees: Employee[] = []
+try {
+  const res = await fetch(`${API_URL}/employees?limit=100&isActive=true`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    employees = ((await res.json()) as { data: Employee[] }).data ?? []
+  }
+} catch {
+  /* tabla queda vacía si el listado falla */
+}
+
+let selectedEmployee: Employee | null = null
+let files: FileRow[] = []
+let types: TypeRow[] = []
+const subtypes: SubtypeRow[] = []
+
+if (employeeId) {
+  try {
+    const [empRes, listRes, typesRes] = await Promise.all([
+      fetch(`${API_URL}/employees/${employeeId}`, { headers }),
+      fetch(`${API_URL}/employee-files?employeeId=${employeeId}`, { headers }),
+      fetch(`${API_URL}/employee-files/types`, { headers }),
+    ])
+    if (empRes.ok) {
+      selectedEmployee = ((await empRes.json()) as { data: Employee }).data
+    }
+    if (listRes.ok) {
+      files = ((await listRes.json()) as { data: FileRow[] }).data ?? []
+    }
+    if (typesRes.ok) {
+      types = ((await typesRes.json()) as { data: TypeRow[] }).data ?? []
+    }
+    // Subtipos: una sola llamada por tipo presente en los expedientes
+    const distinctTypeIds = Array.from(new Set(files.map((f) => f.typeId)))
+    for (const tid of distinctTypeIds) {
+      try {
+        const sres = await fetch(`${API_URL}/employee-files/types/${tid}/subtypes`, { headers })
+        if (sres.ok) {
+          const subs = ((await sres.json()) as { data: SubtypeRow[] }).data ?? []
+          subtypes.push(...subs.map((s) => ({ ...s, typeId: tid })))
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+  } catch {
+    /* listado vacío */
+  }
+}
+
+const typeById = new Map(types.map((t) => [t.id, t]))
+const subtypeById = new Map(subtypes.map((s) => [s.id, s]))
+
+function fmtDate(s: string): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+
+const flash = Astro.url.searchParams.get('flash')
+---
+
+<AppLayout title="Expedientes de empleados">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="flex items-start justify-between gap-3 flex-wrap mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Expedientes de empleados</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Busca un empleado para ver y administrar sus expedientes (estudios académicos,
+          permisos, amonestaciones, licencias, etc).
+        </p>
+      </div>
+      {selectedEmployee && canWrite && (
+        <a
+          href={`/employee-files/new?employeeId=${selectedEmployee.id}`}
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Nuevo expediente
+        </a>
+      )}
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Expediente creado.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Expediente actualizado.</div>
+    )}
+    {flash === 'deleted' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Expediente eliminado.</div>
+    )}
+
+    <form method="GET" action="/employee-files" class="bg-white border border-gray-200 rounded-lg p-4 mb-6">
+      <label class="block text-xs font-medium text-gray-600 mb-1.5" for="emp-search">Empleado</label>
+      <div class="flex items-center gap-2">
+        <div class="relative flex-1">
+          <input
+            type="text"
+            id="emp-search"
+            placeholder="Buscar por nombre, apellido o código…"
+            autocomplete="off"
+            value={selectedEmployee
+              ? `${selectedEmployee.lastName}, ${selectedEmployee.firstName} (${selectedEmployee.code})`
+              : ''}
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+          />
+          <input type="hidden" name="employeeId" id="emp-id" value={selectedEmployee?.id ?? ''} />
+          <ul
+            id="emp-dropdown"
+            class="hidden absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-56 overflow-y-auto text-sm"
+            role="listbox"
+          ></ul>
+        </div>
+        <button
+          type="submit"
+          class="px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          Ver expedientes
+        </button>
+        {selectedEmployee && (
+          <a
+            href="/employee-files"
+            class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            Limpiar
+          </a>
+        )}
+      </div>
+      <p class="mt-2 text-xs text-gray-400">
+        Solo se listan empleados activos. Selecciona uno de la lista al tipear.
+      </p>
+    </form>
+
+    {!selectedEmployee && (
+      <div class="bg-white border border-gray-200 rounded-lg p-10 text-center">
+        <p class="text-sm text-gray-500">Selecciona un empleado arriba para ver sus expedientes.</p>
+      </div>
+    )}
+
+    {selectedEmployee && (
+      <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="px-5 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs uppercase text-gray-400 tracking-wide">Empleado</p>
+            <p class="text-sm font-semibold text-gray-900">
+              {selectedEmployee.lastName}, {selectedEmployee.firstName}
+              <span class="text-gray-400 font-mono text-xs ml-2">{selectedEmployee.code}</span>
+            </p>
+          </div>
+          <div class="text-xs text-gray-500">
+            {files.length} {files.length === 1 ? 'expediente' : 'expedientes'}
+          </div>
+        </div>
+        {files.length === 0 ? (
+          <div class="py-14 text-center">
+            <p class="text-sm text-gray-400">Este empleado no tiene expedientes registrados aún.</p>
+            {canWrite && (
+              <a
+                href={`/employee-files/new?employeeId=${selectedEmployee.id}`}
+                class="inline-flex items-center gap-1 mt-3 text-sm text-blue-600 hover:underline"
+              >+ Crear el primero</a>
+            )}
+          </div>
+        ) : (
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200 bg-gray-50">
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Número</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Subtipo</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Observaciones</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {files.map((f) => {
+                const t = typeById.get(f.typeId)
+                const s = subtypeById.get(f.subtypeId)
+                return (
+                  <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                    <td class="px-4 py-3 font-mono text-xs text-gray-700">{f.documentNumber}</td>
+                    <td class="px-4 py-3 text-gray-700">{fmtDate(f.documentDate)}</td>
+                    <td class="px-4 py-3 text-gray-700">{t?.name ?? '—'}</td>
+                    <td class="px-4 py-3 text-gray-700">{s?.name ?? '—'}</td>
+                    <td class="px-4 py-3 text-xs text-gray-500 max-w-xs truncate" title={f.observations ?? ''}>
+                      {f.observations ?? '—'}
+                    </td>
+                    <td class="px-4 py-3 text-right whitespace-nowrap">
+                      <a href={`/employee-files/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900 mr-3">Ver →</a>
+                      {canWrite && (
+                        <a href={`/employee-files/${f.id}/edit`} class="text-xs text-gray-500 hover:text-gray-900">Editar</a>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    )}
+  </div>
+
+  <script type="application/json" id="emp-catalog" set:html={JSON.stringify(employees)}></script>
+
+  <script is:inline>
+    ;(function () {
+      const catalogEl = document.getElementById('emp-catalog')
+      const input = document.getElementById('emp-search')
+      const hidden = document.getElementById('emp-id')
+      const dropdown = document.getElementById('emp-dropdown')
+      if (!catalogEl || !input || !hidden || !dropdown) return
+      const employees = JSON.parse(catalogEl.textContent || '[]')
+
+      function show(items) {
+        if (items.length === 0) {
+          dropdown.classList.add('hidden')
+          return
+        }
+        dropdown.innerHTML = items.slice(0, 30).map((e) => (
+          '<li class="px-3 py-2 cursor-pointer hover:bg-gray-50" role="option" ' +
+          'data-id="' + e.id + '" data-label="' + e.lastName + ', ' + e.firstName + ' (' + e.code + ')">' +
+          '<div class="text-gray-900">' + e.lastName + ', ' + e.firstName + '</div>' +
+          '<div class="text-xs text-gray-500 font-mono">' + e.code + ' · ' + (e.idNumber || '—') + '</div>' +
+          '</li>'
+        )).join('')
+        dropdown.classList.remove('hidden')
+      }
+
+      input.addEventListener('focus', () => {
+        if (input.value.length === 0) show(employees)
+      })
+      input.addEventListener('input', () => {
+        hidden.value = ''
+        const q = input.value.trim().toLowerCase()
+        if (q.length === 0) {
+          show(employees)
+          return
+        }
+        const filtered = employees.filter((e) => {
+          const hay = (e.lastName + ' ' + e.firstName + ' ' + e.code + ' ' + (e.idNumber || '')).toLowerCase()
+          return hay.includes(q)
+        })
+        show(filtered)
+      })
+      dropdown.addEventListener('mousedown', (e) => {
+        const li = e.target.closest('li[data-id]')
+        if (!li) return
+        hidden.value = li.dataset.id
+        input.value = li.dataset.label
+        dropdown.classList.add('hidden')
+      })
+      document.addEventListener('click', (e) => {
+        if (!dropdown.contains(e.target) && e.target !== input) {
+          dropdown.classList.add('hidden')
+        }
+      })
+    })()
+  </script>
+</AppLayout>
