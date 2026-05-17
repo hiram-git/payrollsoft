@@ -1,0 +1,406 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+// Defaults: año en curso, todo el año.
+const today = new Date()
+const sp = Astro.url.searchParams
+const from = sp.get('from') ?? `${today.getUTCFullYear()}-01-01`
+const to = sp.get('to') ?? today.toISOString().slice(0, 10)
+const filterTypeId = sp.get('typeId') ?? ''
+const filterSubtypeId = sp.get('subtypeId') ?? ''
+const filterEmployeeId = sp.get('employeeId') ?? ''
+const filterDepartamentoId = sp.get('departamentoId') ?? ''
+const filterFuncionId = sp.get('funcionId') ?? ''
+const filterCargoId = sp.get('cargoId') ?? ''
+const filterCreatedBy = sp.get('createdBy') ?? ''
+
+type TypeRow = { id: number; name: string }
+type SubtypeRow = { id: number; typeId: number; name: string }
+type CatItem = { id: string; name: string }
+type Report = {
+  range: { from: string | null; to: string | null }
+  total: number
+  byType: { typeId: number; typeName: string; count: number }[]
+  bySubtype: {
+    typeId: number
+    typeName: string
+    subtypeId: number
+    subtypeName: string
+    count: number
+  }[]
+  byUser: { userId: string | null; userName: string; count: number }[]
+  byEmployee: {
+    employeeId: string
+    employeeCode: string
+    firstName: string
+    lastName: string
+    count: number
+  }[]
+  byDepartamento: { departamentoId: string | null; departamentoName: string; count: number }[]
+  byFuncion: { funcionId: string | null; funcionName: string; count: number }[]
+  byCargo: { cargoId: string | null; cargoName: string; count: number }[]
+  byMonth: { ym: string; count: number }[]
+}
+
+const params = new URLSearchParams()
+if (from) params.set('from', from)
+if (to) params.set('to', to)
+if (filterTypeId) params.set('typeId', filterTypeId)
+if (filterSubtypeId) params.set('subtypeId', filterSubtypeId)
+if (filterEmployeeId) params.set('employeeId', filterEmployeeId)
+if (filterDepartamentoId) params.set('departamentoId', filterDepartamentoId)
+if (filterFuncionId) params.set('funcionId', filterFuncionId)
+if (filterCargoId) params.set('cargoId', filterCargoId)
+if (filterCreatedBy) params.set('createdBy', filterCreatedBy)
+
+let report: Report | null = null
+let types: TypeRow[] = []
+let subtypes: SubtypeRow[] = []
+let departamentos: CatItem[] = []
+let funciones: CatItem[] = []
+let cargos: CatItem[] = []
+let error = ''
+
+try {
+  const [repRes, tRes, dRes, fRes, cRes] = await Promise.all([
+    fetch(`${API_URL}/reports/employee-files?${params}`, { headers }),
+    fetch(`${API_URL}/employee-files/types`, { headers }),
+    fetch(`${API_URL}/departamentos`, { headers }),
+    fetch(`${API_URL}/funciones`, { headers }),
+    fetch(`${API_URL}/cargos`, { headers }),
+  ])
+  if (repRes.status === 401) return Astro.redirect('/login')
+  if (repRes.ok) report = ((await repRes.json()) as { data: Report }).data
+  else error = `Error al cargar el reporte (HTTP ${repRes.status})`
+  if (tRes.ok) types = ((await tRes.json()) as { data: TypeRow[] }).data ?? []
+  if (dRes.ok) departamentos = ((await dRes.json()) as { data: CatItem[] }).data ?? []
+  if (fRes.ok) funciones = ((await fRes.json()) as { data: CatItem[] }).data ?? []
+  if (cRes.ok) cargos = ((await cRes.json()) as { data: CatItem[] }).data ?? []
+  if (filterTypeId) {
+    const sRes = await fetch(`${API_URL}/employee-files/types/${filterTypeId}/subtypes`, {
+      headers,
+    })
+    if (sRes.ok) subtypes = ((await sRes.json()) as { data: SubtypeRow[] }).data ?? []
+  }
+} catch (err) {
+  error = err instanceof Error ? err.message : 'No se pudo conectar.'
+}
+
+function pctOf(n: number, total: number): string {
+  if (total === 0) return '0%'
+  return `${((n * 100) / total).toFixed(1)}%`
+}
+
+const xlsxUrl = `/api/reports/employee-files/xlsx?${params.toString()}`
+---
+
+<AppLayout title="Reporte de expedientes">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Reporte gerencial · Expedientes</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Cantidad de movimientos en el rango, agrupados por tipo, subtipo, usuario,
+          empleado y dimensión organizacional. Aplica los filtros y descarga el resumen
+          en Excel cuando lo necesites.
+        </p>
+      </div>
+      <a
+        href={xlsxUrl}
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        title="Descargar el reporte agregado en Excel (una hoja por agrupación)"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Excel
+      </a>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <form method="GET" action="/reports/employee-files" class="bg-white border border-gray-200 rounded-lg p-4 mb-6 grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Desde</label>
+        <input type="date" name="from" value={from} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Hasta</label>
+        <input type="date" name="to" value={to} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+        <select name="typeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+          <option value="">Todos</option>
+          {types.map((t) => (
+            <option value={t.id} selected={String(t.id) === filterTypeId}>{t.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Subtipo</label>
+        <select name="subtypeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" disabled={subtypes.length === 0}>
+          <option value="">Todos</option>
+          {subtypes.map((s) => (
+            <option value={s.id} selected={String(s.id) === filterSubtypeId}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Departamento</label>
+        <select name="departamentoId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+          <option value="">Todos</option>
+          {departamentos.map((d) => (
+            <option value={d.id} selected={d.id === filterDepartamentoId}>{d.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Función</label>
+        <select name="funcionId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+          <option value="">Todas</option>
+          {funciones.map((f) => (
+            <option value={f.id} selected={f.id === filterFuncionId}>{f.name}</option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-500 mb-1">Cargo</label>
+        <select name="cargoId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+          <option value="">Todos</option>
+          {cargos.map((c) => (
+            <option value={c.id} selected={c.id === filterCargoId}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+      <div class="flex items-end">
+        <button type="submit" class="w-full px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+          Aplicar filtros
+        </button>
+      </div>
+    </form>
+
+    {report && (
+      <>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
+          <div class="border border-gray-200 rounded-lg bg-white p-4">
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Total movimientos</p>
+            <p class="text-2xl font-semibold text-gray-900 tabular-nums">{report.total}</p>
+          </div>
+          <div class="border border-gray-200 rounded-lg bg-white p-4">
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Tipos involucrados</p>
+            <p class="text-2xl font-semibold text-gray-900 tabular-nums">{report.byType.length}</p>
+          </div>
+          <div class="border border-gray-200 rounded-lg bg-white p-4">
+            <p class="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Empleados con expedientes</p>
+            <p class="text-2xl font-semibold text-gray-900 tabular-nums">{report.byEmployee.length}</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <!-- Por tipo -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por tipo</h2>
+            </header>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50">
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Cantidad</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byType.length === 0 ? (
+                  <tr><td colspan="3" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byType.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 text-gray-800">{r.typeName}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium">{r.count}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-500 text-xs">{pctOf(r.count, report!.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por mes -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por mes</h2>
+            </header>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50">
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Año-Mes</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Cantidad</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byMonth.length === 0 ? (
+                  <tr><td colspan="3" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byMonth.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 font-mono text-xs text-gray-700">{r.ym}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium">{r.count}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-500 text-xs">{pctOf(r.count, report!.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por subtipo -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden lg:col-span-2">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por subtipo</h2>
+            </header>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50">
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Subtipo</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Cantidad</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.bySubtype.length === 0 ? (
+                  <tr><td colspan="4" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.bySubtype.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 text-gray-700">{r.typeName}</td>
+                    <td class="px-4 py-2 text-gray-900">{r.subtypeName}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium">{r.count}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-500 text-xs">{pctOf(r.count, report!.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por departamento -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por departamento</h2>
+            </header>
+            <table class="w-full text-sm">
+              <tbody>
+                {report.byDepartamento.length === 0 ? (
+                  <tr><td colspan="2" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byDepartamento.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 text-gray-800">{r.departamentoName}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium w-24">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por función -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por función</h2>
+            </header>
+            <table class="w-full text-sm">
+              <tbody>
+                {report.byFuncion.length === 0 ? (
+                  <tr><td colspan="2" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byFuncion.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 text-gray-800">{r.funcionName}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium w-24">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por cargo -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por cargo</h2>
+            </header>
+            <table class="w-full text-sm">
+              <tbody>
+                {report.byCargo.length === 0 ? (
+                  <tr><td colspan="2" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byCargo.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 text-gray-800">{r.cargoName}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium w-24">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por usuario -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por usuario</h2>
+            </header>
+            <table class="w-full text-sm">
+              <tbody>
+                {report.byUser.length === 0 ? (
+                  <tr><td colspan="2" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byUser.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0">
+                    <td class="px-4 py-2 text-gray-800">{r.userName}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium w-24">{r.count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Por empleado -->
+          <section class="bg-white border border-gray-200 rounded-lg overflow-hidden lg:col-span-2">
+            <header class="px-5 py-3 border-b border-gray-100">
+              <h2 class="text-sm font-semibold text-gray-800">Por empleado</h2>
+            </header>
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50">
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Código</th>
+                  <th class="text-left px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Cantidad</th>
+                  <th class="text-right px-4 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.byEmployee.length === 0 ? (
+                  <tr><td colspan="4" class="px-4 py-6 text-center text-gray-400 text-xs">Sin datos</td></tr>
+                ) : report.byEmployee.map((r) => (
+                  <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                    <td class="px-4 py-2 font-mono text-xs text-gray-500">{r.employeeCode}</td>
+                    <td class="px-4 py-2 text-gray-900">
+                      <a href={`/employee-files?employeeId=${r.employeeId}`} class="hover:text-blue-600 transition-colors">
+                        {r.lastName}, {r.firstName}
+                      </a>
+                    </td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-900 font-medium">{r.count}</td>
+                    <td class="px-4 py-2 text-right tabular-nums text-gray-500 text-xs">{pctOf(r.count, report!.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </>
+    )}
+  </div>
+</AppLayout>
