@@ -43,6 +43,13 @@
       "when": 1762128004000,
       "tag": "0005_employee_files_approve_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1762128005000,
+      "tag": "0006_system_roles_catalog",
+      "breakpoints": true
     }
   ]
 }
