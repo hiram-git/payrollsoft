@@ -51,14 +51,21 @@ import { jwtPlugin } from '../../middleware/auth'
 import {
   buildImpersonationPayload,
   changeTenantStatus,
+  createPermission,
+  createSystemRole,
   createTenant,
   findTenantBySlug,
   getPlatformMetrics,
   getProvisioningStatus,
   listPermissionsCatalog,
   listSuperAdminAudit,
+  listSystemRoles,
   listTenants,
+  propagateSystemRoleToAllTenants,
   resetTenantAdminPassword,
+  setSystemRolePermissions,
+  updatePermission,
+  updateSystemRole,
 } from './service'
 
 /**
@@ -354,6 +361,180 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
     '/permissions',
     async () => ({ success: true, data: await listPermissionsCatalog(publicDb) }),
     { beforeHandle: [guardSuperAdmin] }
+  )
+
+  // ── POST /superadmin/permissions ───────────────────────────────────────────
+  // Crea un permiso nuevo en el catálogo global. Inmediatamente
+  // disponible para asignar a cualquier rol (no necesita propagación).
+  .post(
+    '/permissions',
+    async ({ body, user, set }) => {
+      const result = await createPermission(publicDb, body)
+      if (!result.ok) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      await publicDb.insert(superAdminAudit).values({
+        superAdminId: user?.userId ?? null,
+        action: 'permission.create',
+        payload: { code: body.code, module: body.module },
+      })
+      set.status = 201
+      return { success: true, data: { code: result.code } }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      body: t.Object({
+        code: t.String({ minLength: 3, maxLength: 80 }),
+        module: t.String({ minLength: 1, maxLength: 40 }),
+        action: t.String({ minLength: 1, maxLength: 40 }),
+        scope: t.Optional(t.Union([t.Literal('tenant'), t.Literal('global')])),
+        description: t.String({ minLength: 1, maxLength: 500 }),
+        isDangerous: t.Optional(t.Boolean()),
+      }),
+    }
+  )
+
+  // ── PUT /superadmin/permissions/:code ──────────────────────────────────────
+  .put(
+    '/permissions/:code',
+    async ({ params, body, user, set }) => {
+      const ok = await updatePermission(publicDb, params.code, body)
+      if (!ok) {
+        set.status = 404
+        return { success: false, error: 'Permiso no encontrado' }
+      }
+      await publicDb.insert(superAdminAudit).values({
+        superAdminId: user?.userId ?? null,
+        action: 'permission.update',
+        payload: { code: params.code, changes: body },
+      })
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      params: t.Object({ code: t.String() }),
+      body: t.Object({
+        description: t.Optional(t.String({ minLength: 1, maxLength: 500 })),
+        isDangerous: t.Optional(t.Boolean()),
+        scope: t.Optional(t.Union([t.Literal('tenant'), t.Literal('global')])),
+      }),
+    }
+  )
+
+  // ── GET /superadmin/system-roles ───────────────────────────────────────────
+  // Roles del catálogo global con sus permisos. Estos son los que se
+  // propagan a cada tenant.
+  .get('/system-roles', async () => ({ success: true, data: await listSystemRoles(publicDb) }), {
+    beforeHandle: [guardSuperAdmin],
+  })
+
+  // ── POST /superadmin/system-roles ──────────────────────────────────────────
+  .post(
+    '/system-roles',
+    async ({ body, user, set }) => {
+      const result = await createSystemRole(publicDb, body)
+      if (!result.ok) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      await publicDb.insert(superAdminAudit).values({
+        superAdminId: user?.userId ?? null,
+        action: 'system_role.create',
+        payload: { code: body.code },
+      })
+      set.status = 201
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      body: t.Object({
+        code: t.String({ minLength: 2, maxLength: 50 }),
+        name: t.String({ minLength: 1, maxLength: 120 }),
+        description: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
+        isDangerous: t.Optional(t.Boolean()),
+      }),
+    }
+  )
+
+  // ── PUT /superadmin/system-roles/:code ─────────────────────────────────────
+  .put(
+    '/system-roles/:code',
+    async ({ params, body, user, set }) => {
+      const ok = await updateSystemRole(publicDb, params.code, body)
+      if (!ok) {
+        set.status = 404
+        return { success: false, error: 'Rol no encontrado' }
+      }
+      await publicDb.insert(superAdminAudit).values({
+        superAdminId: user?.userId ?? null,
+        action: 'system_role.update',
+        payload: { code: params.code, changes: body },
+      })
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      params: t.Object({ code: t.String() }),
+      body: t.Object({
+        name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+        description: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
+        isDangerous: t.Optional(t.Boolean()),
+      }),
+    }
+  )
+
+  // ── PUT /superadmin/system-roles/:code/permissions ─────────────────────────
+  // Reemplaza el set completo de permisos asignados al rol.
+  .put(
+    '/system-roles/:code/permissions',
+    async ({ params, body, user, set }) => {
+      const ok = await setSystemRolePermissions(publicDb, params.code, body.permissions)
+      if (!ok) {
+        set.status = 404
+        return { success: false, error: 'Rol no encontrado' }
+      }
+      await publicDb.insert(superAdminAudit).values({
+        superAdminId: user?.userId ?? null,
+        action: 'system_role.permissions',
+        payload: { code: params.code, count: body.permissions.length },
+      })
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      params: t.Object({ code: t.String() }),
+      body: t.Object({
+        permissions: t.Array(t.String({ maxLength: 80 })),
+      }),
+    }
+  )
+
+  // ── POST /superadmin/system-roles/:code/propagate ──────────────────────────
+  // Aplica el rol + sus permisos a TODOS los tenants. Idempotente.
+  .post(
+    '/system-roles/:code/propagate',
+    async ({ params, user, set }) => {
+      const result = await propagateSystemRoleToAllTenants(publicDb, env.DATABASE_URL, params.code)
+      await publicDb.insert(superAdminAudit).values({
+        superAdminId: user?.userId ?? null,
+        action: 'system_role.propagate',
+        payload: {
+          code: params.code,
+          applied: result.applied.length,
+          errors: result.errors.length,
+        },
+      })
+      if (!result.ok && result.applied.length === 0) {
+        set.status = 422
+        return { success: false, error: result.errors[0]?.error ?? 'Falló la propagación' }
+      }
+      return { success: true, data: result }
+    },
+    {
+      beforeHandle: [guardSuperAdmin],
+      params: t.Object({ code: t.String() }),
+    }
   )
 
   // ── GET /superadmin/metrics ────────────────────────────────────────────────
