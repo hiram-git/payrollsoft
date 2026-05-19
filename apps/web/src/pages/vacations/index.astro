@@ -1,101 +1,196 @@
 ---
+/**
+ * Hub del módulo de vacaciones — listado global de solicitudes recientes
+ * de toda la empresa para HR / contadores / admin.
+ *
+ * El detalle del saldo y el botón "Solicitar" viven en el tab Vacaciones
+ * del expediente del empleado (`/employees/[id]`).
+ */
 import AppLayout from '../../layouts/AppLayout.astro'
 import { can, getIdentity } from '../../lib/auth'
 
-/**
- * Esqueleto de la vista de Vacaciones — solo prototipo. Renderiza la
- * estructura visual (KPIs, tabla, panel de balance) con datos
- * placeholder para que el flujo se pueda navegar antes de cablear el
- * backend. Cuando el módulo se implemente, los bloques `data-stub`
- * son los que hay que reemplazar por queries reales.
- */
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
 const identity = getIdentity(Astro.cookies)
 if (!identity) return Astro.redirect('/login')
 if (!can(identity, 'vacations:read')) return Astro.redirect('/dashboard')
 
-const stubKpis = [
-  { label: 'Empleados con saldo > 0', value: '—' },
-  { label: 'Días tomados este año', value: '—' },
-  { label: 'Solicitudes pendientes', value: '—' },
-  { label: 'Días por vencer (90 d)', value: '—' },
-]
----
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canApprove = can(identity, 'vacations:approve')
 
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  isActive: boolean
+}
+type RequestRow = {
+  id: string
+  requestNumber: string
+  employeeId: string
+  requestType: 'enjoy' | 'pay' | 'mixed'
+  startDate: string | null
+  endDate: string | null
+  enjoyDays: number
+  paidDays: number
+  status: string
+  createdAt: string
+  rejectionReason: string | null
+}
+
+let employees: Employee[] = []
+let allRequests: (RequestRow & { employee?: Employee })[] = []
+let pendingCount = 0
+
+try {
+  const empRes = await fetch(`${API_URL}/employees?isActive=true`, { headers })
+  if (empRes.ok) employees = ((await empRes.json()) as { data: Employee[] }).data ?? []
+
+  // No tenemos endpoint "todas las solicitudes" — fan-out por empleado.
+  const reqsByEmp = await Promise.all(
+    employees.map(async (e) => {
+      const r = await fetch(`${API_URL}/vacations?employeeId=${e.id}`, { headers })
+      if (!r.ok) return []
+      const { data = [] } = (await r.json()) as { data: RequestRow[] }
+      return data.map((row) => ({ ...row, employee: e }))
+    })
+  )
+  allRequests = reqsByEmp
+    .flat()
+    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
+    .slice(0, 50)
+  pendingCount = allRequests.filter((r) => r.status === 'pending').length
+} catch {
+  /* empty */
+}
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+function typeLabel(t: string): string {
+  return t === 'enjoy' ? 'Disfrute' : t === 'pay' ? 'Pago' : 'Mixto'
+}
+function statusLabel(s: string): string {
+  if (s === 'pending') return 'Pendiente'
+  if (s === 'approved') return 'Aprobada'
+  if (s === 'rejected') return 'Rechazada'
+  if (s === 'processed') return 'Procesada'
+  return 'Cancelada'
+}
+function statusClass(s: string): string {
+  if (s === 'pending') return 'vac-status-pending'
+  if (s === 'approved' || s === 'processed') return 'vac-status-approved'
+  if (s === 'rejected') return 'vac-status-rejected'
+  return 'vac-status-cancelled'
+}
+---
 <AppLayout title="Vacaciones">
   <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
-    <div class="flex items-start justify-between gap-4 mb-6">
+    <div class="mb-6 flex items-end justify-between gap-2">
       <div>
-        <div class="flex items-center gap-2">
-          <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Vacaciones</h1>
-          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-            Próximamente
-          </span>
-        </div>
-        <p class="text-sm text-gray-500 mt-0.5">
-          Saldos, solicitudes y aprobaciones de vacaciones por empleado.
-          Esta vista es un prototipo — la lógica de cálculo y persistencia se conectará en una fase posterior.
+        <h1 class="text-xl font-semibold tracking-tight vac-title">Vacaciones</h1>
+        <p class="text-sm mt-0.5 vac-subtitle">
+          Solicitudes recientes. Para solicitar o ver saldo, abre el expediente del empleado.
         </p>
       </div>
-      <button
-        type="button"
-        disabled
-        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium opacity-50 cursor-not-allowed"
-        title="Disponible al implementar el módulo"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Nueva solicitud
-      </button>
+      {canApprove && (
+        <a href="/vacations/approvals" class="vac-btn-primary px-3.5 py-2 rounded-md text-sm font-medium">
+          Aprobaciones{pendingCount > 0 ? ` (${pendingCount})` : ''}
+        </a>
+      )}
     </div>
 
-    <!-- KPIs -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6" data-stub="kpis">
-      {stubKpis.map((k) => (
-        <div class="bg-white border border-gray-200 rounded-lg p-4">
-          <div class="text-xs text-gray-500 uppercase tracking-wide">{k.label}</div>
-          <div class="mt-1 text-2xl font-semibold text-gray-900 tabular-nums">{k.value}</div>
+    <section class="vac-card border rounded-lg overflow-hidden">
+      {allRequests.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm vac-subtitle">Sin solicitudes registradas todavía.</p>
         </div>
-      ))}
-    </div>
-
-    <!-- Tabla principal -->
-    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden" data-stub="balances-table">
-      <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-        <h2 class="text-sm font-medium text-gray-900">Saldos por empleado</h2>
-        <div class="flex items-center gap-2 text-xs text-gray-500">
-          <input
-            type="search"
-            placeholder="Buscar empleado…"
-            disabled
-            class="px-2.5 py-1.5 border border-gray-300 rounded-md text-xs disabled:bg-gray-50 disabled:cursor-not-allowed"
-          />
-          <select disabled class="px-2.5 py-1.5 border border-gray-300 rounded-md text-xs disabled:bg-gray-50 disabled:cursor-not-allowed">
-            <option>Todas las áreas</option>
-          </select>
-        </div>
-      </div>
-      <div class="py-16 text-center">
-        <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto w-10 h-10 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2"/>
-          <path d="M16 2v4M8 2v4M3 10h18"/>
-        </svg>
-        <p class="mt-3 text-sm text-gray-500">Aquí se listarán los saldos de vacaciones por empleado.</p>
-        <p class="text-xs text-gray-400 mt-1 font-mono">vacations:read · vista en desarrollo</p>
-      </div>
-    </div>
-
-    <!-- Panel de detalle (placeholder a la derecha en versiones futuras) -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
-      <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2" data-stub="requests-list">
-        <h2 class="text-sm font-medium text-gray-900 mb-2">Solicitudes recientes</h2>
-        <p class="text-sm text-gray-500">No hay solicitudes para mostrar todavía.</p>
-      </div>
-      <div class="bg-white border border-gray-200 rounded-lg p-5" data-stub="policy-card">
-        <h2 class="text-sm font-medium text-gray-900 mb-2">Política vigente</h2>
-        <p class="text-sm text-gray-500">
-          La política de vacaciones se configurará desde
-          <code class="font-mono text-xs">/config/company</code> y aplicará por antigüedad y tipo de contrato.
-        </p>
-      </div>
-    </div>
+      ) : (
+        <table class="vac-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Número</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Tipo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Período</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Días</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Estado</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {allRequests.map((r) => (
+              <tr class="border-b last:border-0 vac-rule">
+                <td class="px-5 py-3 font-mono text-xs vac-cell align-top">{r.requestNumber}</td>
+                <td class="px-5 py-3 align-top">
+                  {r.employee ? (
+                    <a href={`/employees/${r.employee.id}`} class="vac-cell hover:underline">
+                      {r.employee.lastName}, {r.employee.firstName}
+                    </a>
+                  ) : '—'}
+                </td>
+                <td class="px-5 py-3 align-top text-xs vac-cell">{typeLabel(r.requestType)}</td>
+                <td class="px-5 py-3 align-top text-xs vac-cell whitespace-nowrap">
+                  {r.startDate && r.endDate ? `${fmtDate(r.startDate)} → ${fmtDate(r.endDate)}` : '—'}
+                </td>
+                <td class="px-5 py-3 align-top text-xs vac-cell">
+                  {r.enjoyDays > 0 && <div>{r.enjoyDays} disfrute</div>}
+                  {r.paidDays > 0 && <div>{r.paidDays} pago</div>}
+                </td>
+                <td class="px-5 py-3 align-top">
+                  <span class={`vac-status-badge ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
+                </td>
+                <td class="px-5 py-3 align-top text-right">
+                  {r.employee && (
+                    <a href={`/employees/${r.employee.id}`} class="text-xs vac-mute hover:vac-fore">Ver</a>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   </div>
+
+  <style>
+    .vac-title    { color: var(--fore); }
+    .vac-subtitle { color: var(--fore-dim); }
+    .vac-cell     { color: var(--fore-dim); }
+    .vac-mute     { color: var(--mute); }
+    .vac-card { background: var(--ink-2); border-color: var(--rule); }
+    .vac-rule { border-color: var(--rule); }
+
+    .vac-btn-primary { background: #2563eb; color: white; }
+    .vac-btn-primary:hover { background: #1d4ed8; }
+
+    .vac-table thead tr {
+      background: var(--ink-3); border-color: var(--rule); color: var(--mute-2);
+    }
+    .vac-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .vac-table tbody tr:hover { background: var(--ink-4); }
+
+    .vac-status-badge {
+      display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px;
+      font-size: 0.6875rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .vac-status-pending   { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .vac-status-approved  { background: rgba(16,185,129,0.18); color: #34d399; }
+    .vac-status-rejected  { background: rgba(239,68,68,0.18);  color: #f87171; }
+    .vac-status-cancelled { background: rgba(156,163,175,0.18); color: var(--mute); }
+
+    [data-theme='light'] .vac-card { background: #ffffff; }
+    [data-theme='light'] .vac-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .vac-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .vac-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .vac-status-pending   { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .vac-status-approved  { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .vac-status-rejected  { background: #fee2e2; color: #991b1b; }
+    [data-theme='light'] .vac-status-cancelled { background: #f3f4f6; color: #6b7280; }
+  </style>
 </AppLayout>
