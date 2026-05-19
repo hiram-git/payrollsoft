@@ -135,6 +135,7 @@ type VacationRequest = {
   status: 'pending' | 'approved' | 'rejected' | 'processed' | 'cancelled'
   rejectionReason: string | null
   approvedAt: string | null
+  payrollId: string | null
   createdAt: string
 }
 let vacBalance: VacationBalance | null = null
@@ -916,6 +917,11 @@ const freqLabel: Record<string, string> = {
                         <td class="px-3 py-2 text-right whitespace-nowrap">
                           {r.status === 'pending' && (
                             <button type="button" class="text-[11px] text-red-600 hover:underline" data-cancel-vac={r.id} data-num={r.requestNumber}>Cancelar</button>
+                          )}
+                          {r.payrollId && (
+                            <a href={`/payroll/${r.payrollId}`} class="text-[11px] text-blue-600 hover:underline" title="Ver planilla generada">
+                              Planilla →
+                            </a>
                           )}
                         </td>
                       </tr>

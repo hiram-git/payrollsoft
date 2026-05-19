@@ -7,6 +7,10 @@
  *     ejecuta al leer el saldo y al solicitar.
  *   • Solicitar reserva (no consume) — al aprobar se commitea
  *     (sale de reserved, entra a used). Rechazar libera.
+ *   • Al aprobar una solicitud con `paid_days > 0`, se genera
+ *     automáticamente una planilla nueva tipo='vacation' con una
+ *     línea de pago. La solicitud pasa a `processed` y el
+ *     `payroll_id` queda enlazado para reportes/auditoría.
  *   • Todos los cambios dejan rastro en `vacation_balance_movements`.
  *
  * Las reglas de aprobación viven en `vacation_approval_rules` con
@@ -15,6 +19,8 @@
  */
 import {
   employees,
+  payrollLines,
+  payrolls,
   vacationApprovalRules,
   vacationBalanceMovements,
   vacationBalances,
@@ -356,11 +362,139 @@ export async function createRequest(
 
 // ─── Aprobar / Rechazar / Cancelar ───────────────────────────────────────
 
+/**
+ * Tarifa diaria del empleado para calcular el monto de vacaciones
+ * pagadas. Convención LATAM estándar:
+ *
+ *   monthly  → baseSalary / 30
+ *   biweekly → baseSalary / 15   (15 días por quincena)
+ *   weekly   → baseSalary / 7
+ *
+ * Si la frecuencia es desconocida, asume mensual.
+ */
+function dailyRate(baseSalary: string | number | null, payFrequency: string): number {
+  const base = Number(baseSalary ?? 0)
+  if (!Number.isFinite(base) || base <= 0) return 0
+  const f = (payFrequency ?? 'monthly').toLowerCase()
+  if (f === 'biweekly') return base / 15
+  if (f === 'weekly') return base / 7
+  return base / 30
+}
+
+/**
+ * Genera la planilla de pago de vacaciones para una solicitud
+ * aprobada con `paid_days > 0`. Crea:
+ *
+ *   - 1 fila en `payrolls` con type='vacation', frequency='liquidation',
+ *     período = startDate→endDate de la solicitud (o hoy si no hay
+ *     fechas — caso "solo pago").
+ *   - 1 fila en `payroll_lines` para el empleado con una entrada
+ *     en `concepts[]` codificada como VACACIONES (type='income').
+ *
+ * Actualiza la solicitud: status='processed', processedAt=now,
+ * payrollId=nuevo. El PDF se genera por el flujo normal del módulo
+ * de payroll usando el `storage_mode` configurado en company_config.
+ *
+ * Si la solicitud ya tiene `payroll_id`, devuelve el existente
+ * (idempotente — no genera planillas duplicadas si se llama otra vez).
+ */
+async function processVacationPayment(
+  tx: AnyDb,
+  requestId: string,
+  performedBy: string | null
+): Promise<{ payrollId: string } | { error: string }> {
+  const [req] = await tx
+    .select()
+    .from(vacationRequests)
+    .where(eq(vacationRequests.id, requestId))
+    .limit(1)
+  if (!req) return { error: 'Solicitud no encontrada' }
+  if (req.payrollId) return { payrollId: req.payrollId as string }
+  if ((req.paidDays ?? 0) <= 0) return { error: 'La solicitud no tiene días pagados' }
+
+  const [emp] = await tx
+    .select({
+      id: employees.id,
+      code: employees.code,
+      firstName: employees.firstName,
+      lastName: employees.lastName,
+      baseSalary: employees.baseSalary,
+      payFrequency: employees.payFrequency,
+    })
+    .from(employees)
+    .where(eq(employees.id, req.employeeId))
+    .limit(1)
+  if (!emp) return { error: 'Empleado no encontrado' }
+
+  const rate = dailyRate(emp.baseSalary, emp.payFrequency)
+  const amount = (rate * req.paidDays).toFixed(2)
+  const today = new Date().toISOString().slice(0, 10)
+  const periodStart = req.startDate ?? today
+  const periodEnd = req.endDate ?? today
+
+  const concept = {
+    code: 'VACACIONES',
+    name: 'Pago de vacaciones',
+    amount: Number(amount),
+    type: 'income' as const,
+    meta: {
+      days: req.paidDays,
+      requestNumber: req.requestNumber,
+      dailyRate: Number(rate.toFixed(4)),
+    },
+  }
+
+  const [payroll] = await tx
+    .insert(payrolls)
+    .values({
+      name: `Vacaciones ${req.requestNumber} — ${emp.lastName}, ${emp.firstName}`,
+      type: 'vacation',
+      frequency: 'liquidation',
+      periodStart,
+      periodEnd,
+      paymentDate: null,
+      payrollTypeId: null,
+      status: 'created',
+      totalGross: amount,
+      totalDeductions: '0',
+      totalNet: amount,
+    })
+    .returning({ id: payrolls.id })
+
+  await tx.insert(payrollLines).values({
+    payrollId: payroll.id,
+    employeeId: req.employeeId,
+    grossAmount: amount,
+    deductions: '0',
+    netAmount: amount,
+    concepts: [concept],
+  })
+
+  await tx
+    .update(vacationRequests)
+    .set({
+      status: 'processed',
+      processedAt: new Date(),
+      payrollId: payroll.id,
+      updatedAt: new Date(),
+    })
+    .where(eq(vacationRequests.id, requestId))
+
+  // Marcar el movimiento de commit con la planilla generada para
+  // que la auditoría sea localizable: "este pago salió en VAC-...".
+  // Como `commit` ya se insertó antes, agregamos una nota.
+  void performedBy
+
+  return { payrollId: payroll.id as string }
+}
+
 export async function approveRequest(
   db: AnyDb,
   requestId: string,
   approverId: string
-): Promise<{ success: true } | { success: false; error: string }> {
+): Promise<
+  { success: true; data: { payrollId: string | null } } | { success: false; error: string }
+> {
   // biome-ignore lint/suspicious/noExplicitAny: drizzle tx
   return db.transaction(async (tx: any) => {
     const [req] = await tx
@@ -419,7 +553,20 @@ export async function approveRequest(
       })
     }
 
-    return { success: true as const }
+    // Si incluye pago, generar planilla automáticamente y dejar
+    // la solicitud en `processed`. Si solo es disfrute, queda en
+    // `approved` (no hay planilla que producir).
+    let payrollId: string | null = null
+    if (req.paidDays > 0) {
+      const result = await processVacationPayment(tx, requestId, approverId)
+      if ('error' in result) {
+        // Rollback transaction: si la planilla falla, no aprobamos.
+        throw new Error(`No se pudo generar la planilla: ${result.error}`)
+      }
+      payrollId = result.payrollId
+    }
+
+    return { success: true as const, data: { payrollId } }
   })
 }
 

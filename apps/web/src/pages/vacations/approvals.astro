@@ -150,7 +150,18 @@ const flash = Astro.url.searchParams.get('flash') ?? ''
         if (!json.ok) {
           await sa.error({ title: 'No se pudo aprobar', message: json.error })
         } else {
-          await sa.success({ title: 'Solicitud aprobada', redirect: '/vacations/approvals?flash=approved' })
+          // Si la aprobación generó planilla (paid_days > 0), redirigimos al detalle.
+          const payrollId = json.data?.payrollId
+          const successMsg = payrollId
+            ? 'Solicitud aprobada y planilla de vacaciones generada.'
+            : 'Solicitud aprobada.'
+          await sa.success({
+            title: 'Solicitud aprobada',
+            message: successMsg,
+            redirect: payrollId
+              ? `/payroll/${payrollId}?flash=vacation-created`
+              : '/vacations/approvals?flash=approved',
+          })
         }
       }
       async function reject(id, num) {

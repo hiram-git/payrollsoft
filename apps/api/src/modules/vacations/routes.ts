@@ -218,12 +218,22 @@ export const vacationsRoutes = new Elysia({ prefix: '/vacations' })
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const result = await approveRequest(db, params.id, user?.userId ?? '')
-      if (!result.success) {
-        set.status = 422
-        return { success: false, error: result.error }
+      try {
+        const result = await approveRequest(db, params.id, user?.userId ?? '')
+        if (!result.success) {
+          set.status = 422
+          return { success: false, error: result.error }
+        }
+        // `payrollId` viene poblado si la solicitud incluía paid_days > 0
+        // y la planilla de vacaciones se generó como parte de la aprobación.
+        return { success: true, data: result.data }
+      } catch (err) {
+        set.status = 500
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Error al aprobar la solicitud',
+        }
       }
-      return { success: true }
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('vacations:approve')],
