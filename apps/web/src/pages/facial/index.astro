@@ -1,0 +1,261 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
+
+const dateParam = Astro.url.searchParams.get('date') ?? ''
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Panama' })
+const activeDate = dateParam || today
+
+type Totals = {
+  employees: number
+  present: number
+  late: number
+  overtime: number
+  absent: number
+  marcacionesToday: number
+}
+type LastMarcacion = {
+  employeeId: string | null
+  kind: string
+  capturedAt: string
+}
+type PresentRow = {
+  employeeId: string | null
+  workedMinutes: number | null
+  lateMinutes: number | null
+  overtimeMinutes: number | null
+  checkIn: string | null
+  checkOut: string | null
+  employee?: {
+    code: string
+    firstName: string
+    lastName: string
+    department: string | null
+    position: string | null
+  } | null
+}
+
+let totals: Totals = {
+  employees: 0,
+  present: 0,
+  late: 0,
+  overtime: 0,
+  absent: 0,
+  marcacionesToday: 0,
+}
+let present: PresentRow[] = []
+let lastMarcaciones: LastMarcacion[] = []
+let fetchError = ''
+
+try {
+  const res = await fetch(`${API_URL}/facial/dashboard?date=${activeDate}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as {
+      success: boolean
+      data: { totals: Totals; present: PresentRow[]; lastMarcaciones: LastMarcacion[] }
+    }
+    totals = json.data.totals
+    present = json.data.present
+    lastMarcaciones = json.data.lastMarcaciones
+  } else {
+    fetchError = 'Error al cargar dashboard'
+  }
+} catch {
+  fetchError = 'No se pudo conectar con el servidor'
+}
+
+function fmtTime(ts: string | null): string {
+  if (!ts) return '—'
+  return new Date(ts).toLocaleTimeString('es-PA', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Panama',
+  })
+}
+
+function fmtMinutes(m: number | null): string {
+  if (!m || m <= 0) return '—'
+  const h = Math.floor(m / 60)
+  const min = m % 60
+  return h > 0 ? (min > 0 ? `${h}h ${min}m` : `${h}h`) : `${min}m`
+}
+
+function kindLabel(k: string): string {
+  return (
+    (
+      {
+        entry: 'Entrada',
+        exit: 'Salida',
+        lunch_start: 'Salida almuerzo',
+        lunch_end: 'Entrada almuerzo',
+        extra: 'Extra',
+      } as Record<string, string>
+    )[k] ?? k
+  )
+}
+---
+
+<AppLayout title="Reconocimiento facial">
+  <div class="p-8">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Reconocimiento facial</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Asistencia en vivo · {activeDate}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/facial/enrollments" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors">
+          Enrolar
+        </a>
+        <a href="/facial/marcaciones" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors">
+          Marcaciones
+        </a>
+        <a href="/facial/terminals" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors">
+          Terminales
+        </a>
+        <a href="/facial/manual" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          + Manual
+        </a>
+      </div>
+    </div>
+
+    {fetchError && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {fetchError}
+      </div>
+    )}
+
+    <!-- Date filter -->
+    <form method="GET" action="/facial" class="mb-5 flex items-end gap-3 flex-wrap">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="filter-date">Fecha</label>
+        <input id="filter-date" type="date" name="date" value={activeDate}
+          class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+        Filtrar
+      </button>
+    </form>
+
+    <!-- KPI cards -->
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wide">Empleados</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1 tabular-nums">{totals.employees}</p>
+      </div>
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <p class="text-xs text-emerald-700 uppercase tracking-wide">Presentes</p>
+        <p class="text-2xl font-bold text-emerald-700 mt-1 tabular-nums">{totals.present}</p>
+      </div>
+      <div class="rounded-xl border border-amber-200 bg-amber-50 p-4">
+        <p class="text-xs text-amber-700 uppercase tracking-wide">Tardanzas</p>
+        <p class="text-2xl font-bold text-amber-700 mt-1 tabular-nums">{totals.late}</p>
+      </div>
+      <div class="rounded-xl border border-red-200 bg-red-50 p-4">
+        <p class="text-xs text-red-700 uppercase tracking-wide">Ausentes</p>
+        <p class="text-2xl font-bold text-red-700 mt-1 tabular-nums">{totals.absent}</p>
+      </div>
+      <div class="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+        <p class="text-xs text-indigo-700 uppercase tracking-wide">Con horas extra</p>
+        <p class="text-2xl font-bold text-indigo-700 mt-1 tabular-nums">{totals.overtime}</p>
+      </div>
+      <div class="rounded-xl border border-gray-200 bg-white p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wide">Marcaciones</p>
+        <p class="text-2xl font-bold text-gray-900 mt-1 tabular-nums">{totals.marcacionesToday}</p>
+      </div>
+    </div>
+
+    <!-- Live grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+      <!-- Present employees -->
+      <div class="lg:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-gray-900">Empleados presentes</h2>
+          <span class="text-xs text-gray-400">Actualiza cada 15s</span>
+        </div>
+        {present.length === 0 ? (
+          <div class="py-10 text-center text-sm text-gray-400">Sin presencia registrada.</div>
+        ) : (
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-600">Empleado</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-600">Entrada</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-600">Salida</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-600">Trabajadas</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-600">Tardanza</th>
+                <th class="text-left px-4 py-2.5 font-medium text-gray-600">Extra</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              {present.map((r) => (
+                <tr class="hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3">
+                    <p class="font-medium text-gray-900">{r.employee ? `${r.employee.firstName} ${r.employee.lastName}` : '—'}</p>
+                    <p class="text-xs text-gray-400 font-mono mt-0.5">{r.employee?.code}</p>
+                  </td>
+                  <td class="px-4 py-3 tabular-nums">{fmtTime(r.checkIn)}</td>
+                  <td class="px-4 py-3 tabular-nums">{fmtTime(r.checkOut)}</td>
+                  <td class="px-4 py-3 tabular-nums">{fmtMinutes(r.workedMinutes)}</td>
+                  <td class="px-4 py-3 tabular-nums">
+                    {r.lateMinutes && r.lateMinutes > 0
+                      ? <span class="text-amber-600">{r.lateMinutes}m</span>
+                      : <span class="text-gray-400">—</span>}
+                  </td>
+                  <td class="px-4 py-3 tabular-nums">
+                    {r.overtimeMinutes && r.overtimeMinutes > 0
+                      ? <span class="text-emerald-600">{fmtMinutes(r.overtimeMinutes)}</span>
+                      : <span class="text-gray-400">—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <!-- Last marcaciones feed -->
+      <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200">
+          <h2 class="text-sm font-semibold text-gray-900">Últimas marcaciones</h2>
+        </div>
+        {lastMarcaciones.length === 0 ? (
+          <div class="py-10 text-center text-sm text-gray-400">Aún sin eventos.</div>
+        ) : (
+          <ul class="divide-y divide-gray-100 max-h-[440px] overflow-y-auto">
+            {lastMarcaciones.map((m) => (
+              <li class="px-4 py-3 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
+                <div class="min-w-0">
+                  <p class="text-sm font-medium text-gray-900 truncate">{kindLabel(m.kind)}</p>
+                  <p class="text-xs text-gray-400 font-mono mt-0.5">{m.employeeId ?? 'sin match'}</p>
+                </div>
+                <span class="text-xs text-gray-500 font-mono tabular-nums whitespace-nowrap">{fmtTime(m.capturedAt)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+    </div>
+
+  </div>
+
+  <script is:inline define:vars={{ activeDate, today }}>
+    // Poll the dashboard every 15s when viewing today. We just reload —
+    // the SSR cycle is cheap (one API call) and avoids us having to keep
+    // the live state in client JS.
+    if (activeDate === today) {
+      setTimeout(() => { window.location.reload() }, 15000)
+    }
+  </script>
+</AppLayout>

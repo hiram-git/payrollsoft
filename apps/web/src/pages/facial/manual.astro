@@ -1,0 +1,130 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
+
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+}
+
+let employees: Employee[] = []
+let formError = ''
+let formSuccess = ''
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData()
+  const payload = {
+    employeeId: form.get('employeeId'),
+    kind: form.get('kind'),
+    capturedAt: form.get('capturedAt'),
+    justification: form.get('justification'),
+  }
+  try {
+    const res = await fetch(`${API_URL}/facial/marcaciones/manual`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `auth=${authCookie}`,
+        'X-Tenant': tenantSlug,
+      },
+      body: JSON.stringify(payload),
+    })
+    if (res.ok) {
+      formSuccess = 'Marcación registrada correctamente.'
+    } else {
+      const j = (await res.json().catch(() => ({}))) as { error?: string }
+      formError = j.error ?? 'Error al guardar.'
+    }
+  } catch {
+    formError = 'No se pudo conectar con el servidor.'
+  }
+}
+
+try {
+  const res = await fetch(`${API_URL}/employees?limit=500`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as { data?: { data?: Employee[] } | Employee[] }
+    employees = Array.isArray(json.data) ? json.data : (json.data?.data ?? [])
+  }
+} catch {}
+
+const now = new Date()
+const isoLocal = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+  .toISOString()
+  .slice(0, 16)
+---
+
+<AppLayout title="Marcación manual">
+  <div class="p-8 max-w-2xl">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Marcación manual supervisada</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Registra una marcación cuando el reconocimiento facial no fue posible.</p>
+      </div>
+      <a href="/facial" class="text-sm text-blue-600 hover:underline">← Volver</a>
+    </div>
+
+    {formSuccess && (
+      <div class="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">
+        {formSuccess}
+      </div>
+    )}
+    {formError && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {formError}
+      </div>
+    )}
+
+    <form method="POST" class="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="employeeId">Empleado</label>
+        <select id="employeeId" name="employeeId" required
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="">— Selecciona —</option>
+          {employees.map((e) => (
+            <option value={e.id}>{e.code} · {e.firstName} {e.lastName}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="kind">Tipo</label>
+        <select id="kind" name="kind" required
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="entry">Entrada</option>
+          <option value="lunch_start">Salida almuerzo</option>
+          <option value="lunch_end">Entrada almuerzo</option>
+          <option value="exit">Salida</option>
+          <option value="extra">Marcación extraordinaria</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="capturedAt">Fecha y hora</label>
+        <input id="capturedAt" name="capturedAt" type="datetime-local" required defaultValue={isoLocal}
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="justification">Justificación</label>
+        <textarea id="justification" name="justification" rows="3" required minlength="3" maxlength="500"
+          placeholder="Ej. Cámara fuera de servicio, empleado en visita externa, etc."
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+      </div>
+
+      <button type="submit"
+        class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">
+        Registrar marcación
+      </button>
+    </form>
+  </div>
+</AppLayout>

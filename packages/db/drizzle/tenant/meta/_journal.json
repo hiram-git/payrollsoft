@@ -232,6 +232,13 @@
       "when": 1762128012000,
       "tag": "0033_employee_files_requires_approval",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1762128013000,
+      "tag": "0034_facial_recognition",
+      "breakpoints": true
     }
   ]
 }

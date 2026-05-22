@@ -21,6 +21,7 @@ import { dashboardRoutes } from './modules/dashboard/routes'
 import { employeeFilesRoutes } from './modules/employee-files/routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
+import { facialRoutes } from './modules/facial/routes'
 import { payrollRoutes } from './modules/payroll/routes'
 import { positionsRoutes } from './modules/positions/routes'
 import { reportsRoutes } from './modules/reports/routes'
@@ -72,6 +73,7 @@ const app = new Elysia()
   .use(employeeFilesRoutes)
   .use(payrollRoutes)
   .use(reportsRoutes)
+  .use(facialRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen({ port: env.PORT, hostname: env.HOST })
