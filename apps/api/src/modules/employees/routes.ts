@@ -31,6 +31,11 @@ const EmployeeBody = t.Object({
   ),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
+  // Datos bancarios (tesorería)
+  bankId: t.Optional(t.Nullable(t.String())),
+  accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
+  accountType: t.Optional(t.Nullable(t.Union([t.Literal('savings'), t.Literal('checking')]))),
+  paymentMethod: t.Optional(t.Union([t.Literal('ach'), t.Literal('check'), t.Literal('cash')])),
 })
 
 const EmployeeUpdateBody = t.Object({
@@ -52,6 +57,11 @@ const EmployeeUpdateBody = t.Object({
   ),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
+  // Datos bancarios (tesorería)
+  bankId: t.Optional(t.Nullable(t.String())),
+  accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
+  accountType: t.Optional(t.Nullable(t.Union([t.Literal('savings'), t.Literal('checking')]))),
+  paymentMethod: t.Optional(t.Union([t.Literal('ach'), t.Literal('check'), t.Literal('cash')])),
 })
 
 const ListQuery = t.Object({

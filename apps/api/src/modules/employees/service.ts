@@ -38,6 +38,11 @@ export type EmployeeCreateInput = {
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
   payrollTypeIds?: string[]
   customFields?: Record<string, unknown>
+  // Datos bancarios (tesorería)
+  bankId?: string | null
+  accountNumber?: string | null
+  accountType?: 'savings' | 'checking' | null
+  paymentMethod?: 'ach' | 'check' | 'cash'
 }
 
 export type EmployeeUpdateInput = Partial<EmployeeCreateInput>
@@ -211,6 +216,10 @@ export async function createEmployeeService(
     hireDate: input.hireDate,
     baseSalary: input.baseSalary,
     payFrequency: input.payFrequency ?? 'biweekly',
+    bankId: input.bankId ?? null,
+    accountNumber: input.accountNumber?.trim() || null,
+    accountType: input.accountType ?? null,
+    paymentMethod: input.paymentMethod ?? 'check',
     customFields: input.customFields ?? {},
   })
 
@@ -272,6 +281,11 @@ export async function updateEmployeeService(
   if (input.payFrequency !== undefined) patch.payFrequency = input.payFrequency
   if (input.customFields !== undefined) patch.customFields = input.customFields
   if ('positionId' in input) patch.positionId = input.positionId || null
+  // Datos bancarios
+  if ('bankId' in input) patch.bankId = input.bankId || null
+  if ('accountNumber' in input) patch.accountNumber = input.accountNumber?.trim() || null
+  if ('accountType' in input) patch.accountType = input.accountType || null
+  if (input.paymentMethod !== undefined) patch.paymentMethod = input.paymentMethod
 
   // Catalog IDs — resolve names when any ID changes
   const catalogChanged =

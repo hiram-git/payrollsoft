@@ -199,6 +199,13 @@ const navAll: NavEntry[] = [
   },
   {
     kind: 'item',
+    href: '/treasury',
+    label: 'Tesorería',
+    icon: 'payroll',
+    require: 'treasury:read',
+  },
+  {
+    kind: 'item',
     href: '/liquidations',
     label: 'Liquidaciones',
     icon: 'scale',
@@ -218,6 +225,8 @@ const navAll: NavEntry[] = [
         label: 'Expedientes',
         require: 'employee_files:approve',
       },
+      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
+      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
     ],
   },
 ]

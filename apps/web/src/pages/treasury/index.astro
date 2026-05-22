@@ -1,0 +1,232 @@
+---
+/**
+ * Hub del módulo de tesorería — listado de corridas de pago.
+ *
+ * Cada corrida agrupa todo lo que se pagó (ACH + cheques + efectivo)
+ * para una planilla específica o un evento manual. Desde aquí el
+ * contador entra al detalle para emitir cheques o generar el ACH TXT.
+ */
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'treasury:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canWrite = can(identity, 'treasury:write')
+
+type PaymentRun = {
+  id: string
+  payrollId: string | null
+  name: string
+  status: 'draft' | 'open' | 'closed' | 'cancelled'
+  totalAmount: string
+  achTotal: string
+  checkTotal: string
+  cashTotal: string
+  createdAt: string
+  closedAt: string | null
+}
+type PayrollOpt = { id: string; name: string; status: string }
+
+let runs: PaymentRun[] = []
+let payrolls: PayrollOpt[] = []
+let error = ''
+try {
+  const [rRes, pRes] = await Promise.all([
+    fetch(`${API_URL}/treasury/runs`, { headers }),
+    fetch(`${API_URL}/payrolls?status=closed`, { headers }).catch(() => null),
+  ])
+  if (rRes.status === 401) return Astro.redirect('/login')
+  if (rRes.ok) runs = ((await rRes.json()) as { data: PaymentRun[] }).data ?? []
+  if (pRes?.ok) {
+    const j = (await pRes.json()) as { data?: PayrollOpt[]; payrolls?: PayrollOpt[] }
+    payrolls = j.data ?? j.payrolls ?? []
+  }
+} catch {
+  error = 'No se pudo conectar.'
+}
+
+const flash = Astro.url.searchParams.get('flash') ?? ''
+const flashMsg = Astro.url.searchParams.get('msg') ?? ''
+
+function statusLabel(s: string): string {
+  return s === 'draft'
+    ? 'Borrador'
+    : s === 'open'
+      ? 'Abierta'
+      : s === 'closed'
+        ? 'Cerrada'
+        : 'Cancelada'
+}
+function statusClass(s: string): string {
+  if (s === 'open') return 'tr-status-open'
+  if (s === 'closed') return 'tr-status-closed'
+  if (s === 'draft') return 'tr-status-draft'
+  return 'tr-status-cancelled'
+}
+function fmtDate(s: string): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleDateString('es-PA')
+}
+function fmtMoney(s: string): string {
+  const n = Number(s)
+  if (!Number.isFinite(n)) return '—'
+  return `B/. ${n.toFixed(2)}`
+}
+---
+<AppLayout title="Tesorería">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-end justify-between gap-2">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight tr-title">Tesorería</h1>
+        <p class="text-sm mt-0.5 tr-subtitle">
+          {runs.length} {runs.length === 1 ? 'corrida' : 'corridas'} de pago — gestiona el pago efectivo
+          después del cierre de una planilla.
+        </p>
+      </div>
+      {canWrite && (
+        <button type="button" id="btn-new-run" class="tr-btn-primary px-3.5 py-2 rounded-md text-sm font-medium">
+          + Nueva corrida
+        </button>
+      )}
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Corrida creada.</div>
+    )}
+    {flash === 'error' && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Error.'}</div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    {/* Modal de nueva corrida */}
+    {canWrite && (
+      <div id="new-run-modal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-200">
+          <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="font-semibold text-gray-900">Nueva corrida de pago</h3>
+            <button type="button" id="new-run-close" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+          </div>
+          <form method="POST" action="/api/treasury/action?op=run-create" class="p-5 space-y-3">
+            <input type="hidden" name="_redirect" value="/treasury" />
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
+              <input type="text" name="name" required maxlength="255" placeholder="ej. Quincena Enero 2026" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Planilla asociada (opcional)</label>
+              <select name="payrollId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                <option value="">— Sin planilla (pago manual) —</option>
+                {payrolls.map((p) => <option value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Notas (opcional)</label>
+              <textarea name="notes" rows="2" maxlength="1000" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"></textarea>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" id="new-run-cancel" class="px-3 py-2 text-sm text-gray-600">Cancelar</button>
+              <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">Crear corrida</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
+
+    <section class="tr-card border rounded-lg overflow-hidden">
+      {runs.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm tr-subtitle">No hay corridas registradas.</p>
+        </div>
+      ) : (
+        <table class="tr-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Estado</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Total</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">ACH</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Cheques</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Creada</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((r) => (
+              <tr class="border-b last:border-0 tr-rule">
+                <td class="px-5 py-3 align-top tr-cell">{r.name}</td>
+                <td class="px-5 py-3 align-top">
+                  <span class={`tr-status-badge ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
+                </td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(r.totalAmount)}</td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(r.achTotal)}</td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(r.checkTotal)}</td>
+                <td class="px-5 py-3 align-top text-xs tr-mute whitespace-nowrap">{fmtDate(r.createdAt)}</td>
+                <td class="px-5 py-3 align-top text-right">
+                  <a href={`/treasury/${r.id}`} class="text-xs tr-link">Abrir →</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const modal = document.getElementById('new-run-modal')
+      if (!modal) return
+      const open = document.getElementById('btn-new-run')
+      const close = document.getElementById('new-run-close')
+      const cancel = document.getElementById('new-run-cancel')
+      const show = () => { modal.classList.remove('hidden'); modal.classList.add('flex') }
+      const hide = () => { modal.classList.add('hidden'); modal.classList.remove('flex') }
+      open?.addEventListener('click', show)
+      close?.addEventListener('click', hide)
+      cancel?.addEventListener('click', hide)
+      modal.addEventListener('click', (e) => { if (e.target === modal) hide() })
+    })()
+  </script>
+
+  <style>
+    .tr-title    { color: var(--fore); }
+    .tr-subtitle { color: var(--fore-dim); }
+    .tr-cell     { color: var(--fore-dim); }
+    .tr-mute     { color: var(--mute); }
+    .tr-card { background: var(--ink-2); border-color: var(--rule); }
+    .tr-rule { border-color: var(--rule); }
+    .tr-link { color: #60a5fa; }
+    .tr-link:hover { text-decoration: underline; }
+    .tr-btn-primary { background: #2563eb; color: white; }
+    .tr-btn-primary:hover { background: #1d4ed8; }
+    .tr-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
+    .tr-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .tr-table tbody tr:hover { background: var(--ink-4); }
+    .tr-status-badge {
+      display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px;
+      font-size: 0.6875rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .tr-status-draft     { background: rgba(156,163,175,0.18); color: var(--mute); }
+    .tr-status-open      { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .tr-status-closed    { background: rgba(16,185,129,0.18); color: #34d399; }
+    .tr-status-cancelled { background: rgba(248,113,113,0.18); color: #f87171; }
+    [data-theme='light'] .tr-card { background: #ffffff; }
+    [data-theme='light'] .tr-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .tr-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .tr-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .tr-link { color: #2563eb; }
+    [data-theme='light'] .tr-status-draft     { background: #f3f4f6; color: #6b7280; }
+    [data-theme='light'] .tr-status-open      { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .tr-status-closed    { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .tr-status-cancelled { background: #fee2e2; color: #991b1b; }
+  </style>
+</AppLayout>

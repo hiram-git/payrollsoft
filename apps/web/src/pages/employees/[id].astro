@@ -30,7 +30,13 @@ type Employee = {
   payFrequency: string
   isActive: boolean
   payrollTypeIds?: string[]
+  // Datos bancarios (módulo de tesorería)
+  bankId?: string | null
+  accountNumber?: string | null
+  accountType?: 'savings' | 'checking' | null
+  paymentMethod?: 'ach' | 'check' | 'cash'
 }
+type Bank = { id: string; name: string; isActive: number }
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 
 type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
@@ -99,6 +105,7 @@ let payrollTypes: PayrollType[] = []
 let customFieldDefs: CustomFieldDefinition[] = []
 let cfHistory: CustomFieldHistoryEntry[] = []
 let tipoInstitucion = 'privada'
+let banksCatalog: Bank[] = []
 
 type FileRow = {
   id: string
@@ -206,6 +213,12 @@ try {
     ])
     if (balRes.ok) vacBalance = ((await balRes.json()) as { data: VacationBalance }).data
     if (reqRes.ok) vacRequests = ((await reqRes.json()) as { data: VacationRequest[] }).data ?? []
+  }
+
+  // Catálogo de bancos (tab Bancario)
+  const banksRes = await fetch(`${API_URL}/banks`, { headers }).catch(() => null)
+  if (banksRes?.ok) {
+    banksCatalog = ((await banksRes.json()) as { data: Bank[] }).data ?? []
   }
 
   // Expedientes del empleado — agrupados por tipo en el tab.
@@ -363,6 +376,9 @@ const freqLabel: Record<string, string> = {
         </button>
         <button type="button" class="tab-btn" data-tab="vacaciones" onclick="switchTab('vacaciones', this)">
           Vacaciones
+        </button>
+        <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
+          Bancario
         </button>
       </div>
 
@@ -995,6 +1011,71 @@ const freqLabel: Record<string, string> = {
                 <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">Enviar solicitud</button>
               </div>
             </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Bancario -->
+      <div id="tab-bancario" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Datos bancarios</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Configura cómo el empleado recibe su pago. El campo <strong>método</strong>
+            determina si entra al lote ACH automático o si se le emite cheque manual
+            desde el módulo de Tesorería.
+          </p>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div class="col-span-2">
+              <label class="block text-sm text-gray-700 font-medium mb-1">Método de pago</label>
+              <div class="flex gap-2">
+                <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                  <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} />
+                  <span>Cheque</span>
+                </label>
+                <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                  <input type="radio" name="paymentMethod" value="ach" checked={emp.paymentMethod === 'ach'} />
+                  <span>ACH (transferencia)</span>
+                </label>
+                <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                  <input type="radio" name="paymentMethod" value="cash" checked={emp.paymentMethod === 'cash'} />
+                  <span>Efectivo</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">Banco</label>
+              <select name="bankId" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="">— Sin banco —</option>
+                {banksCatalog.filter((b) => b.isActive === 1).map((b) => (
+                  <option value={b.id} selected={emp.bankId === b.id}>{b.name}</option>
+                ))}
+              </select>
+              <p class="text-[10px] text-gray-400 mt-0.5">
+                Solo se requiere para ACH. Las cuentas sin banco con número de ruta configurado no podrán ser pagadas por transferencia.
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">Tipo de cuenta</label>
+              <select name="accountType" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="" selected={!emp.accountType}>— Sin cuenta —</option>
+                <option value="savings" selected={emp.accountType === 'savings'}>Ahorros (SC)</option>
+                <option value="checking" selected={emp.accountType === 'checking'}>Corriente (DC)</option>
+              </select>
+            </div>
+
+            <div class="col-span-2">
+              <label class="block text-sm text-gray-700 font-medium mb-1">Número de cuenta</label>
+              <input type="text" name="accountNumber" value={emp.accountNumber ?? ''} maxlength="40" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono" />
+            </div>
+          </div>
+
+          <div class="mt-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            <strong>Recordatorio:</strong> para que un empleado con método ACH entre al lote
+            automático, el <strong>banco seleccionado debe tener el número de ruta configurado</strong>
+            en <a href="/config/banks" class="underline">Configuración → Bancos</a>.
           </div>
         </div>
       </div>
