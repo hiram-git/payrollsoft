@@ -246,6 +246,13 @@
       "when": 1762128014000,
       "tag": "0035_vacations_module",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1762128015000,
+      "tag": "0036_treasury_module",
+      "breakpoints": true
     }
   ]
 }
