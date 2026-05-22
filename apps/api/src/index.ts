@@ -27,6 +27,7 @@ import { positionsRoutes } from './modules/positions/routes'
 import { reportsRoutes } from './modules/reports/routes'
 import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
 import { superadminRoutes } from './modules/superadmin/routes'
+import { treasuryRoutes } from './modules/treasury/routes'
 import { tenantUserRoutes } from './modules/users/routes'
 import { vacationsRoutes } from './modules/vacations/routes'
 
@@ -76,6 +77,7 @@ const app = new Elysia()
   .use(payrollRoutes)
   .use(reportsRoutes)
   .use(facialRoutes)
+  .use(treasuryRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen({ port: env.PORT, hostname: env.HOST })
