@@ -183,7 +183,11 @@ paso** — la migración `0034_facial_recognition` detecta automáticamente
 la ausencia de la extensión y deja el módulo deshabilitado sin
 romper el resto del sistema.
 
-Para habilitarlo:
+> **¿Estás en Windows?** Esta sección es para Ubuntu (`apt`). Para
+> Windows ver `docs/PGVECTOR-WINDOWS.md` — cubre Docker, WSL2,
+> binarios pre-compilados y compilación con Visual Studio.
+
+Para habilitarlo en Ubuntu:
 
 ```bash
 sudo apt install -y postgresql-16-pgvector
