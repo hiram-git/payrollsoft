@@ -1,6 +1,8 @@
 // Attendance Processor — implemented in Phase 3
 // Handles: marcaciones, tolerancias, horas extra, descuento almuerzo, Base44 webhook
 
+export * from './consolidator'
+
 export type AttendanceWebhookPayload = {
   employeeCode: string
   timestamp: string

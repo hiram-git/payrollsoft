@@ -4,6 +4,7 @@ use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use url::Url;
 
 const DEFAULT_URL: &str = "http://localhost:4321";
+const KIOSK_PATH: &str = "/kiosk";
 
 fn load_env() {
     // Look for a .env up the tree starting from the binary's CWD. The desktop
@@ -36,7 +37,24 @@ fn resolve_target_url() -> Result<Url, String> {
     if raw.is_empty() {
         return Err("DESKTOP_URL is set but empty".into());
     }
-    Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))
+    let mut url = Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))?;
+
+    // When DESKTOP_MODE=kiosk the shell points the WebView at the
+    // facial-recognition kiosk page so the device boots straight into the
+    // marcacion UI. Operators can still navigate elsewhere via the URL
+    // unless they pin the windows to fullscreen + lock down keys.
+    let mode = std::env::var("DESKTOP_MODE").unwrap_or_default();
+    if mode.trim().eq_ignore_ascii_case("kiosk") {
+        url.set_path(KIOSK_PATH);
+    }
+
+    Ok(url)
+}
+
+fn is_kiosk_mode() -> bool {
+    std::env::var("DESKTOP_MODE")
+        .map(|v| v.trim().eq_ignore_ascii_case("kiosk"))
+        .unwrap_or(false)
 }
 
 pub fn run() {
@@ -64,16 +82,21 @@ pub fn run() {
 
     eprintln!("[payroll-desktop] loading {target}");
 
+    let kiosk = is_kiosk_mode();
+
     tauri::Builder::default()
         .setup(move |app| {
             let webview_url = WebviewUrl::External(target.clone());
-            let window = WebviewWindowBuilder::new(app, "main", webview_url)
-                .title("PayrollSoft")
+            let mut builder = WebviewWindowBuilder::new(app, "main", webview_url)
+                .title(if kiosk { "PayrollSoft — Marcación" } else { "PayrollSoft" })
                 .inner_size(1280.0, 800.0)
                 .min_inner_size(1024.0, 640.0)
                 .resizable(true)
-                .visible(false)
-                .build()?;
+                .visible(false);
+            if kiosk {
+                builder = builder.fullscreen(true).resizable(false);
+            }
+            let window = builder.build()?;
             window.show()?;
             let _ = app.get_webview_window("main");
             Ok(())

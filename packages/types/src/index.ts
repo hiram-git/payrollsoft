@@ -138,6 +138,14 @@ export const PERMISSION_CODES = [
   'employee_files:write',
   'employee_files:delete',
   'employee_files:approve',
+  // Facial recognition + kiosk terminals
+  'facial:enroll',
+  'facial:read',
+  'facial:mark',
+  'facial:override',
+  'facial:admin',
+  'terminals:read',
+  'terminals:write',
   // Global (super-admin only)
   'tenants:create',
   'tenants:read',
@@ -170,6 +178,9 @@ const TENANT_PERMISSION_MODULES = new Set([
   'roles',
   'settings',
   'audit',
+  'employee_files',
+  'facial',
+  'terminals',
 ])
 
 /** Returns true if a code is in the global (super-admin) scope. */
@@ -237,6 +248,10 @@ const HR_PERMISSIONS: readonly PermissionCode[] = [
   'reports:personnel.export',
   'reports:attendance.view',
   'reports:attendance.export',
+  'facial:enroll',
+  'facial:read',
+  'facial:override',
+  'terminals:read',
 ]
 
 const ACCOUNTANT_PERMISSIONS: readonly PermissionCode[] = [
@@ -270,6 +285,7 @@ const ACCOUNTANT_PERMISSIONS: readonly PermissionCode[] = [
   'reports:payroll.view',
   'reports:payroll.export',
   'reports:loans.view',
+  'facial:read',
 ]
 
 const VIEWER_PERMISSIONS: readonly PermissionCode[] = [
@@ -288,6 +304,7 @@ const VIEWER_PERMISSIONS: readonly PermissionCode[] = [
   'reports:payroll.view',
   'reports:personnel.view',
   'reports:attendance.view',
+  'facial:read',
 ]
 
 export const SYSTEM_ROLES: readonly SystemRoleDefinition[] = [
@@ -363,6 +380,98 @@ export const createPayrollSchema = z.object({
 })
 
 export type CreatePayrollInput = z.infer<typeof createPayrollSchema>
+
+// ─── Facial recognition ──────────────────────────────────────────────────────
+
+export const FACIAL_EMBEDDING_DIM = 128
+
+export const MARCACION_KINDS = ['entry', 'exit', 'lunch_start', 'lunch_end', 'extra'] as const
+export type MarcacionKind = (typeof MARCACION_KINDS)[number]
+
+export const MARCACION_SOURCES = ['kiosk', 'manual', 'admin', 'webhook'] as const
+export type MarcacionSource = (typeof MARCACION_SOURCES)[number]
+
+export const MARCACION_STATUSES = ['verified', 'pending', 'rejected', 'manual'] as const
+export type MarcacionStatus = (typeof MARCACION_STATUSES)[number]
+
+const embeddingSchema = z
+  .array(z.number().finite())
+  .length(FACIAL_EMBEDDING_DIM, `Embedding must have ${FACIAL_EMBEDDING_DIM} dimensions`)
+
+export const facialEnrollSchema = z.object({
+  employeeId: z.string().uuid(),
+  embedding: embeddingSchema,
+  photoUrl: z.string().url().optional(),
+  qualityScore: z.number().min(0).max(1).optional(),
+  isPrimary: z.boolean().optional(),
+  notes: z.string().max(500).optional(),
+})
+export type FacialEnrollInput = z.infer<typeof facialEnrollSchema>
+
+export const facialMatchSchema = z.object({
+  embedding: embeddingSchema,
+  terminalCode: z.string().max(60).optional(),
+  /** Cosine distance threshold (0..1). Lower = stricter. Default 0.4. */
+  threshold: z.number().min(0).max(1).optional(),
+})
+export type FacialMatchInput = z.infer<typeof facialMatchSchema>
+
+const marcacionSchema = z.object({
+  employeeId: z.string().uuid().optional(),
+  kind: z.enum(MARCACION_KINDS),
+  capturedAt: z.string().datetime({ offset: true }),
+  confidence: z.number().min(0).max(1).optional(),
+  matchDistance: z.number().min(0).max(2).optional(),
+  livenessScore: z.number().min(0).max(1).optional(),
+  matchedEnrollmentId: z.string().uuid().optional(),
+  photoUrl: z.string().url().optional(),
+  idempotencyKey: z.string().min(8).max(100),
+  clientEventId: z.string().max(100).optional(),
+  terminalCode: z.string().max(60).optional(),
+  source: z.enum(MARCACION_SOURCES).optional(),
+  deviceMeta: z.record(z.unknown()).optional(),
+})
+export type MarcacionInput = z.infer<typeof marcacionSchema>
+
+export const facialMarcacionBatchSchema = z.object({
+  items: z.array(marcacionSchema).min(1).max(200),
+})
+export type FacialMarcacionBatchInput = z.infer<typeof facialMarcacionBatchSchema>
+
+export const facialManualMarcacionSchema = z.object({
+  employeeId: z.string().uuid(),
+  kind: z.enum(MARCACION_KINDS),
+  capturedAt: z.string().datetime({ offset: true }),
+  justification: z.string().min(3).max(500),
+})
+export type FacialManualMarcacionInput = z.infer<typeof facialManualMarcacionSchema>
+
+export const facialTerminalSchema = z.object({
+  code: z
+    .string()
+    .min(2)
+    .max(60)
+    .regex(/^[a-zA-Z0-9_-]+$/),
+  name: z.string().min(2).max(160),
+  location: z.string().max(200).optional(),
+  status: z.enum(['active', 'inactive']).optional(),
+})
+export type FacialTerminalInput = z.infer<typeof facialTerminalSchema>
+
+export type FacialMatchResult = {
+  matched: boolean
+  employeeId?: string
+  enrollmentId?: string
+  distance?: number
+  confidence?: number
+  employee?: {
+    code: string
+    firstName: string
+    lastName: string
+    department: string | null
+    position: string | null
+  }
+}
 
 // ─── API Response ─────────────────────────────────────────────────────────────
 
