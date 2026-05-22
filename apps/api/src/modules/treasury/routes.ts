@@ -32,6 +32,7 @@ import {
   createPaymentRun,
   generateAchBatch,
   getAchBatch,
+  getCheckWithChequera,
   getEmployeePayables,
   issueCheck,
   listBanks,
@@ -227,6 +228,26 @@ export const treasuryRoutes = new Elysia()
   )
 
   // ── Cheques ─────────────────────────────────────────────────────────────
+  .get(
+    '/treasury/checks/:id',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const row = await getCheckWithChequera(db, params.id)
+      if (!row) {
+        set.status = 404
+        return { success: false, error: 'Cheque no encontrado' }
+      }
+      return { success: true, data: row }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      params: t.Object({ id: t.String() }),
+    }
+  )
+
   .get(
     '/treasury/runs/:id/checks',
     async ({ db, params, set }) => {
