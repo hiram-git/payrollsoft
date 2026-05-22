@@ -237,6 +237,7 @@
       "idx": 34,
       "version": "7",
       "when": 1762128013000,
+      "tag": "0034_vacations_module",
       "tag": "0034_facial_recognition",
       "breakpoints": true
     }

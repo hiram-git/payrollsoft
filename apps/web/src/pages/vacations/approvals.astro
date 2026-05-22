@@ -1,0 +1,236 @@
+---
+/**
+ * Bandeja de aprobación de solicitudes de vacaciones.
+ *
+ * Lista solicitudes en `pending` cuyo (request_type, departamento)
+ * matchea una regla activa con un rol del usuario, o todas si el
+ * usuario es tenant_admin.
+ */
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'vacations:approve')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type PendingRow = {
+  id: string
+  request_number: string
+  request_type: 'enjoy' | 'pay' | 'mixed'
+  start_date: string | null
+  end_date: string | null
+  enjoy_days: number
+  paid_days: number
+  reason: string | null
+  created_at: string
+  employee_code: string
+  employee_first_name: string
+  employee_last_name: string
+}
+
+let pending: PendingRow[] = []
+try {
+  const res = await fetch(`${API_URL}/vacations/approvals/pending`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) pending = ((await res.json()) as { data: PendingRow[] }).data ?? []
+} catch {
+  /* empty list */
+}
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+function fmtAge(iso: string): string {
+  const ts = new Date(iso).getTime()
+  if (!ts) return '—'
+  const diff = Date.now() - ts
+  const days = Math.floor(diff / 86400000)
+  if (days >= 1) return `hace ${days} ${days === 1 ? 'día' : 'días'}`
+  const hours = Math.floor(diff / 3600000)
+  if (hours >= 1) return `hace ${hours} h`
+  return 'recién'
+}
+function typeLabel(t: string): string {
+  return t === 'enjoy' ? 'Disfrute' : t === 'pay' ? 'Pago' : 'Mixto'
+}
+
+const flash = Astro.url.searchParams.get('flash') ?? ''
+---
+<AppLayout title="Aprobaciones de vacaciones">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-end justify-between gap-2">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight vac-title">Aprobaciones de vacaciones</h1>
+        <p class="text-sm mt-0.5 vac-subtitle">
+          {pending.length} {pending.length === 1 ? 'solicitud pendiente' : 'solicitudes pendientes'}.
+        </p>
+      </div>
+      <a href="/vacations" class="vac-btn-secondary px-3.5 py-2 rounded-md border text-sm font-medium">Volver</a>
+    </div>
+
+    {flash === 'approved' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Solicitud aprobada.</div>
+    )}
+    {flash === 'rejected' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Solicitud rechazada.</div>
+    )}
+
+    <section class="vac-card border rounded-lg overflow-hidden">
+      {pending.length === 0 ? (
+        <div class="py-16 text-center">
+          <svg class="mx-auto w-12 h-12 vac-mute mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <p class="text-sm vac-subtitle">Sin solicitudes pendientes — todo al día.</p>
+        </div>
+      ) : (
+        <table class="vac-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Número</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Tipo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Período</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Días</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Solicitado</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {pending.map((p) => (
+              <tr class="border-b last:border-0 vac-rule">
+                <td class="px-5 py-3 font-mono text-xs vac-cell align-top">{p.request_number}</td>
+                <td class="px-5 py-3 align-top">
+                  <div class="text-sm vac-cell">{p.employee_last_name}, {p.employee_first_name}</div>
+                  <div class="text-xs vac-mute font-mono">{p.employee_code}</div>
+                </td>
+                <td class="px-5 py-3 align-top text-sm vac-cell">{typeLabel(p.request_type)}</td>
+                <td class="px-5 py-3 align-top text-xs vac-cell whitespace-nowrap">
+                  {p.start_date && p.end_date ? `${fmtDate(p.start_date)} → ${fmtDate(p.end_date)}` : '—'}
+                </td>
+                <td class="px-5 py-3 align-top text-xs vac-cell">
+                  {p.enjoy_days > 0 && <div><strong>{p.enjoy_days}</strong> disfrute</div>}
+                  {p.paid_days > 0 && <div><strong>{p.paid_days}</strong> pago</div>}
+                </td>
+                <td class="px-5 py-3 align-top text-xs vac-mute whitespace-nowrap">{fmtAge(p.created_at)}</td>
+                <td class="px-5 py-3 align-top text-right whitespace-nowrap">
+                  <button type="button" class="vac-btn-approve mr-2" data-approve-id={p.id} data-num={p.request_number}>Aprobar</button>
+                  <button type="button" class="vac-btn-reject" data-reject-id={p.id} data-num={p.request_number}>Rechazar</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const sa = window.saModal
+      async function approve(id, num) {
+        if (!sa) return
+        const ok = await sa.confirm({
+          title: 'Aprobar solicitud',
+          message: `Vas a aprobar la solicitud ${num}. El saldo reservado se commiteará y, si incluye pago, se generará la planilla correspondiente.`,
+          confirmLabel: 'Aprobar',
+          tone: 'primary',
+        })
+        if (!ok) return
+        sa.loading({ title: 'Aprobando', message: 'Procesando…' })
+        const res = await fetch('/api/vacations/action?op=approve&id=' + id, {
+          method: 'POST', headers: { 'X-SA-Modal': '1' },
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!json.ok) {
+          await sa.error({ title: 'No se pudo aprobar', message: json.error })
+        } else {
+          // Si la aprobación generó planilla (paid_days > 0), redirigimos al detalle.
+          const payrollId = json.data?.payrollId
+          const successMsg = payrollId
+            ? 'Solicitud aprobada y planilla de vacaciones generada.'
+            : 'Solicitud aprobada.'
+          await sa.success({
+            title: 'Solicitud aprobada',
+            message: successMsg,
+            redirect: payrollId
+              ? `/payroll/${payrollId}?flash=vacation-created`
+              : '/vacations/approvals?flash=approved',
+          })
+        }
+      }
+      async function reject(id, num) {
+        if (!sa) return
+        const reason = window.prompt(`Razón del rechazo de ${num}:`, '')
+        if (reason == null) return
+        if (reason.trim().length < 3) {
+          await sa.error({ title: 'Razón requerida', message: 'Escribe al menos 3 caracteres.' })
+          return
+        }
+        sa.loading({ title: 'Rechazando', message: 'Procesando…' })
+        const res = await fetch('/api/vacations/action?op=reject&id=' + id, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+          body: JSON.stringify({ reason: reason.trim() }),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!json.ok) {
+          await sa.error({ title: 'No se pudo rechazar', message: json.error })
+        } else {
+          await sa.success({ title: 'Solicitud rechazada', redirect: '/vacations/approvals?flash=rejected' })
+        }
+      }
+      document.querySelectorAll('[data-approve-id]').forEach((btn) =>
+        btn.addEventListener('click', () => approve(btn.getAttribute('data-approve-id'), btn.getAttribute('data-num')))
+      )
+      document.querySelectorAll('[data-reject-id]').forEach((btn) =>
+        btn.addEventListener('click', () => reject(btn.getAttribute('data-reject-id'), btn.getAttribute('data-num')))
+      )
+    })()
+  </script>
+
+  <style>
+    .vac-title    { color: var(--fore); }
+    .vac-subtitle { color: var(--fore-dim); }
+    .vac-cell     { color: var(--fore-dim); }
+    .vac-mute     { color: var(--mute); }
+    .vac-card { background: var(--ink-2); border-color: var(--rule); }
+    .vac-rule { border-color: var(--rule); }
+    .vac-btn-secondary {
+      background: var(--ink-2); border-color: var(--rule); color: var(--fore-dim);
+    }
+    .vac-btn-secondary:hover { background: var(--ink-4); color: var(--fore); }
+    .vac-btn-approve {
+      padding: 0.375rem 0.875rem; border-radius: 0.375rem;
+      font-size: 0.75rem; font-weight: 500;
+      background: #16a34a; color: white;
+    }
+    .vac-btn-approve:hover { background: #15803d; }
+    .vac-btn-reject {
+      padding: 0.375rem 0.875rem; border-radius: 0.375rem;
+      font-size: 0.75rem; font-weight: 500;
+      background: var(--ink-3); color: #f87171;
+      border: 1px solid var(--rule);
+    }
+    .vac-btn-reject:hover { background: rgba(248, 113, 113, 0.12); }
+    .vac-table thead tr {
+      background: var(--ink-3); border-color: var(--rule); color: var(--mute-2);
+    }
+    .vac-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .vac-table tbody tr:hover { background: var(--ink-4); }
+
+    [data-theme='light'] .vac-card { background: #ffffff; }
+    [data-theme='light'] .vac-btn-secondary { background: #ffffff; }
+    [data-theme='light'] .vac-btn-secondary:hover { background: #f3f4f6; }
+    [data-theme='light'] .vac-btn-reject { background: #ffffff; color: #dc2626; }
+    [data-theme='light'] .vac-btn-reject:hover { background: #fef2f2; }
+    [data-theme='light'] .vac-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .vac-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .vac-table tbody tr:hover { background: #f9fafb; }
+  </style>
+</AppLayout>

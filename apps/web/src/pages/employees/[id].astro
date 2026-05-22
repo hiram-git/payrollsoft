@@ -118,6 +118,29 @@ let efFiles: FileRow[] = []
 let efTypes: FileType[] = []
 const efSubtypes: FileSubtype[] = []
 
+type VacationBalance = {
+  enjoy: { earned: number; used: number; reserved: number; available: number }
+  paid: { earned: number; used: number; reserved: number; available: number }
+  lastAccrualDate: string | null
+}
+type VacationRequest = {
+  id: string
+  requestNumber: string
+  requestType: 'enjoy' | 'pay' | 'mixed'
+  startDate: string | null
+  endDate: string | null
+  enjoyDays: number
+  paidDays: number
+  reason: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'processed' | 'cancelled'
+  rejectionReason: string | null
+  approvedAt: string | null
+  payrollId: string | null
+  createdAt: string
+}
+let vacBalance: VacationBalance | null = null
+let vacRequests: VacationRequest[] = []
+
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [empRes, cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
@@ -173,6 +196,16 @@ try {
     if (histRes.ok) {
       cfHistory = ((await histRes.json()) as { data: CustomFieldHistoryEntry[] }).data ?? []
     }
+  }
+
+  // Vacaciones — saldo + últimas solicitudes.
+  if (emp) {
+    const [balRes, reqRes] = await Promise.all([
+      fetch(`${API_URL}/vacations/balance/${emp.id}`, { headers }),
+      fetch(`${API_URL}/vacations?employeeId=${emp.id}`, { headers }),
+    ])
+    if (balRes.ok) vacBalance = ((await balRes.json()) as { data: VacationBalance }).data
+    if (reqRes.ok) vacRequests = ((await reqRes.json()) as { data: VacationRequest[] }).data ?? []
   }
 
   // Expedientes del empleado — agrupados por tipo en el tab.
@@ -327,6 +360,9 @@ const freqLabel: Record<string, string> = {
         )}
         <button type="button" class="tab-btn" data-tab="expedientes" onclick="switchTab('expedientes', this)">
           Expedientes{efFiles.length > 0 ? ` (${efFiles.length})` : ''}
+        </button>
+        <button type="button" class="tab-btn" data-tab="vacaciones" onclick="switchTab('vacaciones', this)">
+          Vacaciones
         </button>
       </div>
 
@@ -780,6 +816,189 @@ const freqLabel: Record<string, string> = {
         </div>
       </div>
 
+      <!-- TAB: Vacaciones -->
+      <div id="tab-vacaciones" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Saldo de vacaciones</h3>
+              <p class="text-xs text-gray-500">
+                30 días de cada tipo se acreditan al cumplir cada año desde la contratación.
+                {vacBalance?.lastAccrualDate ? ` Último acreditado: ${vacBalance.lastAccrualDate}.` : ''}
+              </p>
+            </div>
+            <button type="button" id="vac-request-btn" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">
+              Solicitar vacaciones
+            </button>
+          </div>
+
+          {vacBalance ? (
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+              <div class="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-blue-50 to-white">
+                <div class="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-2">Disfrute</div>
+                <div class="flex items-baseline gap-2 mb-3">
+                  <span class="text-3xl font-bold text-gray-900">{vacBalance.enjoy.available}</span>
+                  <span class="text-sm text-gray-500">/ {vacBalance.enjoy.earned} días disponibles</span>
+                </div>
+                <div class="text-xs text-gray-600 space-y-0.5">
+                  <div>Acumulado: <strong>{vacBalance.enjoy.earned}</strong></div>
+                  <div>Tomado: <strong>{vacBalance.enjoy.used}</strong></div>
+                  <div>Reservado (pendientes): <strong>{vacBalance.enjoy.reserved}</strong></div>
+                </div>
+              </div>
+              <div class="border border-gray-200 rounded-lg p-4 bg-gradient-to-br from-emerald-50 to-white">
+                <div class="text-xs font-semibold text-emerald-700 uppercase tracking-wide mb-2">Pagado</div>
+                <div class="flex items-baseline gap-2 mb-3">
+                  <span class="text-3xl font-bold text-gray-900">{vacBalance.paid.available}</span>
+                  <span class="text-sm text-gray-500">/ {vacBalance.paid.earned} días disponibles</span>
+                </div>
+                <div class="text-xs text-gray-600 space-y-0.5">
+                  <div>Acumulado: <strong>{vacBalance.paid.earned}</strong></div>
+                  <div>Pagado: <strong>{vacBalance.paid.used}</strong></div>
+                  <div>Reservado (pendientes): <strong>{vacBalance.paid.reserved}</strong></div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p class="text-sm text-gray-400 py-4">Saldo no disponible.</p>
+          )}
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div class="flex items-end justify-between mb-3">
+            <h3 class="font-semibold text-gray-800">Historial de solicitudes</h3>
+            <span class="text-xs text-gray-500">{vacRequests.length} {vacRequests.length === 1 ? 'solicitud' : 'solicitudes'}</span>
+          </div>
+          {vacRequests.length === 0 ? (
+            <p class="text-sm text-gray-400 py-6 text-center">Sin solicitudes registradas.</p>
+          ) : (
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-200 bg-gray-50">
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Número</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Período</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Disfrute</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                    <th class="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vacRequests.map((r) => {
+                    const statusLabel =
+                      r.status === 'pending' ? 'Pendiente' :
+                      r.status === 'approved' ? 'Aprobada' :
+                      r.status === 'rejected' ? 'Rechazada' :
+                      r.status === 'processed' ? 'Procesada' :
+                      'Cancelada'
+                    const statusClass =
+                      r.status === 'pending' ? 'bg-amber-100 text-amber-800' :
+                      r.status === 'approved' || r.status === 'processed' ? 'bg-green-100 text-green-700' :
+                      r.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-600'
+                    const typeLabel = r.requestType === 'enjoy' ? 'Disfrute' : r.requestType === 'pay' ? 'Pago' : 'Mixto'
+                    return (
+                      <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                        <td class="px-3 py-2 font-mono text-xs text-gray-700">{r.requestNumber}</td>
+                        <td class="px-3 py-2 text-xs text-gray-700">{typeLabel}</td>
+                        <td class="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
+                          {r.startDate && r.endDate ? `${r.startDate} → ${r.endDate}` : '—'}
+                        </td>
+                        <td class="px-3 py-2 text-xs text-gray-700">{r.enjoyDays || '—'}</td>
+                        <td class="px-3 py-2 text-xs text-gray-700">{r.paidDays || '—'}</td>
+                        <td class="px-3 py-2">
+                          <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass}`}>{statusLabel}</span>
+                          {r.status === 'rejected' && r.rejectionReason && (
+                            <div class="text-[10px] text-gray-500 mt-0.5" title={r.rejectionReason}>{r.rejectionReason.slice(0, 40)}</div>
+                          )}
+                        </td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap">
+                          {r.status === 'pending' && (
+                            <button type="button" class="text-[11px] text-red-600 hover:underline" data-cancel-vac={r.id} data-num={r.requestNumber}>Cancelar</button>
+                          )}
+                          {r.payrollId && (
+                            <a href={`/payroll/${r.payrollId}`} class="text-[11px] text-blue-600 hover:underline" title="Ver planilla generada">
+                              Planilla →
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <!-- Modal: solicitar vacaciones -->
+        <div id="vac-modal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4">
+          <div class="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-200">
+            <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 class="font-semibold text-gray-900">Solicitar vacaciones</h3>
+              <button type="button" id="vac-modal-close" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+            <form id="vac-form" class="p-5 space-y-3">
+              <input type="hidden" name="employeeId" value={id} />
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo de solicitud *</label>
+                <div class="flex gap-2">
+                  <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input type="radio" name="requestType" value="enjoy" required checked />
+                    <span>Disfrute</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input type="radio" name="requestType" value="pay" />
+                    <span>Pago</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input type="radio" name="requestType" value="mixed" />
+                    <span>Mixto</span>
+                  </label>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div data-show-when="enjoy mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha inicio</label>
+                  <input type="date" name="startDate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+                <div data-show-when="enjoy mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha fin</label>
+                  <input type="date" name="endDate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div data-show-when="enjoy mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                    Días de disfrute
+                    <span class="text-gray-400 ml-1">(máx. {vacBalance?.enjoy.available ?? 0})</span>
+                  </label>
+                  <input type="number" name="enjoyDays" min="0" max={vacBalance?.enjoy.available ?? 0} value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+                <div data-show-when="pay mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                    Días a pagar
+                    <span class="text-gray-400 ml-1">(máx. {vacBalance?.paid.available ?? 0})</span>
+                  </label>
+                  <input type="number" name="paidDays" min="0" max={vacBalance?.paid.available ?? 0} value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Motivo (opcional)</label>
+                <textarea name="reason" rows="2" maxlength="1000" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"></textarea>
+              </div>
+              <div id="vac-form-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="vac-modal-cancel" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">Enviar solicitud</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="flex justify-between mt-2">
         <!-- Deactivate -->
@@ -931,6 +1150,112 @@ const freqLabel: Record<string, string> = {
     document.getElementById('tab-' + tab).style.display = ''
     btn.classList.add('active')
   }
+
+  // ─── Vacaciones: modal de solicitud + cancelación ──────────────────────
+  ;(function () {
+    const modal = document.getElementById('vac-modal')
+    const openBtn = document.getElementById('vac-request-btn')
+    const closeBtn = document.getElementById('vac-modal-close')
+    const cancelBtn = document.getElementById('vac-modal-cancel')
+    const form = document.getElementById('vac-form')
+    const errBox = document.getElementById('vac-form-error')
+
+    function openModal() {
+      if (!modal) return
+      modal.classList.remove('hidden')
+      modal.classList.add('flex')
+      errBox.classList.add('hidden')
+      applyTypeVisibility()
+    }
+    function closeModal() {
+      if (!modal) return
+      modal.classList.add('hidden')
+      modal.classList.remove('flex')
+      form.reset()
+    }
+    function applyTypeVisibility() {
+      const selectedType = form.querySelector('input[name="requestType"]:checked')?.value || 'enjoy'
+      form.querySelectorAll('[data-show-when]').forEach((el) => {
+        const allowed = (el.getAttribute('data-show-when') || '').split(' ')
+        el.style.display = allowed.includes(selectedType) ? '' : 'none'
+      })
+    }
+
+    openBtn?.addEventListener('click', openModal)
+    closeBtn?.addEventListener('click', closeModal)
+    cancelBtn?.addEventListener('click', closeModal)
+    modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal() })
+    form?.querySelectorAll('input[name="requestType"]').forEach((r) => r.addEventListener('change', applyTypeVisibility))
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      errBox.classList.add('hidden')
+      const fd = new FormData(form)
+      const payload = {
+        employeeId: fd.get('employeeId'),
+        requestType: fd.get('requestType'),
+        startDate: fd.get('startDate') || null,
+        endDate: fd.get('endDate') || null,
+        enjoyDays: parseInt(fd.get('enjoyDays') || '0', 10),
+        paidDays: parseInt(fd.get('paidDays') || '0', 10),
+        reason: fd.get('reason') || null,
+      }
+      try {
+        const res = await fetch('/api/vacations/action?op=create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+          body: JSON.stringify(payload),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!json.ok) {
+          errBox.textContent = json.error || ('HTTP ' + res.status)
+          errBox.classList.remove('hidden')
+          return
+        }
+        const sa = window.saModal
+        if (sa) {
+          await sa.success({
+            title: 'Solicitud enviada',
+            message: `Solicitud ${json.data?.requestNumber || ''} creada. El saldo quedó reservado hasta la aprobación.`,
+            redirect: window.location.pathname,
+          })
+        } else {
+          window.location.reload()
+        }
+      } catch (err) {
+        errBox.textContent = 'Error de red: ' + String(err)
+        errBox.classList.remove('hidden')
+      }
+    })
+
+    // Cancelar solicitud pendiente
+    document.querySelectorAll('[data-cancel-vac]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-cancel-vac')
+        const num = btn.getAttribute('data-num')
+        const sa = window.saModal
+        if (!sa) return
+        const ok = await sa.confirm({
+          title: 'Cancelar solicitud',
+          message: `Vas a cancelar la solicitud ${num}. Los días reservados se devolverán al saldo.`,
+          confirmLabel: 'Cancelar solicitud',
+          tone: 'danger',
+        })
+        if (!ok) return
+        sa.loading({ title: 'Cancelando', message: 'Procesando…' })
+        const res = await fetch('/api/vacations/action?op=cancel&id=' + id, {
+          method: 'POST',
+          headers: { 'X-SA-Modal': '1' },
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!json.ok) {
+          await sa.error({ title: 'No se pudo cancelar', message: json.error })
+        } else {
+          await sa.success({ title: 'Solicitud cancelada', redirect: window.location.pathname })
+        }
+      })
+    })
+  })()
 
   // Auto-fill cargo/depto/funcion/salary from selected position (empresa pública)
   const posSelect = document.getElementById('positionSelect')

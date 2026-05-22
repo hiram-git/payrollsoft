@@ -189,11 +189,13 @@ const navAll: NavEntry[] = [
     ],
   },
   {
-    kind: 'item',
-    href: '/vacations',
+    kind: 'group',
     label: 'Vacaciones',
     icon: 'calendar',
-    require: 'vacations:read',
+    children: [
+      { href: '/vacations', label: 'Solicitudes', require: 'vacations:read' },
+      { href: '/vacations/approvals', label: 'Aprobaciones', require: 'vacations:approve' },
+    ],
   },
   {
     kind: 'item',
