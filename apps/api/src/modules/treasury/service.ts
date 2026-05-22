@@ -310,6 +310,26 @@ export async function voidCheck(
   return { success: true }
 }
 
+/**
+ * Trae un cheque individual con datos enriquecidos de la chequera
+ * y el banco — útil para los renderers de PDF/Excel que necesitan
+ * `bankName` y `accountNumber` para la cabecera.
+ */
+export async function getCheckWithChequera(db: AnyDb, checkId: string) {
+  const rows = await db
+    .select({
+      check: treasuryChecks,
+      checkbook: treasuryCheckbooks,
+      bankName: banks.name,
+    })
+    .from(treasuryChecks)
+    .leftJoin(treasuryCheckbooks, eq(treasuryCheckbooks.id, treasuryChecks.checkbookId))
+    .leftJoin(banks, eq(banks.id, treasuryCheckbooks.bankId))
+    .where(eq(treasuryChecks.id, checkId))
+    .limit(1)
+  return rows[0] ?? null
+}
+
 export async function listChecksByRun(db: AnyDb, paymentRunId: string) {
   return db
     .select()
