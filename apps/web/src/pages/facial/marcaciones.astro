@@ -1,0 +1,207 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
+
+const searchParams = Astro.url.searchParams
+const dateParam = searchParams.get('date') ?? ''
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Panama' })
+const activeDate = dateParam || today
+
+type MarcacionRow = {
+  marcacion: {
+    id: string
+    employeeId: string | null
+    kind: string
+    capturedAt: string
+    status: string
+    confidence: string | null
+    livenessScore: string | null
+    source: string
+    justification: string | null
+  }
+  employee: {
+    id: string
+    code: string
+    firstName: string
+    lastName: string
+  } | null
+}
+
+let rows: MarcacionRow[] = []
+let fetchError = ''
+
+try {
+  const url = new URL(`${API_URL}/facial/marcaciones`)
+  url.searchParams.set('date', activeDate)
+  const res = await fetch(url.toString(), {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { data: MarcacionRow[] }
+    rows = json.data ?? []
+  } else {
+    fetchError = 'Error al cargar marcaciones'
+  }
+} catch {
+  fetchError = 'No se pudo conectar con el servidor'
+}
+
+function fmtDateTime(ts: string): string {
+  return new Date(ts).toLocaleString('es-PA', {
+    timeZone: 'America/Panama',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+function kindLabel(k: string): string {
+  return (
+    (
+      {
+        entry: 'Entrada',
+        exit: 'Salida',
+        lunch_start: 'Salida almuerzo',
+        lunch_end: 'Entrada almuerzo',
+        extra: 'Extra',
+      } as Record<string, string>
+    )[k] ?? k
+  )
+}
+
+function statusPill(s: string) {
+  switch (s) {
+    case 'verified':
+      return { label: 'Verificada', class: 'bg-emerald-50 text-emerald-700' }
+    case 'pending':
+      return { label: 'Pendiente', class: 'bg-amber-50 text-amber-700' }
+    case 'rejected':
+      return { label: 'Rechazada', class: 'bg-red-50 text-red-700' }
+    case 'manual':
+      return { label: 'Manual', class: 'bg-indigo-50 text-indigo-700' }
+    default:
+      return { label: s, class: 'bg-gray-100 text-gray-700' }
+  }
+}
+---
+
+<AppLayout title="Marcaciones faciales">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Marcaciones faciales</h1>
+        <p class="text-sm text-gray-500 mt-0.5">{rows.length} eventos · {activeDate}</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <a href="/facial" class="text-sm text-blue-600 hover:underline">← Dashboard</a>
+        <button
+          type="button"
+          id="btn-export"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+        >
+          Exportar CSV
+        </button>
+        <form method="POST" action="/api/facial/consolidate" class="inline">
+          <input type="hidden" name="date" value={activeDate} />
+          <button class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+            Reconsolidar día
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <form method="GET" action="/facial/marcaciones" class="mb-5 flex items-end gap-3 flex-wrap">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="filter-date">Fecha</label>
+        <input id="filter-date" type="date" name="date" value={activeDate}
+          class="rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+      <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+        Filtrar
+      </button>
+    </form>
+
+    {fetchError && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {fetchError}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm" id="tbl-marcaciones">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Hora</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Empleado</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Tipo</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Confianza</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Liveness</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Origen</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Justificación</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {rows.map(({ marcacion, employee }) => {
+            const pill = statusPill(marcacion.status)
+            return (
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 font-mono text-xs text-gray-700 tabular-nums">{fmtDateTime(marcacion.capturedAt)}</td>
+                <td class="px-4 py-3">
+                  {employee
+                    ? <>
+                        <p class="font-medium text-gray-900">{employee.firstName} {employee.lastName}</p>
+                        <p class="text-xs text-gray-400 font-mono">{employee.code}</p>
+                      </>
+                    : <span class="text-gray-400 italic">Sin match</span>
+                  }
+                </td>
+                <td class="px-4 py-3 text-gray-700">{kindLabel(marcacion.kind)}</td>
+                <td class="px-4 py-3">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${pill.class}`}>{pill.label}</span>
+                </td>
+                <td class="px-4 py-3 tabular-nums text-gray-700">
+                  {marcacion.confidence ? `${(Number(marcacion.confidence) * 100).toFixed(1)}%` : '—'}
+                </td>
+                <td class="px-4 py-3 tabular-nums text-gray-700">
+                  {marcacion.livenessScore ? `${(Number(marcacion.livenessScore) * 100).toFixed(0)}%` : '—'}
+                </td>
+                <td class="px-4 py-3 text-gray-600 text-xs">{marcacion.source}</td>
+                <td class="px-4 py-3 text-gray-500 text-xs">{marcacion.justification ?? '—'}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {rows.length === 0 && (
+        <div class="py-10 text-center text-sm text-gray-400">Sin marcaciones en esta fecha.</div>
+      )}
+    </div>
+  </div>
+
+  <script is:inline>
+    document.getElementById('btn-export')?.addEventListener('click', () => {
+      const table = document.getElementById('tbl-marcaciones')
+      if (!(table instanceof HTMLTableElement)) return
+      const rows = Array.from(table.querySelectorAll('tr')).map((tr) =>
+        Array.from(tr.querySelectorAll('th,td'))
+          .map((c) => '"' + (c.textContent ?? '').replace(/"/g, '""').replace(/\s+/g, ' ').trim() + '"')
+          .join(',')
+      )
+      const csv = rows.join('\n')
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `marcaciones-${document.title}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    })
+  </script>
+</AppLayout>

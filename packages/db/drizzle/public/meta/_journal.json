@@ -50,6 +50,13 @@
       "when": 1762128005000,
       "tag": "0006_system_roles_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1762128006000,
+      "tag": "0007_facial_permissions",
+      "breakpoints": true
     }
   ]
 }

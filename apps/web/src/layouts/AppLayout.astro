@@ -145,6 +145,18 @@ const navAll: NavEntry[] = [
   },
   {
     kind: 'group',
+    label: 'Reconocimiento facial',
+    icon: 'clock',
+    children: [
+      { href: '/facial', label: 'Dashboard', require: 'facial:read' },
+      { href: '/facial/marcaciones', label: 'Marcaciones', require: 'facial:read' },
+      { href: '/facial/enrollments', label: 'Enrolar empleados', require: 'facial:enroll' },
+      { href: '/facial/manual', label: 'Marcación manual', require: 'facial:override' },
+      { href: '/facial/terminals', label: 'Terminales', require: 'terminals:read' },
+    ],
+  },
+  {
+    kind: 'group',
     label: 'Planilla',
     icon: 'payroll',
     children: [
