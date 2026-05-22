@@ -90,6 +90,11 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
+    // Datos bancarios (tesorería) — string vacío se mapea a null
+    bankId: g('bankId') || null,
+    accountNumber: g('accountNumber') || null,
+    accountType: g('accountType') || null,
+    paymentMethod: g('paymentMethod') || 'check',
     ...(customFields !== undefined ? { customFields } : {}),
   }
 
