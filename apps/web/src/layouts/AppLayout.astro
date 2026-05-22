@@ -218,6 +218,8 @@ const navAll: NavEntry[] = [
         label: 'Expedientes',
         require: 'employee_files:approve',
       },
+      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
+      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
     ],
   },
 ]

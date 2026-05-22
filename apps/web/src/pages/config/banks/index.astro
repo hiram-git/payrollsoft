@@ -1,0 +1,207 @@
+---
+/**
+ * Configuración del catálogo de bancos.
+ *
+ * Los bancos seedeados por la migración aparecen sin número de ruta;
+ * el operador debe completar el `routing` antes de poder generar
+ * ACH para empleados con cuentas en ese banco.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'banks:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canWrite = can(identity, 'banks:write')
+
+type Bank = {
+  id: string
+  code: string
+  name: string
+  routing: string | null
+  swift: string | null
+  country: string
+  isActive: number
+  sortOrder: number
+}
+
+let banks: Bank[] = []
+let error = ''
+try {
+  const res = await fetch(`${API_URL}/banks`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) banks = ((await res.json()) as { data: Bank[] }).data ?? []
+  else error = `No se pudo cargar el catálogo (HTTP ${res.status}).`
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const flash = Astro.url.searchParams.get('flash') ?? ''
+const flashMsg = Astro.url.searchParams.get('msg') ?? ''
+---
+<AppLayout title="Configuración · Bancos">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold tracking-tight cfg-title">Catálogo de bancos</h1>
+      <p class="text-sm mt-0.5 cfg-subtitle">
+        {banks.length} bancos · El número de <strong>ruta</strong> es obligatorio para que
+        los empleados de ese banco puedan recibir pagos por ACH.
+      </p>
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Banco creado.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Cambios guardados.</div>
+    )}
+    {flash === 'error' && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Error.'}</div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <section class="cfg-card border rounded-lg overflow-hidden">
+      <header class="cfg-section-header px-5 py-3 border-b flex items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold cfg-heading">Bancos</h2>
+        {canWrite && (
+          <button type="button" id="btn-new-bank" class="text-xs cfg-link">+ Nuevo banco</button>
+        )}
+      </header>
+
+      {canWrite && (
+        <form id="form-new-bank" method="POST" action="/api/treasury/action?op=bank-create" class="hidden px-5 py-4 border-b cfg-rule">
+          <input type="hidden" name="_redirect" value="/config/banks" />
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Código *</label>
+              <input type="text" name="code" required maxlength="20" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+            </div>
+            <div class="md:col-span-5">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Nombre *</label>
+              <input type="text" name="name" required maxlength="120" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Ruta</label>
+              <input type="text" name="routing" maxlength="15" placeholder="ej. 0006" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+            </div>
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium cfg-label mb-1.5">SWIFT</label>
+              <input type="text" name="swift" maxlength="15" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-3">
+            <button type="button" id="btn-new-bank-cancel" class="cfg-btn-link px-3 py-2 text-sm">Cancelar</button>
+            <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Crear</button>
+          </div>
+        </form>
+      )}
+
+      {banks.length === 0 ? (
+        <div class="p-10 text-center">
+          <p class="text-sm cfg-mute">No hay bancos registrados.</p>
+        </div>
+      ) : (
+        <table class="cfg-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Código</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Ruta</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">SWIFT</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Estado</th>
+              <th class="px-5 py-2"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {banks.map((b) => (
+              <tr class="border-b last:border-0 cfg-rule">
+                <td class="px-5 py-3 font-mono text-xs cfg-cell-mono">{b.code}</td>
+                {canWrite ? (
+                  <td colspan="4" class="px-5 py-3">
+                    <form method="POST" action={`/api/treasury/action?op=bank-update&id=${b.id}`} class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
+                      <input type="hidden" name="_redirect" value="/config/banks" />
+                      <input type="text" name="name" value={b.name} required maxlength="120" class="cfg-input md:col-span-4 px-2 py-1.5 text-sm rounded-md" />
+                      <input type="text" name="routing" value={b.routing ?? ''} maxlength="15" placeholder="ruta" class="cfg-input md:col-span-2 px-2 py-1.5 text-sm rounded-md font-mono" />
+                      <input type="text" name="swift" value={b.swift ?? ''} maxlength="15" placeholder="swift" class="cfg-input md:col-span-2 px-2 py-1.5 text-sm rounded-md font-mono" />
+                      <label class="inline-flex items-center gap-1.5 text-xs cfg-label md:col-span-2">
+                        <input type="checkbox" name="isActive" value="1" checked={b.isActive === 1} class="rounded" />
+                        Activo
+                      </label>
+                      <div class="md:col-span-2 text-right">
+                        <button type="submit" class="px-3 py-1.5 rounded bg-blue-600 text-white text-xs hover:bg-blue-700">✓ Guardar</button>
+                      </div>
+                    </form>
+                  </td>
+                ) : (
+                  <>
+                    <td class="px-5 py-3 cfg-cell">{b.name}</td>
+                    <td class="px-5 py-3 cfg-cell font-mono text-xs">{b.routing ?? '—'}</td>
+                    <td class="px-5 py-3 cfg-cell font-mono text-xs">{b.swift ?? '—'}</td>
+                    <td class="px-5 py-3">
+                      <span class={`text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide ${b.isActive === 1 ? 'cfg-badge-approval' : 'cfg-badge-inactive'}`}>
+                        {b.isActive === 1 ? 'activo' : 'inactivo'}
+                      </span>
+                    </td>
+                  </>
+                )}
+                {!canWrite && <td></td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const btn = document.getElementById('btn-new-bank')
+      const form = document.getElementById('form-new-bank')
+      const cancel = document.getElementById('btn-new-bank-cancel')
+      btn?.addEventListener('click', () => form?.classList.toggle('hidden'))
+      cancel?.addEventListener('click', () => form?.classList.add('hidden'))
+    })()
+  </script>
+
+  <style>
+    .cfg-title       { color: var(--fore); }
+    .cfg-subtitle    { color: var(--fore-dim); }
+    .cfg-heading     { color: var(--fore); }
+    .cfg-label       { color: var(--fore-dim); }
+    .cfg-mute        { color: var(--mute); }
+    .cfg-cell        { color: var(--fore-dim); }
+    .cfg-cell-mono   { color: var(--fore-dim); }
+    .cfg-card        { background: var(--ink-2); border-color: var(--rule); }
+    .cfg-section-header { background: var(--ink-3); border-color: var(--rule); }
+    .cfg-rule { border-color: var(--rule); }
+    .cfg-input {
+      background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore);
+    }
+    .cfg-input:focus { border-color: var(--rule-hi); outline: none; }
+    .cfg-link { color: #60a5fa; }
+    .cfg-link:hover { text-decoration: underline; }
+    .cfg-btn-link { background: transparent; color: var(--fore-dim); }
+    .cfg-btn-link:hover { color: var(--fore); }
+    .cfg-badge-approval { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .cfg-badge-inactive { background: rgba(156,163,175,0.18); color: var(--mute); }
+    .cfg-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
+    .cfg-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .cfg-table tbody tr:hover { background: var(--ink-4); }
+    [data-theme='light'] .cfg-card { background: #ffffff; }
+    [data-theme='light'] .cfg-section-header { background: #f9fafb; }
+    [data-theme='light'] .cfg-input { background: #ffffff; }
+    [data-theme='light'] .cfg-link { color: #2563eb; }
+    [data-theme='light'] .cfg-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .cfg-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .cfg-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .cfg-badge-approval { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .cfg-badge-inactive { background: #f3f4f6; color: #6b7280; }
+  </style>
+</AppLayout>

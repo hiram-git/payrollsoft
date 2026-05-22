@@ -1,0 +1,222 @@
+---
+/**
+ * Configuración de chequeras. Cada chequera tiene un rango fijo
+ * [start, end] de cheques físicos y un puntero `next_number` que
+ * avanza al emitir. El usuario solo crea — la edición es mínima
+ * porque cambiar el rango después de emitir puede romper la
+ * unicidad histórica.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'treasury:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canWrite = can(identity, 'treasury:write')
+
+type Bank = { id: string; name: string; isActive: number }
+type Checkbook = {
+  id: string
+  code: string
+  name: string
+  bankId: string | null
+  accountNumber: string
+  startNumber: number
+  endNumber: number
+  nextNumber: number
+  purpose: 'employees' | 'creditors' | 'general'
+  isActive: number
+}
+
+let banks: Bank[] = []
+let checkbooks: Checkbook[] = []
+let error = ''
+try {
+  const [bRes, cRes] = await Promise.all([
+    fetch(`${API_URL}/banks`, { headers }),
+    fetch(`${API_URL}/treasury/checkbooks`, { headers }),
+  ])
+  if (bRes.status === 401) return Astro.redirect('/login')
+  if (bRes.ok) banks = ((await bRes.json()) as { data: Bank[] }).data ?? []
+  if (cRes.ok) checkbooks = ((await cRes.json()) as { data: Checkbook[] }).data ?? []
+} catch {
+  error = 'No se pudo conectar.'
+}
+
+const banksById = new Map(banks.map((b) => [b.id, b]))
+const flash = Astro.url.searchParams.get('flash') ?? ''
+const flashMsg = Astro.url.searchParams.get('msg') ?? ''
+
+function purposeLabel(p: string): string {
+  return p === 'employees' ? 'Empleados' : p === 'creditors' ? 'Acreedores' : 'General'
+}
+---
+<AppLayout title="Configuración · Chequeras">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold tracking-tight cfg-title">Chequeras</h1>
+      <p class="text-sm mt-0.5 cfg-subtitle">
+        {checkbooks.length} chequeras · El campo "siguiente" indica el próximo número
+        a usar al emitir un cheque. Cuando llega al final del rango, la chequera se considera agotada.
+      </p>
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Chequera creada.</div>
+    )}
+    {flash === 'error' && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Error.'}</div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <section class="cfg-card border rounded-lg overflow-hidden">
+      <header class="cfg-section-header px-5 py-3 border-b flex items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold cfg-heading">Chequeras registradas</h2>
+        {canWrite && (
+          <button type="button" id="btn-new-cb" class="text-xs cfg-link">+ Nueva chequera</button>
+        )}
+      </header>
+
+      {canWrite && (
+        <form id="form-new-cb" method="POST" action="/api/treasury/action?op=checkbook-create" class="hidden px-5 py-4 border-b cfg-rule">
+          <input type="hidden" name="_redirect" value="/config/checkbooks" />
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Código *</label>
+              <input type="text" name="code" required maxlength="30" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Nombre *</label>
+              <input type="text" name="name" required maxlength="160" placeholder="ej. Chequera BNP Operativa" class="cfg-input w-full px-3 py-2 text-sm rounded-md" />
+            </div>
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Banco</label>
+              <select name="bankId" class="cfg-input w-full px-3 py-2 text-sm rounded-md">
+                <option value="">— Sin banco —</option>
+                {banks.filter((b) => b.isActive === 1).map((b) => (
+                  <option value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Cuenta *</label>
+              <input type="text" name="accountNumber" required maxlength="40" class="cfg-input w-full px-3 py-2 text-sm rounded-md font-mono" />
+            </div>
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Número inicial *</label>
+              <input type="number" name="startNumber" required min="1" class="cfg-input w-full px-3 py-2 text-sm rounded-md font-mono" />
+            </div>
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Número final *</label>
+              <input type="number" name="endNumber" required min="1" class="cfg-input w-full px-3 py-2 text-sm rounded-md font-mono" />
+            </div>
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium cfg-label mb-1.5">Propósito *</label>
+              <select name="purpose" required class="cfg-input w-full px-3 py-2 text-sm rounded-md">
+                <option value="general">General (cualquier beneficiario)</option>
+                <option value="employees">Solo empleados</option>
+                <option value="creditors">Solo acreedores</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-3">
+            <button type="button" id="btn-new-cb-cancel" class="cfg-btn-link px-3 py-2 text-sm">Cancelar</button>
+            <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Crear</button>
+          </div>
+        </form>
+      )}
+
+      {checkbooks.length === 0 ? (
+        <div class="p-10 text-center">
+          <p class="text-sm cfg-mute">No hay chequeras registradas.</p>
+        </div>
+      ) : (
+        <table class="cfg-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Código</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Nombre</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Banco</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Cuenta</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Rango</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Siguiente</th>
+              <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Propósito</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checkbooks.map((c) => {
+              const exhausted = c.nextNumber > c.endNumber
+              return (
+                <tr class="border-b last:border-0 cfg-rule">
+                  <td class="px-5 py-3 font-mono text-xs cfg-cell-mono">{c.code}</td>
+                  <td class="px-5 py-3 cfg-cell">{c.name}</td>
+                  <td class="px-5 py-3 cfg-cell text-xs">{banksById.get(c.bankId ?? '')?.name ?? '—'}</td>
+                  <td class="px-5 py-3 cfg-cell font-mono text-xs">{c.accountNumber}</td>
+                  <td class="px-5 py-3 cfg-cell font-mono text-xs">
+                    {String(c.startNumber).padStart(7, '0')} → {String(c.endNumber).padStart(7, '0')}
+                  </td>
+                  <td class="px-5 py-3 font-mono text-xs">
+                    {exhausted ? (
+                      <span class="text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide cfg-badge-inactive">Agotada</span>
+                    ) : (
+                      <span class="cfg-cell">{String(c.nextNumber).padStart(7, '0')}</span>
+                    )}
+                  </td>
+                  <td class="px-5 py-3 text-xs cfg-cell">{purposeLabel(c.purpose)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const btn = document.getElementById('btn-new-cb')
+      const form = document.getElementById('form-new-cb')
+      const cancel = document.getElementById('btn-new-cb-cancel')
+      btn?.addEventListener('click', () => form?.classList.toggle('hidden'))
+      cancel?.addEventListener('click', () => form?.classList.add('hidden'))
+    })()
+  </script>
+
+  <style>
+    .cfg-title       { color: var(--fore); }
+    .cfg-subtitle    { color: var(--fore-dim); }
+    .cfg-heading     { color: var(--fore); }
+    .cfg-label       { color: var(--fore-dim); }
+    .cfg-mute        { color: var(--mute); }
+    .cfg-cell        { color: var(--fore-dim); }
+    .cfg-cell-mono   { color: var(--fore-dim); }
+    .cfg-card { background: var(--ink-2); border-color: var(--rule); }
+    .cfg-section-header { background: var(--ink-3); border-color: var(--rule); }
+    .cfg-rule { border-color: var(--rule); }
+    .cfg-input { background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore); }
+    .cfg-input:focus { border-color: var(--rule-hi); outline: none; }
+    .cfg-link { color: #60a5fa; }
+    .cfg-link:hover { text-decoration: underline; }
+    .cfg-btn-link { background: transparent; color: var(--fore-dim); }
+    .cfg-btn-link:hover { color: var(--fore); }
+    .cfg-badge-inactive { background: rgba(248,113,113,0.18); color: #f87171; }
+    .cfg-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
+    .cfg-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .cfg-table tbody tr:hover { background: var(--ink-4); }
+    [data-theme='light'] .cfg-card { background: #ffffff; }
+    [data-theme='light'] .cfg-section-header { background: #f9fafb; }
+    [data-theme='light'] .cfg-input { background: #ffffff; }
+    [data-theme='light'] .cfg-link { color: #2563eb; }
+    [data-theme='light'] .cfg-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .cfg-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .cfg-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .cfg-badge-inactive { background: #fee2e2; color: #991b1b; }
+  </style>
+</AppLayout>
