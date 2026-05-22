@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./formulas": "./src/formulas/index.ts",
     "./payroll": "./src/payroll/index.ts",
-    "./attendance": "./src/attendance/index.ts"
+    "./attendance": "./src/attendance/index.ts",
+    "./treasury": "./src/treasury/index.ts"
   },
   "scripts": {
     "test": "bun test",
