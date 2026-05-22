@@ -31,6 +31,15 @@ export const employees = pgTable('employees', {
   // Stored as string to avoid floating-point precision issues in salary math
   baseSalary: varchar('base_salary', { length: 20 }).notNull(),
   payFrequency: varchar('pay_frequency', { length: 20 }).notNull().default('biweekly'),
+  // ── Datos bancarios para tesorería ────────────────────────────────────
+  // `paymentMethod` determina cómo se paga al empleado. `bankId`,
+  // `accountNumber` y `accountType` solo son obligatorios cuando es 'ach'.
+  bankId: uuid('bank_id'),
+  accountNumber: varchar('account_number', { length: 40 }),
+  /** 'savings' | 'checking' — null si paymentMethod != 'ach' */
+  accountType: varchar('account_type', { length: 20 }),
+  /** 'ach' | 'check' | 'cash' */
+  paymentMethod: varchar('payment_method', { length: 10 }).notNull().default('check'),
   isActive: boolean('is_active').notNull().default(true),
   customFields: jsonb('custom_fields').default({}),
   createdAt: timestamp('created_at').notNull().defaultNow(),

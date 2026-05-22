@@ -92,6 +92,15 @@ export const creditors = pgTable('creditors', {
   description: text('description'),
   /** UUID of the deduction concept auto-created for this creditor */
   conceptId: uuid('concept_id'),
+  // ── Datos bancarios para tesorería ─────────────────────────────────
+  bankId: uuid('bank_id'),
+  accountNumber: varchar('account_number', { length: 40 }),
+  /** 'savings' | 'checking' */
+  accountType: varchar('account_type', { length: 20 }),
+  /** 'ach' | 'check' | 'cash' */
+  paymentMethod: varchar('payment_method', { length: 10 }).notNull().default('check'),
+  /** Nombre del beneficiario en cheque/ACH si difiere del nombre comercial */
+  beneficiaryName: varchar('beneficiary_name', { length: 255 }),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
