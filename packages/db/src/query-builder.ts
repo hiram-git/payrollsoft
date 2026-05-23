@@ -58,7 +58,7 @@ async function paginate<T>(
   options: PaginationOptions
 ): Promise<PaginatedResult<T>> {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20))
+  const limit = Math.min(500, Math.max(1, options.limit ?? 20))
   const offset = (page - 1) * limit
 
   const [totalResult] = await db.select({ count: count() }).from(table as never)
@@ -92,7 +92,7 @@ export async function listEmployees(
   options: PaginationOptions = {}
 ) {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20))
+  const limit = Math.min(500, Math.max(1, options.limit ?? 20))
   const offset = (page - 1) * limit
 
   const conditions = []
@@ -309,7 +309,7 @@ export async function listPayrolls(
   options: PaginationOptions = {}
 ) {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20))
+  const limit = Math.min(500, Math.max(1, options.limit ?? 20))
   const offset = (page - 1) * limit
 
   const conditions = []
