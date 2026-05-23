@@ -38,12 +38,16 @@ try {
 ---
 <AppLayout title="Importar marcaciones">
   <div class="mx-auto w-full max-w-5xl p-8 lg:w-3/4">
-    <div class="mb-6">
-      <a href="/attendance" class="text-xs imp-mute hover:underline">← Marcaciones</a>
-      <h1 class="text-xl font-semibold tracking-tight imp-title mt-2">Importar marcaciones desde TXT</h1>
-      <p class="text-sm mt-0.5 imp-subtitle">
-        Sube el archivo de texto que exporta el reloj biométrico. Cada línea se parsea como:
-      </p>
+    <div class="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight imp-title">Importar marcaciones desde TXT</h1>
+        <p class="text-sm mt-0.5 imp-subtitle">
+          Sube el archivo de texto que exporta el reloj biométrico. Cada línea se parsea como:
+        </p>
+      </div>
+      <a href="/attendance" class="shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+        ← Volver
+      </a>
     </div>
 
     <section class="imp-card border rounded-lg p-5 mb-5">
