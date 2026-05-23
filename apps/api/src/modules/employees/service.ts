@@ -461,5 +461,5 @@ export async function listCustomFieldHistoryService(db: AnyDb, employeeId: strin
     .from(customFieldValueHistory)
     .where(eq(customFieldValueHistory.employeeId, employeeId))
     .orderBy(desc(customFieldValueHistory.changedAt))
-    .limit(Math.max(1, Math.min(500, limit)))
+    .limit(Math.max(1, Math.min(5000, limit)))
 }

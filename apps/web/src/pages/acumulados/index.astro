@@ -85,7 +85,7 @@ const filterQs = new URLSearchParams({
 
 try {
   const [empRes, dataRes] = await Promise.all([
-    fetch(`${API_URL}/employees?limit=500`, { headers }),
+    fetch(`${API_URL}/employees?limit=5000`, { headers }),
     filterView === 'summary'
       ? fetch(`${API_URL}/acumulados/summary?${filterQs}`, { headers })
       : fetch(`${API_URL}/acumulados?${filterQs}&page=${page}&limit=100`, { headers }),

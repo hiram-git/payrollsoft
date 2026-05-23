@@ -31,7 +31,7 @@ let fetchError = ''
 
 try {
   const [eRes, enRes] = await Promise.all([
-    fetch(`${API_URL}/employees?limit=500`, {
+    fetch(`${API_URL}/employees?limit=5000`, {
       headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
     }),
     fetch(`${API_URL}/facial/enrollments`, {
