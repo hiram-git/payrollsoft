@@ -1079,7 +1079,6 @@ export type CreateAttendanceData = {
   lunchEnd?: string | null
   checkOut?: string | null
   source?: 'manual' | 'import' | 'webhook'
-  rawData?: Record<string, unknown>
 }
 
 export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData) {
@@ -1132,7 +1131,6 @@ export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData)
       checkOut,
       workedMinutes,
       source: data.source ?? 'manual',
-      rawData: data.rawData ?? {},
     })
     .returning()
   return row

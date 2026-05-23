@@ -1,17 +1,24 @@
-import { groupPunchesByDay, parseBiometricTxt } from '@payroll/core/attendance'
-import { employees } from '@payroll/db'
-import { eq, sql } from 'drizzle-orm'
 /**
  * POST /attendance/import
  *
  * Importa marcaciones desde un archivo TXT de reloj biométrico.
- * Parsea, agrupa por (empleado, día), resuelve employeeCode → UUID,
- * y upsertea en attendance_records con source='import'.
  *
- * Body: multipart/form-data con campo `file` (.txt) y opcionalmente
- * `deviceId` (UUID del dispositivo registrado que generó el archivo).
+ * Flujo optimizado para alto volumen (1000+ empleados, sync cada 5 min):
+ *
+ *   1. Parsea TXT → punches individuales
+ *   2. INSERT cada punch en `attendance_punches` con idempotency_key
+ *      → ON CONFLICT DO NOTHING (skip duplicados en re-imports)
+ *   3. Agrupa los punches NUEVOS por (empleado, día)
+ *   4. Consolida → UPSERT en `attendance_records` (resumen diario)
+ *
+ * NO escribe rawData JSONB en attendance_records — los punches
+ * individuales viven en su propia tabla y son purgables después
+ * de N días sin perder el resumen.
  */
-import { Elysia, t } from 'elysia'
+import { groupPunchesByDay, parseBiometricTxt } from '@payroll/core/attendance'
+import { attendancePunches, employees } from '@payroll/db'
+import { eq, sql } from 'drizzle-orm'
+import { Elysia } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 import { recordDeviceEvent } from './devices-service'
@@ -56,6 +63,7 @@ export const attendanceImportRoutes = new Elysia()
       }
 
       const deviceId = form.get('deviceId')?.toString().trim() || null
+      const deviceCode = form.get('deviceCode')?.toString().trim() || 'UNKNOWN'
       const content = await file.text()
 
       const parsed = parseBiometricTxt(content)
@@ -64,17 +72,59 @@ export const attendanceImportRoutes = new Elysia()
         return { success: false, error: 'El archivo está vacío.' }
       }
 
-      const days = groupPunchesByDay(parsed.punches)
       const empMap = await buildEmployeeMap(db)
 
-      const summary = {
-        totalLines: parsed.totalLines,
-        totalDays: days.length,
-        imported: 0,
-        skipped: 0,
-        failed: 0,
-        unknownEmployees: 0,
+      // ── Paso 1: INSERT punches individuales con idempotency key ────────
+      let punchesInserted = 0
+      let punchesSkipped = 0
+      const unknownCodes = new Set<string>()
+      const affectedPairs = new Set<string>()
+
+      for (const p of parsed.punches) {
+        const employeeId = empMap.get(p.employeeCode.toUpperCase())
+        if (!employeeId) {
+          unknownCodes.add(p.employeeCode)
+          continue
+        }
+
+        const idemKey = `${p.deviceCode ?? deviceCode}:${p.employeeCode}:${p.date}_${p.time.replace(/:/g, '')}`
+        const punchedAt = new Date(`${p.date}T${p.time.length === 5 ? `${p.time}:00` : p.time}`)
+
+        try {
+          const result = await db
+            .insert(attendancePunches)
+            .values({
+              employeeId,
+              deviceId,
+              punchedAt,
+              punchType: p.punchType,
+              source: 'import',
+              idempotencyKey: idemKey,
+            })
+            .onConflictDoNothing()
+            .returning({ id: attendancePunches.id })
+
+          if (result.length > 0) {
+            punchesInserted++
+            affectedPairs.add(`${p.employeeCode}|${p.date}`)
+          } else {
+            punchesSkipped++
+          }
+        } catch {
+          punchesSkipped++
+        }
       }
+
+      // ── Paso 2: Consolidar solo los (empleado, día) que tuvieron nuevos punches ─
+      const days = groupPunchesByDay(
+        parsed.punches.filter((p) => {
+          const key = `${p.employeeCode}|${p.date}`
+          return affectedPairs.has(key)
+        })
+      )
+
+      let consolidated = 0
+      let consolidateErrors = 0
       const rows: Array<{
         employeeCode: string
         date: string
@@ -84,17 +134,7 @@ export const attendanceImportRoutes = new Elysia()
 
       for (const day of days) {
         const employeeId = empMap.get(day.employeeCode.toUpperCase())
-        if (!employeeId) {
-          summary.unknownEmployees++
-          summary.failed++
-          rows.push({
-            employeeCode: day.employeeCode,
-            date: day.date,
-            status: 'failed',
-            message: `Empleado "${day.employeeCode}" no encontrado.`,
-          })
-          continue
-        }
+        if (!employeeId) continue
 
         try {
           const result = await upsertAttendanceService(db, {
@@ -105,31 +145,22 @@ export const attendanceImportRoutes = new Elysia()
             lunchStart: day.lunchStart,
             lunchEnd: day.lunchEnd,
             source: 'import',
-            rawData: {
-              deviceId,
-              punchCount: day.punchCount,
-              punches: day.rawPunches.map((p) => ({
-                time: p.time,
-                type: p.punchType,
-                line: p.lineNumber,
-              })),
-            },
           })
 
           if (result.success) {
-            summary.imported++
+            consolidated++
             rows.push({ employeeCode: day.employeeCode, date: day.date, status: 'imported' })
           } else {
-            summary.failed++
+            consolidateErrors++
             rows.push({
               employeeCode: day.employeeCode,
               date: day.date,
               status: 'failed',
-              message: result.message ?? 'Error al guardar.',
+              message: result.message ?? 'Error al consolidar.',
             })
           }
         } catch (err) {
-          summary.failed++
+          consolidateErrors++
           rows.push({
             employeeCode: day.employeeCode,
             date: day.date,
@@ -139,19 +170,28 @@ export const attendanceImportRoutes = new Elysia()
         }
       }
 
+      for (const code of unknownCodes) {
+        rows.push({
+          employeeCode: code,
+          date: '—',
+          status: 'failed',
+          message: `Empleado "${code}" no encontrado.`,
+        })
+      }
+
       if (deviceId) {
         try {
           await recordDeviceEvent(
             db,
             deviceId,
             'txt_imported',
-            `Importados ${summary.imported} registros de ${file.name}`,
+            `${punchesInserted} punches nuevos, ${punchesSkipped} duplicados, ${consolidated} jornadas consolidadas`,
             {
               fileName: file.name,
               fileSize: file.size,
-              totalLines: parsed.totalLines,
-              imported: summary.imported,
-              failed: summary.failed,
+              punchesInserted,
+              punchesSkipped,
+              consolidated,
             }
           )
         } catch {
@@ -162,7 +202,14 @@ export const attendanceImportRoutes = new Elysia()
       return {
         success: true,
         data: {
-          summary,
+          summary: {
+            totalLines: parsed.totalLines,
+            punchesInserted,
+            punchesSkipped,
+            daysConsolidated: consolidated,
+            consolidateErrors,
+            unknownEmployees: unknownCodes.size,
+          },
           parseErrors: parsed.errors.slice(0, 50),
           rows,
         },
@@ -170,5 +217,30 @@ export const attendanceImportRoutes = new Elysia()
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('attendance:mark')],
+    }
+  )
+
+  // ── Purgar punches antiguos ──────────────────────────────────────────────
+  // Borra punches de más de N días (default 90). Los resúmenes en
+  // attendance_records quedan intactos — son la fuente canónica.
+  .post(
+    '/attendance/punches/purge',
+    async ({ db, request, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const body = (await request.json().catch(() => ({}))) as { olderThanDays?: number }
+      const days = Math.max(body.olderThanDays ?? 90, 7)
+
+      const result = await db.execute(sql`
+        DELETE FROM attendance_punches
+        WHERE created_at < NOW() - INTERVAL '1 day' * ${days}
+      `)
+      const deleted = (result as Array<{ count?: number }>)[0]?.count ?? 0
+      return { success: true, data: { deleted, olderThanDays: days } }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('attendance:edit')],
     }
   )

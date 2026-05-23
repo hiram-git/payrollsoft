@@ -98,26 +98,30 @@ CódigoEmpleado	YYYY-MM-DD	HH:MM:SS	TipoPunch	CódigoDispositivo
       <div class="imp-card border rounded-lg overflow-hidden mb-5">
         <div class="p-5 border-b imp-rule">
           <h2 class="text-sm font-semibold imp-heading mb-3">Resultado</h2>
-          <div class="grid grid-cols-5 gap-3">
+          <div class="grid grid-cols-3 md:grid-cols-6 gap-3">
             <div class="text-center p-3 rounded-md imp-stat-bg">
               <div id="stat-lines" class="text-2xl font-bold imp-title">0</div>
               <div class="text-[10px] uppercase tracking-wide imp-mute">Líneas</div>
             </div>
-            <div class="text-center p-3 rounded-md imp-stat-bg">
-              <div id="stat-days" class="text-2xl font-bold imp-title">0</div>
-              <div class="text-[10px] uppercase tracking-wide imp-mute">Jornadas</div>
-            </div>
             <div class="text-center p-3 rounded-md bg-green-50 dark:bg-green-900/20">
-              <div id="stat-imported" class="text-2xl font-bold text-green-700">0</div>
-              <div class="text-[10px] uppercase tracking-wide text-green-600">Importadas</div>
+              <div id="stat-punches" class="text-2xl font-bold text-green-700">0</div>
+              <div class="text-[10px] uppercase tracking-wide text-green-600">Punches nuevos</div>
+            </div>
+            <div class="text-center p-3 rounded-md imp-stat-bg">
+              <div id="stat-skipped" class="text-2xl font-bold imp-title">0</div>
+              <div class="text-[10px] uppercase tracking-wide imp-mute">Duplicados (skip)</div>
+            </div>
+            <div class="text-center p-3 rounded-md bg-blue-50 dark:bg-blue-900/20">
+              <div id="stat-days" class="text-2xl font-bold text-blue-700">0</div>
+              <div class="text-[10px] uppercase tracking-wide text-blue-600">Jornadas</div>
             </div>
             <div class="text-center p-3 rounded-md bg-red-50 dark:bg-red-900/20">
               <div id="stat-failed" class="text-2xl font-bold text-red-700">0</div>
-              <div class="text-[10px] uppercase tracking-wide text-red-600">Fallidas</div>
+              <div class="text-[10px] uppercase tracking-wide text-red-600">Errores</div>
             </div>
             <div class="text-center p-3 rounded-md bg-amber-50 dark:bg-amber-900/20">
               <div id="stat-unknown" class="text-2xl font-bold text-amber-700">0</div>
-              <div class="text-[10px] uppercase tracking-wide text-amber-600">Emp. no encontrado</div>
+              <div class="text-[10px] uppercase tracking-wide text-amber-600">No encontrado</div>
             </div>
           </div>
         </div>
@@ -161,9 +165,10 @@ CódigoEmpleado	YYYY-MM-DD	HH:MM:SS	TipoPunch	CódigoDispositivo
 
           const s = json.data.summary
           document.getElementById('stat-lines').textContent = s.totalLines
-          document.getElementById('stat-days').textContent = s.totalDays
-          document.getElementById('stat-imported').textContent = s.imported
-          document.getElementById('stat-failed').textContent = s.failed
+          document.getElementById('stat-punches').textContent = s.punchesInserted
+          document.getElementById('stat-skipped').textContent = s.punchesSkipped
+          document.getElementById('stat-days').textContent = s.daysConsolidated
+          document.getElementById('stat-failed').textContent = s.consolidateErrors
           document.getElementById('stat-unknown').textContent = s.unknownEmployees
 
           const rows = json.data.rows || []
