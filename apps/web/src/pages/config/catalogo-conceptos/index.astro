@@ -24,7 +24,7 @@ try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [configRes, cuentasRes] = await Promise.all([
     fetch(`${API_URL}/concepts/config`, { headers }),
-    fetch(`${API_URL}/cuentas-contables`, { headers }),
+    fetch(`${API_URL}/chart-of-accounts`, { headers }),
   ])
   if (configRes.status === 401) return Astro.redirect('/login')
   if (configRes.ok) catalogs = ((await configRes.json()) as { data: Catalogs }).data
@@ -104,7 +104,7 @@ const isCuentasTab = activeTab === 'cuentas'
         <>
           <!-- New cuenta contable form -->
           <div id="newItemForm" class="new-form hidden">
-            <form method="POST" action="/api/config/cuentas-contables" class="new-form-row">
+            <form method="POST" action="/api/config/chart-of-accounts" class="new-form-row">
               <div class="field">
                 <label class="label">Código *</label>
                 <input type="text" name="code" class="inp" required maxlength="20" placeholder="ej: 1001" />

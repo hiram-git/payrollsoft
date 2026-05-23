@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}/departamentos`, {
+    res = await fetch(`${API_URL}/departments`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

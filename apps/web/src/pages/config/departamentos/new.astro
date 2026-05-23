@@ -17,7 +17,7 @@ type Departamento = {
 
 let allDepts: Departamento[] = []
 try {
-  const res = await fetch(`${API_URL}/departamentos`, {
+  const res = await fetch(`${API_URL}/departments`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.ok) {
@@ -40,7 +40,7 @@ const errorMessages: Record<string, string> = {
   <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-2xl font-bold text-gray-900">Nuevo Departamento</h1>
-      <a href="/config/departamentos" class="text-sm text-gray-500 hover:text-gray-700">← Volver</a>
+      <a href="/config/departments" class="text-sm text-gray-500 hover:text-gray-700">← Volver</a>
     </div>
 
     {error && (
@@ -49,7 +49,7 @@ const errorMessages: Record<string, string> = {
       </div>
     )}
 
-    <form method="POST" action="/api/config/departamentos">
+    <form method="POST" action="/api/config/departments">
       <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
@@ -73,7 +73,7 @@ const errorMessages: Record<string, string> = {
       </div>
 
       <div class="flex justify-end gap-3 mt-4">
-        <a href="/config/departamentos" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        <a href="/config/departments" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
           Cancelar
         </a>
         <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">

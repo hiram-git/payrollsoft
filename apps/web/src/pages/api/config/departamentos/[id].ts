@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     } catch {
       return redirect(`/config/departamentos/${id}?error=server-error`)
     }
-    return redirect('/config/departamentos')
+    return redirect('/config/departments')
   }
 
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''

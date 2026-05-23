@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     } catch {
       return redirect(`/config/funciones/${id}?error=server-error`)
     }
-    return redirect('/config/funciones')
+    return redirect('/config/job-functions')
   }
 
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''

@@ -22,7 +22,7 @@ const DepartamentoUpdateBody = t.Object({
   parentId: t.Optional(t.Nullable(t.String())),
 })
 
-export const departamentosRoutes = new Elysia({ prefix: '/departamentos' })
+export const departmentsRoutes = new Elysia({ prefix: '/departments' })
   .use(authPlugin)
   .use(tenantPlugin)
 

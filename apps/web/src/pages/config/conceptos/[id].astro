@@ -51,7 +51,7 @@ let cuentasContables: CuentaContable[] = []
 const [conceptRes, configRes, cuentasRes] = await Promise.allSettled([
   fetch(`${API_URL}/concepts/${id}`, { headers }),
   fetch(`${API_URL}/concepts/config`, { headers }),
-  fetch(`${API_URL}/cuentas-contables`, { headers }),
+  fetch(`${API_URL}/chart-of-accounts`, { headers }),
 ])
 
 if (conceptRes.status === 'fulfilled') {

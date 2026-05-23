@@ -33,10 +33,10 @@ try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [pRes, cRes, fRes, dRes, ptRes] = await Promise.all([
     fetch(`${API_URL}/positions/${id}`, { headers }),
-    fetch(`${API_URL}/cargos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
-    fetch(`${API_URL}/partidas`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
+    fetch(`${API_URL}/budget-items`, { headers }),
   ])
   if (pRes.status === 401) return Astro.redirect('/login')
   if (pRes.status === 404) return Astro.redirect('/config/estructura')

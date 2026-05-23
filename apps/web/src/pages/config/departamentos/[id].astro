@@ -25,13 +25,13 @@ try {
     fetch(`${API_URL}/departamentos/${id}`, {
       headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
     }),
-    fetch(`${API_URL}/departamentos`, {
+    fetch(`${API_URL}/departments`, {
       headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
     }),
   ])
 
   if (deptRes.status === 401) return Astro.redirect('/login')
-  if (deptRes.status === 404) return Astro.redirect('/config/departamentos')
+  if (deptRes.status === 404) return Astro.redirect('/config/departments')
   if (deptRes.ok) {
     const json = (await deptRes.json()) as { data: Departamento }
     dept = json.data
@@ -42,10 +42,10 @@ try {
     allDepts = json.data ?? []
   }
 } catch {
-  return Astro.redirect('/config/departamentos')
+  return Astro.redirect('/config/departments')
 }
 
-if (!dept) return Astro.redirect('/config/departamentos')
+if (!dept) return Astro.redirect('/config/departments')
 
 // Collect all descendant IDs (including self) to prevent cycles in dropdown
 function getDescendants(flat: Departamento[], rootId: string): Set<string> {
@@ -88,7 +88,7 @@ const errorMessages: Record<string, string> = {
         {!dept.isActive && (
           <span class="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Inactivo</span>
         )}
-        <a href="/config/departamentos" class="text-sm text-gray-500 hover:text-gray-700">← Volver</a>
+        <a href="/config/departments" class="text-sm text-gray-500 hover:text-gray-700">← Volver</a>
       </div>
     </div>
 
@@ -140,7 +140,7 @@ const errorMessages: Record<string, string> = {
           </form>
         )}
         <div class="flex gap-3 ml-auto">
-          <a href="/config/departamentos" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+          <a href="/config/departments" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
             Cancelar
           </a>
           <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">

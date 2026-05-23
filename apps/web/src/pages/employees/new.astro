@@ -32,9 +32,9 @@ let tipoInstitucion = 'privada'
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
-    fetch(`${API_URL}/cargos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
     fetch(`${API_URL}/concepts/config`, { headers }),
   ])

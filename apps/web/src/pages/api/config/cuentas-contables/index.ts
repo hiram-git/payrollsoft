@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}/cuentas-contables`, {
+    res = await fetch(`${API_URL}/chart-of-accounts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

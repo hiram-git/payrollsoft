@@ -19,7 +19,7 @@ const PartidaUpdateBody = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
 })
 
-export const partidasRoutes = new Elysia({ prefix: '/partidas' })
+export const budgetItemsRoutes = new Elysia({ prefix: '/budget-items' })
   .use(authPlugin)
   .use(tenantPlugin)
 

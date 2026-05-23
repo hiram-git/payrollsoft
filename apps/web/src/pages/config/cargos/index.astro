@@ -19,7 +19,7 @@ let cargos: Cargo[] = []
 let error = ''
 
 try {
-  const res = await fetch(`${API_URL}/cargos`, {
+  const res = await fetch(`${API_URL}/job-titles`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.ok) {
@@ -45,7 +45,7 @@ const success = Astro.url.searchParams.get('success') === '1'
         <p class="text-sm text-gray-500 mt-0.5">{cargos.length} registros</p>
       </div>
       <div class="flex items-center gap-2">
-        <a href="/config/import/cargos" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+        <a href="/config/import/job-titles" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
           Importar
         </a>
         <a href="/config/cargos/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">

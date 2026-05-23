@@ -21,7 +21,7 @@ const CargoUpdateBody = t.Object({
   description: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
 })
 
-export const cargosRoutes = new Elysia({ prefix: '/cargos' })
+export const jobTitlesRoutes = new Elysia({ prefix: '/job-titles' })
   .use(authPlugin)
   .use(tenantPlugin)
 

@@ -10,12 +10,12 @@ import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
 import { authRoutes } from './modules/auth/routes'
 import { calendarRoutes } from './modules/calendar/routes'
-import { cargosRoutes } from './modules/catalogs/cargos/routes'
+import { jobTitlesRoutes } from './modules/catalogs/cargos/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
-import { cuentasContablesRoutes } from './modules/catalogs/cuentas-contables/routes'
-import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
-import { funcionesRoutes } from './modules/catalogs/funciones/routes'
-import { partidasRoutes } from './modules/catalogs/partidas/routes'
+import { chartOfAccountsRoutes } from './modules/catalogs/cuentas-contables/routes'
+import { departmentsRoutes } from './modules/catalogs/departamentos/routes'
+import { jobFunctionsRoutes } from './modules/catalogs/funciones/routes'
+import { budgetItemsRoutes } from './modules/catalogs/partidas/routes'
 import { companyRoutes } from './modules/company/routes'
 import { creditorRoutes } from './modules/creditors/routes'
 import { customFieldsRoutes } from './modules/custom-fields/routes'
@@ -62,11 +62,11 @@ const app = new Elysia()
   .use(companyRoutes)
   .use(positionsRoutes)
   .use(employeeRoutes)
-  .use(cargosRoutes)
-  .use(funcionesRoutes)
-  .use(departamentosRoutes)
-  .use(partidasRoutes)
-  .use(cuentasContablesRoutes)
+  .use(jobTitlesRoutes)
+  .use(jobFunctionsRoutes)
+  .use(departmentsRoutes)
+  .use(budgetItemsRoutes)
+  .use(chartOfAccountsRoutes)
   .use(conceptsRoutes)
   .use(dashboardRoutes)
   .use(acumuladosRoutes)

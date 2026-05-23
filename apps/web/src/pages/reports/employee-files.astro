@@ -75,9 +75,9 @@ try {
   const [repRes, tRes, dRes, fRes, cRes] = await Promise.all([
     fetch(`${API_URL}/reports/employee-files?${params}`, { headers }),
     fetch(`${API_URL}/employee-files/types`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/cargos`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
   ])
   if (repRes.status === 401) return Astro.redirect('/login')
   if (repRes.ok) report = ((await repRes.json()) as { data: Report }).data

@@ -13,7 +13,7 @@ let partidas: Partida[] = []
 let error = ''
 
 try {
-  const res = await fetch(`${API_URL}/partidas`, {
+  const res = await fetch(`${API_URL}/budget-items`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.status === 401) return Astro.redirect('/login')
@@ -34,7 +34,7 @@ const success = Astro.url.searchParams.get('success') === '1'
         <p class="text-sm text-gray-500 mt-0.5">{partidas.length} partidas registradas</p>
       </div>
       <div class="flex items-center gap-2">
-        <a href="/config/import/partidas" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+        <a href="/config/import/budget-items" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
           Importar
         </a>
         <a href="/config/partidas/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">

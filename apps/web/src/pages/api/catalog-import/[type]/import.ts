@@ -133,10 +133,10 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   // Pre-fetch de dependencias para resolver códigos → IDs
   const depMaps: Record<string, CatalogMap> = {}
   const depPaths: Record<string, string> = {
-    cargos: '/cargos',
-    funciones: '/funciones',
-    departamentos: '/departamentos',
-    partidas: '/partidas',
+    cargos: '/job-titles',
+    funciones: '/job-functions',
+    departamentos: '/departments',
+    partidas: '/budget-items',
   }
   for (const dep of config.dependencies) {
     depMaps[dep] = await fetchCatalog(API_URL, depPaths[dep] ?? `/${dep}`, authHeaders)

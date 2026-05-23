@@ -19,7 +19,7 @@ const CuentaContableUpdateBody = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
 })
 
-export const cuentasContablesRoutes = new Elysia({ prefix: '/cuentas-contables' })
+export const chartOfAccountsRoutes = new Elysia({ prefix: '/chart-of-accounts' })
   .use(authPlugin)
   .use(tenantPlugin)
 

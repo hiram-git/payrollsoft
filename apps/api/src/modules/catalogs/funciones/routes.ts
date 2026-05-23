@@ -21,7 +21,7 @@ const FuncionUpdateBody = t.Object({
   description: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
 })
 
-export const funcionesRoutes = new Elysia({ prefix: '/funciones' })
+export const jobFunctionsRoutes = new Elysia({ prefix: '/job-functions' })
   .use(authPlugin)
   .use(tenantPlugin)
 
