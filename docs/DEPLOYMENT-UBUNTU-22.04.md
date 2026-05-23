@@ -174,6 +174,57 @@ sudo systemctl restart postgresql
 PGPASSWORD='LA_CLAVE_QUE_PUSISTE' psql -h 127.0.0.1 -U payrollsoft -d payroll_panama -c '\conninfo'
 ```
 
+### 3.6. (Opcional) Instalar pgvector para el módulo de reconocimiento facial
+
+El módulo de **reconocimiento facial** (asistencia por kiosko) usa la
+extensión `pgvector` para almacenar embeddings 128-d con búsqueda
+KNN coseno. **Si no piensas usar este módulo, puedes saltarte este
+paso** — la migración `0034_facial_recognition` detecta automáticamente
+la ausencia de la extensión y deja el módulo deshabilitado sin
+romper el resto del sistema.
+
+> **¿Estás en Windows?** Esta sección es para Ubuntu (`apt`). Para
+> Windows ver `docs/PGVECTOR-WINDOWS.md` — cubre Docker, WSL2,
+> binarios pre-compilados y compilación con Visual Studio.
+
+Para habilitarlo en Ubuntu:
+
+```bash
+sudo apt install -y postgresql-16-pgvector
+```
+
+> Cambia `postgresql-16-pgvector` por la versión que corresponda a tu
+> PostgreSQL (`postgresql-15-pgvector`, `postgresql-17-pgvector`...).
+> Si tu versión no está en los repos oficiales, sigue las
+> instrucciones de https://github.com/pgvector/pgvector
+
+Después, **si ya provisionaste tenants** sin pgvector, re-corre la
+migración 0034 manualmente para que ahora SÍ cree las tablas facial:
+
+```bash
+# Para cada tenant que ya existe
+sudo -u postgres psql -d payroll_panama <<'SQL'
+  DO $$
+  DECLARE tenant_schema text;
+  BEGIN
+    FOR tenant_schema IN
+      SELECT nspname FROM pg_namespace WHERE nspname LIKE 'tenant_%'
+    LOOP
+      EXECUTE format(
+        'DELETE FROM %I.__drizzle_migrations WHERE hash LIKE %L',
+        tenant_schema, '%0034%'
+      );
+      RAISE NOTICE 'Cleared 0034 entry from %', tenant_schema;
+    END LOOP;
+  END $$;
+SQL
+
+bun run --filter @payroll/db db:migrate:all-tenants
+```
+
+Tenants provisionados *después* de instalar pgvector tendrán las
+tablas facial automáticamente sin ningún paso extra.
+
 ---
 
 ## 4. Instalación de Bun
