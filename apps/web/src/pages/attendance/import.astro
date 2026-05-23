@@ -1,0 +1,215 @@
+---
+/**
+ * Importar marcaciones desde archivo TXT de reloj biométrico.
+ *
+ * El usuario selecciona el dispositivo que generó el archivo, sube
+ * el .txt, y el importador parsea + agrupa + inserta en
+ * attendance_records con source='import'.
+ */
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'attendance:mark')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type Device = {
+  id: string
+  code: string
+  name: string
+  deviceType: string
+  connectionMethod: string
+}
+let devices: Device[] = []
+try {
+  const res = await fetch(`${API_URL}/attendance/devices`, { headers })
+  if (res.ok) {
+    const all = ((await res.json()) as { data: Device[] }).data ?? []
+    devices = all.filter((d) => d.connectionMethod === 'txt_import')
+  }
+} catch {
+  /* */
+}
+---
+<AppLayout title="Importar marcaciones">
+  <div class="mx-auto w-full max-w-5xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <a href="/attendance" class="text-xs imp-mute hover:underline">← Marcaciones</a>
+      <h1 class="text-xl font-semibold tracking-tight imp-title mt-2">Importar marcaciones desde TXT</h1>
+      <p class="text-sm mt-0.5 imp-subtitle">
+        Sube el archivo de texto que exporta el reloj biométrico. Cada línea se parsea como:
+      </p>
+    </div>
+
+    <section class="imp-card border rounded-lg p-5 mb-5">
+      <h2 class="text-sm font-semibold imp-heading mb-2">Formato esperado</h2>
+      <div class="text-xs imp-cell space-y-2">
+        <p>Líneas separadas por <strong>TAB</strong> con estas columnas:</p>
+        <pre class="bg-gray-100 dark:bg-gray-800 rounded p-3 font-mono text-[11px] overflow-x-auto">
+CódigoEmpleado	YYYY-MM-DD	HH:MM:SS	TipoPunch	CódigoDispositivo
+1001	2026-01-15	08:00:00	0	REL-01
+1001	2026-01-15	12:00:00	1	REL-01
+1001	2026-01-15	13:00:00	2	REL-01
+1001	2026-01-15	17:00:00	3	REL-01</pre>
+        <p><strong>Tipos de punch:</strong> 0 = Entrada, 1 = Salida almuerzo, 2 = Regreso almuerzo, 3 = Salida.
+        Si el reloj no distingue tipos (todos son 0), el importador los infiere por orden cronológico:
+        1er punch = entrada, 2do = almuerzo, 3ro = regreso, 4to = salida.</p>
+        <p>También se acepta el formato con fecha+hora combinadas:
+          <code class="ml-1 bg-gray-100 dark:bg-gray-800 px-1 rounded">1001\t2026-01-15 08:00:00\t0</code></p>
+      </div>
+    </section>
+
+    <section class="imp-card border rounded-lg p-5 mb-5">
+      <form id="import-form" enctype="multipart/form-data">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+          <div class="md:col-span-1">
+            <label class="block text-xs font-medium imp-label mb-1.5">Dispositivo (opcional)</label>
+            <select name="deviceId" class="imp-input w-full px-3 py-2 text-sm rounded-md">
+              <option value="">— Sin dispositivo —</option>
+              {devices.map((d) => (
+                <option value={d.id}>{d.name} ({d.code})</option>
+              ))}
+            </select>
+            <p class="text-[10px] imp-mute mt-0.5">Solo dispositivos con conexión "Importar TXT".</p>
+          </div>
+          <div class="md:col-span-1">
+            <label class="block text-xs font-medium imp-label mb-1.5">Archivo TXT *</label>
+            <input type="file" name="file" accept=".txt,.csv,.dat" required
+              class="block w-full text-sm imp-cell file:mr-3 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-300" />
+          </div>
+          <div class="md:col-span-1">
+            <button type="submit" id="btn-import"
+              class="w-full px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
+              Importar
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <div id="import-error" class="hidden mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"></div>
+    </section>
+
+    <section id="results" class="hidden">
+      <div class="imp-card border rounded-lg overflow-hidden mb-5">
+        <div class="p-5 border-b imp-rule">
+          <h2 class="text-sm font-semibold imp-heading mb-3">Resultado</h2>
+          <div class="grid grid-cols-5 gap-3">
+            <div class="text-center p-3 rounded-md imp-stat-bg">
+              <div id="stat-lines" class="text-2xl font-bold imp-title">0</div>
+              <div class="text-[10px] uppercase tracking-wide imp-mute">Líneas</div>
+            </div>
+            <div class="text-center p-3 rounded-md imp-stat-bg">
+              <div id="stat-days" class="text-2xl font-bold imp-title">0</div>
+              <div class="text-[10px] uppercase tracking-wide imp-mute">Jornadas</div>
+            </div>
+            <div class="text-center p-3 rounded-md bg-green-50 dark:bg-green-900/20">
+              <div id="stat-imported" class="text-2xl font-bold text-green-700">0</div>
+              <div class="text-[10px] uppercase tracking-wide text-green-600">Importadas</div>
+            </div>
+            <div class="text-center p-3 rounded-md bg-red-50 dark:bg-red-900/20">
+              <div id="stat-failed" class="text-2xl font-bold text-red-700">0</div>
+              <div class="text-[10px] uppercase tracking-wide text-red-600">Fallidas</div>
+            </div>
+            <div class="text-center p-3 rounded-md bg-amber-50 dark:bg-amber-900/20">
+              <div id="stat-unknown" class="text-2xl font-bold text-amber-700">0</div>
+              <div class="text-[10px] uppercase tracking-wide text-amber-600">Emp. no encontrado</div>
+            </div>
+          </div>
+        </div>
+        <div id="rows-container" class="max-h-[400px] overflow-y-auto"></div>
+      </div>
+
+      <div id="parse-errors" class="hidden imp-card border rounded-lg p-5 mb-5">
+        <h3 class="text-xs font-semibold imp-heading mb-2">Errores de formato (líneas no parseables)</h3>
+        <div id="parse-errors-body" class="text-xs imp-mute font-mono max-h-40 overflow-y-auto"></div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const form = document.getElementById('import-form')
+      const btn = document.getElementById('btn-import')
+      const errBox = document.getElementById('import-error')
+      const results = document.getElementById('results')
+      const rowsBox = document.getElementById('rows-container')
+      const parseBox = document.getElementById('parse-errors')
+      const parseBody = document.getElementById('parse-errors-body')
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        errBox.classList.add('hidden')
+        results.classList.add('hidden')
+        parseBox.classList.add('hidden')
+        btn.disabled = true
+        btn.textContent = 'Importando…'
+
+        const fd = new FormData(form)
+        try {
+          const res = await fetch('/api/attendance/import', { method: 'POST', body: fd })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || !json.ok) {
+            errBox.textContent = json.error || 'Error del servidor.'
+            errBox.classList.remove('hidden')
+            return
+          }
+
+          const s = json.data.summary
+          document.getElementById('stat-lines').textContent = s.totalLines
+          document.getElementById('stat-days').textContent = s.totalDays
+          document.getElementById('stat-imported').textContent = s.imported
+          document.getElementById('stat-failed').textContent = s.failed
+          document.getElementById('stat-unknown').textContent = s.unknownEmployees
+
+          const rows = json.data.rows || []
+          if (rows.length > 0) {
+            let html = '<table class="w-full text-xs"><thead><tr class="border-b"><th class="text-left px-4 py-2 font-medium">Empleado</th><th class="text-left px-4 py-2 font-medium">Fecha</th><th class="text-left px-4 py-2 font-medium">Estado</th><th class="text-left px-4 py-2 font-medium">Detalle</th></tr></thead><tbody>'
+            for (const r of rows) {
+              const cls = r.status === 'imported' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              const label = r.status === 'imported' ? 'Importado' : 'Error'
+              html += `<tr class="border-b last:border-0"><td class="px-4 py-2 font-mono">${r.employeeCode}</td><td class="px-4 py-2">${r.date}</td><td class="px-4 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${cls}">${label}</span></td><td class="px-4 py-2 text-gray-600">${r.message || '—'}</td></tr>`
+            }
+            html += '</tbody></table>'
+            rowsBox.innerHTML = html
+          }
+
+          const pe = json.data.parseErrors || []
+          if (pe.length > 0) {
+            parseBody.innerHTML = pe.map((e) => `Línea ${e.line}: ${e.error} → <code>${e.raw?.slice(0, 80)}</code>`).join('<br/>')
+            parseBox.classList.remove('hidden')
+          }
+
+          results.classList.remove('hidden')
+        } catch (err) {
+          errBox.textContent = 'Error de red: ' + String(err)
+          errBox.classList.remove('hidden')
+        } finally {
+          btn.disabled = false
+          btn.textContent = 'Importar'
+        }
+      })
+    })()
+  </script>
+
+  <style>
+    .imp-title    { color: var(--fore); }
+    .imp-subtitle { color: var(--fore-dim); }
+    .imp-heading  { color: var(--fore); }
+    .imp-label    { color: var(--fore-dim); }
+    .imp-cell     { color: var(--fore-dim); }
+    .imp-mute     { color: var(--mute); }
+    .imp-card     { background: var(--ink-2); border-color: var(--rule); }
+    .imp-rule     { border-color: var(--rule); }
+    .imp-input    { background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore); }
+    .imp-input:focus { border-color: var(--rule-hi); outline: none; }
+    .imp-stat-bg  { background: var(--ink-3); }
+    [data-theme='light'] .imp-card { background: #ffffff; }
+    [data-theme='light'] .imp-input { background: #ffffff; }
+    [data-theme='light'] .imp-stat-bg { background: #f9fafb; }
+  </style>
+</AppLayout>

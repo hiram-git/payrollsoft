@@ -6,6 +6,7 @@ import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
 import { attendanceDevicesRoutes } from './modules/attendance/devices-routes'
+import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
 import { authRoutes } from './modules/auth/routes'
 import { calendarRoutes } from './modules/calendar/routes'
@@ -71,6 +72,7 @@ const app = new Elysia()
   .use(acumuladosRoutes)
   .use(attendanceRoutes)
   .use(attendanceDevicesRoutes)
+  .use(attendanceImportRoutes)
   .use(loansRoutes)
   .use(creditorRoutes)
   .use(customFieldsRoutes)
