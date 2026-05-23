@@ -61,7 +61,7 @@ const errorMessages: Record<string, string> = {
       </div>
     )}
 
-    <form method="POST" action={`/api/config/partidas/${id}`}>
+    <form method="POST" action={`/api/config/budget-items/${id}`}>
       <input type="hidden" name="_method" value="PUT" />
 
       <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
@@ -92,7 +92,7 @@ const errorMessages: Record<string, string> = {
         {partida.isActive && (
           <form
             method="POST"
-            action={`/api/config/partidas/${id}`}
+            action={`/api/config/budget-items/${id}`}
             onsubmit="return confirm('¿Dar de baja esta partida?')"
           >
             <input type="hidden" name="_method" value="DELETE" />

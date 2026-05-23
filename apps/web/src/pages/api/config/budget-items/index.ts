@@ -11,17 +11,15 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
 
-  const body = {
-    code: g('code'),
-    name: g('name'),
-    description: g('description') || null,
-  }
+  const body = { code: g('code'), name: g('name') }
 
-  if (!body.code || !body.name) return redirect('/config/funciones/new?error=missing-fields')
+  if (!body.code || !body.name) {
+    return redirect('/config/budget-items/new?error=missing-fields')
+  }
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}/job-functions`, {
+    res = await fetch(`${API_URL}/budget-items`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,17 +29,15 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       body: JSON.stringify(body),
     })
   } catch {
-    return redirect('/config/funciones/new?error=server-error')
+    return redirect('/config/budget-items/new?error=server-error')
   }
 
   if (res.status === 401) return redirect('/login')
-  if (res.ok) return redirect('/config/funciones?success=1')
+  if (res.ok) return redirect('/config/budget-items?success=1')
 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
-  const msg = data.error ?? ''
-
-  if (msg.toLowerCase().includes('code') || res.status === 409) {
-    return redirect('/config/funciones/new?error=code_taken')
+  if (res.status === 409 || data.error?.includes('código')) {
+    return redirect('/config/budget-items/new?error=code_taken')
   }
-  return redirect('/config/funciones/new?error=server-error')
+  return redirect('/config/budget-items/new?error=server-error')
 }

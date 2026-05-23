@@ -17,7 +17,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     parentId: g('parentId') || null,
   }
 
-  if (!body.code || !body.name) return redirect('/config/departamentos/new?error=missing-fields')
+  if (!body.code || !body.name) return redirect('/config/departments/new?error=missing-fields')
 
   let res: Response
   try {
@@ -31,17 +31,17 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       body: JSON.stringify(body),
     })
   } catch {
-    return redirect('/config/departamentos/new?error=server-error')
+    return redirect('/config/departments/new?error=server-error')
   }
 
   if (res.status === 401) return redirect('/login')
-  if (res.ok) return redirect('/config/departamentos?success=1')
+  if (res.ok) return redirect('/config/departments?success=1')
 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   const msg = data.error ?? ''
 
   if (msg.toLowerCase().includes('code') || res.status === 409) {
-    return redirect('/config/departamentos/new?error=code_taken')
+    return redirect('/config/departments/new?error=code_taken')
   }
-  return redirect('/config/departamentos/new?error=server-error')
+  return redirect('/config/departments/new?error=server-error')
 }

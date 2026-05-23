@@ -103,7 +103,7 @@ const errorMessages: Record<string, string> = {
       </div>
     )}
 
-    <form method="POST" action={`/api/config/departamentos/${id}`}>
+    <form method="POST" action={`/api/config/departments/${id}`}>
       <input type="hidden" name="_method" value="PUT" />
 
       <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
@@ -130,7 +130,7 @@ const errorMessages: Record<string, string> = {
 
       <div class="flex justify-between mt-4">
         {dept.isActive && (
-          <form method="POST" action={`/api/config/departamentos/${id}`}
+          <form method="POST" action={`/api/config/departments/${id}`}
             onsubmit="return confirm('¿Dar de baja este departamento?')"
           >
             <input type="hidden" name="_method" value="DELETE" />

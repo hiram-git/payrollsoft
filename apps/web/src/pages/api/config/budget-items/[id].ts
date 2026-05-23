@@ -14,29 +14,27 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   if (method === 'DELETE') {
     try {
-      const res = await fetch(`${API_URL}/funciones/${id}`, {
+      const res = await fetch(`${API_URL}/partidas/${id}`, {
         method: 'DELETE',
         headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
       })
       if (res.status === 401) return redirect('/login')
     } catch {
-      return redirect(`/config/funciones/${id}?error=server-error`)
+      return redirect(`/config/budget-items/${id}?error=server-error`)
     }
-    return redirect('/config/job-functions')
+    return redirect('/config/budget-items')
   }
 
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
-  const body = {
-    code: g('code'),
-    name: g('name'),
-    description: g('description') || null,
-  }
+  const body = { code: g('code'), name: g('name') }
 
-  if (!body.code || !body.name) return redirect(`/config/funciones/${id}?error=missing-fields`)
+  if (!body.code || !body.name) {
+    return redirect(`/config/budget-items/${id}?error=missing-fields`)
+  }
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}/funciones/${id}`, {
+    res = await fetch(`${API_URL}/partidas/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -46,17 +44,15 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       body: JSON.stringify(body),
     })
   } catch {
-    return redirect(`/config/funciones/${id}?error=server-error`)
+    return redirect(`/config/budget-items/${id}?error=server-error`)
   }
 
   if (res.status === 401) return redirect('/login')
-  if (res.ok) return redirect(`/config/funciones/${id}?success=1`)
+  if (res.ok) return redirect(`/config/budget-items/${id}?success=1`)
 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
-  const msg = data.error ?? ''
-
-  if (msg.toLowerCase().includes('code') || res.status === 409) {
-    return redirect(`/config/funciones/${id}?error=code_taken`)
+  if (res.status === 409 || data.error?.includes('código')) {
+    return redirect(`/config/budget-items/${id}?error=code_taken`)
   }
-  return redirect(`/config/funciones/${id}?error=server-error`)
+  return redirect(`/config/budget-items/${id}?error=server-error`)
 }

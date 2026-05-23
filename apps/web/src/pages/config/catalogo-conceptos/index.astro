@@ -150,7 +150,7 @@ const isCuentasTab = activeTab === 'cuentas'
                       <form
                         id={`edit-form-${item.id}`}
                         method="POST"
-                        action={`/api/config/cuentas-contables/${item.id}`}
+                        action={`/api/config/chart-of-accounts/${item.id}`}
                         class="edit-mode hidden"
                       >
                         <input type="hidden" name="_method" value="PUT" />
@@ -184,7 +184,7 @@ const isCuentasTab = activeTab === 'cuentas'
                         </span>
                         <form
                           method="POST"
-                          action={`/api/config/cuentas-contables/${item.id}`}
+                          action={`/api/config/chart-of-accounts/${item.id}`}
                           onsubmit="return confirm('¿Dar de baja esta cuenta contable?')"
                           class="tooltip-wrap"
                         >
