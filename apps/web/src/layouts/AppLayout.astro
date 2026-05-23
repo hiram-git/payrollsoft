@@ -140,6 +140,8 @@ const navAll: NavEntry[] = [
     icon: 'clock',
     children: [
       { href: '/attendance', label: 'Marcaciones', require: 'attendance:read' },
+      { href: '/attendance/import', label: 'Importar TXT', require: 'attendance:mark' },
+      { href: '/attendance/devices', label: 'Dispositivos', require: 'terminals:read' },
       { href: '/attendance/shifts', label: 'Horarios', require: 'shifts:read' },
     ],
   },

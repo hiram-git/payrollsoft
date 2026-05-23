@@ -253,6 +253,20 @@
       "when": 1762128015000,
       "tag": "0036_treasury_module",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1762128016000,
+      "tag": "0037_attendance_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1762128017000,
+      "tag": "0038_attendance_punches",
+      "breakpoints": true
     }
   ]
 }
