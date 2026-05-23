@@ -29,12 +29,16 @@ if (!can(identity, config.permission)) return Astro.redirect('/dashboard')
 ---
 <AppLayout title={`Importar ${config.label}`}>
   <div class="mx-auto w-full max-w-5xl p-8 lg:w-3/4">
-    <div class="mb-6">
-      <a href={config.returnPath} class="text-xs imp-mute hover:underline">← Volver a {config.label}</a>
-      <h1 class="text-xl font-semibold tracking-tight imp-title mt-2">Importar {config.label}</h1>
-      <p class="text-sm mt-0.5 imp-subtitle">
-        Sube un archivo Excel (.xlsx) con los registros. Los códigos duplicados se omiten automáticamente.
-      </p>
+    <div class="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight imp-title">Importar {config.label}</h1>
+        <p class="text-sm mt-0.5 imp-subtitle">
+          Sube un archivo Excel (.xlsx) con los registros. Los códigos duplicados se omiten automáticamente.
+        </p>
+      </div>
+      <a href={config.returnPath} class="shrink-0 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+        ← Volver
+      </a>
     </div>
 
     <!-- Esquema de columnas -->

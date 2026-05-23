@@ -52,12 +52,14 @@ const total = countAll(tree)
         <h1 class="text-2xl font-bold text-gray-900">Departamentos</h1>
         <p class="text-sm text-gray-500 mt-0.5">{total} registros</p>
       </div>
-      <a href="/config/import/departamentos" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-        Importar
-      </a>
-      <a href="/config/departamentos/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-        + Nuevo departamento
-      </a>
+      <div class="flex items-center gap-2">
+        <a href="/config/import/departamentos" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+          Importar
+        </a>
+        <a href="/config/departamentos/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          + Nuevo departamento
+        </a>
+      </div>
     </div>
 
     {success && (
