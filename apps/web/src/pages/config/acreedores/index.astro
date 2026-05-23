@@ -46,6 +46,9 @@ const success = Astro.url.searchParams.get('success') === '1'
         <h1 class="text-2xl font-bold text-gray-900">Acreedores</h1>
         <p class="text-sm text-gray-500 mt-0.5">{creditors.length} registros</p>
       </div>
+      <a href="/config/import/acreedores" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+        Importar
+      </a>
       <a href="/config/acreedores/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
         + Nuevo acreedor
       </a>

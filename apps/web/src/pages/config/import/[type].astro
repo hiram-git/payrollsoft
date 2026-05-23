@@ -1,0 +1,230 @@
+---
+/**
+ * Importador genérico de catálogos vía Excel (.xlsx).
+ *
+ * La ruta es `/config/import/cargos`, `/config/import/estructura`, etc.
+ * El param `type` selecciona la configuración del catálogo (columnas,
+ * endpoint, dependencias) desde `@lib/catalog-import/config.ts`.
+ *
+ * Flujo:
+ *   1. El usuario descarga la plantilla (.xlsx con headers + ejemplo).
+ *   2. Llena las filas y sube el archivo.
+ *   3. El importador parsea cada fila, resuelve FKs donde aplica
+ *      (ej. códigos de cargo → UUID), y POSTea al endpoint del
+ *      catálogo correspondiente.
+ *   4. Muestra un resumen con colores: creados (verde), omitidos
+ *      (ámbar), con error (rojo).
+ */
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+import { getCatalogConfig } from '../../../lib/catalog-import/config'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+
+const catalogType = Astro.params.type ?? ''
+const config = getCatalogConfig(catalogType)
+if (!config) return Astro.redirect('/dashboard')
+if (!can(identity, config.permission)) return Astro.redirect('/dashboard')
+---
+<AppLayout title={`Importar ${config.label}`}>
+  <div class="mx-auto w-full max-w-5xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <a href={config.returnPath} class="text-xs imp-mute hover:underline">← Volver a {config.label}</a>
+      <h1 class="text-xl font-semibold tracking-tight imp-title mt-2">Importar {config.label}</h1>
+      <p class="text-sm mt-0.5 imp-subtitle">
+        Sube un archivo Excel (.xlsx) con los registros. Los códigos duplicados se omiten automáticamente.
+      </p>
+    </div>
+
+    <!-- Esquema de columnas -->
+    <section class="imp-card border rounded-lg p-5 mb-5">
+      <h2 class="text-sm font-semibold imp-heading mb-3">Columnas esperadas</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+        <div>
+          <h3 class="text-[10px] font-bold uppercase tracking-wide imp-mute mb-1.5">Obligatorias</h3>
+          <ul class="space-y-1">
+            {config.required.map((c) => (
+              <li class="flex items-baseline gap-2 imp-cell">
+                <code class="font-mono text-blue-600 dark:text-blue-400">{c.label}</code>
+                {c.aliases && c.aliases.length > 0 && (
+                  <span class="imp-mute text-[10px]">alias: {c.aliases.join(', ')}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+        {config.optional.length > 0 && (
+          <div>
+            <h3 class="text-[10px] font-bold uppercase tracking-wide imp-mute mb-1.5">Opcionales</h3>
+            <ul class="space-y-1">
+              {config.optional.map((c) => (
+                <li class="flex items-baseline gap-2 imp-cell">
+                  <code class="font-mono">{c.label}</code>
+                  {c.aliases && c.aliases.length > 0 && (
+                    <span class="imp-mute text-[10px]">alias: {c.aliases.join(', ')}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      <div class="mt-4 flex items-center gap-3">
+        <a
+          href={`/api/catalog-import/${catalogType}/template`}
+          class="text-xs imp-link font-medium"
+        >Descargar plantilla .xlsx</a>
+        <span class="imp-mute text-[10px]">Incluye headers + una fila de ejemplo.</span>
+      </div>
+    </section>
+
+    <!-- Upload form -->
+    <section class="imp-card border rounded-lg p-5 mb-5">
+      <form id="import-form" enctype="multipart/form-data">
+        <div class="flex items-end gap-3">
+          <div class="flex-1">
+            <label class="block text-xs font-medium imp-label mb-1.5">Archivo Excel (.xlsx) *</label>
+            <input type="file" name="file" accept=".xlsx,.xls" required
+              class="block w-full text-sm imp-cell file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-300" />
+          </div>
+          <button type="submit" id="btn-import"
+            class="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">
+            Importar
+          </button>
+        </div>
+        <p class="text-[10px] imp-mute mt-1.5">Máximo 2 MB. Los registros con código ya existente se omiten (no se sobreescriben).</p>
+      </form>
+
+      <div id="import-error" class="hidden mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"></div>
+    </section>
+
+    <!-- Resultados -->
+    <section id="import-results" class="hidden imp-card border rounded-lg overflow-hidden mb-5">
+      <div class="p-5 border-b imp-rule">
+        <h2 class="text-sm font-semibold imp-heading mb-3">Resultado</h2>
+        <div class="grid grid-cols-4 gap-3">
+          <div class="text-center p-3 rounded-md imp-stat-bg">
+            <div id="stat-total" class="text-2xl font-bold imp-title">0</div>
+            <div class="text-[10px] uppercase tracking-wide imp-mute">Total</div>
+          </div>
+          <div class="text-center p-3 rounded-md bg-green-50 dark:bg-green-900/20">
+            <div id="stat-created" class="text-2xl font-bold text-green-700">0</div>
+            <div class="text-[10px] uppercase tracking-wide text-green-600">Creados</div>
+          </div>
+          <div class="text-center p-3 rounded-md bg-amber-50 dark:bg-amber-900/20">
+            <div id="stat-skipped" class="text-2xl font-bold text-amber-700">0</div>
+            <div class="text-[10px] uppercase tracking-wide text-amber-600">Omitidos</div>
+          </div>
+          <div class="text-center p-3 rounded-md bg-red-50 dark:bg-red-900/20">
+            <div id="stat-failed" class="text-2xl font-bold text-red-700">0</div>
+            <div class="text-[10px] uppercase tracking-wide text-red-600">Con error</div>
+          </div>
+        </div>
+      </div>
+      <div id="import-rows" class="max-h-[400px] overflow-y-auto"></div>
+    </section>
+  </div>
+
+  <script is:inline define:vars={{ catalogType }}>
+    ;(function () {
+      const form = document.getElementById('import-form')
+      const btn = document.getElementById('btn-import')
+      const errBox = document.getElementById('import-error')
+      const resultsSection = document.getElementById('import-results')
+      const rowsContainer = document.getElementById('import-rows')
+
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        errBox.classList.add('hidden')
+        resultsSection.classList.add('hidden')
+        btn.disabled = true
+        btn.textContent = 'Importando…'
+
+        const fd = new FormData(form)
+        try {
+          const res = await fetch(`/api/catalog-import/${catalogType}/import`, {
+            method: 'POST',
+            body: fd,
+          })
+          const json = await res.json().catch(() => ({}))
+
+          if (!res.ok || !json.ok) {
+            errBox.textContent = json.error || 'Error del servidor.'
+            errBox.classList.remove('hidden')
+            btn.disabled = false
+            btn.textContent = 'Importar'
+            return
+          }
+
+          // Renderizar stats
+          document.getElementById('stat-total').textContent = json.summary.total
+          document.getElementById('stat-created').textContent = json.summary.created
+          document.getElementById('stat-skipped').textContent = json.summary.skipped
+          document.getElementById('stat-failed').textContent = json.summary.failed
+
+          // Renderizar filas
+          const rows = json.rows || []
+          if (rows.length > 0) {
+            let html = '<table class="w-full text-xs"><thead><tr class="border-b">'
+            html += '<th class="text-left px-4 py-2 font-medium">Fila</th>'
+            html += '<th class="text-left px-4 py-2 font-medium">Código</th>'
+            html += '<th class="text-left px-4 py-2 font-medium">Nombre</th>'
+            html += '<th class="text-left px-4 py-2 font-medium">Estado</th>'
+            html += '<th class="text-left px-4 py-2 font-medium">Mensaje</th>'
+            html += '</tr></thead><tbody>'
+            for (const r of rows) {
+              const statusColors = {
+                created: 'bg-green-100 text-green-700',
+                skipped: 'bg-amber-100 text-amber-700',
+                failed: 'bg-red-100 text-red-700',
+              }
+              const statusLabel = {
+                created: 'Creado',
+                skipped: 'Omitido',
+                failed: 'Error',
+              }
+              html += '<tr class="border-b last:border-0">'
+              html += `<td class="px-4 py-2 font-mono">${r.row}</td>`
+              html += `<td class="px-4 py-2 font-mono">${r.code}</td>`
+              html += `<td class="px-4 py-2">${r.name}</td>`
+              html += `<td class="px-4 py-2"><span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${statusColors[r.status] || ''}">${statusLabel[r.status] || r.status}</span></td>`
+              html += `<td class="px-4 py-2 text-gray-600">${r.message || '—'}</td>`
+              html += '</tr>'
+            }
+            html += '</tbody></table>'
+            rowsContainer.innerHTML = html
+          } else {
+            rowsContainer.innerHTML = '<p class="p-4 text-center text-xs text-gray-500">Sin detalle.</p>'
+          }
+          resultsSection.classList.remove('hidden')
+        } catch (err) {
+          errBox.textContent = 'Error de red: ' + String(err)
+          errBox.classList.remove('hidden')
+        } finally {
+          btn.disabled = false
+          btn.textContent = 'Importar'
+        }
+      })
+    })()
+  </script>
+
+  <style>
+    .imp-title    { color: var(--fore); }
+    .imp-subtitle { color: var(--fore-dim); }
+    .imp-heading  { color: var(--fore); }
+    .imp-label    { color: var(--fore-dim); }
+    .imp-cell     { color: var(--fore-dim); }
+    .imp-mute     { color: var(--mute); }
+    .imp-card     { background: var(--ink-2); border-color: var(--rule); }
+    .imp-rule     { border-color: var(--rule); }
+    .imp-link     { color: #60a5fa; }
+    .imp-link:hover { text-decoration: underline; }
+    .imp-stat-bg  { background: var(--ink-3); }
+
+    [data-theme='light'] .imp-card { background: #ffffff; }
+    [data-theme='light'] .imp-stat-bg { background: #f9fafb; }
+    [data-theme='light'] .imp-link { color: #2563eb; }
+  </style>
+</AppLayout>
