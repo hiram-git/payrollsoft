@@ -160,8 +160,8 @@ export type FacialPunch = typeof facialPunches.$inferSelect
 export type NewFacialPunch = typeof facialPunches.$inferInsert
 export type FacialTerminalEvent = typeof facialTerminalEvents.$inferSelect
 
-export type MarcacionKind = (typeof PUNCH_KINDS)[number]
-export type MarcacionStatus = (typeof PUNCH_STATUSES)[number]
+export type PunchKind = (typeof PUNCH_KINDS)[number]
+export type PunchStatus = (typeof PUNCH_STATUSES)[number]
 
 // Re-export sql so other modules can compose vector distance ops.
 export { sql as facialSql }
