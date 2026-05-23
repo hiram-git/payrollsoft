@@ -705,6 +705,31 @@ export async function listByEmployee(db: AnyDb, employeeId: string) {
     .orderBy(desc(vacationRequests.createdAt))
 }
 
+/**
+ * Listado global de solicitudes — una sola query SQL con JOIN a
+ * employees. Reemplaza el fan-out de N requests por empleado que
+ * hacía el hub de vacaciones.
+ */
+export async function listAllRequests(
+  db: AnyDb,
+  filters: { status?: string; limit?: number } = {}
+) {
+  const limit = Math.min(filters.limit ?? 200, 5000)
+  // biome-ignore lint/suspicious/noExplicitAny: drizzle rows
+  const rows: any[] = await db.execute(sql`
+    SELECT r.*,
+           e.code        AS employee_code,
+           e.first_name  AS employee_first_name,
+           e.last_name   AS employee_last_name
+    FROM vacation_requests r
+    JOIN employees e ON e.id = r.employee_id
+    ${filters.status ? sql`WHERE r.status = ${filters.status}` : sql``}
+    ORDER BY r.created_at DESC
+    LIMIT ${limit}
+  `)
+  return rows
+}
+
 export async function getRequest(db: AnyDb, id: string) {
   const [row] = await db.select().from(vacationRequests).where(eq(vacationRequests.id, id)).limit(1)
   return row ?? null
