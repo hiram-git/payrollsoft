@@ -274,6 +274,13 @@
       "when": 1762128018000,
       "tag": "0039_english_standardization",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1762128019000,
+      "tag": "0040_attendance_status",
+      "breakpoints": true
     }
   ]
 }

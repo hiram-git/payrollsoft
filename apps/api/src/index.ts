@@ -5,6 +5,7 @@ import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
+import { consolidationRoutes } from './modules/attendance/consolidation-routes'
 import { attendanceDevicesRoutes } from './modules/attendance/devices-routes'
 import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
@@ -74,6 +75,7 @@ const app = new Elysia()
   .use(attendanceRoutes)
   .use(attendanceDevicesRoutes)
   .use(attendanceImportRoutes)
+  .use(consolidationRoutes)
   .use(unifiedPunchRoutes)
   .use(loansRoutes)
   .use(creditorRoutes)
