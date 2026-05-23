@@ -14,10 +14,10 @@ type Position = {
   code: string
   name: string
   salary: string
-  cargoId: string | null
-  departamentoId: string | null
-  funcionId: string | null
-  partidaId: string | null
+  jobTitleId: string | null
+  departmentId: string | null
+  jobFunctionId: string | null
+  budgetItemId: string | null
   isActive: boolean
   status: 'en_uso' | 'vacante' | string
 }
@@ -60,10 +60,10 @@ function buildOptions(items: CatalogItem[], currentId: string | null) {
   return active
 }
 
-const cargoOptions = buildOptions(cargos, pos.cargoId)
-const funcionOptions = buildOptions(funciones, pos.funcionId)
-const deptOptions = buildOptions(departamentos, pos.departamentoId)
-const partidaOptions = buildOptions(partidas, pos.partidaId)
+const cargoOptions = buildOptions(cargos, pos.jobTitleId)
+const funcionOptions = buildOptions(funciones, pos.jobFunctionId)
+const deptOptions = buildOptions(departamentos, pos.departmentId)
+const partidaOptions = buildOptions(partidas, pos.budgetItemId)
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const success = Astro.url.searchParams.get('success') === '1'
@@ -145,7 +145,7 @@ const errorMessages: Record<string, string> = {
             <select name="cargoId" class="input">
               <option value="">— Sin cargo —</option>
               {cargoOptions.map((c) => (
-                <option value={c.id} selected={pos!.cargoId === c.id}>{c.name} ({c.code})</option>
+                <option value={c.id} selected={pos!.jobTitleId === c.id}>{c.name} ({c.code})</option>
               ))}
             </select>
           </div>
@@ -154,7 +154,7 @@ const errorMessages: Record<string, string> = {
             <select name="departamentoId" class="input">
               <option value="">— Sin departamento —</option>
               {deptOptions.map((d) => (
-                <option value={d.id} selected={pos!.departamentoId === d.id}>{d.name} ({d.code})</option>
+                <option value={d.id} selected={pos!.departmentId === d.id}>{d.name} ({d.code})</option>
               ))}
             </select>
           </div>
@@ -163,7 +163,7 @@ const errorMessages: Record<string, string> = {
             <select name="funcionId" class="input">
               <option value="">— Sin función —</option>
               {funcionOptions.map((f) => (
-                <option value={f.id} selected={pos!.funcionId === f.id}>{f.name} ({f.code})</option>
+                <option value={f.id} selected={pos!.jobFunctionId === f.id}>{f.name} ({f.code})</option>
               ))}
             </select>
           </div>
@@ -173,7 +173,7 @@ const errorMessages: Record<string, string> = {
           <select name="partidaId" class="input">
             <option value="">— Sin partida —</option>
             {partidaOptions.map((p) => (
-              <option value={p.id} selected={pos!.partidaId === p.id}>{p.code} — {p.name}</option>
+              <option value={p.id} selected={pos!.budgetItemId === p.id}>{p.code} — {p.name}</option>
             ))}
           </select>
         </div>

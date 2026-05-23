@@ -266,7 +266,7 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
       }
     }
 
-    const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
+    const isPublicInstitution = companyConfig?.institutionType === 'publica'
 
     const creditorIdsWithConcepts = new Set(
       allCreditors.filter((c) => c.conceptId).map((c) => c.id)
@@ -686,7 +686,7 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
 
   // Resolve base salary for public institutions
   let effectiveBaseSalaryForRegen = Number(emp.baseSalary)
-  if (companyConfigSingle?.tipoInstitucion === 'publica' && emp.positionId) {
+  if (companyConfigSingle?.institutionType === 'publica' && emp.positionId) {
     const pos = await getPosition(db, emp.positionId)
     if (pos) effectiveBaseSalaryForRegen = Number(pos.salary)
   }

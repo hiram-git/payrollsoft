@@ -362,9 +362,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       email,
       phone,
       socialSecurityNumber: ssn,
-      cargoId: cargo.id,
-      funcionId: funcion.id,
-      departamentoId: departamento.id,
+      jobTitleId: cargo.id,
+      jobFunctionId: funcion.id,
+      departmentId: departamento.id,
       positionId: position.id,
     }
     if (payFrequency) payload.payFrequency = payFrequency

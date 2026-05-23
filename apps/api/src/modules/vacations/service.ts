@@ -724,7 +724,7 @@ export async function listPendingApprovals(db: AnyDb, userRoles: string[]) {
            e.code        AS employee_code,
            e.first_name  AS employee_first_name,
            e.last_name   AS employee_last_name,
-           e.departamento_id AS employee_department_id
+           e.department_id AS employee_department_id
     FROM vacation_requests r
     JOIN employees e ON e.id = r.employee_id
     WHERE r.status = 'pending'
@@ -735,7 +735,7 @@ export async function listPendingApprovals(db: AnyDb, userRoles: string[]) {
           WHERE ar.is_active = 1
             AND ar.approver_role = ANY(${userRoles})
             AND (ar.request_type IS NULL OR ar.request_type = r.request_type)
-            AND (ar.department_id IS NULL OR ar.department_id = e.departamento_id)
+            AND (ar.department_id IS NULL OR ar.department_id = e.department_id)
         )
       )
     ORDER BY r.created_at ASC

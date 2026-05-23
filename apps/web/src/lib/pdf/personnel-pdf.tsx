@@ -17,7 +17,7 @@ export type PdfPersonnelEmployee = {
 
 export type PdfPersonnelCompany = {
   companyName: string | null
-  logoEmpresa: string | null
+  companyLogo: string | null
 }
 
 export type PdfPersonnelGeneratedBy = {
@@ -216,7 +216,7 @@ export function PersonnelPdf({
     timeStyle: 'medium',
   })
   const companyName = company?.companyName ?? 'Empresa'
-  const logo = company?.logoEmpresa ?? null
+  const logo = company?.companyLogo ?? null
   const reportTitle = 'LISTADO DE PERSONAL'
   const totalSalary = employees.reduce((acc, e) => acc + (Number(e.baseSalary) || 0), 0)
   const activeCount = employees.filter((e) => e.isActive).length

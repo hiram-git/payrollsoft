@@ -19,9 +19,9 @@ export const employees = pgTable('employees', {
   email: varchar('email', { length: 255 }),
   phone: varchar('phone', { length: 20 }),
   // Catalog links (no .references() — multi-tenant search_path incompatibility)
-  cargoId: uuid('cargo_id'),
-  funcionId: uuid('funcion_id'),
-  departamentoId: uuid('departamento_id'),
+  jobTitleId: uuid('job_title_id'),
+  jobFunctionId: uuid('job_function_id'),
+  departmentId: uuid('department_id'),
   positionId: uuid('position_id'), // NO .references() — multi-tenant
   // Denormalized text copies for display (auto-set from catalog on save)
   position: varchar('position', { length: 100 }),

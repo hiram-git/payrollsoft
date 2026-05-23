@@ -38,7 +38,7 @@ type Concept = {
   isReferenceValue: boolean
   useAmountCalc: boolean
   allowZero: boolean
-  cuentaContableId: string | null
+  chartAccountId: string | null
   links: ConceptLinks
 }
 type CuentaContable = { id: string; code: string; name: string }
@@ -340,7 +340,7 @@ const errorMessages: Record<string, string> = {
             <select name="cuentaContableId" class="input">
               <option value="">— Sin cuenta —</option>
               {cuentasContables.map((c) => (
-                <option value={c.id} selected={concept!.cuentaContableId === c.id}>{c.code} — {c.name}</option>
+                <option value={c.id} selected={concept!.chartAccountId === c.id}>{c.code} — {c.name}</option>
               ))}
             </select>
           </div>

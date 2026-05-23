@@ -31,10 +31,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     code: g('code'),
     name: g('name'),
     salary: g('salary'),
-    cargoId: g('cargoId') || null,
-    departamentoId: g('departamentoId') || null,
-    funcionId: g('funcionId') || null,
-    partidaId: g('partidaId') || null,
+    jobTitleId: g('jobTitleId') || null,
+    departmentId: g('departmentId') || null,
+    jobFunctionId: g('jobFunctionId') || null,
+    budgetItemId: g('budgetItemId') || null,
     status: status === 'en_uso' || status === 'vacante' ? status : 'vacante',
   }
 

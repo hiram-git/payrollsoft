@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     isReferenceValue: bool('isReferenceValue'),
     useAmountCalc: bool('useAmountCalc'),
     allowZero: bool('allowZero'),
-    cuentaContableId: g('cuentaContableId') || null,
+    chartAccountId: g('chartAccountId') || null,
     links: {
       payrollTypeIds: form.getAll('payrollTypeIds[]').map(String),
       frequencyIds: form.getAll('frequencyIds[]').map(String),
