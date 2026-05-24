@@ -65,6 +65,7 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
           passwordHash: hash,
           failedAttempts: 0,
           isLocked: false,
+          mustChangePassword: true,
           passwordChangedAt: new Date(),
           updatedAt: new Date(),
         })

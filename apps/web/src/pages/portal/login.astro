@@ -630,7 +630,7 @@ if (identity) return Astro.redirect('/portal')
       .then(function(res) { return res.json().then(function(d) { return { status: res.status, data: d }; }); })
       .then(function(r) {
         if (r.data.success) {
-          window.location.href = '/portal';
+          window.location.href = r.data.mustChangePassword ? '/portal/change-password' : '/portal';
         } else {
           errText.textContent = r.data.error || 'Error al iniciar sesión.';
           errBanner.classList.add('visible');

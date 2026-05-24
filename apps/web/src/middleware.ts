@@ -27,6 +27,10 @@ export const onRequest = defineMiddleware(({ request, rewrite }, next) => {
     return rewrite(new Request(new URL(`/portal${path}${url.search}`, request.url), request))
   }
 
+  if (path === '/change-password') {
+    return rewrite(new Request(new URL('/portal/change-password', request.url), request))
+  }
+
   if (
     path.startsWith('/requests') ||
     path.startsWith('/approvals') ||
