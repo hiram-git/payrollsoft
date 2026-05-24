@@ -13,7 +13,7 @@
  *   POST /portal/auth/logout  — clear portal session
  *   GET  /portal/auth/me      — get current employee info
  */
-import { companyConfig, employeeCredentials, employees, tenants } from '@payroll/db'
+import { companyConfig, employeeCredentials, employees, portalAccess, tenants } from '@payroll/db'
 import { and, eq } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { getTenantDb, publicDb } from '../../config/db'
@@ -182,6 +182,12 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           return { success: true, mustChangePassword: true }
         }
 
+        const accessRows = await tdb
+          .select({ module: portalAccess.module })
+          .from(portalAccess)
+          .where(and(eq(portalAccess.employeeId, emp.id), eq(portalAccess.isEnabled, true)))
+        const modules = accessRows.map((r: { module: string }) => r.module)
+
         const token = await jwt.sign({
           type: 'employee',
           employeeId: emp.id,
@@ -190,6 +196,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           idNumber: emp.idNumber,
           departmentId: emp.departmentId ?? null,
           isApprover: cred.isApprover ?? false,
+          modules,
           tenantSlug: resolvedSlug,
           exp: Math.floor(Date.now() / 1000) + 8 * 3600,
         })

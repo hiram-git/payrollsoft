@@ -380,6 +380,9 @@ const freqLabel: Record<string, string> = {
         <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
           Bancario
         </button>
+        <button type="button" class="tab-btn" data-tab="portal" onclick="switchTab('portal', this)">
+          Portal
+        </button>
       </div>
 
       <!-- TAB: Datos Personales -->
@@ -1080,6 +1083,86 @@ const freqLabel: Record<string, string> = {
         </div>
       </div>
 
+      <!-- TAB: Portal de colaboradores -->
+      <div id="tab-portal" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800">Portal de colaboradores</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Gestión de acceso al portal de autoservicio.</p>
+            </div>
+            <span id="portal-status-badge" class="text-xs font-medium px-2.5 py-0.5 rounded bg-gray-100 text-gray-500">Cargando...</span>
+          </div>
+
+          <div id="portal-controls" class="space-y-4">
+            <!-- Access toggle -->
+            <div class="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <div class="text-sm font-medium text-gray-800">Acceso al portal</div>
+                <div class="text-xs text-gray-500">El empleado podrá ingresar con su cédula y contraseña.</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="portal-enabled" class="sr-only peer" />
+                <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+            </div>
+
+            <!-- Approver toggle -->
+            <div class="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <div class="text-sm font-medium text-gray-800">Aprobador de departamento</div>
+                <div class="text-xs text-gray-500">Puede aprobar/rechazar solicitudes de su departamento.</div>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="portal-approver" class="sr-only peer" />
+                <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+            </div>
+
+            <!-- Module access -->
+            <div class="py-3 border-b border-gray-100">
+              <div class="text-sm font-medium text-gray-800 mb-3">Módulos habilitados</div>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" id="mod-requests" class="portal-mod w-4 h-4 rounded text-blue-600 focus:ring-blue-500" data-module="requests" />
+                  <div><div class="text-sm text-gray-700">Solicitudes</div><div class="text-xs text-gray-400">Crear y ver expedientes</div></div>
+                </label>
+                <label class="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" id="mod-attendance" class="portal-mod w-4 h-4 rounded text-blue-600 focus:ring-blue-500" data-module="attendance" />
+                  <div><div class="text-sm text-gray-700">Marcaciones</div><div class="text-xs text-gray-400">Ver registros de asistencia</div></div>
+                </label>
+                <label class="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" id="mod-vacations" class="portal-mod w-4 h-4 rounded text-blue-600 focus:ring-blue-500" data-module="vacations" />
+                  <div><div class="text-sm text-gray-700">Vacaciones</div><div class="text-xs text-gray-400">Solicitar y ver saldo</div></div>
+                </label>
+                <label class="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                  <input type="checkbox" id="mod-approvals" class="portal-mod w-4 h-4 rounded text-blue-600 focus:ring-blue-500" data-module="approvals" />
+                  <div><div class="text-sm text-gray-700">Aprobaciones</div><div class="text-xs text-gray-400">Bandeja de aprobación</div></div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Password reset -->
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <div class="text-sm font-medium text-gray-800">Contraseña del portal</div>
+                <div class="text-xs text-gray-500" id="portal-pw-hint">Resetear a la contraseña por defecto (172839).</div>
+              </div>
+              <button type="button" id="portal-reset-pw" class="px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md hover:bg-amber-100">
+                Resetear contraseña
+              </button>
+            </div>
+          </div>
+
+          <!-- Save button for portal settings -->
+          <div class="mt-5 pt-4 border-t border-gray-200 flex justify-end">
+            <button type="button" id="portal-save" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+              Guardar configuración del portal
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="flex justify-between mt-2">
         <!-- Deactivate -->
@@ -1349,4 +1432,106 @@ const freqLabel: Record<string, string> = {
       document.getElementById('baseSalaryInput').value = opt.dataset.salary || ''
     })
   }
+</script>
+
+<script is:inline>
+;(function() {
+  var empId = window.location.pathname.split('/employees/')[1]?.split('/')[0] || '';
+  if (!empId) return;
+  var badge = document.getElementById('portal-status-badge');
+  var enabledCb = document.getElementById('portal-enabled');
+  var approverCb = document.getElementById('portal-approver');
+  var modChecks = document.querySelectorAll('.portal-mod');
+  var saveBtn = document.getElementById('portal-save');
+  var resetBtn = document.getElementById('portal-reset-pw');
+  var pwHint = document.getElementById('portal-pw-hint');
+  if (!badge || !enabledCb || !saveBtn) return;
+
+  function loadPortalData() {
+    fetch('/api/employees/' + empId + '/portal')
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (!res.success) { badge.textContent = 'Error'; return; }
+        var d = res.data;
+        if (!d.hasCredentials) {
+          badge.textContent = 'Sin acceso';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-gray-100 text-gray-500';
+          enabledCb.checked = false;
+        } else if (d.credentials.isLocked) {
+          badge.textContent = 'Bloqueado';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-red-100 text-red-700';
+          enabledCb.checked = d.credentials.isActive;
+        } else if (!d.credentials.isActive) {
+          badge.textContent = 'Desactivado';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-amber-100 text-amber-700';
+          enabledCb.checked = false;
+        } else {
+          badge.textContent = 'Activo';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-green-100 text-green-700';
+          enabledCb.checked = true;
+        }
+        approverCb.checked = d.credentials?.isApprover || false;
+        var mods = {};
+        (d.modules || []).forEach(function(m) { mods[m.module] = m.isEnabled; });
+        modChecks.forEach(function(cb) {
+          cb.checked = mods[cb.dataset.module] !== false;
+        });
+        if (d.credentials?.lastLoginAt) {
+          pwHint.textContent = 'Último acceso: ' + new Date(d.credentials.lastLoginAt).toLocaleDateString('es-PA');
+        }
+      })
+      .catch(function() { badge.textContent = 'Error de conexión'; });
+  }
+
+  saveBtn.addEventListener('click', function() {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Guardando...';
+    var modules = [];
+    modChecks.forEach(function(cb) {
+      modules.push({ module: cb.dataset.module, isEnabled: cb.checked });
+    });
+    fetch('/api/employees/' + empId + '/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        portalEnabled: enabledCb.checked,
+        isApprover: approverCb.checked,
+        modules: modules
+      })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Guardar configuración del portal';
+      if (res.success) {
+        loadPortalData();
+        alert('Configuración del portal guardada.');
+      } else {
+        alert(res.error || 'Error al guardar.');
+      }
+    })
+    .catch(function() {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Guardar configuración del portal';
+      alert('Error de conexión.');
+    });
+  });
+
+  resetBtn.addEventListener('click', function() {
+    if (!confirm('¿Resetear la contraseña a 172839? El empleado deberá cambiarla en su próximo acceso.')) return;
+    fetch('/api/employees/' + empId + '/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetPassword: true })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.success) alert('Contraseña reseteada a 172839.');
+      else alert(res.error || 'Error.');
+    })
+    .catch(function() { alert('Error de conexión.'); });
+  });
+
+  loadPortalData();
+})();
 </script>

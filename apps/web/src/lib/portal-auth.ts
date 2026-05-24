@@ -8,6 +8,7 @@ export type PortalIdentity = {
   departmentId: string | null
   isApprover: boolean
   mustChangePassword: boolean
+  modules: string[]
   tenantSlug: string
   raw: string
 }
@@ -29,6 +30,7 @@ export function getPortalIdentity(cookies: AstroCookies): PortalIdentity | null 
       departmentId: string | null
       isApprover: boolean
       mustChangePassword: boolean
+      modules: string[]
       tenantSlug: string
     }>
     if (payload.type !== 'employee') return null
@@ -40,6 +42,7 @@ export function getPortalIdentity(cookies: AstroCookies): PortalIdentity | null 
       departmentId: payload.departmentId ?? null,
       isApprover: payload.isApprover ?? false,
       mustChangePassword: payload.mustChangePassword ?? false,
+      modules: payload.modules ?? [],
       tenantSlug: payload.tenantSlug ?? '',
       raw,
     }
