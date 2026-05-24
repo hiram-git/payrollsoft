@@ -1,8 +1,20 @@
-import { attendanceRecords, employeeFiles, vacationRequests } from '@payroll/db'
-import { and, desc, eq, gte, sql } from 'drizzle-orm'
-import { Elysia } from 'elysia'
+import {
+  attendanceRecords,
+  employeeFileSubtypes,
+  employeeFileTypes,
+  employeeFiles,
+  vacationRequests,
+} from '@payroll/db'
+import { and, asc, desc, eq, gte, sql } from 'drizzle-orm'
+import { Elysia, t } from 'elysia'
 import { jwtPlugin } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
+import { getFieldsFor } from '../employee-files/dynamic-fields'
+import {
+  type EmployeeFileInput,
+  type FormFile,
+  createWithCorrelative,
+} from '../employee-files/service'
 import { getBalance } from '../vacations/service'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
@@ -134,6 +146,168 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
           recentFiles,
           recentAttendance: todayAttendance,
         },
+      }
+    },
+    { beforeHandle: [guardPortal] }
+  )
+
+  .get(
+    '/file-types',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await (db as AnyDb)
+        .select({
+          id: employeeFileTypes.id,
+          code: employeeFileTypes.code,
+          name: employeeFileTypes.name,
+        })
+        .from(employeeFileTypes)
+        .where(eq(employeeFileTypes.isActive, 1))
+        .orderBy(asc(employeeFileTypes.sortOrder), asc(employeeFileTypes.name))
+      return { success: true, data }
+    },
+    { beforeHandle: [guardPortal] }
+  )
+
+  .get(
+    '/file-types/:typeId/subtypes',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const typeId = Number.parseInt(params.typeId, 10)
+      if (!Number.isFinite(typeId)) {
+        set.status = 400
+        return { success: false, error: 'Invalid typeId' }
+      }
+      const data = await (db as AnyDb)
+        .select({
+          id: employeeFileSubtypes.id,
+          code: employeeFileSubtypes.code,
+          name: employeeFileSubtypes.name,
+        })
+        .from(employeeFileSubtypes)
+        .where(and(eq(employeeFileSubtypes.typeId, typeId), eq(employeeFileSubtypes.isActive, 1)))
+        .orderBy(asc(employeeFileSubtypes.sortOrder), asc(employeeFileSubtypes.name))
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardPortal],
+      params: t.Object({ typeId: t.String() }),
+    }
+  )
+
+  .get(
+    '/file-fields',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const typeId = Number.parseInt(query.typeId ?? '', 10)
+      const subtypeId = Number.parseInt(query.subtypeId ?? '', 10)
+      if (!Number.isFinite(typeId) || !Number.isFinite(subtypeId)) {
+        return { success: true, data: { fields: [] } }
+      }
+      const [typeRow] = await (db as AnyDb)
+        .select({ code: employeeFileTypes.code })
+        .from(employeeFileTypes)
+        .where(eq(employeeFileTypes.id, typeId))
+        .limit(1)
+      const [subRow] = await (db as AnyDb)
+        .select({ code: employeeFileSubtypes.code })
+        .from(employeeFileSubtypes)
+        .where(eq(employeeFileSubtypes.id, subtypeId))
+        .limit(1)
+      const fields = getFieldsFor(typeRow?.code ?? '', subRow?.code ?? null)
+      return { success: true, data: { fields } }
+    },
+    {
+      beforeHandle: [guardPortal],
+      query: t.Object({
+        typeId: t.Optional(t.String()),
+        subtypeId: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  .post(
+    '/requests',
+    async ({ db, portalEmployee, request, tenantSlug, set }) => {
+      if (!db || !portalEmployee || !tenantSlug) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+
+      const form = await request.formData()
+      const scalars: Record<string, string> = {}
+      const extraFields: Record<string, unknown> = {}
+      const files: FormFile[] = []
+
+      for (const [key, value] of form.entries()) {
+        if (value instanceof File) {
+          if (value.size === 0 || !value.name) continue
+          const bytes = new Uint8Array(await value.arrayBuffer())
+          if (key === 'attachments') {
+            files.push({
+              label: 'adjunto',
+              originalName: value.name,
+              mimeType: value.type || 'application/octet-stream',
+              bytes,
+            })
+          } else if (key.startsWith('file_')) {
+            files.push({
+              label: key.slice('file_'.length),
+              originalName: value.name,
+              mimeType: value.type || 'application/octet-stream',
+              bytes,
+            })
+          }
+          continue
+        }
+        if (key.startsWith('extra_')) {
+          extraFields[key.slice('extra_'.length)] = value
+        } else {
+          scalars[key] = value
+        }
+      }
+
+      const typeId = Number.parseInt(scalars.typeId ?? '', 10)
+      const subtypeId = Number.parseInt(scalars.subtypeId ?? '', 10)
+      if (!Number.isFinite(typeId) || !Number.isFinite(subtypeId) || !scalars.documentDate) {
+        set.status = 400
+        return { success: false, error: 'typeId, subtypeId y documentDate son obligatorios.' }
+      }
+
+      const input: EmployeeFileInput = {
+        employeeId: portalEmployee.employeeId,
+        typeId,
+        subtypeId,
+        documentDate: scalars.documentDate.trim(),
+        observations: scalars.observations ?? null,
+        extraFields,
+      }
+
+      try {
+        const result = await createWithCorrelative(db, tenantSlug, input, files, {
+          createdBy: portalEmployee.employeeId,
+        })
+        if (!result.success) {
+          set.status = 422
+          return { success: false, error: result.message }
+        }
+        set.status = 201
+        return { success: true, data: result.data }
+      } catch (err) {
+        set.status = 500
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Error al crear la solicitud.',
+        }
       }
     },
     { beforeHandle: [guardPortal] }
