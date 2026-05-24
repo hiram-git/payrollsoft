@@ -302,6 +302,13 @@
       "when": 1762128022000,
       "tag": "0043_portal_approvers",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1762128023000,
+      "tag": "0044_portal_password_reset",
+      "breakpoints": true
     }
   ]
 }

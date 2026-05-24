@@ -19,6 +19,8 @@ export const employeeCredentials = pgTable('employee_credentials', {
   isLocked: boolean('is_locked').notNull().default(false),
   failedAttempts: integer('failed_attempts').notNull().default(0),
   isApprover: boolean('is_approver').notNull().default(false),
+  resetToken: varchar('reset_token', { length: 255 }),
+  resetTokenExpiresAt: timestamp('reset_token_expires_at', { withTimezone: true }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   passwordChangedAt: timestamp('password_changed_at', { withTimezone: true })
     .notNull()
