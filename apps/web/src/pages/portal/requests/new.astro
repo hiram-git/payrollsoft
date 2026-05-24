@@ -40,16 +40,26 @@ const today = new Date().toISOString().slice(0, 10)
         <h2 class="pr-section-title">Documento</h2>
         <div class="pr-grid-3">
           <div>
-            <label class="pr-label" for="pr-type">Tipo</label>
-            <select id="pr-type" name="typeId" required class="pr-input pr-select">
-              <option value="">Cargando...</option>
-            </select>
+            <label class="pr-label">Tipo</label>
+            <input type="hidden" name="typeId" id="pr-type-id" required />
+            <div class="pr-combo-wrap">
+              <input type="text" id="pr-type-text" placeholder="Buscar tipo…" autocomplete="off" class="pr-input" />
+              <button type="button" id="pr-type-clear" class="pr-combo-clear" style="display:none" aria-label="Limpiar">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+              </button>
+              <ul id="pr-type-dropdown" class="pr-combo-list" role="listbox"></ul>
+            </div>
           </div>
           <div>
-            <label class="pr-label" for="pr-subtype">Subtipo</label>
-            <select id="pr-subtype" name="subtypeId" required disabled class="pr-input pr-select">
-              <option value="">Selecciona un tipo primero</option>
-            </select>
+            <label class="pr-label">Subtipo</label>
+            <input type="hidden" name="subtypeId" id="pr-subtype-id" required />
+            <div class="pr-combo-wrap">
+              <input type="text" id="pr-subtype-text" placeholder="Selecciona un tipo primero" autocomplete="off" class="pr-input" disabled />
+              <button type="button" id="pr-subtype-clear" class="pr-combo-clear" style="display:none" aria-label="Limpiar">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+              </button>
+              <ul id="pr-subtype-dropdown" class="pr-combo-list" role="listbox"></ul>
+            </div>
           </div>
           <div>
             <label class="pr-label" for="pr-date">Fecha del documento</label>
@@ -135,6 +145,26 @@ const today = new Date().toISOString().slice(0, 10)
     }
     .pr-full { grid-column:1/-1; }
 
+    .pr-combo-wrap { position:relative; }
+    .pr-combo-clear {
+      position:absolute; right:8px; top:50%; transform:translateY(-50%);
+      background:none; border:none; cursor:pointer; color:var(--mute);
+      padding:4px; display:grid; place-items:center; transition:color 140ms;
+    }
+    .pr-combo-clear:hover { color:var(--fore); }
+    .pr-combo-list {
+      display:none; position:absolute; z-index:20; left:0; right:0; margin-top:4px;
+      background:var(--ink-2); border:1px solid var(--rule); border-radius:6px;
+      box-shadow:0 8px 24px rgba(0,0,0,0.3); max-height:14rem; overflow-y:auto;
+      list-style:none; padding:4px 0;
+    }
+    .pr-combo-list.open { display:block; }
+    .pr-combo-list li {
+      padding:8px 12px; cursor:pointer; font-size:13px; color:var(--fore-dim);
+      transition:background 100ms;
+    }
+    .pr-combo-list li:hover { background:var(--ink-4); color:var(--fore); }
+
     .pr-label {
       display:block; font-family:var(--f-mono); font-size:10.5px;
       color:var(--mute-2); letter-spacing:.1em; text-transform:uppercase;
@@ -192,8 +222,14 @@ const today = new Date().toISOString().slice(0, 10)
 
   <script is:inline>
     ;(function() {
-      var typeSel = document.getElementById('pr-type');
-      var subtypeSel = document.getElementById('pr-subtype');
+      var typeIdInput = document.getElementById('pr-type-id');
+      var typeText = document.getElementById('pr-type-text');
+      var typeDropdown = document.getElementById('pr-type-dropdown');
+      var typeClear = document.getElementById('pr-type-clear');
+      var subtypeIdInput = document.getElementById('pr-subtype-id');
+      var subtypeText = document.getElementById('pr-subtype-text');
+      var subtypeDropdown = document.getElementById('pr-subtype-dropdown');
+      var subtypeClear = document.getElementById('pr-subtype-clear');
       var dateEl = document.getElementById('pr-date');
       var dynSection = document.getElementById('dyn-section');
       var dynFields = document.getElementById('dyn-fields');
@@ -204,6 +240,7 @@ const today = new Date().toISOString().slice(0, 10)
       var okBanner = document.getElementById('ok-banner');
       var okText = document.getElementById('ok-text');
 
+      var allTypes = [];
       var subtypesCache = {};
       var fieldsCache = {};
 
@@ -226,36 +263,93 @@ const today = new Date().toISOString().slice(0, 10)
         return fetch('/api/portal/proxy?path=' + encodeURIComponent(path))
           .then(function(r) { return r.json(); });
       }
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
 
-      // Load types on init
+      // ── Combobox helper ──
+      function setupCombo(textEl, dropdownEl, clearEl, idInputEl, items, onSelect) {
+        function filter(q) {
+          var lq = q.toLowerCase();
+          return items.filter(function(i) { return i.name.toLowerCase().indexOf(lq) !== -1; }).slice(0, 30);
+        }
+        function renderList(list) {
+          if (list.length === 0) { dropdownEl.classList.remove('open'); return; }
+          dropdownEl.innerHTML = list.map(function(i) {
+            return '<li data-id="' + i.id + '" data-label="' + esc(i.name) + '">' + esc(i.name) + '</li>';
+          }).join('');
+          dropdownEl.classList.add('open');
+        }
+        dropdownEl.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        dropdownEl.addEventListener('click', function(e) {
+          var li = e.target.closest('li[data-id]');
+          if (!li) return;
+          idInputEl.value = li.dataset.id;
+          textEl.value = li.dataset.label;
+          dropdownEl.classList.remove('open');
+          clearEl.style.display = '';
+          if (onSelect) onSelect(li.dataset.id);
+        });
+        textEl.addEventListener('input', function() {
+          idInputEl.value = '';
+          clearEl.style.display = 'none';
+          var q = textEl.value.trim();
+          renderList(q.length === 0 ? items.slice(0, 30) : filter(q));
+          if (onSelect) onSelect('');
+        });
+        textEl.addEventListener('focus', function() {
+          if (!idInputEl.value) {
+            var q = textEl.value.trim();
+            renderList(q.length === 0 ? items.slice(0, 30) : filter(q));
+          }
+        });
+        textEl.addEventListener('blur', function() {
+          setTimeout(function() { dropdownEl.classList.remove('open'); }, 120);
+        });
+        clearEl.addEventListener('click', function() {
+          idInputEl.value = '';
+          textEl.value = '';
+          dropdownEl.classList.remove('open');
+          clearEl.style.display = 'none';
+          textEl.focus();
+          if (onSelect) onSelect('');
+        });
+      }
+
+      // ── Load types ──
       proxyGet('file-types').then(function(res) {
-        var types = (res && res.data) || [];
-        typeSel.innerHTML = '<option value="">Selecciona…</option>' +
-          types.map(function(t) { return '<option value="' + t.id + '">' + t.name + '</option>'; }).join('');
-      }).catch(function() {
-        typeSel.innerHTML = '<option value="">Error al cargar tipos</option>';
+        allTypes = (res && res.data) || [];
+        typeText.placeholder = allTypes.length > 0 ? 'Buscar tipo…' : 'Sin tipos disponibles';
+        setupCombo(typeText, typeDropdown, typeClear, typeIdInput, allTypes, function(typeId) {
+          subtypeIdInput.value = '';
+          subtypeText.value = '';
+          subtypeClear.style.display = 'none';
+          if (!typeId) {
+            subtypeText.disabled = true;
+            subtypeText.placeholder = 'Selecciona un tipo primero';
+            loadFields('', '');
+            return;
+          }
+          loadSubtypes(typeId);
+        });
       });
 
       function loadSubtypes(typeId) {
-        if (!typeId) {
-          subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>';
-          subtypeSel.disabled = true;
-          return Promise.resolve();
-        }
         if (subtypesCache[typeId]) {
-          renderSubtypes(subtypesCache[typeId]);
-          return Promise.resolve();
+          activateSubtypeCombo(subtypesCache[typeId]);
+          return;
         }
-        return proxyGet('file-types/' + typeId + '/subtypes').then(function(res) {
+        subtypeText.placeholder = 'Cargando…';
+        proxyGet('file-types/' + typeId + '/subtypes').then(function(res) {
           var subs = (res && res.data) || [];
           subtypesCache[typeId] = subs;
-          renderSubtypes(subs);
+          activateSubtypeCombo(subs);
         });
       }
-      function renderSubtypes(subs) {
-        subtypeSel.innerHTML = '<option value="">Selecciona…</option>' +
-          subs.map(function(s) { return '<option value="' + s.id + '">' + s.name + '</option>'; }).join('');
-        subtypeSel.disabled = false;
+      function activateSubtypeCombo(subs) {
+        subtypeText.disabled = false;
+        subtypeText.placeholder = subs.length > 0 ? 'Buscar subtipo…' : 'Sin subtipos';
+        setupCombo(subtypeText, subtypeDropdown, subtypeClear, subtypeIdInput, subs, function(subId) {
+          loadFields(typeIdInput.value, subId);
+        });
       }
 
       function loadFields(typeId, subtypeId) {
@@ -335,20 +429,11 @@ const today = new Date().toISOString().slice(0, 10)
         return '<div class="' + full + '">' + labelHtml + inner + '</div>';
       }
 
-      typeSel.addEventListener('change', function() {
-        loadSubtypes(typeSel.value).then(function() {
-          loadFields(typeSel.value, subtypeSel.value);
-        });
-      });
-      subtypeSel.addEventListener('change', function() {
-        loadFields(typeSel.value, subtypeSel.value);
-      });
-
       form.addEventListener('submit', function(e) {
         e.preventDefault();
         hideMessages();
 
-        if (!typeSel.value || !subtypeSel.value || !dateEl.value) {
+        if (!typeIdInput.value || !subtypeIdInput.value || !dateEl.value) {
           showErr('Selecciona tipo, subtipo y fecha.');
           return;
         }
@@ -364,8 +449,9 @@ const today = new Date().toISOString().slice(0, 10)
             if (r.data.success) {
               showOk('Solicitud creada exitosamente. N° ' + (r.data.data && r.data.data.documentNumber ? r.data.data.documentNumber : ''));
               form.reset();
-              subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>';
-              subtypeSel.disabled = true;
+              typeIdInput.value = ''; typeText.value = ''; typeClear.style.display = 'none';
+              subtypeIdInput.value = ''; subtypeText.value = ''; subtypeClear.style.display = 'none';
+              subtypeText.disabled = true; subtypeText.placeholder = 'Selecciona un tipo primero';
               dynSection.style.display = 'none';
               dynFields.innerHTML = '';
               dateEl.value = new Date().toISOString().slice(0, 10);

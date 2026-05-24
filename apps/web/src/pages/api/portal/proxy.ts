@@ -3,7 +3,14 @@ import { getPortalIdentity } from '../../../lib/portal-auth'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
-const GET_PREFIXES = ['file-types', 'file-fields', 'requests', 'dashboard', 'approvals']
+const GET_PREFIXES = [
+  'file-types',
+  'file-fields',
+  'requests',
+  'dashboard',
+  'approvals',
+  'attendance',
+]
 const POST_PREFIXES = ['approvals']
 
 function validatePath(rawPath: string, allowed: string[]) {
