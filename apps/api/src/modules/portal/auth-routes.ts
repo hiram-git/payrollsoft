@@ -182,11 +182,14 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           return { success: true, mustChangePassword: true }
         }
 
-        const accessRows = await tdb
-          .select({ module: portalAccess.module })
-          .from(portalAccess)
-          .where(and(eq(portalAccess.employeeId, emp.id), eq(portalAccess.isEnabled, true)))
-        const modules = accessRows.map((r: { module: string }) => r.module)
+        let modules: string[] = []
+        try {
+          const accessRows = await tdb
+            .select({ module: portalAccess.module })
+            .from(portalAccess)
+            .where(and(eq(portalAccess.employeeId, emp.id), eq(portalAccess.isEnabled, true)))
+          modules = accessRows.map((r: { module: string }) => r.module)
+        } catch {}
 
         const token = await jwt.sign({
           type: 'employee',

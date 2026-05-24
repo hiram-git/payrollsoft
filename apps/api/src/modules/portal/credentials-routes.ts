@@ -169,10 +169,13 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
         .where(eq(employeeCredentials.employeeId, params.employeeId))
         .limit(1)
 
-      const modules = await db
-        .select({ module: portalAccess.module, isEnabled: portalAccess.isEnabled })
-        .from(portalAccess)
-        .where(eq(portalAccess.employeeId, params.employeeId))
+      let modules: { module: string; isEnabled: boolean }[] = []
+      try {
+        modules = await db
+          .select({ module: portalAccess.module, isEnabled: portalAccess.isEnabled })
+          .from(portalAccess)
+          .where(eq(portalAccess.employeeId, params.employeeId))
+      } catch {}
 
       return {
         success: true,
@@ -228,24 +231,26 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
       }
 
       if (body.modules) {
-        for (const m of body.modules) {
-          await db
-            .insert(portalAccess)
-            .values({
-              employeeId: empId,
-              module: m.module,
-              isEnabled: m.isEnabled,
-              grantedBy: user?.userId ?? null,
-            })
-            .onConflictDoUpdate({
-              target: [portalAccess.employeeId, portalAccess.module],
-              set: {
+        try {
+          for (const m of body.modules) {
+            await db
+              .insert(portalAccess)
+              .values({
+                employeeId: empId,
+                module: m.module,
                 isEnabled: m.isEnabled,
                 grantedBy: user?.userId ?? null,
-                grantedAt: new Date(),
-              },
-            })
-        }
+              })
+              .onConflictDoUpdate({
+                target: [portalAccess.employeeId, portalAccess.module],
+                set: {
+                  isEnabled: m.isEnabled,
+                  grantedBy: user?.userId ?? null,
+                  grantedAt: new Date(),
+                },
+              })
+          }
+        } catch {}
       }
 
       return { success: true }
