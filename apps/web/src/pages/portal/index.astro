@@ -63,17 +63,19 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
         </div>
       </a>
 
-      <a href="/portal/approvals" class="pt-card pd-link-card">
-        <div class="pd-link-icon" style="background:var(--navy-soft);">
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2l-8.5 8.5L2 7"/>
-          </svg>
-        </div>
-        <div>
-          <h2 class="pt-card-title" style="margin:0 0 4px;">Aprobaciones</h2>
-          <p class="pd-link-desc">Solicitudes de tu departamento.</p>
-        </div>
-      </a>
+      {identity.isApprover && (
+        <a href="/portal/approvals" class="pt-card pd-link-card">
+          <div class="pd-link-icon" style="background:var(--navy-soft);">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2l-8.5 8.5L2 7"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="pt-card-title" style="margin:0 0 4px;">Aprobaciones</h2>
+            <p class="pd-link-desc">Solicitudes de tu departamento.</p>
+          </div>
+        </a>
+      )}
     </div>
 
     <!-- Recent data tables side-by-side -->

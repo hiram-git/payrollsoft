@@ -13,9 +13,15 @@ import { getFieldsFor } from '../employee-files/dynamic-fields'
 import {
   type EmployeeFileInput,
   type FormFile,
+  approveEmployeeFile,
   createWithCorrelative,
+  rejectEmployeeFile,
 } from '../employee-files/service'
-import { getBalance } from '../vacations/service'
+import {
+  approveRequest as approveVacation,
+  getBalance,
+  rejectRequest as rejectVacation,
+} from '../vacations/service'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
 type AnyDb = any
@@ -26,6 +32,7 @@ type PortalEmployee = {
   name: string
   idNumber: string
   departmentId: string | null
+  isApprover: boolean
   tenantSlug: string
 }
 
@@ -48,6 +55,7 @@ const portalAuthDerive = new Elysia({ name: 'portal-auth-derive' })
         name: (p.name as string) ?? '',
         idNumber: (p.idNumber as string) ?? '',
         departmentId: (p.departmentId as string) ?? null,
+        isApprover: (p.isApprover as boolean) ?? false,
         tenantSlug: (p.tenantSlug as string) ?? '',
       } satisfies PortalEmployee,
     }
@@ -63,6 +71,23 @@ function guardPortal({
   if (!portalEmployee) {
     set.status = 401
     return { success: false, error: 'Unauthorized' }
+  }
+}
+
+function guardApprover({
+  portalEmployee,
+  set,
+}: {
+  portalEmployee: PortalEmployee | null
+  set: { status: number | string }
+}) {
+  if (!portalEmployee) {
+    set.status = 401
+    return { success: false, error: 'Unauthorized' }
+  }
+  if (!portalEmployee.isApprover) {
+    set.status = 403
+    return { success: false, error: 'No tiene permisos de aprobador.' }
   }
 }
 
@@ -362,5 +387,143 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
     {
       beforeHandle: [guardPortal],
       params: t.Object({ id: t.String() }),
+    }
+  )
+
+  // ── Approvals (department-scoped) ─────────────────────────────────────
+
+  .get(
+    '/approvals',
+    async ({ db, portalEmployee, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const deptId = portalEmployee.departmentId
+
+      const [pendingFiles, pendingVacations] = await Promise.all([
+        (db as AnyDb).execute(sql`
+          SELECT ef.id, ef.document_number, ef.document_date, ef.observations,
+                 ef.approval_status, ef.created_at,
+                 eft.name AS type_name, efs.name AS subtype_name,
+                 e.code AS employee_code,
+                 e.first_name AS employee_first_name,
+                 e.last_name AS employee_last_name
+          FROM employee_files ef
+          JOIN employee_file_types    eft ON eft.id = ef.type_id
+          JOIN employee_file_subtypes efs ON efs.id = ef.subtype_id
+          JOIN employees e ON e.id = ef.employee_id
+          WHERE ef.approval_status = 'pending'
+            AND e.department_id = ${deptId}
+            AND ef.employee_id != ${portalEmployee.employeeId}
+          ORDER BY ef.created_at ASC
+        `),
+
+        (db as AnyDb).execute(sql`
+          SELECT vr.id, vr.request_number, vr.request_type,
+                 vr.start_date, vr.end_date, vr.enjoy_days, vr.paid_days,
+                 vr.status, vr.reason, vr.created_at,
+                 e.code AS employee_code,
+                 e.first_name AS employee_first_name,
+                 e.last_name AS employee_last_name
+          FROM vacation_requests vr
+          JOIN employees e ON e.id = vr.employee_id
+          WHERE vr.status = 'pending'
+            AND e.department_id = ${deptId}
+            AND vr.employee_id != ${portalEmployee.employeeId}
+          ORDER BY vr.created_at ASC
+        `),
+      ])
+
+      return {
+        success: true,
+        data: {
+          files: pendingFiles,
+          vacations: pendingVacations,
+        },
+      }
+    },
+    { beforeHandle: [guardApprover] }
+  )
+
+  .post(
+    '/approvals/files/:id/approve',
+    async ({ db, portalEmployee, params, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const result = await approveEmployeeFile(db, params.id, portalEmployee.employeeId)
+      if (!result.success) {
+        set.status = 422
+        return result
+      }
+      return result
+    },
+    {
+      beforeHandle: [guardApprover],
+      params: t.Object({ id: t.String() }),
+    }
+  )
+
+  .post(
+    '/approvals/files/:id/reject',
+    async ({ db, portalEmployee, params, body, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const result = await rejectEmployeeFile(db, params.id, portalEmployee.employeeId, body.reason)
+      if (!result.success) {
+        set.status = 422
+        return result
+      }
+      return result
+    },
+    {
+      beforeHandle: [guardApprover],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({ reason: t.String() }),
+    }
+  )
+
+  .post(
+    '/approvals/vacations/:id/approve',
+    async ({ db, portalEmployee, params, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const result = await approveVacation(db, params.id, portalEmployee.employeeId)
+      if (!result.success) {
+        set.status = 422
+        return result
+      }
+      return result
+    },
+    {
+      beforeHandle: [guardApprover],
+      params: t.Object({ id: t.String() }),
+    }
+  )
+
+  .post(
+    '/approvals/vacations/:id/reject',
+    async ({ db, portalEmployee, params, body, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const result = await rejectVacation(db, params.id, portalEmployee.employeeId, body.reason)
+      if (!result.success) {
+        set.status = 422
+        return result
+      }
+      return result
+    },
+    {
+      beforeHandle: [guardApprover],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({ reason: t.String() }),
     }
   )

@@ -112,6 +112,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
         name: `${emp.firstName} ${emp.lastName}`,
         idNumber: emp.idNumber,
         departmentId: emp.departmentId ?? null,
+        isApprover: cred.isApprover ?? false,
         tenantSlug: cookie.auth?.value
           ? (() => {
               try {
