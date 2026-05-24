@@ -64,6 +64,13 @@
       "when": 1762128007000,
       "tag": "0008_treasury_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1762128008000,
+      "tag": "0009_users_write_permission",
+      "breakpoints": true
     }
   ]
 }

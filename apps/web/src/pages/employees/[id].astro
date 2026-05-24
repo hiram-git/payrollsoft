@@ -94,6 +94,7 @@ type CustomFieldHistoryEntry = {
   changedBy: string | null
   changedAt: string
 }
+type UserRow = { id: string; name: string | null; email: string }
 
 let emp: Employee | null = null
 let cargos: CatalogItem[] = []
@@ -104,6 +105,7 @@ let loans: Loan[] = []
 let payrollTypes: PayrollType[] = []
 let customFieldDefs: CustomFieldDefinition[] = []
 let cfHistory: CustomFieldHistoryEntry[] = []
+const userNameMap = new Map<string, string>()
 let tipoInstitucion = 'privada'
 let banksCatalog: Bank[] = []
 
@@ -202,6 +204,13 @@ try {
     })
     if (histRes.ok) {
       cfHistory = ((await histRes.json()) as { data: CustomFieldHistoryEntry[] }).data ?? []
+    }
+    if (cfHistory.length > 0) {
+      const usersRes = await fetch(`${API_URL}/tenant-users`, { headers }).catch(() => null)
+      if (usersRes?.ok) {
+        const users = ((await usersRes.json()) as { data: UserRow[] }).data ?? []
+        for (const u of users) userNameMap.set(u.id, u.name || u.email)
+      }
     }
   }
 
@@ -532,9 +541,6 @@ const freqLabel: Record<string, string> = {
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
           <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 class="font-semibold text-gray-800">Préstamos</h3>
-            <a href={`/employees/${id}/loans/new`} class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-              + Nuevo préstamo
-            </a>
           </div>
           {loans.length === 0 ? (
             <div class="p-10 text-center text-gray-400 text-sm">
@@ -738,7 +744,7 @@ const freqLabel: Record<string, string> = {
                           <td class="px-3 py-2 text-xs text-gray-600">{fmtVal(h.oldValue)}</td>
                           <td class="px-3 py-2 text-xs text-gray-900 font-medium">{fmtVal(h.newValue)}</td>
                           <td class="px-3 py-2 text-xs text-gray-400 font-mono">
-                            {h.changedBy ? h.changedBy.slice(0, 8) : '—'}
+                            {h.changedBy ? (userNameMap.get(h.changedBy) ?? h.changedBy.slice(0, 8)) : '—'}
                           </td>
                         </tr>
                       )
@@ -761,9 +767,6 @@ const freqLabel: Record<string, string> = {
                 {efFiles.length} {efFiles.length === 1 ? 'registro' : 'registros'} — estudios, permisos, licencias, etc.
               </p>
             </div>
-            <a href={`/employee-files?employeeId=${id}`} class="text-sm text-blue-600 hover:underline">
-              Abrir módulo →
-            </a>
           </div>
 
           {efFiles.length === 0 ? (
@@ -846,9 +849,6 @@ const freqLabel: Record<string, string> = {
                 {vacBalance?.lastAccrualDate ? ` Último acreditado: ${vacBalance.lastAccrualDate}.` : ''}
               </p>
             </div>
-            <button type="button" id="vac-request-btn" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">
-              Solicitar vacaciones
-            </button>
           </div>
 
           {vacBalance ? (
@@ -1028,25 +1028,25 @@ const freqLabel: Record<string, string> = {
             desde el módulo de Tesorería.
           </p>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div class="col-span-2">
-              <label class="block text-sm text-gray-700 font-medium mb-1">Método de pago</label>
-              <div class="flex gap-2">
-                <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
-                  <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} />
-                  <span>Cheque</span>
-                </label>
-                <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
-                  <input type="radio" name="paymentMethod" value="ach" checked={emp.paymentMethod === 'ach'} />
-                  <span>ACH (transferencia)</span>
-                </label>
-                <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
-                  <input type="radio" name="paymentMethod" value="cash" checked={emp.paymentMethod === 'cash'} />
-                  <span>Efectivo</span>
-                </label>
-              </div>
+          <div>
+            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago</label>
+            <div class="bank-radio-group">
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} class="bank-radio-input" />
+                <span class="bank-radio-card">Cheque</span>
+              </label>
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="ach" checked={emp.paymentMethod === 'ach'} class="bank-radio-input" />
+                <span class="bank-radio-card">ACH</span>
+              </label>
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="cash" checked={emp.paymentMethod === 'cash'} class="bank-radio-input" />
+                <span class="bank-radio-card">Efectivo</span>
+              </label>
             </div>
+          </div>
 
+          <div id="bank-fields" class="grid grid-cols-2 gap-4 mt-4" style={emp.paymentMethod === 'cash' ? 'display:none' : ''}>
             <div>
               <label class="block text-sm text-gray-700 font-medium mb-1">Banco</label>
               <select name="bankId" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
@@ -1055,9 +1055,6 @@ const freqLabel: Record<string, string> = {
                   <option value={b.id} selected={emp.bankId === b.id}>{b.name}</option>
                 ))}
               </select>
-              <p class="text-[10px] text-gray-400 mt-0.5">
-                Solo se requiere para ACH. Las cuentas sin banco con número de ruta configurado no podrán ser pagadas por transferencia.
-              </p>
             </div>
 
             <div>
@@ -1073,12 +1070,6 @@ const freqLabel: Record<string, string> = {
               <label class="block text-sm text-gray-700 font-medium mb-1">Número de cuenta</label>
               <input type="text" name="accountNumber" value={emp.accountNumber ?? ''} maxlength="40" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono" />
             </div>
-          </div>
-
-          <div class="mt-4 p-3 rounded-md bg-amber-50 border border-amber-200 text-xs text-amber-800">
-            <strong>Recordatorio:</strong> para que un empleado con método ACH entre al lote
-            automático, el <strong>banco seleccionado debe tener el número de ruta configurado</strong>
-            en <a href="/config/banks" class="underline">Configuración → Bancos</a>.
           </div>
         </div>
       </div>
@@ -1253,9 +1244,21 @@ const freqLabel: Record<string, string> = {
   .vac-balance-detail strong { color:var(--fore-dim,#374151); font-weight:600; }
   .vac-balance-detail div + div { margin-top:2px; }
 
-  /* ── Bancario radio cards (dark mode) ── */
-  [data-theme="dark"] .has-\[\:checked\]\:bg-blue-50:has(:checked) { background:var(--navy-soft); }
-  [data-theme="dark"] .has-\[\:checked\]\:border-blue-500:has(:checked) { border-color:var(--navy-hi); }
+  /* ── Bancario radio group ── */
+  .bank-radio-group { display:flex; gap:.375rem; }
+  .bank-radio-label { cursor:pointer; }
+  .bank-radio-input { position:absolute; opacity:0; pointer-events:none; }
+  .bank-radio-card {
+    display:inline-flex; align-items:center; padding:.5rem .875rem;
+    border:1.5px solid var(--rule,#d1d5db); border-radius:6px;
+    font-size:.8125rem; font-weight:500; color:var(--fore-dim,#6b7280);
+    transition:border-color 140ms, background 140ms, color 140ms;
+  }
+  .bank-radio-card:hover { border-color:var(--rule-hi,#9ca3af); }
+  .bank-radio-input:checked + .bank-radio-card {
+    border-color:var(--navy,#2563eb); background:var(--navy-soft,rgba(37,99,235,0.1));
+    color:var(--fore,#111827);
+  }
 </style>
 
 <script type="application/json" id="cfDefs" set:html={JSON.stringify(customFieldDefs)}></script>
@@ -1361,6 +1364,16 @@ const freqLabel: Record<string, string> = {
     document.getElementById('tab-' + tab).style.display = ''
     btn.classList.add('active')
   }
+
+  // ─── Bancario: ocultar campos cuando es Efectivo ───────────────────────
+  ;(function() {
+    var bankFields = document.getElementById('bank-fields');
+    var radios = document.querySelectorAll('input[name="paymentMethod"]');
+    if (!bankFields || !radios.length) return;
+    radios.forEach(function(r) {
+      r.addEventListener('change', function() { bankFields.style.display = this.value === 'cash' ? 'none' : ''; });
+    });
+  })();
 
   // ─── Vacaciones: modal de solicitud + cancelación ──────────────────────
   ;(function () {
