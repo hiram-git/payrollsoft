@@ -179,7 +179,16 @@ const today = new Date().toISOString().slice(0, 10)
     .pr-input:focus { outline:none; border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft); }
     .pr-input:disabled { opacity:.5; cursor:not-allowed; }
     .pr-input::placeholder { color:var(--mute); }
+    .pr-select-field {
+      cursor:pointer;
+      appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%236A7690' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;
+      background-position:right 12px center;
+      padding-right:36px;
+    }
     .pr-textarea { resize:vertical; min-height:56px; }
+    .pr-dyn-field { min-width:0; }
 
     .pr-file-input {
       display:block; width:100%; font-size:13px; color:var(--fore-dim);
@@ -394,7 +403,7 @@ const today = new Date().toISOString().slice(0, 10)
         var ro = def.readonly ? ' readonly' : '';
         var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
         var val = def.default != null ? esc(String(def.default)) : '';
-        var full = '';
+        var full = false;
         var inner = '';
 
         var labelHtml = '<label class="pr-label" for="' + id + '">' +
@@ -403,17 +412,17 @@ const today = new Date().toISOString().slice(0, 10)
 
         switch (def.type) {
           case 'textarea':
-            full = ' pr-full';
-            inner = '<textarea id="' + id + '" name="' + name + '" rows="2"' + req + ro + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
+            full = true;
+            inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ro + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
             break;
           case 'select':
             var opts = (def.options || []).map(function(o) {
               return '<option value="' + esc(o.value) + '"' + (val === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
             }).join('');
-            inner = '<select id="' + id + '" name="' + name + '"' + req + ro + ' class="pr-input pr-select"><option value="">Selecciona…</option>' + opts + '</select>';
+            inner = '<select id="' + id + '" name="' + name + '"' + req + ro + ' class="pr-input pr-select-field"><option value="">Selecciona…</option>' + opts + '</select>';
             break;
           case 'file':
-            full = ' pr-full';
+            full = true;
             inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + esc(def.accept || '') + '" class="pr-file-input" />';
             break;
           case 'number':
@@ -429,7 +438,7 @@ const today = new Date().toISOString().slice(0, 10)
           default:
             inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ro + ph + ' value="' + val + '" class="pr-input" />';
         }
-        return '<div class="' + full + '">' + labelHtml + inner + '</div>';
+        return '<div class="pr-dyn-field' + (full ? ' pr-full' : '') + '">' + labelHtml + inner + '</div>';
       }
 
       form.addEventListener('submit', function(e) {
