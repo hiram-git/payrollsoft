@@ -3,7 +3,7 @@ import { getPortalIdentity } from '../../../lib/portal-auth'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
-const ALLOWED_PREFIXES = ['file-types', 'file-fields']
+const ALLOWED_PREFIXES = ['file-types', 'file-fields', 'requests', 'dashboard']
 
 export const GET: APIRoute = async ({ request, cookies }) => {
   const identity = getPortalIdentity(cookies)

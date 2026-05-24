@@ -312,3 +312,55 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
     },
     { beforeHandle: [guardPortal] }
   )
+
+  .get(
+    '/requests',
+    async ({ db, portalEmployee, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+
+      const rows = await (db as AnyDb).execute(sql`
+        SELECT ef.id, ef.document_number, ef.document_date, ef.observations,
+               ef.approval_status, ef.rejection_reason, ef.created_at,
+               eft.name  AS type_name,
+               efs.name  AS subtype_name
+        FROM employee_files ef
+        JOIN employee_file_types    eft ON eft.id = ef.type_id
+        JOIN employee_file_subtypes efs ON efs.id = ef.subtype_id
+        WHERE ef.employee_id = ${portalEmployee.employeeId}
+        ORDER BY ef.created_at DESC
+        LIMIT 100
+      `)
+      return { success: true, data: rows }
+    },
+    { beforeHandle: [guardPortal] }
+  )
+
+  .get(
+    '/requests/:id',
+    async ({ db, portalEmployee, params, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const rows = await (db as AnyDb).execute(sql`
+        SELECT ef.*, eft.name AS type_name, efs.name AS subtype_name
+        FROM employee_files ef
+        JOIN employee_file_types    eft ON eft.id = ef.type_id
+        JOIN employee_file_subtypes efs ON efs.id = ef.subtype_id
+        WHERE ef.id = ${params.id} AND ef.employee_id = ${portalEmployee.employeeId}
+        LIMIT 1
+      `)
+      if (!rows.length) {
+        set.status = 404
+        return { success: false, error: 'Solicitud no encontrada.' }
+      }
+      return { success: true, data: rows[0] }
+    },
+    {
+      beforeHandle: [guardPortal],
+      params: t.Object({ id: t.String() }),
+    }
+  )
