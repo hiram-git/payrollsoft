@@ -13,9 +13,10 @@
  *   POST /portal/auth/logout  — clear portal session
  *   GET  /portal/auth/me      — get current employee info
  */
-import { companyConfig, employeeCredentials, employees } from '@payroll/db'
-import { eq } from 'drizzle-orm'
+import { companyConfig, employeeCredentials, employees, tenants } from '@payroll/db'
+import { and, eq } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
+import { getTenantDb, publicDb } from '../../config/db'
 import { env } from '../../config/env'
 import { mailerConfigFromCompany, sendMail } from '../../lib/mailer'
 import { hashPassword, verifyPassword } from '../../lib/password'
@@ -33,37 +34,74 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
   .post(
     '/login',
-    async ({ db, body, jwt, cookie, set }) => {
-      if (!db) {
-        set.status = 400
-        return { success: false, error: 'Tenant required' }
-      }
-
+    async ({ db, body, jwt, cookie, set, tenantSlug: headerTenant }) => {
       const idNumber = body.idNumber.trim()
       const password = body.password
 
-      // Find employee by cédula
-      const [emp] = await (db as AnyDb)
-        .select({
-          id: employees.id,
-          code: employees.code,
-          firstName: employees.firstName,
-          lastName: employees.lastName,
-          idNumber: employees.idNumber,
-          departmentId: employees.departmentId,
-          isActive: employees.isActive,
-        })
-        .from(employees)
-        .where(eq(employees.idNumber, idNumber))
-        .limit(1)
+      type EmpRow = {
+        id: string
+        code: string
+        firstName: string
+        lastName: string
+        idNumber: string
+        departmentId: string | null
+        isActive: boolean
+      }
+
+      let emp: EmpRow | undefined
+      let cred: AnyDb | undefined
+      let resolvedSlug = ''
+
+      if (headerTenant && db) {
+        ;[emp] = await (db as AnyDb)
+          .select({
+            id: employees.id,
+            code: employees.code,
+            firstName: employees.firstName,
+            lastName: employees.lastName,
+            idNumber: employees.idNumber,
+            departmentId: employees.departmentId,
+            isActive: employees.isActive,
+          })
+          .from(employees)
+          .where(eq(employees.idNumber, idNumber))
+          .limit(1)
+        if (emp) resolvedSlug = headerTenant
+      } else {
+        const activeTenants = await publicDb
+          .select({ slug: tenants.slug })
+          .from(tenants)
+          .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
+        for (const t of activeTenants) {
+          const tdb = getTenantDb(t.slug)
+          const [row] = await (tdb as AnyDb)
+            .select({
+              id: employees.id,
+              code: employees.code,
+              firstName: employees.firstName,
+              lastName: employees.lastName,
+              idNumber: employees.idNumber,
+              departmentId: employees.departmentId,
+              isActive: employees.isActive,
+            })
+            .from(employees)
+            .where(eq(employees.idNumber, idNumber))
+            .limit(1)
+          if (row) {
+            emp = row
+            resolvedSlug = t.slug
+            break
+          }
+        }
+      }
 
       if (!emp || !emp.isActive) {
         set.status = 401
         return { success: false, error: 'Cédula o contraseña incorrecta.' }
       }
 
-      // Find credentials
-      const [cred] = await (db as AnyDb)
+      const tdb = getTenantDb(resolvedSlug) as AnyDb
+      ;[cred] = await tdb
         .select()
         .from(employeeCredentials)
         .where(eq(employeeCredentials.employeeId, emp.id))
@@ -84,7 +122,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
       const valid = await verifyPassword(password, cred.passwordHash)
       if (!valid) {
-        await (db as AnyDb)
+        await tdb
           .update(employeeCredentials)
           .set({
             failedAttempts: cred.failedAttempts + 1,
@@ -97,14 +135,9 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
         return { success: false, error: 'Cédula o contraseña incorrecta.' }
       }
 
-      // Success — reset failed attempts + update last login
-      await (db as AnyDb)
+      await tdb
         .update(employeeCredentials)
-        .set({
-          failedAttempts: 0,
-          lastLoginAt: new Date(),
-          updatedAt: new Date(),
-        })
+        .set({ failedAttempts: 0, lastLoginAt: new Date(), updatedAt: new Date() })
         .where(eq(employeeCredentials.id, cred.id))
 
       const token = await jwt.sign({
@@ -115,19 +148,8 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
         idNumber: emp.idNumber,
         departmentId: emp.departmentId ?? null,
         isApprover: cred.isApprover ?? false,
-        tenantSlug: cookie.auth?.value
-          ? (() => {
-              try {
-                const parts = (cookie.auth.value as string).split('.')
-                if (parts.length === 3) {
-                  const p = JSON.parse(Buffer.from(parts[1], 'base64').toString())
-                  return p.tenantSlug ?? 'demo'
-                }
-              } catch {}
-              return 'demo'
-            })()
-          : 'demo',
-        exp: Math.floor(Date.now() / 1000) + 8 * 3600, // 8 hours
+        tenantSlug: resolvedSlug,
+        exp: Math.floor(Date.now() / 1000) + 8 * 3600,
       })
 
       cookie.portal_auth.set({
@@ -163,49 +185,61 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
   .post(
     '/forgot-password',
-    async ({ db, body, set }) => {
-      if (!db) {
-        set.status = 400
-        return { success: false, error: 'Tenant required' }
-      }
-
+    async ({ db, body, tenantSlug: headerTenant }) => {
       const idNumber = body.idNumber.trim()
+      const SAFE_MSG = 'Si la cédula está registrada con un correo, recibirás instrucciones.'
 
-      const [emp] = await (db as AnyDb)
-        .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
-        .from(employees)
-        .where(eq(employees.idNumber, idNumber))
-        .limit(1)
+      type EmpInfo = { id: string; email: string | null; firstName: string }
+      let emp: EmpInfo | undefined
+      let resolvedSlug = ''
 
-      if (!emp || !emp.email) {
-        return {
-          success: true,
-          message: 'Si la cédula está registrada con un correo, recibirás instrucciones.',
+      if (headerTenant && db) {
+        ;[emp] = await (db as AnyDb)
+          .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
+          .from(employees)
+          .where(eq(employees.idNumber, idNumber))
+          .limit(1)
+        if (emp) resolvedSlug = headerTenant
+      } else {
+        const active = await publicDb
+          .select({ slug: tenants.slug })
+          .from(tenants)
+          .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
+        for (const t of active) {
+          const tdb = getTenantDb(t.slug)
+          const [row] = await (tdb as AnyDb)
+            .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
+            .from(employees)
+            .where(eq(employees.idNumber, idNumber))
+            .limit(1)
+          if (row) {
+            emp = row
+            resolvedSlug = t.slug
+            break
+          }
         }
       }
 
-      const [cred] = await (db as AnyDb)
+      if (!emp || !emp.email) return { success: true, message: SAFE_MSG }
+
+      const tdb = getTenantDb(resolvedSlug) as AnyDb
+      const [cred] = await tdb
         .select()
         .from(employeeCredentials)
         .where(eq(employeeCredentials.employeeId, emp.id))
         .limit(1)
 
-      if (!cred || !cred.isActive) {
-        return {
-          success: true,
-          message: 'Si la cédula está registrada con un correo, recibirás instrucciones.',
-        }
-      }
+      if (!cred || !cred.isActive) return { success: true, message: SAFE_MSG }
 
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
 
-      await (db as AnyDb)
+      await tdb
         .update(employeeCredentials)
         .set({ resetToken: token, resetTokenExpiresAt: expiresAt, updatedAt: new Date() })
         .where(eq(employeeCredentials.id, cred.id))
 
-      const [[company]] = await Promise.all([(db as AnyDb).select().from(companyConfig).limit(1)])
+      const [[company]] = await Promise.all([tdb.select().from(companyConfig).limit(1)])
       const mailer = mailerConfigFromCompany(company ?? null)
       if (mailer) {
         const resetUrl = `${env.WEB_URL}/portal/reset-password?token=${encodeURIComponent(token)}`
@@ -229,10 +263,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
         }).catch(() => {})
       }
 
-      return {
-        success: true,
-        message: 'Si la cédula está registrada con un correo, recibirás instrucciones.',
-      }
+      return { success: true, message: SAFE_MSG }
     },
     {
       body: t.Object({ idNumber: t.String({ minLength: 1 }) }),
@@ -241,19 +272,38 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
   .post(
     '/reset-password',
-    async ({ db, body, set }) => {
-      if (!db) {
-        set.status = 400
-        return { success: false, error: 'Tenant required' }
+    async ({ db, body, tenantSlug: headerTenant, set }) => {
+      let cred: AnyDb | undefined
+      let resolvedDb: AnyDb | undefined
+
+      if (headerTenant && db) {
+        ;[cred] = await (db as AnyDb)
+          .select()
+          .from(employeeCredentials)
+          .where(eq(employeeCredentials.resetToken, body.token))
+          .limit(1)
+        if (cred) resolvedDb = db
+      } else {
+        const active = await publicDb
+          .select({ slug: tenants.slug })
+          .from(tenants)
+          .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
+        for (const t of active) {
+          const tdb = getTenantDb(t.slug)
+          const [row] = await (tdb as AnyDb)
+            .select()
+            .from(employeeCredentials)
+            .where(eq(employeeCredentials.resetToken, body.token))
+            .limit(1)
+          if (row) {
+            cred = row
+            resolvedDb = tdb
+            break
+          }
+        }
       }
 
-      const [cred] = await (db as AnyDb)
-        .select()
-        .from(employeeCredentials)
-        .where(eq(employeeCredentials.resetToken, body.token))
-        .limit(1)
-
-      if (!cred) {
+      if (!cred || !resolvedDb) {
         set.status = 400
         return { success: false, error: 'Token inválido o expirado.' }
       }
@@ -264,7 +314,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
       }
 
       const hash = await hashPassword(body.password)
-      await (db as AnyDb)
+      await resolvedDb
         .update(employeeCredentials)
         .set({
           passwordHash: hash,

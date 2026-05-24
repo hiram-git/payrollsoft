@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro'
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
 export const POST: APIRoute = async ({ request }) => {
-  let body: { idNumber?: string; password?: string; tenant?: string }
+  let body: { idNumber?: string; password?: string }
   try {
     body = await request.json()
   } catch {
@@ -12,9 +12,8 @@ export const POST: APIRoute = async ({ request }) => {
 
   const idNumber = body.idNumber?.trim()
   const password = body.password
-  const tenant = body.tenant?.trim().toLowerCase()
 
-  if (!idNumber || !password || !tenant) {
+  if (!idNumber || !password) {
     return Response.json({ success: false, error: 'Completa todos los campos.' }, { status: 400 })
   }
 
@@ -22,10 +21,7 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     res = await fetch(`${API_URL}/portal/auth/login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant': tenant,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ idNumber, password }),
     })
   } catch (err) {
