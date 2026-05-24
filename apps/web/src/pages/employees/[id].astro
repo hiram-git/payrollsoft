@@ -1100,8 +1100,8 @@ const freqLabel: Record<string, string> = {
                 <div class="text-sm font-medium text-gray-800">Acceso al portal</div>
                 <div class="text-xs text-gray-500">El empleado podrá ingresar con su cédula y contraseña.</div>
               </div>
-              <button type="button" class="portal-toggle-btn" id="portal-enabled-btn" onclick="togglePortalCb('portal-enabled')">
-                <span class="portal-toggle-track" id="portal-enabled-track"><span class="portal-toggle-knob" id="portal-enabled-knob"></span></span>
+              <button type="button" class="toggle-btn" onclick="togglePortalCb('portal-enabled')">
+                <span class="toggle-track toggle-off" id="portal-enabled-track"><span class="toggle-knob knob-off" id="portal-enabled-knob"></span></span>
               </button>
               <input type="checkbox" id="portal-enabled" class="hidden" />
             </div>
@@ -1111,8 +1111,8 @@ const freqLabel: Record<string, string> = {
                 <div class="text-sm font-medium text-gray-800">Aprobador de departamento</div>
                 <div class="text-xs text-gray-500">Puede aprobar/rechazar solicitudes de su departamento.</div>
               </div>
-              <button type="button" class="portal-toggle-btn" id="portal-approver-btn" onclick="togglePortalCb('portal-approver')">
-                <span class="portal-toggle-track" id="portal-approver-track"><span class="portal-toggle-knob" id="portal-approver-knob"></span></span>
+              <button type="button" class="toggle-btn" onclick="togglePortalCb('portal-approver')">
+                <span class="toggle-track toggle-off" id="portal-approver-track"><span class="toggle-knob knob-off" id="portal-approver-knob"></span></span>
               </button>
               <input type="checkbox" id="portal-approver" class="hidden" />
             </div>
@@ -1219,12 +1219,14 @@ const freqLabel: Record<string, string> = {
     font-weight: 600;
   }
 
-  /* ── Portal toggle (matches Conceptos → Configuraciones Avanzadas) ── */
-  .portal-toggle-btn { display:flex; align-items:center; gap:.625rem; background:none; border:none; cursor:pointer; padding:0; }
-  .portal-toggle-track { position:relative; display:inline-flex; width:2.25rem; height:1.25rem; border-radius:9999px; flex-shrink:0; transition:background .2s; background:var(--ink-4,#e5e7eb); border:1px solid var(--rule,#d1d5db); }
-  .portal-toggle-track.on { background:var(--ok,#6fb58c); border-color:var(--ok,#6fb58c); }
-  .portal-toggle-knob { position:absolute; top:.125rem; width:1rem; height:1rem; border-radius:50%; background:#fff; transition:transform .2s; transform:translateX(.125rem); }
-  .portal-toggle-knob.on { transform:translateX(1.125rem); }
+  /* ── Toggle slider (same as Conceptos → Configuraciones Avanzadas) ── */
+  .toggle-btn   { display:flex; align-items:center; gap:.625rem; background:none; border:none; cursor:pointer; padding:0; }
+  .toggle-track { position:relative; display:inline-flex; width:2.25rem; height:1.25rem; border-radius:9999px; flex-shrink:0; transition:background .2s; }
+  .toggle-on    { background:var(--ok); }
+  .toggle-off   { background:var(--ink-4); border:1px solid var(--rule); }
+  .toggle-knob  { position:absolute; top:.125rem; width:1rem; height:1rem; border-radius:50%; background:#fff; transition:transform .2s; }
+  .knob-on      { transform:translateX(1.125rem); }
+  .knob-off     { transform:translateX(.125rem); }
 
   /* ── Portal module checkboxes (matches adv-check from Conceptos) ── */
   .portal-mod-label { padding:.625rem; border-radius:.5rem; border:1px solid var(--rule,#e5e7eb); cursor:pointer; transition:border-color 140ms; }
@@ -1484,18 +1486,21 @@ function togglePortalCb(id) {
   var cb = document.getElementById(id);
   if (!cb) return;
   cb.checked = !cb.checked;
-  var track = document.getElementById(id + '-track');
-  var knob = document.getElementById(id + '-knob');
-  if (track) track.classList.toggle('on', cb.checked);
-  if (knob) knob.classList.toggle('on', cb.checked);
+  syncToggleUI(id, cb.checked);
 }
 function syncToggleUI(id, val) {
   var cb = document.getElementById(id);
   var track = document.getElementById(id + '-track');
   var knob = document.getElementById(id + '-knob');
   if (cb) cb.checked = val;
-  if (track) track.classList.toggle('on', val);
-  if (knob) knob.classList.toggle('on', val);
+  if (track) {
+    track.classList.remove('toggle-on', 'toggle-off');
+    track.classList.add(val ? 'toggle-on' : 'toggle-off');
+  }
+  if (knob) {
+    knob.classList.remove('knob-on', 'knob-off');
+    knob.classList.add(val ? 'knob-on' : 'knob-off');
+  }
 }
 
 ;(function() {
