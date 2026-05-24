@@ -32,6 +32,10 @@ export const companyConfig = pgTable('company_config', {
   absenceFileSubtypeId: integer('absence_file_subtype_id'),
   latenessFileTypeId: integer('lateness_file_type_id'),
   latenessFileSubtypeId: integer('lateness_file_subtype_id'),
+  portalNotificationsEnabled: boolean('portal_notifications_enabled').notNull().default(false),
+  notifyOnRequestCreated: text('notify_on_request_created'),
+  notifyOnRequestApproved: text('notify_on_request_approved'),
+  notifyOnRequestRejected: text('notify_on_request_rejected'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 

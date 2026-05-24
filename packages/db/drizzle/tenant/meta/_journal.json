@@ -288,6 +288,13 @@
       "when": 1762128020000,
       "tag": "0041_attendance_justifications",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1762128021000,
+      "tag": "0042_employee_portal",
+      "breakpoints": true
     }
   ]
 }
