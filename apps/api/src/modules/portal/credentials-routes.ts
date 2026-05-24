@@ -104,6 +104,25 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
     }
   )
 
+  .post(
+    '/toggle-approver',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      await db
+        .update(employeeCredentials)
+        .set({ isApprover: body.isApprover, updatedAt: new Date() })
+        .where(eq(employeeCredentials.employeeId, body.employeeId))
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:write')],
+      body: t.Object({ employeeId: t.String(), isApprover: t.Boolean() }),
+    }
+  )
+
   .get(
     '/status',
     async ({ db, set }) => {
@@ -116,6 +135,7 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
                ec.id IS NOT NULL AS has_credentials,
                ec.is_active AS cred_active,
                ec.is_locked AS cred_locked,
+               ec.is_approver AS is_approver,
                ec.last_login_at
         FROM employees e
         LEFT JOIN employee_credentials ec ON ec.employee_id = e.id
