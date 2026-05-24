@@ -1,0 +1,219 @@
+---
+import PortalLayout from '../../layouts/PortalLayout.astro'
+import { getPortalIdentity } from '../../lib/portal-auth'
+
+const identity = getPortalIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/portal/login')
+
+const today = new Date().toISOString().slice(0, 10)
+const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
+---
+
+<PortalLayout title="Mis marcaciones">
+  <div class="at-wrap">
+    <h1 class="at-title">Mis marcaciones</h1>
+    <p class="at-sub">Historial de asistencia y marcaciones de entrada/salida.</p>
+
+    <div class="at-filters">
+      <div class="at-filter-group">
+        <label class="at-filter-label">Desde</label>
+        <input type="date" id="at-from" value={thirtyDaysAgo} class="at-filter-input" />
+      </div>
+      <div class="at-filter-group">
+        <label class="at-filter-label">Hasta</label>
+        <input type="date" id="at-to" value={today} class="at-filter-input" />
+      </div>
+      <button type="button" id="at-search" class="at-search-btn">Buscar</button>
+      <div class="at-stats" id="at-stats"></div>
+    </div>
+
+    <div class="pt-card at-table-card">
+      <div id="at-body">
+        <div class="at-empty">Cargando marcaciones...</div>
+      </div>
+    </div>
+
+    <div class="at-summary" id="at-summary"></div>
+  </div>
+
+  <style>
+    .at-wrap { max-width:960px; margin:0 auto; padding:32px 24px; }
+    .at-title {
+      font-family:var(--f-display); font-weight:300; font-size:24px;
+      letter-spacing:-0.02em; margin:0 0 4px; color:var(--fore);
+    }
+    .at-sub { font-size:13px; color:var(--mute-2); margin:0 0 24px; }
+
+    .at-filters {
+      display:flex; align-items:flex-end; gap:12px; margin-bottom:16px; flex-wrap:wrap;
+    }
+    .at-filter-group { display:flex; flex-direction:column; gap:4px; }
+    .at-filter-label {
+      font-family:var(--f-mono); font-size:10px; color:var(--mute);
+      letter-spacing:.1em; text-transform:uppercase;
+    }
+    .at-filter-input {
+      padding:6px 10px; font-size:13px; background:var(--ink-3);
+      border:1px solid var(--rule); color:var(--fore); border-radius:4px;
+      font-family:var(--f-sans);
+    }
+    .at-filter-input:focus { outline:none; border-color:var(--navy-hi); }
+    .at-search-btn {
+      padding:6px 16px; font-size:13px; font-weight:500;
+      background:var(--navy); color:#fff; border:none; border-radius:4px;
+      cursor:pointer; font-family:var(--f-sans);
+      transition:background 140ms ease;
+    }
+    .at-search-btn:hover { background:var(--navy-hi); }
+    .at-stats {
+      margin-left:auto; font-family:var(--f-mono); font-size:11px;
+      color:var(--mute); letter-spacing:.06em;
+    }
+
+    .at-table-card { padding:0; overflow:hidden; }
+    .at-table { width:100%; border-collapse:collapse; }
+    .at-table th {
+      font-family:var(--f-mono); font-size:10px; color:var(--mute);
+      letter-spacing:.1em; text-transform:uppercase; text-align:left;
+      padding:12px 16px; border-bottom:1px solid var(--rule);
+      background:var(--ink-3); position:sticky; top:0;
+    }
+    .at-table td {
+      font-size:13px; color:var(--fore-dim); padding:10px 16px;
+      border-bottom:1px solid var(--rule);
+    }
+    .at-table tr:last-child td { border-bottom:none; }
+    .at-table tr:hover td { background:var(--ink-4); }
+    .at-table .at-time { font-family:var(--f-mono); font-size:12px; }
+
+    .at-chip {
+      display:inline-block; padding:2px 8px; border-radius:3px;
+      font-family:var(--f-mono); font-size:10px; letter-spacing:.06em;
+      text-transform:uppercase; font-weight:500;
+    }
+    .at-chip-present  { background:rgba(111,181,140,0.15); color:var(--ok); }
+    .at-chip-late     { background:rgba(227,178,90,0.15); color:var(--warn); }
+    .at-chip-absent   { background:rgba(224,107,92,0.15); color:var(--err); }
+    .at-chip-partial  { background:rgba(227,178,90,0.15); color:var(--warn); }
+    .at-chip-holiday  { background:var(--ink-4); color:var(--mute-2); }
+    .at-chip-justified { background:rgba(111,181,140,0.15); color:var(--ok); }
+    .at-chip-default  { background:var(--ink-4); color:var(--mute-2); }
+
+    .at-empty { padding:48px 16px; text-align:center; color:var(--mute); font-size:13px; }
+
+    .at-summary {
+      display:flex; gap:16px; margin-top:16px; flex-wrap:wrap;
+    }
+    .at-summary-item {
+      background:var(--ink-2); border:1px solid var(--rule); border-radius:6px;
+      padding:12px 16px; flex:1; min-width:120px;
+    }
+    .at-summary-label {
+      font-family:var(--f-mono); font-size:10px; color:var(--mute);
+      letter-spacing:.1em; text-transform:uppercase; margin-bottom:4px;
+    }
+    .at-summary-value {
+      font-family:var(--f-display); font-size:22px; font-weight:300;
+      color:var(--fore); letter-spacing:-0.02em;
+    }
+
+    @media (max-width:640px) {
+      .at-table th:nth-child(5), .at-table td:nth-child(5),
+      .at-table th:nth-child(6), .at-table td:nth-child(6) { display:none; }
+    }
+  </style>
+
+  <script is:inline>
+    ;(function() {
+      var body = document.getElementById('at-body');
+      var statsEl = document.getElementById('at-stats');
+      var summaryEl = document.getElementById('at-summary');
+      var fromEl = document.getElementById('at-from');
+      var toEl = document.getElementById('at-to');
+      var searchBtn = document.getElementById('at-search');
+
+      var STATUS_LABEL = {
+        present:'Presente', late:'Tardanza', absent:'Ausente',
+        partial:'Parcial', holiday:'Feriado', justified:'Justificada'
+      };
+      var STATUS_CLS = {
+        present:'present', late:'late', absent:'absent',
+        partial:'partial', holiday:'holiday', justified:'justified'
+      };
+
+      function chip(s) {
+        return '<span class="at-chip at-chip-' + (STATUS_CLS[s] || 'default') + '">' + (STATUS_LABEL[s] || s || '—') + '</span>';
+      }
+      function fmtDate(d) { return d ? String(d).substring(0, 10) : '—'; }
+      function fmtTime(t) {
+        if (!t) return '—';
+        var s = typeof t === 'string' ? t : new Date(t).toISOString();
+        var m = s.match(/(\d{2}:\d{2})/);
+        return m ? m[1] : '—';
+      }
+      function fmtMinutes(m) {
+        if (m == null) return '—';
+        var h = Math.floor(m / 60);
+        var min = m % 60;
+        return h > 0 ? h + 'h ' + min + 'm' : min + 'm';
+      }
+
+      function loadData() {
+        var from = fromEl.value;
+        var to = toEl.value;
+        var qs = '';
+        if (from) qs += 'from=' + from;
+        if (to) qs += (qs ? '&' : '') + 'to=' + to;
+        body.innerHTML = '<div class="at-empty">Cargando...</div>';
+
+        fetch('/api/portal/proxy?path=' + encodeURIComponent('attendance' + (qs ? '?' + qs : '')))
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            var rows = (res && res.data) || [];
+            statsEl.textContent = rows.length + ' registro' + (rows.length !== 1 ? 's' : '');
+
+            if (rows.length === 0) {
+              body.innerHTML = '<div class="at-empty">Sin registros en el período seleccionado.</div>';
+              summaryEl.innerHTML = '';
+              return;
+            }
+
+            var html = '<table class="at-table"><thead><tr>' +
+              '<th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Trabajado</th><th>Tardanza</th>' +
+              '</tr></thead><tbody>';
+            var totalWorked = 0, totalLate = 0, presents = 0, lates = 0, absents = 0;
+            for (var i = 0; i < rows.length; i++) {
+              var r = rows[i];
+              totalWorked += r.worked_minutes || 0;
+              totalLate += r.late_minutes || 0;
+              if (r.status === 'present' || r.status === 'justified') presents++;
+              else if (r.status === 'late') lates++;
+              else if (r.status === 'absent') absents++;
+              html += '<tr>' +
+                '<td>' + fmtDate(r.date) + '</td>' +
+                '<td class="at-time">' + fmtTime(r.check_in) + '</td>' +
+                '<td class="at-time">' + fmtTime(r.check_out) + '</td>' +
+                '<td>' + chip(r.status) + '</td>' +
+                '<td class="at-time">' + fmtMinutes(r.worked_minutes) + '</td>' +
+                '<td class="at-time">' + (r.late_minutes > 0 ? fmtMinutes(r.late_minutes) : '—') + '</td>' +
+                '</tr>';
+            }
+            html += '</tbody></table>';
+            body.innerHTML = html;
+
+            summaryEl.innerHTML =
+              '<div class="at-summary-item"><div class="at-summary-label">Días trabajados</div><div class="at-summary-value">' + (presents + lates) + '</div></div>' +
+              '<div class="at-summary-item"><div class="at-summary-label">Tardanzas</div><div class="at-summary-value" style="color:var(--warn)">' + lates + '</div></div>' +
+              '<div class="at-summary-item"><div class="at-summary-label">Ausencias</div><div class="at-summary-value" style="color:var(--err)">' + absents + '</div></div>' +
+              '<div class="at-summary-item"><div class="at-summary-label">Horas totales</div><div class="at-summary-value">' + fmtMinutes(totalWorked) + '</div></div>';
+          })
+          .catch(function() {
+            body.innerHTML = '<div class="at-empty">Error al cargar marcaciones.</div>';
+          });
+      }
+
+      searchBtn.addEventListener('click', loadData);
+      loadData();
+    })();
+  </script>
+</PortalLayout>

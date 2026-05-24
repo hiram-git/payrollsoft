@@ -613,3 +613,40 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
       body: t.Object({ reason: t.String() }),
     }
   )
+
+  .get(
+    '/attendance',
+    async ({ db, portalEmployee, query, set }) => {
+      if (!db || !portalEmployee) {
+        set.status = 400
+        return { success: false, error: 'Context required' }
+      }
+      const empId = portalEmployee.employeeId
+      const dateFrom = query.from ?? ''
+      const dateTo = query.to ?? ''
+
+      let dateFilter = sql`ar.date >= CURRENT_DATE - INTERVAL '30 days'`
+      if (dateFrom && dateTo) {
+        dateFilter = sql`ar.date >= ${dateFrom} AND ar.date <= ${dateTo}`
+      } else if (dateFrom) {
+        dateFilter = sql`ar.date >= ${dateFrom}`
+      } else if (dateTo) {
+        dateFilter = sql`ar.date <= ${dateTo}`
+      }
+
+      const rows = await (db as AnyDb).execute(sql`
+        SELECT ar.id, ar.date, ar.check_in, ar.check_out,
+               ar.worked_minutes, ar.late_minutes, ar.overtime_minutes,
+               ar.status, ar.source
+        FROM attendance_records ar
+        WHERE ar.employee_id = ${empId} AND ${dateFilter}
+        ORDER BY ar.date DESC
+        LIMIT 200
+      `)
+      return { success: true, data: rows }
+    },
+    {
+      beforeHandle: [guardPortal],
+      query: t.Object({ from: t.Optional(t.String()), to: t.Optional(t.String()) }),
+    }
+  )
