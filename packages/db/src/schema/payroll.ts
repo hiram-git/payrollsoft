@@ -10,7 +10,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 
-export const payrollAcumulados = pgTable('payroll_acumulados', {
+export const payrollAccumulators = pgTable('payroll_accumulators', {
   id: uuid('id').defaultRandom().primaryKey(),
   payrollId: uuid('payroll_id').notNull(),
   employeeId: uuid('employee_id').notNull(),
@@ -37,7 +37,7 @@ export const concepts = pgTable('concepts', {
   isReferenceValue: boolean('is_reference_value').notNull().default(false),
   useAmountCalc: boolean('use_amount_calc').notNull().default(false),
   allowZero: boolean('allow_zero').notNull().default(false),
-  cuentaContableId: uuid('cuenta_contable_id'),
+  chartAccountId: uuid('chart_account_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -144,8 +144,11 @@ export type PayrollReport = typeof payrollReports.$inferSelect
 export type NewPayrollReport = typeof payrollReports.$inferInsert
 export type Loan = typeof loans.$inferSelect
 export type NewLoan = typeof loans.$inferInsert
-export type PayrollAcumulado = typeof payrollAcumulados.$inferSelect
-export type NewPayrollAcumulado = typeof payrollAcumulados.$inferInsert
+export type PayrollAccumulator = typeof payrollAccumulators.$inferSelect
+export type NewPayrollAccumulator = typeof payrollAccumulators.$inferInsert
+
+/** @deprecated Use `payrollAccumulators` */
+export const payrollAcumulados = payrollAccumulators
 export type Creditor = typeof creditors.$inferSelect
 export type NewCreditor = typeof creditors.$inferInsert
 export type LoanInstallment = typeof loanInstallments.$inferSelect

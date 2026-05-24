@@ -125,8 +125,8 @@ async function resolveCatalogNames(
   }
 ): Promise<{ position: string | null; department: string | null }> {
   const [cargo, dept] = await Promise.all([
-    input.cargoId ? getCargoById(db, input.cargoId) : null,
-    input.departamentoId ? getDepartamentoById(db, input.departamentoId) : null,
+    input.jobTitleId ? getCargoById(db, input.jobTitleId) : null,
+    input.departmentId ? getDepartamentoById(db, input.departmentId) : null,
   ])
   return {
     position: cargo?.name ?? null,
@@ -207,9 +207,9 @@ export async function createEmployeeService(
     socialSecurityNumber: input.socialSecurityNumber?.trim() || null,
     email: input.email?.trim().toLowerCase() || null,
     phone: input.phone?.trim() || null,
-    cargoId: input.cargoId || null,
-    funcionId: input.funcionId || null,
-    departamentoId: input.departamentoId || null,
+    jobTitleId: input.jobTitleId || null,
+    jobFunctionId: input.jobFunctionId || null,
+    departmentId: input.departmentId || null,
     positionId: input.positionId || null,
     position,
     department,
@@ -289,22 +289,22 @@ export async function updateEmployeeService(
 
   // Catalog IDs — resolve names when any ID changes
   const catalogChanged =
-    input.cargoId !== undefined ||
-    input.funcionId !== undefined ||
-    input.departamentoId !== undefined
+    input.jobTitleId !== undefined ||
+    input.jobFunctionId !== undefined ||
+    input.departmentId !== undefined
 
   if (catalogChanged) {
     // Use incoming values if provided, otherwise fall back to existing
     const resolveInput = {
-      cargoId: 'cargoId' in input ? input.cargoId : existing.cargoId,
-      funcionId: 'funcionId' in input ? input.funcionId : existing.funcionId,
-      departamentoId: 'departamentoId' in input ? input.departamentoId : existing.departamentoId,
+      jobTitleId: 'jobTitleId' in input ? input.jobTitleId : existing.jobTitleId,
+      jobFunctionId: 'jobFunctionId' in input ? input.jobFunctionId : existing.jobFunctionId,
+      departmentId: 'departmentId' in input ? input.departmentId : existing.departmentId,
     }
     const { position, department } = await resolveCatalogNames(db, resolveInput)
 
-    if ('cargoId' in input) patch.cargoId = input.cargoId || null
-    if ('funcionId' in input) patch.funcionId = input.funcionId || null
-    if ('departamentoId' in input) patch.departamentoId = input.departamentoId || null
+    if ('jobTitleId' in input) patch.jobTitleId = input.jobTitleId || null
+    if ('jobFunctionId' in input) patch.jobFunctionId = input.jobFunctionId || null
+    if ('departmentId' in input) patch.departmentId = input.departmentId || null
     patch.position = position
     patch.department = department
   }
@@ -461,5 +461,5 @@ export async function listCustomFieldHistoryService(db: AnyDb, employeeId: strin
     .from(customFieldValueHistory)
     .where(eq(customFieldValueHistory.employeeId, employeeId))
     .orderBy(desc(customFieldValueHistory.changedAt))
-    .limit(Math.max(1, Math.min(500, limit)))
+    .limit(Math.max(1, Math.min(5000, limit)))
 }

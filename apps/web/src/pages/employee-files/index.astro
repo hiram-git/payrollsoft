@@ -41,7 +41,7 @@ const employeeId = (Astro.url.searchParams.get('employeeId') ?? '').trim()
 
 let employees: Employee[] = []
 try {
-  const res = await fetch(`${API_URL}/employees?limit=100&isActive=true`, { headers })
+  const res = await fetch(`${API_URL}/employees?limit=5000&isActive=true`, { headers })
   if (res.status === 401) return Astro.redirect('/login')
   if (res.ok) {
     employees = ((await res.json()) as { data: Employee[] }).data ?? []

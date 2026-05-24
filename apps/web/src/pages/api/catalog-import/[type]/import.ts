@@ -133,10 +133,10 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   // Pre-fetch de dependencias para resolver códigos → IDs
   const depMaps: Record<string, CatalogMap> = {}
   const depPaths: Record<string, string> = {
-    cargos: '/cargos',
-    funciones: '/funciones',
-    departamentos: '/departamentos',
-    partidas: '/partidas',
+    cargos: '/job-titles',
+    funciones: '/job-functions',
+    departamentos: '/departments',
+    partidas: '/budget-items',
   }
   for (const dep of config.dependencies) {
     depMaps[dep] = await fetchCatalog(API_URL, depPaths[dep] ?? `/${dep}`, authHeaders)
@@ -145,10 +145,10 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   // Mapeos de campos opcionales que requieren resolución code→id
   const fkResolutions: Record<string, { dep: string; idField: string }> = {
     parentCode: { dep: 'departamentos', idField: 'parentId' },
-    cargoCode: { dep: 'cargos', idField: 'cargoId' },
-    funcionCode: { dep: 'funciones', idField: 'funcionId' },
-    departamentoCode: { dep: 'departamentos', idField: 'departamentoId' },
-    partidaCode: { dep: 'partidas', idField: 'partidaId' },
+    cargoCode: { dep: 'cargos', idField: 'jobTitleId' },
+    funcionCode: { dep: 'funciones', idField: 'jobFunctionId' },
+    departamentoCode: { dep: 'departamentos', idField: 'departmentId' },
+    partidaCode: { dep: 'partidas', idField: 'budgetItemId' },
   }
 
   const summary = { total: rawRows.length, created: 0, skipped: 0, failed: 0 }

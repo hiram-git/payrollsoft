@@ -75,7 +75,7 @@ async function fetchCreditorReport(
       e.code        AS employee_code,
       e.first_name,
       e.last_name
-    FROM payroll_acumulados pa
+    FROM payroll_accumulators pa
     JOIN payrolls   p  ON p.id = pa.payroll_id
     JOIN concepts   cn ON cn.code = pa.concept_code
     JOIN creditors  c  ON c.concept_id = cn.id
@@ -227,9 +227,9 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
         typeId: query.typeId ? Number.parseInt(query.typeId, 10) : null,
         subtypeId: query.subtypeId ? Number.parseInt(query.subtypeId, 10) : null,
         employeeId: query.employeeId?.trim() || null,
-        departamentoId: query.departamentoId?.trim() || null,
-        funcionId: query.funcionId?.trim() || null,
-        cargoId: query.cargoId?.trim() || null,
+        departmentId: query.departmentId?.trim() || null,
+        jobFunctionId: query.jobFunctionId?.trim() || null,
+        jobTitleId: query.jobTitleId?.trim() || null,
         createdBy: query.createdBy?.trim() || null,
       }
 
@@ -250,11 +250,13 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
       }
       const empJoinFilters = sql.join(
         [
-          filters.departamentoId
-            ? sql`e.departamento_id = ${filters.departamentoId}::uuid`
+          filters.departmentId
+            ? sql`e.department_id = ${filters.departmentId}::uuid`
             : sql.raw('1=1'),
-          filters.funcionId ? sql`e.funcion_id = ${filters.funcionId}::uuid` : sql.raw('1=1'),
-          filters.cargoId ? sql`e.cargo_id = ${filters.cargoId}::uuid` : sql.raw('1=1'),
+          filters.jobFunctionId
+            ? sql`e.job_function_id = ${filters.jobFunctionId}::uuid`
+            : sql.raw('1=1'),
+          filters.jobTitleId ? sql`e.job_title_id = ${filters.jobTitleId}::uuid` : sql.raw('1=1'),
         ],
         sql` AND `
       )
@@ -314,36 +316,36 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
           ORDER BY count DESC, e.last_name ASC, e.first_name ASC
         `),
         db.execute(sql`
-          SELECT e.departamento_id AS departamento_id,
+          SELECT e.department_id AS department_id,
                  COALESCE(d.name, '— Sin departamento') AS departamento_name,
                  COUNT(*)::int AS count
           FROM employee_files ef
           JOIN employees e ON e.id = ef.employee_id
-          LEFT JOIN departamentos d ON d.id = e.departamento_id
+          LEFT JOIN departments d ON d.id = e.department_id
           WHERE ${where()} AND ${empJoinFilters}
-          GROUP BY e.departamento_id, d.name
+          GROUP BY e.department_id, d.name
           ORDER BY count DESC, d.name ASC
         `),
         db.execute(sql`
-          SELECT e.funcion_id AS funcion_id,
+          SELECT e.job_function_id AS job_function_id,
                  COALESCE(f.name, '— Sin función') AS funcion_name,
                  COUNT(*)::int AS count
           FROM employee_files ef
           JOIN employees e ON e.id = ef.employee_id
-          LEFT JOIN funciones f ON f.id = e.funcion_id
+          LEFT JOIN job_functions f ON f.id = e.job_function_id
           WHERE ${where()} AND ${empJoinFilters}
-          GROUP BY e.funcion_id, f.name
+          GROUP BY e.job_function_id, f.name
           ORDER BY count DESC, f.name ASC
         `),
         db.execute(sql`
-          SELECT e.cargo_id AS cargo_id,
+          SELECT e.job_title_id AS job_title_id,
                  COALESCE(c.name, '— Sin cargo') AS cargo_name,
                  COUNT(*)::int AS count
           FROM employee_files ef
           JOIN employees e ON e.id = ef.employee_id
-          LEFT JOIN cargos c ON c.id = e.cargo_id
+          LEFT JOIN job_titles c ON c.id = e.job_title_id
           WHERE ${where()} AND ${empJoinFilters}
-          GROUP BY e.cargo_id, c.name
+          GROUP BY e.job_title_id, c.name
           ORDER BY count DESC, c.name ASC
         `),
         db.execute(sql`
@@ -411,17 +413,17 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
             count: Number(r.count),
           })),
           byDepartamento: (byDeptRows as unknown as Array<Record<string, unknown>>).map((r) => ({
-            departamentoId: r.departamento_id ? String(r.departamento_id) : null,
+            departmentId: r.department_id ? String(r.department_id) : null,
             departamentoName: String(r.departamento_name),
             count: Number(r.count),
           })),
           byFuncion: (byFuncionRows as unknown as Array<Record<string, unknown>>).map((r) => ({
-            funcionId: r.funcion_id ? String(r.funcion_id) : null,
+            jobFunctionId: r.job_function_id ? String(r.job_function_id) : null,
             funcionName: String(r.funcion_name),
             count: Number(r.count),
           })),
           byCargo: (byCargoRows as unknown as Array<Record<string, unknown>>).map((r) => ({
-            cargoId: r.cargo_id ? String(r.cargo_id) : null,
+            jobTitleId: r.job_title_id ? String(r.job_title_id) : null,
             cargoName: String(r.cargo_name),
             count: Number(r.count),
           })),
@@ -440,9 +442,9 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
         typeId: t.Optional(t.String()),
         subtypeId: t.Optional(t.String()),
         employeeId: t.Optional(t.String()),
-        departamentoId: t.Optional(t.String()),
-        funcionId: t.Optional(t.String()),
-        cargoId: t.Optional(t.String()),
+        departmentId: t.Optional(t.String()),
+        jobFunctionId: t.Optional(t.String()),
+        jobTitleId: t.Optional(t.String()),
         createdBy: t.Optional(t.String()),
       }),
     }

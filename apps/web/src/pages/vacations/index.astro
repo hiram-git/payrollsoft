@@ -19,48 +19,30 @@ const tenantSlug = identity.tenantSlug ?? 'demo'
 const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
 const canApprove = can(identity, 'vacations:approve')
 
-type Employee = {
-  id: string
-  code: string
-  firstName: string
-  lastName: string
-  isActive: boolean
-}
 type RequestRow = {
   id: string
-  requestNumber: string
-  employeeId: string
-  requestType: 'enjoy' | 'pay' | 'mixed'
-  startDate: string | null
-  endDate: string | null
-  enjoyDays: number
-  paidDays: number
+  request_number: string
+  employee_id: string
+  request_type: 'enjoy' | 'pay' | 'mixed'
+  start_date: string | null
+  end_date: string | null
+  enjoy_days: number
+  paid_days: number
   status: string
-  createdAt: string
-  rejectionReason: string | null
+  created_at: string
+  rejection_reason: string | null
+  employee_code: string
+  employee_first_name: string
+  employee_last_name: string
 }
 
-let employees: Employee[] = []
-let allRequests: (RequestRow & { employee?: Employee })[] = []
+let allRequests: RequestRow[] = []
 let pendingCount = 0
 
 try {
-  const empRes = await fetch(`${API_URL}/employees?isActive=true`, { headers })
-  if (empRes.ok) employees = ((await empRes.json()) as { data: Employee[] }).data ?? []
-
-  // No tenemos endpoint "todas las solicitudes" — fan-out por empleado.
-  const reqsByEmp = await Promise.all(
-    employees.map(async (e) => {
-      const r = await fetch(`${API_URL}/vacations?employeeId=${e.id}`, { headers })
-      if (!r.ok) return []
-      const { data = [] } = (await r.json()) as { data: RequestRow[] }
-      return data.map((row) => ({ ...row, employee: e }))
-    })
-  )
-  allRequests = reqsByEmp
-    .flat()
-    .sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1))
-    .slice(0, 50)
+  const res = await fetch(`${API_URL}/vacations?limit=200`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) allRequests = ((await res.json()) as { data: RequestRow[] }).data ?? []
   pendingCount = allRequests.filter((r) => r.status === 'pending').length
 } catch {
   /* empty */
@@ -125,29 +107,26 @@ function statusClass(s: string): string {
           <tbody>
             {allRequests.map((r) => (
               <tr class="border-b last:border-0 vac-rule">
-                <td class="px-5 py-3 font-mono text-xs vac-cell align-top">{r.requestNumber}</td>
+                <td class="px-5 py-3 font-mono text-xs vac-cell align-top">{r.request_number}</td>
                 <td class="px-5 py-3 align-top">
-                  {r.employee ? (
-                    <a href={`/employees/${r.employee.id}`} class="vac-cell hover:underline">
-                      {r.employee.lastName}, {r.employee.firstName}
-                    </a>
-                  ) : '—'}
+                  <a href={`/employees/${r.employee_id}`} class="vac-cell hover:underline">
+                    {r.employee_last_name}, {r.employee_first_name}
+                  </a>
+                  <div class="text-[10px] font-mono vac-mute">{r.employee_code}</div>
                 </td>
-                <td class="px-5 py-3 align-top text-xs vac-cell">{typeLabel(r.requestType)}</td>
+                <td class="px-5 py-3 align-top text-xs vac-cell">{typeLabel(r.request_type)}</td>
                 <td class="px-5 py-3 align-top text-xs vac-cell whitespace-nowrap">
-                  {r.startDate && r.endDate ? `${fmtDate(r.startDate)} → ${fmtDate(r.endDate)}` : '—'}
+                  {r.start_date && r.end_date ? `${fmtDate(r.start_date)} → ${fmtDate(r.end_date)}` : '—'}
                 </td>
                 <td class="px-5 py-3 align-top text-xs vac-cell">
-                  {r.enjoyDays > 0 && <div>{r.enjoyDays} disfrute</div>}
-                  {r.paidDays > 0 && <div>{r.paidDays} pago</div>}
+                  {r.enjoy_days > 0 && <div>{r.enjoy_days} disfrute</div>}
+                  {r.paid_days > 0 && <div>{r.paid_days} pago</div>}
                 </td>
                 <td class="px-5 py-3 align-top">
                   <span class={`vac-status-badge ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
                 </td>
                 <td class="px-5 py-3 align-top text-right">
-                  {r.employee && (
-                    <a href={`/employees/${r.employee.id}`} class="text-xs vac-mute hover:vac-fore">Ver</a>
-                  )}
+                  <a href={`/employees/${r.employee_id}`} class="text-xs vac-mute hover:underline">Ver</a>
                 </td>
               </tr>
             ))}

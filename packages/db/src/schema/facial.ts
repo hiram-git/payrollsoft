@@ -5,7 +5,7 @@
  * are stored as pgvector(128) — the dimension produced by the
  * @vladmandic/face-api recognition net used by the kiosk.
  *
- * Raw events arrive from kiosks into `facial_marcaciones`. A periodic
+ * Raw events arrive from kiosks into `facial_punches`. A periodic
  * consolidator (see packages/core/attendance/consolidator) folds those
  * events into the existing `attendance_records` table so the payroll
  * engine keeps reading from a single source of truth.
@@ -97,12 +97,12 @@ export const facialEnrollments = pgTable(
 
 // ─── Raw marcaciones (events) ────────────────────────────────────────────────
 
-export const MARCACION_KINDS = ['entry', 'exit', 'lunch_start', 'lunch_end', 'extra'] as const
+export const PUNCH_KINDS = ['entry', 'exit', 'lunch_start', 'lunch_end', 'extra'] as const
 
-export const MARCACION_STATUSES = ['verified', 'pending', 'rejected', 'manual'] as const
+export const PUNCH_STATUSES = ['verified', 'pending', 'rejected', 'manual'] as const
 
-export const facialMarcaciones = pgTable(
-  'facial_marcaciones',
+export const facialPunches = pgTable(
+  'facial_punches',
   {
     id: uuid('id').defaultRandom().primaryKey(),
     employeeId: uuid('employee_id'),
@@ -124,13 +124,13 @@ export const facialMarcaciones = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    idempotencyUnique: uniqueIndex('facial_marcaciones_idem_key_unique').on(t.idempotencyKey),
-    byEmployeeCaptured: index('facial_marcaciones_employee_captured_idx').on(
+    idempotencyUnique: uniqueIndex('facial_punches_idem_key_unique').on(t.idempotencyKey),
+    byEmployeeCaptured: index('facial_punches_employee_captured_idx').on(
       t.employeeId,
       t.capturedAt
     ),
-    byCaptured: index('facial_marcaciones_captured_idx').on(t.capturedAt),
-    byTerminal: index('facial_marcaciones_terminal_idx').on(t.terminalId),
+    byCaptured: index('facial_punches_captured_idx').on(t.capturedAt),
+    byTerminal: index('facial_punches_terminal_idx').on(t.terminalId),
   })
 )
 
@@ -156,12 +156,12 @@ export type FacialTerminal = typeof facialTerminals.$inferSelect
 export type NewFacialTerminal = typeof facialTerminals.$inferInsert
 export type FacialEnrollment = typeof facialEnrollments.$inferSelect
 export type NewFacialEnrollment = typeof facialEnrollments.$inferInsert
-export type FacialMarcacion = typeof facialMarcaciones.$inferSelect
-export type NewFacialMarcacion = typeof facialMarcaciones.$inferInsert
+export type FacialPunch = typeof facialPunches.$inferSelect
+export type NewFacialPunch = typeof facialPunches.$inferInsert
 export type FacialTerminalEvent = typeof facialTerminalEvents.$inferSelect
 
-export type MarcacionKind = (typeof MARCACION_KINDS)[number]
-export type MarcacionStatus = (typeof MARCACION_STATUSES)[number]
+export type PunchKind = (typeof PUNCH_KINDS)[number]
+export type PunchStatus = (typeof PUNCH_STATUSES)[number]
 
 // Re-export sql so other modules can compose vector distance ops.
 export { sql as facialSql }

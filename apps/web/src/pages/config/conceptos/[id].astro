@@ -38,7 +38,7 @@ type Concept = {
   isReferenceValue: boolean
   useAmountCalc: boolean
   allowZero: boolean
-  cuentaContableId: string | null
+  chartAccountId: string | null
   links: ConceptLinks
 }
 type CuentaContable = { id: string; code: string; name: string }
@@ -51,7 +51,7 @@ let cuentasContables: CuentaContable[] = []
 const [conceptRes, configRes, cuentasRes] = await Promise.allSettled([
   fetch(`${API_URL}/concepts/${id}`, { headers }),
   fetch(`${API_URL}/concepts/config`, { headers }),
-  fetch(`${API_URL}/cuentas-contables`, { headers }),
+  fetch(`${API_URL}/chart-of-accounts`, { headers }),
 ])
 
 if (conceptRes.status === 'fulfilled') {
@@ -340,7 +340,7 @@ const errorMessages: Record<string, string> = {
             <select name="cuentaContableId" class="input">
               <option value="">— Sin cuenta —</option>
               {cuentasContables.map((c) => (
-                <option value={c.id} selected={concept!.cuentaContableId === c.id}>{c.code} — {c.name}</option>
+                <option value={c.id} selected={concept!.chartAccountId === c.id}>{c.code} — {c.name}</option>
               ))}
             </select>
           </div>

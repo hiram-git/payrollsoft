@@ -17,10 +17,10 @@ let partidas: CatalogItem[] = []
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [cRes, fRes, dRes, pRes] = await Promise.all([
-    fetch(`${API_URL}/cargos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
-    fetch(`${API_URL}/partidas`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
+    fetch(`${API_URL}/budget-items`, { headers }),
   ])
   if (cRes.ok) cargos = ((await cRes.json()) as { data: CatalogItem[] }).data ?? []
   if (fRes.ok) funciones = ((await fRes.json()) as { data: CatalogItem[] }).data ?? []

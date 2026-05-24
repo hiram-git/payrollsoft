@@ -385,14 +385,14 @@ export type CreatePayrollInput = z.infer<typeof createPayrollSchema>
 
 export const FACIAL_EMBEDDING_DIM = 128
 
-export const MARCACION_KINDS = ['entry', 'exit', 'lunch_start', 'lunch_end', 'extra'] as const
-export type MarcacionKind = (typeof MARCACION_KINDS)[number]
+export const PUNCH_KINDS = ['entry', 'exit', 'lunch_start', 'lunch_end', 'extra'] as const
+export type PunchKind = (typeof PUNCH_KINDS)[number]
 
 export const MARCACION_SOURCES = ['kiosk', 'manual', 'admin', 'webhook'] as const
 export type MarcacionSource = (typeof MARCACION_SOURCES)[number]
 
-export const MARCACION_STATUSES = ['verified', 'pending', 'rejected', 'manual'] as const
-export type MarcacionStatus = (typeof MARCACION_STATUSES)[number]
+export const PUNCH_STATUSES = ['verified', 'pending', 'rejected', 'manual'] as const
+export type PunchStatus = (typeof PUNCH_STATUSES)[number]
 
 const embeddingSchema = z
   .array(z.number().finite())
@@ -418,7 +418,7 @@ export type FacialMatchInput = z.infer<typeof facialMatchSchema>
 
 const marcacionSchema = z.object({
   employeeId: z.string().uuid().optional(),
-  kind: z.enum(MARCACION_KINDS),
+  kind: z.enum(PUNCH_KINDS),
   capturedAt: z.string().datetime({ offset: true }),
   confidence: z.number().min(0).max(1).optional(),
   matchDistance: z.number().min(0).max(2).optional(),
@@ -440,7 +440,7 @@ export type FacialMarcacionBatchInput = z.infer<typeof facialMarcacionBatchSchem
 
 export const facialManualMarcacionSchema = z.object({
   employeeId: z.string().uuid(),
-  kind: z.enum(MARCACION_KINDS),
+  kind: z.enum(PUNCH_KINDS),
   capturedAt: z.string().datetime({ offset: true }),
   justification: z.string().min(3).max(500),
 })

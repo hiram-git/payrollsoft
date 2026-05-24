@@ -43,7 +43,7 @@ export type PdfCreditorsReport = {
 export type PdfCompany = {
   companyName: string | null
   ruc: string | null
-  logoEmpresa: string | null
+  companyLogo: string | null
 }
 
 export type PdfGeneratedBy = {
@@ -275,7 +275,7 @@ export function CreditorsPdf({
     timeStyle: 'medium',
   })
   const companyName = company?.companyName ?? 'Empresa'
-  const logo = company?.logoEmpresa ?? null
+  const logo = company?.companyLogo ?? null
   const monthLabel = MONTHS[report.month - 1] ?? String(report.month)
   const reportTitle = `ACREEDORES — ${monthLabel.toUpperCase()} ${report.year}`
 

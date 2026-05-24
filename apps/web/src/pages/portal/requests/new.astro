@@ -1,0 +1,386 @@
+---
+import PortalLayout from '../../../layouts/PortalLayout.astro'
+import { getPortalIdentity } from '../../../lib/portal-auth'
+
+const identity = getPortalIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/portal/login')
+
+const today = new Date().toISOString().slice(0, 10)
+---
+
+<PortalLayout title="Nueva solicitud">
+  <div class="pr-wrap">
+    <div class="pr-header">
+      <a href="/portal/requests" class="pr-back">← Volver a solicitudes</a>
+      <h1 class="pr-title">Nueva solicitud</h1>
+      <p class="pr-subtitle">
+        Empleado: <span class="pr-emp-name">{identity.name}</span>
+        <span class="pr-emp-code">{identity.employeeCode}</span>
+      </p>
+    </div>
+
+    <div class="pr-banner pr-banner-err" id="err-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3">
+        <circle cx="5.5" cy="5.5" r="4.5"/>
+        <path d="M5.5 3v3M5.5 7.8v.2"/>
+      </svg>
+      <span id="err-text"></span>
+    </div>
+
+    <div class="pr-banner pr-banner-ok" id="ok-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="2 5.8 4.5 8.2 9 3.4"/>
+      </svg>
+      <span id="ok-text"></span>
+    </div>
+
+    <form id="req-form" enctype="multipart/form-data" novalidate>
+      <!-- Document identification -->
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Documento</h2>
+        <div class="pr-grid-3">
+          <div>
+            <label class="pr-label" for="pr-type">Tipo</label>
+            <select id="pr-type" name="typeId" required class="pr-input pr-select">
+              <option value="">Cargando...</option>
+            </select>
+          </div>
+          <div>
+            <label class="pr-label" for="pr-subtype">Subtipo</label>
+            <select id="pr-subtype" name="subtypeId" required disabled class="pr-input pr-select">
+              <option value="">Selecciona un tipo primero</option>
+            </select>
+          </div>
+          <div>
+            <label class="pr-label" for="pr-date">Fecha del documento</label>
+            <input type="date" id="pr-date" name="documentDate" required value={today} class="pr-input" />
+          </div>
+        </div>
+        <div>
+          <label class="pr-label" for="pr-obs">Observaciones</label>
+          <textarea id="pr-obs" name="observations" rows="2" placeholder="Notas sobre esta solicitud (opcional)" class="pr-input pr-textarea"></textarea>
+        </div>
+      </section>
+
+      <!-- Dynamic fields -->
+      <section class="pt-card pr-section" id="dyn-section" style="display:none;">
+        <h2 class="pr-section-title">Datos específicos</h2>
+        <p class="pr-section-hint">Estos campos dependen del tipo y subtipo seleccionado.</p>
+        <div id="dyn-fields" class="pr-grid-2"></div>
+      </section>
+
+      <!-- Attachments -->
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Adjuntos adicionales</h2>
+        <p class="pr-section-hint">PDFs o imágenes hasta 5 MB cada uno.</p>
+        <input
+          type="file"
+          name="attachments"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/gif"
+          class="pr-file-input"
+        />
+      </section>
+
+      <div class="pr-actions">
+        <a href="/portal/requests" class="pr-btn-cancel">Cancelar</a>
+        <button type="submit" id="pr-submit" class="pr-btn-submit">
+          <span class="btn-text">Enviar solicitud</span>
+          <span class="pr-spinner"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <style>
+    .pr-wrap { max-width:800px; margin:0 auto; padding:32px 24px; }
+    .pr-header { margin-bottom:24px; }
+    .pr-back {
+      font-family:var(--f-mono); font-size:11px; color:var(--mute-2);
+      text-decoration:none; letter-spacing:.04em;
+    }
+    .pr-back:hover { color:var(--fore); }
+    .pr-title {
+      font-family:var(--f-display); font-weight:300; font-size:24px;
+      letter-spacing:-0.02em; margin:8px 0 4px; color:var(--fore);
+    }
+    .pr-subtitle { font-size:13px; color:var(--mute-2); margin:0; }
+    .pr-emp-name { font-weight:500; color:var(--fore-dim); }
+    .pr-emp-code { font-family:var(--f-mono); font-size:11px; color:var(--mute); margin-left:6px; }
+
+    .pr-banner {
+      font-family:var(--f-mono); font-size:11.5px; padding:10px 12px;
+      border-radius:3px; margin-bottom:16px; letter-spacing:.04em;
+      display:flex; align-items:center; gap:10px;
+    }
+    .pr-banner-err { color:var(--err); border:1px solid rgba(224,107,92,0.35); background:rgba(224,107,92,0.06); }
+    .pr-banner-ok { color:var(--ok); border:1px solid rgba(111,181,140,0.35); background:rgba(111,181,140,0.06); }
+
+    .pr-section { padding:24px; margin-bottom:16px; }
+    .pr-section-title {
+      font-family:var(--f-sans); font-weight:600; font-size:14px;
+      color:var(--fore); margin:0 0 16px;
+    }
+    .pr-section-hint {
+      font-size:12px; color:var(--mute-2); margin:-8px 0 16px;
+    }
+
+    .pr-grid-3 {
+      display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:16px;
+    }
+    .pr-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+    @media (max-width:640px) {
+      .pr-grid-3 { grid-template-columns:1fr; }
+      .pr-grid-2 { grid-template-columns:1fr; }
+    }
+    .pr-full { grid-column:1/-1; }
+
+    .pr-label {
+      display:block; font-family:var(--f-mono); font-size:10.5px;
+      color:var(--mute-2); letter-spacing:.1em; text-transform:uppercase;
+      margin-bottom:6px;
+    }
+    .pr-label-req { color:var(--err); }
+    .pr-input {
+      width:100%; padding:8px 10px; font-size:13.5px;
+      background:var(--ink-3); border:1px solid var(--rule);
+      color:var(--fore); border-radius:4px; font-family:var(--f-sans);
+      transition:border-color 140ms ease;
+    }
+    .pr-input:focus { outline:none; border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft); }
+    .pr-input:disabled { opacity:.5; cursor:not-allowed; }
+    .pr-select { cursor:pointer; }
+    .pr-textarea { resize:vertical; min-height:48px; }
+
+    .pr-file-input {
+      display:block; width:100%; font-size:13px; color:var(--fore-dim);
+    }
+    .pr-file-input::file-selector-button {
+      margin-right:12px; padding:6px 14px; border-radius:4px; border:1px solid var(--rule);
+      background:var(--ink-3); color:var(--fore-dim); font-size:12px; cursor:pointer;
+      font-family:var(--f-sans);
+    }
+    .pr-file-input::file-selector-button:hover { border-color:var(--rule-hi); }
+
+    .pr-actions {
+      display:flex; align-items:center; justify-content:flex-end; gap:12px;
+      padding-top:16px; border-top:1px solid var(--rule);
+    }
+    .pr-btn-cancel {
+      padding:8px 16px; font-size:13px; color:var(--mute-2);
+      text-decoration:none; border-radius:4px;
+    }
+    .pr-btn-cancel:hover { color:var(--fore); }
+    .pr-btn-submit {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:10px 20px; background:var(--navy); color:#fff;
+      border:none; border-radius:4px; font-family:var(--f-sans);
+      font-weight:500; font-size:13.5px; cursor:pointer;
+      transition:background 140ms ease;
+    }
+    .pr-btn-submit:hover { background:var(--navy-hi); }
+    .pr-btn-submit:disabled { opacity:.6; cursor:not-allowed; }
+    .pr-btn-submit.loading .btn-text { display:none; }
+    .pr-btn-submit.loading .pr-spinner { display:block; }
+    .pr-spinner {
+      width:14px; height:14px; border:2px solid rgba(255,255,255,.3);
+      border-top-color:#fff; border-radius:50%;
+      animation:pr-spin .6s linear infinite; display:none;
+    }
+    @keyframes pr-spin { to { transform:rotate(360deg); } }
+  </style>
+
+  <script is:inline>
+    ;(function() {
+      var typeSel = document.getElementById('pr-type');
+      var subtypeSel = document.getElementById('pr-subtype');
+      var dateEl = document.getElementById('pr-date');
+      var dynSection = document.getElementById('dyn-section');
+      var dynFields = document.getElementById('dyn-fields');
+      var form = document.getElementById('req-form');
+      var submitBtn = document.getElementById('pr-submit');
+      var errBanner = document.getElementById('err-banner');
+      var errText = document.getElementById('err-text');
+      var okBanner = document.getElementById('ok-banner');
+      var okText = document.getElementById('ok-text');
+
+      var subtypesCache = {};
+      var fieldsCache = {};
+
+      function showErr(msg) {
+        errText.textContent = msg;
+        errBanner.style.display = 'flex';
+        okBanner.style.display = 'none';
+      }
+      function showOk(msg) {
+        okText.textContent = msg;
+        okBanner.style.display = 'flex';
+        errBanner.style.display = 'none';
+      }
+      function hideMessages() {
+        errBanner.style.display = 'none';
+        okBanner.style.display = 'none';
+      }
+
+      function proxyGet(path) {
+        return fetch('/api/portal/proxy?path=' + encodeURIComponent(path))
+          .then(function(r) { return r.json(); });
+      }
+
+      // Load types on init
+      proxyGet('file-types').then(function(res) {
+        var types = (res && res.data) || [];
+        typeSel.innerHTML = '<option value="">Selecciona…</option>' +
+          types.map(function(t) { return '<option value="' + t.id + '">' + t.name + '</option>'; }).join('');
+      }).catch(function() {
+        typeSel.innerHTML = '<option value="">Error al cargar tipos</option>';
+      });
+
+      function loadSubtypes(typeId) {
+        if (!typeId) {
+          subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>';
+          subtypeSel.disabled = true;
+          return Promise.resolve();
+        }
+        if (subtypesCache[typeId]) {
+          renderSubtypes(subtypesCache[typeId]);
+          return Promise.resolve();
+        }
+        return proxyGet('file-types/' + typeId + '/subtypes').then(function(res) {
+          var subs = (res && res.data) || [];
+          subtypesCache[typeId] = subs;
+          renderSubtypes(subs);
+        });
+      }
+      function renderSubtypes(subs) {
+        subtypeSel.innerHTML = '<option value="">Selecciona…</option>' +
+          subs.map(function(s) { return '<option value="' + s.id + '">' + s.name + '</option>'; }).join('');
+        subtypeSel.disabled = false;
+      }
+
+      function loadFields(typeId, subtypeId) {
+        if (!typeId || !subtypeId) {
+          dynSection.style.display = 'none';
+          dynFields.innerHTML = '';
+          return Promise.resolve();
+        }
+        var key = typeId + '/' + subtypeId;
+        if (fieldsCache[key]) {
+          renderFields(fieldsCache[key]);
+          return Promise.resolve();
+        }
+        return proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) {
+          var fields = (res && res.data && res.data.fields) || [];
+          fieldsCache[key] = fields;
+          renderFields(fields);
+        });
+      }
+
+      function renderFields(fields) {
+        if (fields.length === 0) {
+          dynSection.style.display = 'none';
+          dynFields.innerHTML = '';
+          return;
+        }
+        dynFields.innerHTML = fields.map(function(def) {
+          return renderField(def, def.type === 'file' ? 'file' : 'extra');
+        }).join('');
+        dynSection.style.display = 'block';
+      }
+
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+      function renderField(def, prefix) {
+        var id = 'dyn-' + def.name;
+        var name = prefix + '_' + def.name;
+        var req = def.required ? ' required' : '';
+        var ro = def.readonly ? ' readonly' : '';
+        var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
+        var val = def.default != null ? esc(String(def.default)) : '';
+        var full = '';
+        var inner = '';
+
+        var labelHtml = '<label class="pr-label" for="' + id + '">' +
+          esc(def.label) + (def.required ? ' <span class="pr-label-req">*</span>' : '') +
+          '</label>';
+
+        switch (def.type) {
+          case 'textarea':
+            full = ' pr-full';
+            inner = '<textarea id="' + id + '" name="' + name + '" rows="2"' + req + ro + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
+            break;
+          case 'select':
+            var opts = (def.options || []).map(function(o) {
+              return '<option value="' + esc(o.value) + '"' + (val === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+            }).join('');
+            inner = '<select id="' + id + '" name="' + name + '"' + req + ro + ' class="pr-input pr-select"><option value="">Selecciona…</option>' + opts + '</select>';
+            break;
+          case 'file':
+            full = ' pr-full';
+            inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + esc(def.accept || '') + '" class="pr-file-input" />';
+            break;
+          case 'number':
+            var step = def.step != null ? ' step="' + def.step + '"' : '';
+            inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + ro + step + ph + ' value="' + val + '" class="pr-input" />';
+            break;
+          case 'datetime':
+            inner = '<input id="' + id + '" type="datetime-local" name="' + name + '"' + req + ro + ' value="' + val + '" class="pr-input" />';
+            break;
+          case 'date':
+            inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ro + ' value="' + val + '" class="pr-input" />';
+            break;
+          default:
+            inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ro + ph + ' value="' + val + '" class="pr-input" />';
+        }
+        return '<div class="' + full + '">' + labelHtml + inner + '</div>';
+      }
+
+      typeSel.addEventListener('change', function() {
+        loadSubtypes(typeSel.value).then(function() {
+          loadFields(typeSel.value, subtypeSel.value);
+        });
+      });
+      subtypeSel.addEventListener('change', function() {
+        loadFields(typeSel.value, subtypeSel.value);
+      });
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        hideMessages();
+
+        if (!typeSel.value || !subtypeSel.value || !dateEl.value) {
+          showErr('Selecciona tipo, subtipo y fecha.');
+          return;
+        }
+
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+
+        var fd = new FormData(form);
+
+        fetch('/api/portal/requests', { method: 'POST', body: fd })
+          .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+          .then(function(r) {
+            if (r.data.success) {
+              showOk('Solicitud creada exitosamente. N° ' + (r.data.data && r.data.data.documentNumber ? r.data.data.documentNumber : ''));
+              form.reset();
+              subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>';
+              subtypeSel.disabled = true;
+              dynSection.style.display = 'none';
+              dynFields.innerHTML = '';
+              dateEl.value = new Date().toISOString().slice(0, 10);
+            } else {
+              showErr(r.data.error || 'Error al crear la solicitud.');
+            }
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+          })
+          .catch(function() {
+            showErr('Error de conexión. Intenta de nuevo.');
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+          });
+      });
+    })();
+  </script>
+</PortalLayout>

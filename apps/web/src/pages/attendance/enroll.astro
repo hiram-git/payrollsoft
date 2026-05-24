@@ -1,0 +1,132 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
+
+type Employee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  department: string | null
+  position: string | null
+}
+type Enrollment = {
+  id: string
+  employeeId: string
+  status: string
+  isPrimary: boolean
+  qualityScore: string | null
+  photoUrl: string | null
+  enrolledAt: string
+}
+
+let employees: Employee[] = []
+let enrollments: Enrollment[] = []
+let fetchError = ''
+
+try {
+  const [eRes, enRes] = await Promise.all([
+    fetch(`${API_URL}/employees?limit=5000`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+    }),
+    fetch(`${API_URL}/facial/enrollments`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+    }),
+  ])
+  if (eRes.status === 401 || enRes.status === 401) return Astro.redirect('/login')
+  if (eRes.ok) {
+    const json = (await eRes.json()) as { data?: { data?: Employee[] } | Employee[] }
+    employees = Array.isArray(json.data) ? json.data : (json.data?.data ?? [])
+  }
+  if (enRes.ok) {
+    const json = (await enRes.json()) as { data: Enrollment[] }
+    enrollments = json.data ?? []
+  }
+} catch {
+  fetchError = 'Error al cargar enrolamientos'
+}
+
+const enrollmentByEmployee = new Map<string, Enrollment>()
+for (const e of enrollments) {
+  const prior = enrollmentByEmployee.get(e.employeeId)
+  if (!prior || (e.isPrimary && !prior.isPrimary)) enrollmentByEmployee.set(e.employeeId, e)
+}
+---
+
+<AppLayout title="Enrolamiento facial">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Enrolamiento facial</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          {enrollmentByEmployee.size} de {employees.length} empleados enrolados
+        </p>
+      </div>
+      <a href="/attendance" class="text-sm text-blue-600 hover:underline">← Asistencia</a>
+    </div>
+
+    {fetchError && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {fetchError}
+      </div>
+    )}
+
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Empleado</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Departamento</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Estado</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Calidad</th>
+            <th class="text-left px-4 py-3 font-medium text-gray-600">Enrolado</th>
+            <th class="px-4 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {employees.map((emp) => {
+            const en = enrollmentByEmployee.get(emp.id)
+            return (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3.5">
+                  <p class="font-medium text-gray-900">{emp.firstName} {emp.lastName}</p>
+                  <p class="text-xs text-gray-400 font-mono mt-0.5">{emp.code}</p>
+                </td>
+                <td class="px-4 py-3.5 text-gray-700">{emp.department ?? '—'}</td>
+                <td class="px-4 py-3.5">
+                  {en
+                    ? <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium">Enrolado</span>
+                    : <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-medium">Sin enrolar</span>
+                  }
+                </td>
+                <td class="px-4 py-3.5 text-gray-700 tabular-nums">
+                  {en?.qualityScore ? `${(Number(en.qualityScore) * 100).toFixed(0)}%` : '—'}
+                </td>
+                <td class="px-4 py-3.5 text-gray-500 text-xs">
+                  {en ? new Date(en.enrolledAt).toLocaleDateString('es-PA') : '—'}
+                </td>
+                <td class="px-4 py-3.5 text-right">
+                  <a
+                    href={`/kiosk/setup?enroll=${emp.id}`}
+                    class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-300 text-gray-700 text-xs font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    {en ? 'Re-enrolar' : 'Enrolar'}
+                  </a>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {employees.length === 0 && (
+        <div class="py-10 text-center text-sm text-gray-400">No hay empleados.</div>
+      )}
+    </div>
+
+  </div>
+</AppLayout>

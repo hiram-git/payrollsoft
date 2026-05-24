@@ -1,8 +1,8 @@
 import { boolean, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
-// ── Cargos (Job Positions) ────────────────────────────────────────────────────
+// ── Job Titles (previously "cargos") ─────────────────────────────────────────
 
-export const cargos = pgTable('cargos', {
+export const jobTitles = pgTable('job_titles', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -12,12 +12,17 @@ export const cargos = pgTable('cargos', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
-export type Cargo = typeof cargos.$inferSelect
-export type NewCargo = typeof cargos.$inferInsert
+export type JobTitle = typeof jobTitles.$inferSelect
+export type NewJobTitle = typeof jobTitles.$inferInsert
 
-// ── Funciones (Job Functions) ─────────────────────────────────────────────────
+/** @deprecated Use `jobTitles` — kept for backward compatibility during migration */
+export const cargos = jobTitles
+/** @deprecated Use `JobTitle` */
+export type Cargo = JobTitle
 
-export const funciones = pgTable('funciones', {
+// ── Job Functions (previously "funciones") ───────────────────────────────────
+
+export const jobFunctions = pgTable('job_functions', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -27,41 +32,37 @@ export const funciones = pgTable('funciones', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
-export type Funcion = typeof funciones.$inferSelect
-export type NewFuncion = typeof funciones.$inferInsert
+export type JobFunction = typeof jobFunctions.$inferSelect
+export type NewJobFunction = typeof jobFunctions.$inferInsert
 
-// ── Departamentos (Departments — adjacency list, no FK for multi-tenant) ──────
+/** @deprecated Use `jobFunctions` */
+export const funciones = jobFunctions
+/** @deprecated Use `JobFunction` */
+export type Funcion = JobFunction
 
-export const departamentos = pgTable('departamentos', {
+// ── Departments (previously "departamentos") ─────────────────────────────────
+
+export const departments = pgTable('departments', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
   name: varchar('name', { length: 255 }).notNull(),
-  parentId: uuid('parent_id'), // NO .references() — breaks multi-tenant search_path
+  parentId: uuid('parent_id'),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
-export type Departamento = typeof departamentos.$inferSelect
-export type NewDepartamento = typeof departamentos.$inferInsert
+export type Department = typeof departments.$inferSelect
+export type NewDepartment = typeof departments.$inferInsert
 
-// ── Partidas Presupuestarias (Budget Items) ───────────────────────────────────
+/** @deprecated Use `departments` */
+export const departamentos = departments
+/** @deprecated Use `Department` */
+export type Departamento = Department
 
-export const partidasPresupuestarias = pgTable('partidas_presupuestarias', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  code: varchar('code', { length: 20 }).notNull().unique(),
-  name: varchar('name', { length: 255 }).notNull(),
-  isActive: boolean('is_active').notNull().default(true),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-  updatedAt: timestamp('updated_at').notNull().defaultNow(),
-})
+// ── Budget Items (previously "partidas_presupuestarias") ─────────────────────
 
-export type PartidaPresupuestaria = typeof partidasPresupuestarias.$inferSelect
-export type NewPartidaPresupuestaria = typeof partidasPresupuestarias.$inferInsert
-
-// ── Cuentas Contables (Chart of Accounts) ─────────────────────────────────────
-
-export const cuentasContables = pgTable('cuentas_contables', {
+export const budgetItems = pgTable('budget_items', {
   id: uuid('id').defaultRandom().primaryKey(),
   code: varchar('code', { length: 20 }).notNull().unique(),
   name: varchar('name', { length: 255 }).notNull(),
@@ -70,26 +71,42 @@ export const cuentasContables = pgTable('cuentas_contables', {
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 
-export type CuentaContable = typeof cuentasContables.$inferSelect
-export type NewCuentaContable = typeof cuentasContables.$inferInsert
+export type BudgetItem = typeof budgetItems.$inferSelect
+export type NewBudgetItem = typeof budgetItems.$inferInsert
 
-// ── Department tree node (built in-memory) ────────────────────────────────────
+/** @deprecated Use `budgetItems` */
+export const partidasPresupuestarias = budgetItems
 
-export type DepartamentoNode = Departamento & { children: DepartamentoNode[] }
+// ── Chart of Accounts (previously "cuentas_contables") ───────────────────────
 
-/**
- * Build a nested tree from a flat list of departamentos.
- * Roots are nodes where parentId is null.
- */
-export function buildDepartamentoTree(flat: Departamento[]): DepartamentoNode[] {
-  const map = new Map<string, DepartamentoNode>()
+export const chartOfAccounts = pgTable('chart_of_accounts', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  code: varchar('code', { length: 20 }).notNull().unique(),
+  name: varchar('name', { length: 255 }).notNull(),
+  isActive: boolean('is_active').notNull().default(true),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  updatedAt: timestamp('updated_at').notNull().defaultNow(),
+})
 
+export type ChartOfAccount = typeof chartOfAccounts.$inferSelect
+export type NewChartOfAccount = typeof chartOfAccounts.$inferInsert
+
+/** @deprecated Use `chartOfAccounts` */
+export const cuentasContables = chartOfAccounts
+
+// ── Department tree helpers ──────────────────────────────────────────────────
+
+export type DepartmentNode = Department & { children: DepartmentNode[] }
+
+/** @deprecated Use `DepartmentNode` */
+export type DepartamentoNode = DepartmentNode
+
+export function buildDepartmentTree(flat: Department[]): DepartmentNode[] {
+  const map = new Map<string, DepartmentNode>()
   for (const d of flat) {
     map.set(d.id, { ...d, children: [] })
   }
-
-  const roots: DepartamentoNode[] = []
-
+  const roots: DepartmentNode[] = []
   for (const node of map.values()) {
     if (node.parentId && map.has(node.parentId)) {
       map.get(node.parentId)?.children.push(node)
@@ -97,14 +114,13 @@ export function buildDepartamentoTree(flat: Departamento[]): DepartamentoNode[] 
       roots.push(node)
     }
   }
-
   return roots
 }
 
-/**
- * Collect all descendant IDs (including the node itself) for cycle prevention.
- */
-export function getDescendantIds(flat: Departamento[], rootId: string): Set<string> {
+/** @deprecated Use `buildDepartmentTree` */
+export const buildDepartamentoTree = buildDepartmentTree
+
+export function getDescendantIds(flat: Department[], rootId: string): Set<string> {
   const ids = new Set<string>([rootId])
   let changed = true
   while (changed) {

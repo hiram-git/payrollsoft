@@ -30,6 +30,7 @@ import {
   deactivateApprovalRule,
   getBalance,
   getRequest,
+  listAllRequests,
   listApprovalRules,
   listByEmployee,
   listMovements,
@@ -87,7 +88,8 @@ export const vacationsRoutes = new Elysia({ prefix: '/vacations' })
     }
   )
 
-  // ── Listar solicitudes por empleado ────────────────────────────────────
+  // ── Listar solicitudes ──────────────────────────────────────────────────
+  // Con employeeId → filtra por empleado. Sin employeeId → listado global.
   .get(
     '/',
     async ({ db, query, set }) => {
@@ -96,16 +98,23 @@ export const vacationsRoutes = new Elysia({ prefix: '/vacations' })
         return { success: false, error: 'Tenant required' }
       }
       const employeeId = (query.employeeId ?? '').trim()
-      if (!employeeId) {
-        set.status = 400
-        return { success: false, error: 'employeeId es obligatorio' }
+      if (employeeId) {
+        const data = await listByEmployee(db, employeeId)
+        return { success: true, data }
       }
-      const data = await listByEmployee(db, employeeId)
+      const data = await listAllRequests(db, {
+        status: (query.status ?? '').trim() || undefined,
+        limit: query.limit ? Number.parseInt(query.limit, 10) : undefined,
+      })
       return { success: true, data }
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('vacations:read')],
-      query: t.Object({ employeeId: t.Optional(t.String()) }),
+      query: t.Object({
+        employeeId: t.Optional(t.String()),
+        status: t.Optional(t.String()),
+        limit: t.Optional(t.String()),
+      }),
     }
   )
 

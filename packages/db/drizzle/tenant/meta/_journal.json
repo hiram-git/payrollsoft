@@ -267,6 +267,48 @@
       "when": 1762128017000,
       "tag": "0038_attendance_punches",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1762128018000,
+      "tag": "0039_english_standardization",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1762128019000,
+      "tag": "0040_attendance_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1762128020000,
+      "tag": "0041_attendance_justifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1762128021000,
+      "tag": "0042_employee_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1762128022000,
+      "tag": "0043_portal_approvers",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1762128023000,
+      "tag": "0044_portal_password_reset",
+      "breakpoints": true
     }
   ]
 }

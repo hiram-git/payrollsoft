@@ -2,7 +2,7 @@
  * Definiciones de los catálogos importables. Cada entrada describe:
  *
  *   - label: nombre humano para el UI
- *   - apiPath: ruta POST del backend (ej. '/cargos')
+ *   - apiPath: ruta POST del backend (ej. '/job-titles')
  *   - required/optional: columnas del Excel con sus aliases
  *   - dependencies: catálogos que se pre-fetchean para resolver
  *     códigos a UUIDs (ej. estructura necesita cargos/funciones)
@@ -36,7 +36,7 @@ export type CatalogConfig = {
 export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
   cargos: {
     label: 'Cargos',
-    apiPath: '/cargos',
+    apiPath: '/job-titles',
     required: [
       { key: 'code', label: 'Código', aliases: ['codigo', 'cod'], maxLength: 20 },
       { key: 'name', label: 'Nombre', aliases: ['nombre'], maxLength: 255 },
@@ -52,12 +52,12 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
     dependencies: [],
     sampleRow: { code: 'GER', name: 'Gerente', description: 'Cargo gerencial' },
     permission: 'catalogs:create',
-    returnPath: '/config/cargos',
+    returnPath: '/config/job-titles',
   },
 
   funciones: {
     label: 'Funciones',
-    apiPath: '/funciones',
+    apiPath: '/job-functions',
     required: [
       { key: 'code', label: 'Código', aliases: ['codigo', 'cod'], maxLength: 20 },
       { key: 'name', label: 'Nombre', aliases: ['nombre'], maxLength: 255 },
@@ -73,12 +73,12 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
     dependencies: [],
     sampleRow: { code: 'ADM', name: 'Administrativo', description: 'Funciones administrativas' },
     permission: 'catalogs:create',
-    returnPath: '/config/funciones',
+    returnPath: '/config/job-functions',
   },
 
   departamentos: {
     label: 'Departamentos',
-    apiPath: '/departamentos',
+    apiPath: '/departments',
     required: [
       { key: 'code', label: 'Código', aliases: ['codigo', 'cod'], maxLength: 20 },
       { key: 'name', label: 'Nombre', aliases: ['nombre'], maxLength: 255 },
@@ -93,12 +93,12 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
     dependencies: ['departamentos'],
     sampleRow: { code: 'FIN', name: 'Finanzas', parentCode: '' },
     permission: 'catalogs:create',
-    returnPath: '/config/departamentos',
+    returnPath: '/config/departments',
   },
 
   partidas: {
     label: 'Partidas presupuestarias',
-    apiPath: '/partidas',
+    apiPath: '/budget-items',
     required: [
       { key: 'code', label: 'Código', aliases: ['codigo', 'cod'], maxLength: 20 },
       { key: 'name', label: 'Nombre', aliases: ['nombre'], maxLength: 255 },
@@ -107,7 +107,7 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
     dependencies: [],
     sampleRow: { code: '001', name: 'Salarios del personal fijo' },
     permission: 'catalogs:create',
-    returnPath: '/config/partidas',
+    returnPath: '/config/budget-items',
   },
 
   estructura: {

@@ -62,7 +62,10 @@ export const attendanceRecords = pgTable('attendance_records', {
   workedMinutes: integer('worked_minutes').default(0),
   lateMinutes: integer('late_minutes').default(0),
   overtimeMinutes: integer('overtime_minutes').default(0),
-  source: varchar('source', { length: 50 }).default('manual'), // manual | webhook | import
+  /** 'present' | 'late' | 'absent' | 'partial' | 'holiday' */
+  status: varchar('status', { length: 20 }).notNull().default('present'),
+  shiftId: uuid('shift_id'),
+  source: varchar('source', { length: 50 }).default('manual'),
   rawData: jsonb('raw_data').default({}),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
