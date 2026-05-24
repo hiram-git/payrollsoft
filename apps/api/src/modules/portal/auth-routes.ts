@@ -14,7 +14,7 @@
  *   GET  /portal/auth/me      — get current employee info
  */
 import { companyConfig, employeeCredentials, employees, portalAccess, tenants } from '@payroll/db'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { getTenantDb, publicDb } from '../../config/db'
 import { env } from '../../config/env'
@@ -102,38 +102,31 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
         const { emp, slug: resolvedSlug } = found
         const tdb = getTenantDb(resolvedSlug) as AnyDb
 
-        let [cred] = await tdb
-          .select()
-          .from(employeeCredentials)
-          .where(eq(employeeCredentials.employeeId, emp.id))
-          .limit(1)
+        let credRows: AnyDb[] = await tdb.execute(
+          sql`SELECT * FROM employee_credentials WHERE employee_id = ${emp.id} LIMIT 1`
+        )
+        let cred = credRows[0]
 
         if (!cred) {
           const defaultHash = await hashPassword(DEFAULT_PASSWORD)
-          ;[cred] = await tdb
-            .insert(employeeCredentials)
-            .values({
-              employeeId: emp.id,
-              passwordHash: defaultHash,
-              mustChangePassword: true,
-            })
-            .onConflictDoNothing()
-            .returning()
-          if (!cred) {
-            ;[cred] = await tdb
-              .select()
-              .from(employeeCredentials)
-              .where(eq(employeeCredentials.employeeId, emp.id))
-              .limit(1)
-          }
+          await tdb.execute(
+            sql`INSERT INTO employee_credentials (employee_id, password_hash)
+                VALUES (${emp.id}, ${defaultHash})
+                ON CONFLICT (employee_id) DO NOTHING`
+          )
+          credRows = await tdb.execute(
+            sql`SELECT * FROM employee_credentials WHERE employee_id = ${emp.id} LIMIT 1`
+          )
+          cred = credRows[0]
         }
 
-        if (!cred?.isActive) {
+        if (!cred?.is_active) {
           set.status = 401
           return { success: false, error: 'Cuenta desactivada. Contacte a Recursos Humanos.' }
         }
 
-        if (cred.isLocked || cred.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+        const failedAttempts = cred.failed_attempts ?? 0
+        if (cred.is_locked || failedAttempts >= MAX_FAILED_ATTEMPTS) {
           set.status = 423
           return {
             success: false,
@@ -141,26 +134,29 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           }
         }
 
-        const valid = await verifyPassword(password, cred.passwordHash)
+        const valid = await verifyPassword(password, cred.password_hash)
         if (!valid) {
-          await tdb
-            .update(employeeCredentials)
-            .set({
-              failedAttempts: cred.failedAttempts + 1,
-              isLocked: cred.failedAttempts + 1 >= MAX_FAILED_ATTEMPTS,
-              updatedAt: new Date(),
-            })
-            .where(eq(employeeCredentials.id, cred.id))
+          await tdb.execute(
+            sql`UPDATE employee_credentials
+                SET failed_attempts = ${failedAttempts + 1},
+                    is_locked = ${failedAttempts + 1 >= MAX_FAILED_ATTEMPTS},
+                    updated_at = now()
+                WHERE id = ${cred.id}`
+          )
           set.status = 401
           return { success: false, error: 'Cédula o contraseña incorrecta.' }
         }
 
-        await tdb
-          .update(employeeCredentials)
-          .set({ failedAttempts: 0, lastLoginAt: new Date(), updatedAt: new Date() })
-          .where(eq(employeeCredentials.id, cred.id))
+        await tdb.execute(
+          sql`UPDATE employee_credentials
+              SET failed_attempts = 0, last_login_at = now(), updated_at = now()
+              WHERE id = ${cred.id}`
+        )
 
-        if (cred.mustChangePassword) {
+        const mustChange = cred.must_change_password ?? false
+        const isApprover = cred.is_approver ?? false
+
+        if (mustChange) {
           const tempToken = await jwt.sign({
             type: 'employee',
             employeeId: emp.id,
@@ -168,7 +164,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
             name: `${emp.firstName} ${emp.lastName}`,
             idNumber: emp.idNumber,
             departmentId: emp.departmentId ?? null,
-            isApprover: cred.isApprover ?? false,
+            isApprover,
             tenantSlug: resolvedSlug,
             mustChangePassword: true,
             exp: Math.floor(Date.now() / 1000) + 900,
@@ -186,11 +182,10 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
         let modules: string[] = []
         try {
-          const accessRows = await tdb
-            .select({ module: portalAccess.module })
-            .from(portalAccess)
-            .where(and(eq(portalAccess.employeeId, emp.id), eq(portalAccess.isEnabled, true)))
-          modules = accessRows.map((r: { module: string }) => r.module)
+          const accessRows = await tdb.execute(
+            sql`SELECT module FROM portal_access WHERE employee_id = ${emp.id} AND is_enabled = true`
+          )
+          modules = (accessRows as AnyDb[]).map((r: AnyDb) => r.module)
         } catch {}
 
         const token = await jwt.sign({
@@ -200,7 +195,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           name: `${emp.firstName} ${emp.lastName}`,
           idNumber: emp.idNumber,
           departmentId: emp.departmentId ?? null,
-          isApprover: cred.isApprover ?? false,
+          isApprover,
           modules,
           tenantSlug: resolvedSlug,
           exp: Math.floor(Date.now() / 1000) + 8 * 3600,
@@ -220,9 +215,10 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           data: { employeeId: emp.id, code: emp.code, name: `${emp.firstName} ${emp.lastName}` },
         }
       } catch (err) {
-        console.error('[portal/login] error:', err)
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error('[portal/login] error:', msg, err)
         set.status = 500
-        return { success: false, error: 'Error interno del servidor.' }
+        return { success: false, error: `Error interno: ${msg}` }
       }
     },
     {
