@@ -28,6 +28,10 @@ export const companyConfig = pgTable('company_config', {
   reportLogoLeft: text('report_logo_left'),
   reportLogoRight: text('report_logo_right'),
   payrollReportMode: varchar('payroll_report_mode', { length: 20 }).notNull().default('on_demand'),
+  absenceFileTypeId: integer('absence_file_type_id'),
+  absenceFileSubtypeId: integer('absence_file_subtype_id'),
+  latenessFileTypeId: integer('lateness_file_type_id'),
+  latenessFileSubtypeId: integer('lateness_file_subtype_id'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 

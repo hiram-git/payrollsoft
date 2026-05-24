@@ -10,7 +10,14 @@
  * a workday, creates an `attendance_records` row with status='absent'.
  */
 import { type ConsolidateInput, type ShiftSnapshot, consolidateDay } from '@payroll/core/attendance'
-import { attendancePunches, attendanceRecords, employees, shifts, workCalendar } from '@payroll/db'
+import {
+  attendancePunches,
+  attendanceRecords,
+  companyConfig,
+  employees,
+  shifts,
+  workCalendar,
+} from '@payroll/db'
 import { and, eq, gte, lte, sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
@@ -52,6 +59,7 @@ export type ConsolidationResult = {
   date: string
   processed: number
   absent: number
+  autoFiles: number
   errors: string[]
 }
 
@@ -189,7 +197,73 @@ export async function consolidateDate(db: AnyDb, date: string): Promise<Consolid
     }
   }
 
-  return { date, processed, absent, errors }
+  // ── Auto-create employee files for absences/tardanzas if configured ──
+  let autoFiles = 0
+  try {
+    const [cfg] = await db.select().from(companyConfig).limit(1)
+    if (cfg) {
+      const absTypeId = cfg.absenceFileTypeId as number | null
+      const absSubtypeId = cfg.absenceFileSubtypeId as number | null
+      const lateTypeId = cfg.latenessFileTypeId as number | null
+      const lateSubtypeId = cfg.latenessFileSubtypeId as number | null
+
+      if (absTypeId && absSubtypeId) {
+        // Create file for each absent employee
+        for (const empId of allEmployeeIds) {
+          if (punchesByEmployee.has(empId)) continue
+          if (!isWorkday) continue
+          try {
+            await db.execute(sql`
+              INSERT INTO employee_files (employee_id, type_id, subtype_id, document_date, document_year, document_sequence, document_number, approval_status, created_by)
+              SELECT ${empId}, ${absTypeId}, ${absSubtypeId}, ${date}, EXTRACT(YEAR FROM ${date}::date)::int,
+                COALESCE((SELECT MAX(document_sequence) FROM employee_files WHERE type_id = ${absTypeId} AND subtype_id = ${absSubtypeId} AND document_year = EXTRACT(YEAR FROM ${date}::date)::int), 0) + 1,
+                'AUTO-ABS-' || ${date},
+                'pending', NULL
+              WHERE NOT EXISTS (
+                SELECT 1 FROM employee_files
+                WHERE employee_id = ${empId} AND type_id = ${absTypeId} AND document_date = ${date}
+              )
+            `)
+            autoFiles++
+          } catch {
+            // best-effort — don't fail consolidation for file creation errors
+          }
+        }
+      }
+
+      if (lateTypeId && lateSubtypeId) {
+        for (const [empId, _marcaciones] of punchesByEmployee) {
+          const rec = await db
+            .select()
+            .from(attendanceRecords)
+            .where(and(eq(attendanceRecords.employeeId, empId), eq(attendanceRecords.date, date)))
+            .limit(1)
+          if (rec[0] && (rec[0] as Record<string, unknown>).status === 'late') {
+            try {
+              await db.execute(sql`
+                INSERT INTO employee_files (employee_id, type_id, subtype_id, document_date, document_year, document_sequence, document_number, approval_status, created_by)
+                SELECT ${empId}, ${lateTypeId}, ${lateSubtypeId}, ${date}, EXTRACT(YEAR FROM ${date}::date)::int,
+                  COALESCE((SELECT MAX(document_sequence) FROM employee_files WHERE type_id = ${lateTypeId} AND subtype_id = ${lateSubtypeId} AND document_year = EXTRACT(YEAR FROM ${date}::date)::int), 0) + 1,
+                  'AUTO-LATE-' || ${date},
+                  'pending', NULL
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM employee_files
+                  WHERE employee_id = ${empId} AND type_id = ${lateTypeId} AND document_date = ${date}
+                )
+              `)
+              autoFiles++
+            } catch {
+              // best-effort
+            }
+          }
+        }
+      }
+    }
+  } catch {
+    // config not available — skip auto-file creation
+  }
+
+  return { date, processed, absent, autoFiles, errors }
 }
 
 async function upsertConsolidatedRecord(
