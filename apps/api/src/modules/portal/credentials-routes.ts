@@ -6,8 +6,8 @@
  *   POST /portal/credentials/unlock   — unlock a locked account
  *   GET  /portal/credentials/status   — list employees with/without credentials
  */
-import { employeeCredentials, employees } from '@payroll/db'
-import { eq, sql } from 'drizzle-orm'
+import { employeeCredentials, employees, portalAccess } from '@payroll/db'
+import { and, eq, sql } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { hashPassword } from '../../lib/password'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
@@ -147,5 +147,116 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:read')],
+    }
+  )
+
+  .get(
+    '/access/:employeeId',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const [cred] = await db
+        .select({
+          isActive: employeeCredentials.isActive,
+          isLocked: employeeCredentials.isLocked,
+          isApprover: employeeCredentials.isApprover,
+          mustChangePassword: employeeCredentials.mustChangePassword,
+          lastLoginAt: employeeCredentials.lastLoginAt,
+        })
+        .from(employeeCredentials)
+        .where(eq(employeeCredentials.employeeId, params.employeeId))
+        .limit(1)
+
+      const modules = await db
+        .select({ module: portalAccess.module, isEnabled: portalAccess.isEnabled })
+        .from(portalAccess)
+        .where(eq(portalAccess.employeeId, params.employeeId))
+
+      return {
+        success: true,
+        data: {
+          hasCredentials: !!cred,
+          credentials: cred ?? null,
+          modules,
+        },
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:read')],
+      params: t.Object({ employeeId: t.String() }),
+    }
+  )
+
+  .post(
+    '/access/:employeeId',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const empId = params.employeeId
+
+      if (body.portalEnabled !== undefined) {
+        const [existing] = await db
+          .select()
+          .from(employeeCredentials)
+          .where(eq(employeeCredentials.employeeId, empId))
+          .limit(1)
+
+        if (!existing && body.portalEnabled) {
+          const { hashPassword: hp } = await import('../../lib/password')
+          const hash = await hp('172839')
+          await db
+            .insert(employeeCredentials)
+            .values({ employeeId: empId, passwordHash: hash, mustChangePassword: true })
+            .onConflictDoNothing()
+        } else if (existing) {
+          await db
+            .update(employeeCredentials)
+            .set({ isActive: body.portalEnabled, updatedAt: new Date() })
+            .where(eq(employeeCredentials.employeeId, empId))
+        }
+      }
+
+      if (body.isApprover !== undefined) {
+        await db
+          .update(employeeCredentials)
+          .set({ isApprover: body.isApprover, updatedAt: new Date() })
+          .where(eq(employeeCredentials.employeeId, empId))
+      }
+
+      if (body.modules) {
+        for (const m of body.modules) {
+          await db
+            .insert(portalAccess)
+            .values({
+              employeeId: empId,
+              module: m.module,
+              isEnabled: m.isEnabled,
+              grantedBy: user?.userId ?? null,
+            })
+            .onConflictDoUpdate({
+              target: [portalAccess.employeeId, portalAccess.module],
+              set: {
+                isEnabled: m.isEnabled,
+                grantedBy: user?.userId ?? null,
+                grantedAt: new Date(),
+              },
+            })
+        }
+      }
+
+      return { success: true }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:write')],
+      params: t.Object({ employeeId: t.String() }),
+      body: t.Object({
+        portalEnabled: t.Optional(t.Boolean()),
+        isApprover: t.Optional(t.Boolean()),
+        modules: t.Optional(t.Array(t.Object({ module: t.String(), isEnabled: t.Boolean() }))),
+      }),
     }
   )
