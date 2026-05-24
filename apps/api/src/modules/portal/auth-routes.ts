@@ -41,43 +41,41 @@ type EmpRow = {
 
 async function findEmployeeAcrossTenants(
   idNumber: string,
-  headerTenant: string | undefined,
-  db: AnyDb
+  _headerTenant: string | undefined,
+  _db: AnyDb
 ): Promise<{ emp: EmpRow; slug: string } | null> {
-  const empSelect = {
-    id: employees.id,
-    code: employees.code,
-    firstName: employees.firstName,
-    lastName: employees.lastName,
-    idNumber: employees.idNumber,
-    departmentId: employees.departmentId,
-    isActive: employees.isActive,
-  }
+  try {
+    const activeTenants = await publicDb
+      .select({ slug: tenants.slug })
+      .from(tenants)
+      .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
 
-  if (headerTenant) {
-    const [row] = await (db as AnyDb)
-      .select(empSelect)
-      .from(employees)
-      .where(eq(employees.idNumber, idNumber))
-      .limit(1)
-    if (row) return { emp: row, slug: headerTenant }
-    return null
-  }
-
-  const activeTenants = await publicDb
-    .select({ slug: tenants.slug })
-    .from(tenants)
-    .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
-  for (const t of activeTenants) {
-    try {
-      const tdb = getTenantDb(t.slug)
-      const [row] = await (tdb as AnyDb)
-        .select(empSelect)
-        .from(employees)
-        .where(eq(employees.idNumber, idNumber))
-        .limit(1)
-      if (row) return { emp: row, slug: t.slug }
-    } catch {}
+    for (const t of activeTenants) {
+      try {
+        const tdb = getTenantDb(t.slug)
+        const rows: AnyDb[] = await tdb.execute(
+          sql`SELECT id, code, first_name, last_name, id_number, department_id, is_active
+              FROM employees WHERE id_number = ${idNumber} LIMIT 1`
+        )
+        if (rows.length > 0) {
+          const r = rows[0]
+          return {
+            emp: {
+              id: r.id,
+              code: r.code,
+              firstName: r.first_name,
+              lastName: r.last_name,
+              idNumber: r.id_number,
+              departmentId: r.department_id ?? null,
+              isActive: r.is_active,
+            },
+            slug: t.slug,
+          }
+        }
+      } catch {}
+    }
+  } catch (err) {
+    console.error('[findEmployee] tenant list query failed:', err)
   }
   return null
 }
@@ -308,59 +306,61 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
       let emp: EmpInfo | undefined
       let resolvedSlug = ''
 
-      if (headerTenant && db) {
-        ;[emp] = await (db as AnyDb)
-          .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
-          .from(employees)
-          .where(eq(employees.idNumber, idNumber))
-          .limit(1)
-        if (emp) resolvedSlug = headerTenant
-      } else {
-        const active = await publicDb
-          .select({ slug: tenants.slug })
-          .from(tenants)
-          .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
-        for (const t of active) {
-          try {
-            const tdb = getTenantDb(t.slug)
-            const [row] = await (tdb as AnyDb)
-              .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
-              .from(employees)
-              .where(eq(employees.idNumber, idNumber))
-              .limit(1)
-            if (row) {
-              emp = row
-              resolvedSlug = t.slug
-              break
-            }
-          } catch {}
-        }
+      const active = await publicDb
+        .select({ slug: tenants.slug })
+        .from(tenants)
+        .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
+      for (const t of active) {
+        try {
+          const tdb = getTenantDb(t.slug)
+          const rows: AnyDb[] = await tdb.execute(
+            sql`SELECT id, email, first_name FROM employees WHERE id_number = ${idNumber} LIMIT 1`
+          )
+          if (rows.length > 0) {
+            emp = { id: rows[0].id, email: rows[0].email, firstName: rows[0].first_name }
+            resolvedSlug = t.slug
+            break
+          }
+        } catch {}
       }
 
       if (!emp || !emp.email) return { success: true, message: SAFE_MSG }
 
       const tdb = getTenantDb(resolvedSlug) as AnyDb
-      const [cred] = await tdb
-        .select()
-        .from(employeeCredentials)
-        .where(eq(employeeCredentials.employeeId, emp.id))
-        .limit(1)
+      const credRows: AnyDb[] = await tdb.execute(
+        sql`SELECT * FROM employee_credentials WHERE employee_id = ${emp.id} LIMIT 1`
+      )
+      const cred = credRows[0]
 
-      if (!cred || !cred.isActive) return { success: true, message: SAFE_MSG }
+      if (!cred || !cred.is_active) return { success: true, message: SAFE_MSG }
 
       const token = `${crypto.randomUUID()}-${crypto.randomUUID()}`
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
 
-      await tdb
-        .update(employeeCredentials)
-        .set({ resetToken: token, resetTokenExpiresAt: expiresAt, updatedAt: new Date() })
-        .where(eq(employeeCredentials.id, cred.id))
+      await tdb.execute(
+        sql`UPDATE employee_credentials
+            SET reset_token = ${token}, reset_token_expires_at = ${expiresAt}, updated_at = now()
+            WHERE id = ${cred.id}`
+      )
 
-      const [[company]] = await Promise.all([tdb.select().from(companyConfig).limit(1)])
-      const mailer = mailerConfigFromCompany(company ?? null)
+      const companyRows: AnyDb[] = await tdb.execute(sql`SELECT * FROM company_config LIMIT 1`)
+      const cc = companyRows[0] ?? null
+      const companyForMailer = cc
+        ? {
+            mailHost: cc.mail_host,
+            mailPort: cc.mail_port,
+            mailEncryption: cc.mail_encryption,
+            mailUsername: cc.mail_username,
+            mailPassword: cc.mail_password,
+            mailFromAddress: cc.mail_from_address,
+            mailFromName: cc.mail_from_name,
+            companyName: cc.company_name,
+          }
+        : null
+      const mailer = mailerConfigFromCompany(companyForMailer as AnyDb)
       if (mailer) {
         const resetUrl = `${env.WEB_URL}/portal/reset-password?token=${encodeURIComponent(token)}`
-        const companyName = company?.companyName ?? 'PayrollSoft'
+        const companyName = cc?.company_name ?? 'PayrollSoft'
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;color:#333;max-width:600px;margin:0 auto;padding:24px;">
 <div style="border-bottom:2px solid #003087;padding-bottom:12px;margin-bottom:20px;">
   <strong style="color:#003087;">${companyName}</strong> — Portal del Colaborador
@@ -393,33 +393,22 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
       let cred: AnyDb | undefined
       let resolvedDb: AnyDb | undefined
 
-      if (headerTenant && db) {
-        ;[cred] = await (db as AnyDb)
-          .select()
-          .from(employeeCredentials)
-          .where(eq(employeeCredentials.resetToken, body.token))
-          .limit(1)
-        if (cred) resolvedDb = db
-      } else {
-        const active = await publicDb
-          .select({ slug: tenants.slug })
-          .from(tenants)
-          .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
-        for (const t of active) {
-          try {
-            const tdb = getTenantDb(t.slug)
-            const [row] = await (tdb as AnyDb)
-              .select()
-              .from(employeeCredentials)
-              .where(eq(employeeCredentials.resetToken, body.token))
-              .limit(1)
-            if (row) {
-              cred = row
-              resolvedDb = tdb
-              break
-            }
-          } catch {}
-        }
+      const active = await publicDb
+        .select({ slug: tenants.slug })
+        .from(tenants)
+        .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
+      for (const t of active) {
+        try {
+          const tdb = getTenantDb(t.slug)
+          const rows: AnyDb[] = await tdb.execute(
+            sql`SELECT * FROM employee_credentials WHERE reset_token = ${body.token} LIMIT 1`
+          )
+          if (rows.length > 0) {
+            cred = rows[0]
+            resolvedDb = tdb
+            break
+          }
+        } catch {}
       }
 
       if (!cred || !resolvedDb) {
@@ -427,24 +416,18 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
         return { success: false, error: 'Token inválido o expirado.' }
       }
 
-      if (!cred.resetTokenExpiresAt || new Date(cred.resetTokenExpiresAt) < new Date()) {
+      if (!cred.reset_token_expires_at || new Date(cred.reset_token_expires_at) < new Date()) {
         set.status = 400
         return { success: false, error: 'El enlace ha expirado. Solicita uno nuevo.' }
       }
 
       const hash = await hashPassword(body.password)
-      await resolvedDb
-        .update(employeeCredentials)
-        .set({
-          passwordHash: hash,
-          resetToken: null,
-          resetTokenExpiresAt: null,
-          failedAttempts: 0,
-          isLocked: false,
-          passwordChangedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(employeeCredentials.id, cred.id))
+      await resolvedDb.execute(
+        sql`UPDATE employee_credentials
+            SET password_hash = ${hash}, reset_token = NULL, reset_token_expires_at = NULL,
+                failed_attempts = 0, is_locked = false, password_changed_at = now(), updated_at = now()
+            WHERE id = ${cred.id}`
+      )
 
       return { success: true, message: 'Contraseña actualizada. Ya puedes iniciar sesión.' }
     },
