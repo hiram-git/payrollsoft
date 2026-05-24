@@ -9,58 +9,272 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
 ---
 
 <PortalLayout title="Inicio">
-  <div style="max-width:900px; margin:0 auto; padding:32px 24px;">
-    <h1 style="font-family:var(--f-display); font-weight:300; font-size:28px; letter-spacing:-0.02em; margin:0 0 6px;">
-      Hola, {firstName}.
-    </h1>
-    <p style="color:var(--mute-2); font-size:14px; margin:0 0 32px;">
-      Bienvenido al portal de colaboradores.
-    </p>
+  <div class="pd-wrap">
+    <h1 class="pd-greeting">Hola, {firstName}.</h1>
+    <p class="pd-sub">Bienvenido al portal de colaboradores.</p>
 
-    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:16px;">
-      <a href="/portal/requests" class="pt-card" style="text-decoration:none; transition:border-color 140ms ease;" onmouseover="this.style.borderColor='var(--rule-hi)'" onmouseout="this.style.borderColor='var(--rule)'">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-          <div style="width:36px; height:36px; border-radius:6px; background:var(--navy-soft); display:grid; place-items:center;">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M13 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
-              <path d="M5 6h6M5 9h4"/>
-            </svg>
-          </div>
-          <h2 class="pt-card-title" style="margin:0;">Solicitudes</h2>
+    <!-- Vacation balance cards -->
+    <div class="pd-balance-row" id="balance-row">
+      <div class="pt-card pd-balance-card">
+        <div class="pd-balance-label">Disfrute disponible</div>
+        <div class="pd-balance-value" id="enjoy-available">—</div>
+        <div class="pd-balance-detail">
+          <span>Ganados: <b id="enjoy-earned">—</b></span>
+          <span>Usados: <b id="enjoy-used">—</b></span>
+          <span>Reservados: <b id="enjoy-reserved">—</b></span>
         </div>
-        <p style="color:var(--mute-2); font-size:13px; margin:0; line-height:1.5;">
-          Crea solicitudes de vacaciones, permisos y otros documentos.
-        </p>
+      </div>
+      <div class="pt-card pd-balance-card">
+        <div class="pd-balance-label">Pagados disponible</div>
+        <div class="pd-balance-value" id="paid-available">—</div>
+        <div class="pd-balance-detail">
+          <span>Ganados: <b id="paid-earned">—</b></span>
+          <span>Usados: <b id="paid-used">—</b></span>
+          <span>Reservados: <b id="paid-reserved">—</b></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick links -->
+    <div class="pd-links-row">
+      <a href="/portal/requests" class="pt-card pd-link-card">
+        <div class="pd-link-icon" style="background:var(--navy-soft);">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V3a1 1 0 0 0-1-1z"/>
+            <path d="M5 6h6M5 9h4"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="pt-card-title" style="margin:0 0 4px;">Solicitudes</h2>
+          <p class="pd-link-desc">Vacaciones, permisos y documentos.</p>
+        </div>
       </a>
 
-      <a href="/portal/attendance" class="pt-card" style="text-decoration:none; transition:border-color 140ms ease;" onmouseover="this.style.borderColor='var(--rule-hi)'" onmouseout="this.style.borderColor='var(--rule)'">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-          <div style="width:36px; height:36px; border-radius:6px; background:var(--navy-soft); display:grid; place-items:center;">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="8" cy="8" r="6"/>
-              <path d="M8 4.5V8l2.5 1.5"/>
-            </svg>
-          </div>
-          <h2 class="pt-card-title" style="margin:0;">Mis marcaciones</h2>
+      <a href="/portal/attendance" class="pt-card pd-link-card">
+        <div class="pd-link-icon" style="background:var(--navy-soft);">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="8" r="6"/>
+            <path d="M8 4.5V8l2.5 1.5"/>
+          </svg>
         </div>
-        <p style="color:var(--mute-2); font-size:13px; margin:0; line-height:1.5;">
-          Consulta tu historial de entradas, salidas y asistencia.
-        </p>
+        <div>
+          <h2 class="pt-card-title" style="margin:0 0 4px;">Mis marcaciones</h2>
+          <p class="pd-link-desc">Entradas, salidas y asistencia.</p>
+        </div>
       </a>
 
-      <a href="/portal/approvals" class="pt-card" style="text-decoration:none; transition:border-color 140ms ease;" onmouseover="this.style.borderColor='var(--rule-hi)'" onmouseout="this.style.borderColor='var(--rule)'">
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-          <div style="width:36px; height:36px; border-radius:6px; background:var(--navy-soft); display:grid; place-items:center;">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2l-8.5 8.5L2 7"/>
-            </svg>
-          </div>
-          <h2 class="pt-card-title" style="margin:0;">Aprobaciones</h2>
+      <a href="/portal/approvals" class="pt-card pd-link-card">
+        <div class="pd-link-icon" style="background:var(--navy-soft);">
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="var(--navy-hi)" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2l-8.5 8.5L2 7"/>
+          </svg>
         </div>
-        <p style="color:var(--mute-2); font-size:13px; margin:0; line-height:1.5;">
-          Revisa y aprueba solicitudes de tu departamento.
-        </p>
+        <div>
+          <h2 class="pt-card-title" style="margin:0 0 4px;">Aprobaciones</h2>
+          <p class="pd-link-desc">Solicitudes de tu departamento.</p>
+        </div>
       </a>
     </div>
+
+    <!-- Recent data tables side-by-side -->
+    <div class="pd-tables-row">
+      <!-- Recent vacation requests -->
+      <div class="pt-card pd-table-card">
+        <div class="pd-table-header">
+          <h3 class="pt-card-title" style="margin:0;">Solicitudes de vacaciones</h3>
+          <a href="/portal/requests" class="pd-view-all">Ver todas</a>
+        </div>
+        <div id="vac-table-body">
+          <div class="pd-empty">Cargando...</div>
+        </div>
+      </div>
+
+      <!-- Recent attendance -->
+      <div class="pt-card pd-table-card">
+        <div class="pd-table-header">
+          <h3 class="pt-card-title" style="margin:0;">Asistencia reciente</h3>
+          <a href="/portal/attendance" class="pd-view-all">Ver más</a>
+        </div>
+        <div id="att-table-body">
+          <div class="pd-empty">Cargando...</div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <style>
+    .pd-wrap { max-width:960px; margin:0 auto; padding:32px 24px; }
+    .pd-greeting {
+      font-family:var(--f-display); font-weight:300; font-size:28px;
+      letter-spacing:-0.02em; margin:0 0 6px; color:var(--fore);
+    }
+    .pd-sub { color:var(--mute-2); font-size:14px; margin:0 0 28px; }
+
+    .pd-balance-row {
+      display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;
+    }
+    @media (max-width:640px) { .pd-balance-row { grid-template-columns:1fr; } }
+    .pd-balance-card { padding:20px 24px; }
+    .pd-balance-label {
+      font-family:var(--f-mono); font-size:10.5px; color:var(--mute);
+      letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px;
+    }
+    .pd-balance-value {
+      font-family:var(--f-display); font-weight:300; font-size:36px;
+      letter-spacing:-0.02em; color:var(--fore); margin-bottom:10px;
+      line-height:1;
+    }
+    .pd-balance-detail {
+      display:flex; gap:16px; font-size:12px; color:var(--mute-2);
+    }
+    .pd-balance-detail b { color:var(--fore-dim); font-weight:500; }
+
+    .pd-links-row {
+      display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; margin-bottom:24px;
+    }
+    @media (max-width:768px) { .pd-links-row { grid-template-columns:1fr; } }
+    .pd-link-card {
+      display:flex; align-items:center; gap:16px; text-decoration:none;
+      padding:20px 24px; transition:border-color 140ms ease;
+    }
+    .pd-link-card:hover { border-color:var(--rule-hi); }
+    .pd-link-icon {
+      width:40px; height:40px; border-radius:8px;
+      display:grid; place-items:center; flex-shrink:0;
+    }
+    .pd-link-desc { color:var(--mute-2); font-size:12.5px; margin:0; line-height:1.4; }
+
+    .pd-tables-row {
+      display:grid; grid-template-columns:1fr 1fr; gap:16px;
+    }
+    @media (max-width:768px) { .pd-tables-row { grid-template-columns:1fr; } }
+    .pd-table-card { padding:20px 24px; }
+    .pd-table-header {
+      display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;
+    }
+    .pd-view-all {
+      font-family:var(--f-mono); font-size:10.5px; color:var(--navy-hi);
+      letter-spacing:.08em; text-transform:uppercase; text-decoration:none;
+    }
+    .pd-view-all:hover { text-decoration:underline; }
+
+    .pd-empty {
+      padding:24px 0; text-align:center; color:var(--mute); font-size:13px;
+    }
+
+    .pd-mini-table { width:100%; border-collapse:collapse; }
+    .pd-mini-table th {
+      font-family:var(--f-mono); font-size:10px; color:var(--mute);
+      letter-spacing:.1em; text-transform:uppercase; text-align:left;
+      padding:6px 8px; border-bottom:1px solid var(--rule);
+    }
+    .pd-mini-table td {
+      font-size:13px; color:var(--fore-dim); padding:8px 8px;
+      border-bottom:1px solid var(--rule);
+    }
+    .pd-mini-table tr:last-child td { border-bottom:none; }
+
+    .pd-chip {
+      display:inline-block; padding:2px 8px; border-radius:3px;
+      font-family:var(--f-mono); font-size:10px; letter-spacing:.06em;
+      text-transform:uppercase; font-weight:500;
+    }
+    .pd-chip-pending  { background:rgba(227,178,90,0.15); color:var(--warn); }
+    .pd-chip-approved { background:rgba(111,181,140,0.15); color:var(--ok); }
+    .pd-chip-rejected { background:rgba(224,107,92,0.15); color:var(--err); }
+    .pd-chip-present  { background:rgba(111,181,140,0.15); color:var(--ok); }
+    .pd-chip-late     { background:rgba(227,178,90,0.15); color:var(--warn); }
+    .pd-chip-absent   { background:rgba(224,107,92,0.15); color:var(--err); }
+    .pd-chip-default  { background:var(--ink-4); color:var(--mute-2); }
+  </style>
+
+  <script is:inline>
+    (function() {
+      var STATUS_LABELS = {
+        pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada',
+        processed: 'Procesada', cancelled: 'Cancelada',
+        present: 'Presente', late: 'Tardanza', absent: 'Ausente',
+        partial: 'Parcial', holiday: 'Feriado', justified: 'Justificada'
+      };
+      var STATUS_CHIP = {
+        pending: 'pending', approved: 'approved', rejected: 'rejected',
+        processed: 'approved', cancelled: 'rejected',
+        present: 'present', late: 'late', absent: 'absent',
+        partial: 'late', holiday: 'default', justified: 'approved'
+      };
+
+      function chip(status) {
+        var cls = STATUS_CHIP[status] || 'default';
+        var label = STATUS_LABELS[status] || status;
+        return '<span class="pd-chip pd-chip-' + cls + '">' + label + '</span>';
+      }
+      function fmtDate(d) {
+        if (!d) return '—';
+        return d.substring(0, 10);
+      }
+      function fmtTime(t) {
+        if (!t) return '—';
+        var s = typeof t === 'string' ? t : new Date(t).toISOString();
+        var m = s.match(/(\d{2}:\d{2})/);
+        return m ? m[1] : '—';
+      }
+
+      fetch('/api/portal/dashboard')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (!res.success || !res.data) return;
+          var d = res.data;
+
+          if (d.vacationBalance) {
+            var e = d.vacationBalance.enjoy || {};
+            var p = d.vacationBalance.paid || {};
+            document.getElementById('enjoy-available').textContent = (e.available ?? 0) + ' días';
+            document.getElementById('enjoy-earned').textContent = e.earned ?? 0;
+            document.getElementById('enjoy-used').textContent = e.used ?? 0;
+            document.getElementById('enjoy-reserved').textContent = e.reserved ?? 0;
+            document.getElementById('paid-available').textContent = (p.available ?? 0) + ' días';
+            document.getElementById('paid-earned').textContent = p.earned ?? 0;
+            document.getElementById('paid-used').textContent = p.used ?? 0;
+            document.getElementById('paid-reserved').textContent = p.reserved ?? 0;
+          } else {
+            document.getElementById('enjoy-available').textContent = '0 días';
+            document.getElementById('paid-available').textContent = '0 días';
+          }
+
+          var vacBody = document.getElementById('vac-table-body');
+          var vr = d.recentVacationRequests || [];
+          if (vr.length === 0) {
+            vacBody.innerHTML = '<div class="pd-empty">Sin solicitudes de vacaciones.</div>';
+          } else {
+            var html = '<table class="pd-mini-table"><thead><tr><th>N°</th><th>Tipo</th><th>Días</th><th>Estado</th></tr></thead><tbody>';
+            for (var i = 0; i < vr.length; i++) {
+              var r = vr[i];
+              var typeLabel = r.requestType === 'enjoy' ? 'Disfrute' : r.requestType === 'pay' ? 'Pago' : 'Mixta';
+              var days = (r.enjoyDays || 0) + (r.paidDays || 0);
+              html += '<tr><td>' + (r.requestNumber || '—') + '</td><td>' + typeLabel + '</td><td>' + days + '</td><td>' + chip(r.status) + '</td></tr>';
+            }
+            html += '</tbody></table>';
+            vacBody.innerHTML = html;
+          }
+
+          var attBody = document.getElementById('att-table-body');
+          var att = d.recentAttendance || [];
+          if (att.length === 0) {
+            attBody.innerHTML = '<div class="pd-empty">Sin registros de asistencia recientes.</div>';
+          } else {
+            var ahtml = '<table class="pd-mini-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead><tbody>';
+            for (var j = 0; j < att.length; j++) {
+              var a = att[j];
+              ahtml += '<tr><td>' + fmtDate(a.date) + '</td><td>' + fmtTime(a.checkIn) + '</td><td>' + fmtTime(a.checkOut) + '</td><td>' + chip(a.status) + '</td></tr>';
+            }
+            ahtml += '</tbody></table>';
+            attBody.innerHTML = ahtml;
+          }
+        })
+        .catch(function() {
+          document.getElementById('vac-table-body').innerHTML = '<div class="pd-empty">Error al cargar datos.</div>';
+          document.getElementById('att-table-body').innerHTML = '<div class="pd-empty">Error al cargar datos.</div>';
+        });
+    })();
+  </script>
 </PortalLayout>
