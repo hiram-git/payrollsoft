@@ -22,6 +22,7 @@ import {
   getBalance,
   rejectRequest as rejectVacation,
 } from '../vacations/service'
+import { notifyRequestApproved, notifyRequestCreated, notifyRequestRejected } from './notifications'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
 type AnyDb = any
@@ -325,6 +326,27 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
           set.status = 422
           return { success: false, error: result.message }
         }
+
+        const [[typeRow], [subRow]] = await Promise.all([
+          (db as AnyDb)
+            .select({ name: employeeFileTypes.name })
+            .from(employeeFileTypes)
+            .where(eq(employeeFileTypes.id, typeId))
+            .limit(1),
+          (db as AnyDb)
+            .select({ name: employeeFileSubtypes.name })
+            .from(employeeFileSubtypes)
+            .where(eq(employeeFileSubtypes.id, subtypeId))
+            .limit(1),
+        ])
+        notifyRequestCreated(db, portalEmployee.employeeId, {
+          employeeName: portalEmployee.name,
+          employeeCode: portalEmployee.employeeCode,
+          documentNumber: result.data?.documentNumber,
+          typeName: typeRow?.name,
+          subtypeName: subRow?.name,
+        })
+
         set.status = 201
         return { success: true, data: result.data }
       } catch (err) {
@@ -458,6 +480,24 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
         set.status = 422
         return result
       }
+      const [fileInfo] = await (db as AnyDb).execute(sql`
+        SELECT ef.employee_id, ef.document_number, e.first_name, e.last_name, e.code,
+               eft.name AS type_name, efs.name AS subtype_name
+        FROM employee_files ef
+        JOIN employees e ON e.id = ef.employee_id
+        JOIN employee_file_types eft ON eft.id = ef.type_id
+        JOIN employee_file_subtypes efs ON efs.id = ef.subtype_id
+        WHERE ef.id = ${params.id} LIMIT 1
+      `)
+      if (fileInfo) {
+        notifyRequestApproved(db, fileInfo.employee_id, {
+          employeeName: `${fileInfo.first_name} ${fileInfo.last_name}`,
+          employeeCode: fileInfo.code,
+          documentNumber: fileInfo.document_number,
+          typeName: fileInfo.type_name,
+          subtypeName: fileInfo.subtype_name,
+        })
+      }
       return result
     },
     {
@@ -477,6 +517,25 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
       if (!result.success) {
         set.status = 422
         return result
+      }
+      const [fileInfo] = await (db as AnyDb).execute(sql`
+        SELECT ef.employee_id, ef.document_number, e.first_name, e.last_name, e.code,
+               eft.name AS type_name, efs.name AS subtype_name
+        FROM employee_files ef
+        JOIN employees e ON e.id = ef.employee_id
+        JOIN employee_file_types eft ON eft.id = ef.type_id
+        JOIN employee_file_subtypes efs ON efs.id = ef.subtype_id
+        WHERE ef.id = ${params.id} LIMIT 1
+      `)
+      if (fileInfo) {
+        notifyRequestRejected(db, fileInfo.employee_id, {
+          employeeName: `${fileInfo.first_name} ${fileInfo.last_name}`,
+          employeeCode: fileInfo.code,
+          documentNumber: fileInfo.document_number,
+          typeName: fileInfo.type_name,
+          subtypeName: fileInfo.subtype_name,
+          reason: body.reason,
+        })
       }
       return result
     },
@@ -499,6 +558,19 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
         set.status = 422
         return result
       }
+      const [vacInfo] = await (db as AnyDb).execute(sql`
+        SELECT vr.employee_id, vr.request_number, e.first_name, e.last_name, e.code
+        FROM vacation_requests vr JOIN employees e ON e.id = vr.employee_id
+        WHERE vr.id = ${params.id} LIMIT 1
+      `)
+      if (vacInfo) {
+        notifyRequestApproved(db, vacInfo.employee_id, {
+          employeeName: `${vacInfo.first_name} ${vacInfo.last_name}`,
+          employeeCode: vacInfo.code,
+          documentNumber: vacInfo.request_number,
+          typeName: 'Vacaciones',
+        })
+      }
       return result
     },
     {
@@ -518,6 +590,20 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
       if (!result.success) {
         set.status = 422
         return result
+      }
+      const [vacInfo] = await (db as AnyDb).execute(sql`
+        SELECT vr.employee_id, vr.request_number, e.first_name, e.last_name, e.code
+        FROM vacation_requests vr JOIN employees e ON e.id = vr.employee_id
+        WHERE vr.id = ${params.id} LIMIT 1
+      `)
+      if (vacInfo) {
+        notifyRequestRejected(db, vacInfo.employee_id, {
+          employeeName: `${vacInfo.first_name} ${vacInfo.last_name}`,
+          employeeCode: vacInfo.code,
+          documentNumber: vacInfo.request_number,
+          typeName: 'Vacaciones',
+          reason: body.reason,
+        })
       }
       return result
     },
