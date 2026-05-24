@@ -545,22 +545,7 @@ if (identity) return Astro.redirect('/portal')
           </div>
         </div>
 
-        <div class="field" style="margin-bottom:28px">
-          <div class="label-row">
-            <span class="field-label">Código de empresa</span>
-          </div>
-          <div class="input-wrap">
-            <input
-              id="tenant"
-              name="tenant"
-              type="text"
-              required
-              autocomplete="organization"
-              placeholder="demo"
-              class="field-input"
-            />
-          </div>
-        </div>
+        <div style="margin-bottom:28px"></div>
 
         <button type="submit" class="submit-btn" id="submit-btn">
           <span class="btn-text">Entrar al portal</span>
@@ -570,11 +555,8 @@ if (identity) return Astro.redirect('/portal')
           </svg>
         </button>
 
-        <p class="admin-link-row" style="margin-bottom:12px;">
-          <a href="/portal/forgot-password" class="admin-link">¿Olvidaste tu contraseña?</a>
-        </p>
         <p class="admin-link-row">
-          <a href="/login" class="admin-link">Acceso administrativo</a>
+          <a href="/portal/forgot-password" class="admin-link">¿Olvidaste tu contraseña?</a>
         </p>
       </form>
     </div>
@@ -630,9 +612,8 @@ if (identity) return Astro.redirect('/portal')
 
       var idNumber = document.getElementById('idNumber').value.trim();
       var password = document.getElementById('password').value;
-      var tenant = document.getElementById('tenant').value.trim();
 
-      if (!idNumber || !password || !tenant) {
+      if (!idNumber || !password) {
         errText.textContent = 'Completa todos los campos.';
         errBanner.classList.add('visible');
         return;
@@ -644,7 +625,7 @@ if (identity) return Astro.redirect('/portal')
       fetch('/api/portal/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idNumber: idNumber, password: password, tenant: tenant }),
+        body: JSON.stringify({ idNumber: idNumber, password: password }),
       })
       .then(function(res) { return res.json().then(function(d) { return { status: res.status, data: d }; }); })
       .then(function(r) {
