@@ -27,6 +27,58 @@ import { tenantPlugin } from '../../middleware/tenant'
 type AnyDb = any
 
 const MAX_FAILED_ATTEMPTS = 5
+const DEFAULT_PASSWORD = '172839'
+
+type EmpRow = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  idNumber: string
+  departmentId: string | null
+  isActive: boolean
+}
+
+async function findEmployeeAcrossTenants(
+  idNumber: string,
+  headerTenant: string | undefined,
+  db: AnyDb
+): Promise<{ emp: EmpRow; slug: string } | null> {
+  const empSelect = {
+    id: employees.id,
+    code: employees.code,
+    firstName: employees.firstName,
+    lastName: employees.lastName,
+    idNumber: employees.idNumber,
+    departmentId: employees.departmentId,
+    isActive: employees.isActive,
+  }
+
+  if (headerTenant) {
+    const [row] = await (db as AnyDb)
+      .select(empSelect)
+      .from(employees)
+      .where(eq(employees.idNumber, idNumber))
+      .limit(1)
+    if (row) return { emp: row, slug: headerTenant }
+    return null
+  }
+
+  const activeTenants = await publicDb
+    .select({ slug: tenants.slug })
+    .from(tenants)
+    .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
+  for (const t of activeTenants) {
+    const tdb = getTenantDb(t.slug)
+    const [row] = await (tdb as AnyDb)
+      .select(empSelect)
+      .from(employees)
+      .where(eq(employees.idNumber, idNumber))
+      .limit(1)
+    if (row) return { emp: row, slug: t.slug }
+  }
+  return null
+}
 
 export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
   .use(jwtPlugin)
@@ -35,139 +87,130 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
   .post(
     '/login',
     async ({ db, body, jwt, cookie, set, tenantSlug: headerTenant }) => {
-      const idNumber = body.idNumber.trim()
-      const password = body.password
+      try {
+        const idNumber = body.idNumber.trim()
+        const password = body.password
 
-      type EmpRow = {
-        id: string
-        code: string
-        firstName: string
-        lastName: string
-        idNumber: string
-        departmentId: string | null
-        isActive: boolean
-      }
+        const found = await findEmployeeAcrossTenants(idNumber, headerTenant, db)
+        if (!found || !found.emp.isActive) {
+          set.status = 401
+          return { success: false, error: 'Cédula o contraseña incorrecta.' }
+        }
 
-      let emp: EmpRow | undefined
-      let cred: AnyDb | undefined
-      let resolvedSlug = ''
+        const { emp, slug: resolvedSlug } = found
+        const tdb = getTenantDb(resolvedSlug) as AnyDb
 
-      if (headerTenant && db) {
-        ;[emp] = await (db as AnyDb)
-          .select({
-            id: employees.id,
-            code: employees.code,
-            firstName: employees.firstName,
-            lastName: employees.lastName,
-            idNumber: employees.idNumber,
-            departmentId: employees.departmentId,
-            isActive: employees.isActive,
-          })
-          .from(employees)
-          .where(eq(employees.idNumber, idNumber))
+        let [cred] = await tdb
+          .select()
+          .from(employeeCredentials)
+          .where(eq(employeeCredentials.employeeId, emp.id))
           .limit(1)
-        if (emp) resolvedSlug = headerTenant
-      } else {
-        const activeTenants = await publicDb
-          .select({ slug: tenants.slug })
-          .from(tenants)
-          .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
-        for (const t of activeTenants) {
-          const tdb = getTenantDb(t.slug)
-          const [row] = await (tdb as AnyDb)
-            .select({
-              id: employees.id,
-              code: employees.code,
-              firstName: employees.firstName,
-              lastName: employees.lastName,
-              idNumber: employees.idNumber,
-              departmentId: employees.departmentId,
-              isActive: employees.isActive,
+
+        if (!cred) {
+          const defaultHash = await hashPassword(DEFAULT_PASSWORD)
+          ;[cred] = await tdb
+            .insert(employeeCredentials)
+            .values({
+              employeeId: emp.id,
+              passwordHash: defaultHash,
+              mustChangePassword: true,
             })
-            .from(employees)
-            .where(eq(employees.idNumber, idNumber))
-            .limit(1)
-          if (row) {
-            emp = row
-            resolvedSlug = t.slug
-            break
+            .onConflictDoNothing()
+            .returning()
+          if (!cred) {
+            ;[cred] = await tdb
+              .select()
+              .from(employeeCredentials)
+              .where(eq(employeeCredentials.employeeId, emp.id))
+              .limit(1)
           }
         }
-      }
 
-      if (!emp || !emp.isActive) {
-        set.status = 401
-        return { success: false, error: 'Cédula o contraseña incorrecta.' }
-      }
-
-      const tdb = getTenantDb(resolvedSlug) as AnyDb
-      ;[cred] = await tdb
-        .select()
-        .from(employeeCredentials)
-        .where(eq(employeeCredentials.employeeId, emp.id))
-        .limit(1)
-
-      if (!cred || !cred.isActive) {
-        set.status = 401
-        return { success: false, error: 'No tiene acceso al portal. Contacte a Recursos Humanos.' }
-      }
-
-      if (cred.isLocked || cred.failedAttempts >= MAX_FAILED_ATTEMPTS) {
-        set.status = 423
-        return {
-          success: false,
-          error: 'Cuenta bloqueada por intentos fallidos. Contacte a Recursos Humanos.',
+        if (!cred?.isActive) {
+          set.status = 401
+          return { success: false, error: 'Cuenta desactivada. Contacte a Recursos Humanos.' }
         }
-      }
 
-      const valid = await verifyPassword(password, cred.passwordHash)
-      if (!valid) {
+        if (cred.isLocked || cred.failedAttempts >= MAX_FAILED_ATTEMPTS) {
+          set.status = 423
+          return {
+            success: false,
+            error: 'Cuenta bloqueada por intentos fallidos. Contacte a Recursos Humanos.',
+          }
+        }
+
+        const valid = await verifyPassword(password, cred.passwordHash)
+        if (!valid) {
+          await tdb
+            .update(employeeCredentials)
+            .set({
+              failedAttempts: cred.failedAttempts + 1,
+              isLocked: cred.failedAttempts + 1 >= MAX_FAILED_ATTEMPTS,
+              updatedAt: new Date(),
+            })
+            .where(eq(employeeCredentials.id, cred.id))
+          set.status = 401
+          return { success: false, error: 'Cédula o contraseña incorrecta.' }
+        }
+
         await tdb
           .update(employeeCredentials)
-          .set({
-            failedAttempts: cred.failedAttempts + 1,
-            isLocked: cred.failedAttempts + 1 >= MAX_FAILED_ATTEMPTS,
-            updatedAt: new Date(),
-          })
+          .set({ failedAttempts: 0, lastLoginAt: new Date(), updatedAt: new Date() })
           .where(eq(employeeCredentials.id, cred.id))
 
-        set.status = 401
-        return { success: false, error: 'Cédula o contraseña incorrecta.' }
-      }
+        if (cred.mustChangePassword) {
+          const tempToken = await jwt.sign({
+            type: 'employee',
+            employeeId: emp.id,
+            employeeCode: emp.code,
+            name: `${emp.firstName} ${emp.lastName}`,
+            idNumber: emp.idNumber,
+            departmentId: emp.departmentId ?? null,
+            isApprover: cred.isApprover ?? false,
+            tenantSlug: resolvedSlug,
+            mustChangePassword: true,
+            exp: Math.floor(Date.now() / 1000) + 900,
+          })
+          cookie.portal_auth.set({
+            value: tempToken,
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 900,
+          })
+          return { success: true, mustChangePassword: true }
+        }
 
-      await tdb
-        .update(employeeCredentials)
-        .set({ failedAttempts: 0, lastLoginAt: new Date(), updatedAt: new Date() })
-        .where(eq(employeeCredentials.id, cred.id))
-
-      const token = await jwt.sign({
-        type: 'employee',
-        employeeId: emp.id,
-        employeeCode: emp.code,
-        name: `${emp.firstName} ${emp.lastName}`,
-        idNumber: emp.idNumber,
-        departmentId: emp.departmentId ?? null,
-        isApprover: cred.isApprover ?? false,
-        tenantSlug: resolvedSlug,
-        exp: Math.floor(Date.now() / 1000) + 8 * 3600,
-      })
-
-      cookie.portal_auth.set({
-        value: token,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-        maxAge: 8 * 3600,
-      })
-
-      return {
-        success: true,
-        data: {
+        const token = await jwt.sign({
+          type: 'employee',
           employeeId: emp.id,
-          code: emp.code,
+          employeeCode: emp.code,
           name: `${emp.firstName} ${emp.lastName}`,
-        },
+          idNumber: emp.idNumber,
+          departmentId: emp.departmentId ?? null,
+          isApprover: cred.isApprover ?? false,
+          tenantSlug: resolvedSlug,
+          exp: Math.floor(Date.now() / 1000) + 8 * 3600,
+        })
+
+        cookie.portal_auth.set({
+          value: token,
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: 8 * 3600,
+        })
+
+        return {
+          success: true,
+          data: { employeeId: emp.id, code: emp.code, name: `${emp.firstName} ${emp.lastName}` },
+        }
+      } catch (err) {
+        console.error('[portal/login] error:', err)
+        set.status = 500
+        return { success: false, error: 'Error interno del servidor.' }
       }
     },
     {
@@ -182,6 +225,70 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
     cookie.portal_auth.remove()
     return { success: true }
   })
+
+  .post(
+    '/change-password',
+    async ({ jwt, cookie, body, set }) => {
+      const token = cookie.portal_auth?.value
+      if (!token) {
+        set.status = 401
+        return { success: false, error: 'No autenticado.' }
+      }
+      const payload = await jwt.verify(token)
+      if (!payload || (payload as AnyDb).type !== 'employee') {
+        set.status = 401
+        return { success: false, error: 'Sesión inválida.' }
+      }
+      const p = payload as AnyDb
+      const tdb = getTenantDb(p.tenantSlug) as AnyDb
+
+      const [cred] = await tdb
+        .select()
+        .from(employeeCredentials)
+        .where(eq(employeeCredentials.employeeId, p.employeeId))
+        .limit(1)
+      if (!cred) {
+        set.status = 404
+        return { success: false, error: 'Credenciales no encontradas.' }
+      }
+
+      const hash = await hashPassword(body.password)
+      await tdb
+        .update(employeeCredentials)
+        .set({
+          passwordHash: hash,
+          mustChangePassword: false,
+          passwordChangedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(employeeCredentials.id, cred.id))
+
+      const newToken = await jwt.sign({
+        type: 'employee',
+        employeeId: p.employeeId,
+        employeeCode: p.employeeCode,
+        name: p.name,
+        idNumber: p.idNumber,
+        departmentId: p.departmentId ?? null,
+        isApprover: cred.isApprover ?? false,
+        tenantSlug: p.tenantSlug,
+        exp: Math.floor(Date.now() / 1000) + 8 * 3600,
+      })
+      cookie.portal_auth.set({
+        value: newToken,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 8 * 3600,
+      })
+
+      return { success: true, message: 'Contraseña actualizada.' }
+    },
+    {
+      body: t.Object({ password: t.String({ minLength: 6 }) }),
+    }
+  )
 
   .post(
     '/forgot-password',

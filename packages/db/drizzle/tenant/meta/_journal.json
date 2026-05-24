@@ -309,6 +309,13 @@
       "when": 1762128023000,
       "tag": "0044_portal_password_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1762128024000,
+      "tag": "0045_portal_must_change_password",
+      "breakpoints": true
     }
   ]
 }
