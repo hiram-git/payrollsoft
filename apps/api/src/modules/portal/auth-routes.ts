@@ -69,13 +69,15 @@ async function findEmployeeAcrossTenants(
     .from(tenants)
     .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
   for (const t of activeTenants) {
-    const tdb = getTenantDb(t.slug)
-    const [row] = await (tdb as AnyDb)
-      .select(empSelect)
-      .from(employees)
-      .where(eq(employees.idNumber, idNumber))
-      .limit(1)
-    if (row) return { emp: row, slug: t.slug }
+    try {
+      const tdb = getTenantDb(t.slug)
+      const [row] = await (tdb as AnyDb)
+        .select(empSelect)
+        .from(employees)
+        .where(eq(employees.idNumber, idNumber))
+        .limit(1)
+      if (row) return { emp: row, slug: t.slug }
+    } catch {}
   }
   return null
 }
@@ -323,17 +325,19 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           .from(tenants)
           .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
         for (const t of active) {
-          const tdb = getTenantDb(t.slug)
-          const [row] = await (tdb as AnyDb)
-            .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
-            .from(employees)
-            .where(eq(employees.idNumber, idNumber))
-            .limit(1)
-          if (row) {
-            emp = row
-            resolvedSlug = t.slug
-            break
-          }
+          try {
+            const tdb = getTenantDb(t.slug)
+            const [row] = await (tdb as AnyDb)
+              .select({ id: employees.id, email: employees.email, firstName: employees.firstName })
+              .from(employees)
+              .where(eq(employees.idNumber, idNumber))
+              .limit(1)
+            if (row) {
+              emp = row
+              resolvedSlug = t.slug
+              break
+            }
+          } catch {}
         }
       }
 
@@ -406,17 +410,19 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
           .from(tenants)
           .where(and(eq(tenants.isActive, true), eq(tenants.status, 'ACTIVE')))
         for (const t of active) {
-          const tdb = getTenantDb(t.slug)
-          const [row] = await (tdb as AnyDb)
-            .select()
-            .from(employeeCredentials)
-            .where(eq(employeeCredentials.resetToken, body.token))
-            .limit(1)
-          if (row) {
-            cred = row
-            resolvedDb = tdb
-            break
-          }
+          try {
+            const tdb = getTenantDb(t.slug)
+            const [row] = await (tdb as AnyDb)
+              .select()
+              .from(employeeCredentials)
+              .where(eq(employeeCredentials.resetToken, body.token))
+              .limit(1)
+            if (row) {
+              cred = row
+              resolvedDb = tdb
+              break
+            }
+          } catch {}
         }
       }
 
