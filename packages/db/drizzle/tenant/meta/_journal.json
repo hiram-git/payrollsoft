@@ -330,6 +330,13 @@
       "when": 1762128026000,
       "tag": "0047_employee_photo",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1762128027000,
+      "tag": "0048_dependents",
+      "breakpoints": true
     }
   ]
 }
