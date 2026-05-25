@@ -344,6 +344,13 @@
       "when": 1762128028000,
       "tag": "0049_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1762128029000,
+      "tag": "0050_employee_gobierno_fields",
+      "breakpoints": true
     }
   ]
 }
