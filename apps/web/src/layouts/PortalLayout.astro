@@ -44,8 +44,10 @@ const userCode = identity.employeeCode || ''
     }
     [data-theme="light"] {
       --ink:#F4F5F7; --ink-2:#FFFFFF; --ink-3:#FFFFFF; --ink-4:#EFF1F5;
+      --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.08);
       --rule:#E4E7EE; --rule-hi:#D2D7E0;
       --fore:#0C1424; --fore-dim:#2A3346; --mute-2:#5B6478; --mute:#7A8499;
+      --warn:#B07A17; --err:#B53A2B; --ok:#2E7A56;
     }
     *, *::before, *::after { box-sizing: border-box; }
     html, body { height:100%; margin:0; }
@@ -136,6 +138,13 @@ const userCode = identity.employeeCode || ''
     [data-theme="dark"] .pt-content textarea:focus {
       border-color: var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft);
     }
+
+    /* ── Light mode overrides for portal content ── */
+    [data-theme="light"] .pt-content { background:var(--ink); }
+    [data-theme="light"] .pt-side { background:var(--ink-2); border-color:var(--rule); }
+    [data-theme="light"] .pt-top { background:var(--ink-2); border-color:var(--rule); }
+    [data-theme="light"] .pt-user-pill { background:var(--ink-4); border-color:var(--rule); }
+    [data-theme="light"] .pt-item:hover:not(.pt-active) { background:var(--ink-4); }
 
     .pt-card {
       background: var(--ink-2);

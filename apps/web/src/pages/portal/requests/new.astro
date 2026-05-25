@@ -158,6 +158,7 @@ const today = new Date().toISOString().slice(0, 10)
       box-shadow:0 12px 32px rgba(0,0,0,0.35); max-height:14rem; overflow-y:auto;
       list-style:none; padding:6px 0;
     }
+    [data-theme="light"] .pr-combo-list { box-shadow:0 8px 24px rgba(12,20,36,0.12); }
     .pr-combo-list.open { display:block; }
     .pr-combo-list li {
       padding:10px 14px; cursor:pointer; font-size:13.5px; color:var(--fore-dim);
@@ -187,6 +188,9 @@ const today = new Date().toISOString().slice(0, 10)
       background-position:right 12px center;
       padding-right:36px;
     }
+    [data-theme="light"] .pr-select-field {
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none' stroke='%235B6478' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='M3 4.5l3 3 3-3'/%3E%3C/svg%3E");
+    }
     .pr-textarea { resize:vertical; min-height:56px; }
     .pr-dyn-field { min-width:0; }
 
@@ -202,6 +206,12 @@ const today = new Date().toISOString().slice(0, 10)
       transition:border-color 140ms, background 140ms;
     }
     .pr-file-input::file-selector-button:hover { border-color:var(--rule-hi); background:var(--ink-4); }
+
+    /* Light mode refinements */
+    [data-theme="light"] .pr-input { background:var(--ink-2); }
+    [data-theme="light"] .pr-file-input::file-selector-button { background:var(--ink-4); color:var(--fore-dim); }
+    [data-theme="light"] .pr-banner-err { background:rgba(181,58,43,0.06); border-color:rgba(181,58,43,0.3); }
+    [data-theme="light"] .pr-banner-ok { background:rgba(46,122,86,0.06); border-color:rgba(46,122,86,0.3); }
 
     .pr-actions {
       display:flex; align-items:center; justify-content:flex-end; gap:12px;
@@ -279,18 +289,27 @@ const today = new Date().toISOString().slice(0, 10)
 
       // ── Combobox helper ──
       function setupCombo(textEl, dropdownEl, clearEl, idInputEl, items, onSelect) {
+        var blurTimeout = null;
+
         function filter(q) {
           var lq = q.toLowerCase();
           return items.filter(function(i) { return i.name.toLowerCase().indexOf(lq) !== -1; }).slice(0, 30);
         }
-        function renderList(list) {
+        function openList(list) {
           if (list.length === 0) { dropdownEl.classList.remove('open'); return; }
           dropdownEl.innerHTML = list.map(function(i) {
             return '<li data-id="' + i.id + '" data-label="' + esc(i.name) + '">' + esc(i.name) + '</li>';
           }).join('');
           dropdownEl.classList.add('open');
         }
+        function showAll() {
+          var q = textEl.value.trim();
+          openList(q.length === 0 ? items.slice(0, 30) : filter(q));
+        }
+
         dropdownEl.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        clearEl.addEventListener('mousedown', function(e) { e.preventDefault(); });
+
         dropdownEl.addEventListener('click', function(e) {
           var li = e.target.closest('li[data-id]');
           if (!li) return;
@@ -300,28 +319,29 @@ const today = new Date().toISOString().slice(0, 10)
           clearEl.style.display = '';
           if (onSelect) onSelect(li.dataset.id);
         });
+
         textEl.addEventListener('input', function() {
           idInputEl.value = '';
           clearEl.style.display = 'none';
-          var q = textEl.value.trim();
-          renderList(q.length === 0 ? items.slice(0, 30) : filter(q));
+          showAll();
           if (onSelect) onSelect('');
         });
+
         textEl.addEventListener('focus', function() {
-          if (!idInputEl.value) {
-            var q = textEl.value.trim();
-            renderList(q.length === 0 ? items.slice(0, 30) : filter(q));
-          }
+          if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+          if (!idInputEl.value) showAll();
         });
+
         textEl.addEventListener('blur', function() {
-          setTimeout(function() { dropdownEl.classList.remove('open'); }, 120);
+          blurTimeout = setTimeout(function() { dropdownEl.classList.remove('open'); }, 150);
         });
+
         clearEl.addEventListener('click', function() {
           idInputEl.value = '';
           textEl.value = '';
-          dropdownEl.classList.remove('open');
           clearEl.style.display = 'none';
           textEl.focus();
+          showAll();
           if (onSelect) onSelect('');
         });
       }
