@@ -156,13 +156,13 @@ const today = new Date().toISOString().slice(0, 10)
           {run.status === 'open' && canWrite && (
             <form method="POST" action={`/api/treasury/action?op=run-close&id=${runId}`}
               data-saconfirm
-              data-sa-title="Cerrar corrida"
-              data-sa-message="Una corrida cerrada ya no acepta nuevos cheques o ACH. ¿Continuar?"
-              data-sa-confirm-label="Cerrar corrida"
+              data-sa-title="Cerrar lote de pago"
+              data-sa-message="Un lote cerrado ya no acepta nuevos cheques o ACH. ¿Continuar?"
+              data-sa-confirm-label="Cerrar lote"
               data-sa-tone="primary"
               style="display:inline">
               <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
-              <button type="submit" class="tr-btn-secondary px-3 py-1.5 text-xs rounded-md">Cerrar corrida</button>
+              <button type="submit" class="tr-btn-secondary px-3 py-1.5 text-xs rounded-md">Cerrar lote</button>
             </form>
           )}
         </div>
@@ -264,7 +264,7 @@ const today = new Date().toISOString().slice(0, 10)
 
         {checks.length === 0 ? (
           <div class="py-10 text-center">
-            <p class="text-sm tr-mute">Sin cheques emitidos en esta corrida.</p>
+            <p class="text-sm tr-mute">Sin cheques emitidos en este lote.</p>
           </div>
         ) : (
           <table class="tr-table w-full text-sm">
@@ -369,7 +369,7 @@ const today = new Date().toISOString().slice(0, 10)
         {!run.payrollId && (
           <div class="px-5 py-10 text-center">
             <p class="text-sm tr-mute">
-              Esta corrida no está enlazada a una planilla. El ACH se genera desde una corrida con planilla asociada.
+              Este lote no está enlazado a una planilla. El ACH se genera desde un lote con planilla asociada.
             </p>
           </div>
         )}

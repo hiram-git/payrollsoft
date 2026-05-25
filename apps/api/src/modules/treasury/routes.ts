@@ -175,9 +175,13 @@ export const treasuryRoutes = new Elysia()
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const data = await createPaymentRun(db, body, { createdBy: user?.userId ?? null })
+      const result = await createPaymentRun(db, body, { createdBy: user?.userId ?? null })
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
       set.status = 201
-      return { success: true, data }
+      return { success: true, data: { id: result.id } }
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:write')],

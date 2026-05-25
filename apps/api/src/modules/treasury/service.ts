@@ -122,7 +122,18 @@ export async function createPaymentRun(
   db: AnyDb,
   input: { payrollId?: string | null; name: string; notes?: string | null },
   options: { createdBy?: string | null } = {}
-): Promise<{ id: string }> {
+): Promise<{ success: true; id: string } | { success: false; error: string }> {
+  if (input.payrollId) {
+    const [payroll] = await db
+      .select({ status: payrolls.status })
+      .from(payrolls)
+      .where(eq(payrolls.id, input.payrollId))
+      .limit(1)
+    if (!payroll) return { success: false, error: 'Planilla no encontrada.' }
+    if (payroll.status !== 'closed') {
+      return { success: false, error: 'La planilla debe estar cerrada para generar cheques.' }
+    }
+  }
   const [row] = await db
     .insert(treasuryPaymentRuns)
     .values({
@@ -133,7 +144,7 @@ export async function createPaymentRun(
       status: 'open',
     })
     .returning({ id: treasuryPaymentRuns.id })
-  return { id: row.id as string }
+  return { success: true, id: row.id as string }
 }
 
 export async function closePaymentRun(db: AnyDb, id: string) {

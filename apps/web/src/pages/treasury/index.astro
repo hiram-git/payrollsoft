@@ -85,19 +85,19 @@ function fmtMoney(s: string): string {
       <div>
         <h1 class="text-xl font-semibold tracking-tight tr-title">Tesorería</h1>
         <p class="text-sm mt-0.5 tr-subtitle">
-          {runs.length} {runs.length === 1 ? 'corrida' : 'corridas'} de pago — gestiona el pago efectivo
+          {runs.length} {runs.length === 1 ? 'lote' : 'lotes'} de pago — gestiona el pago efectivo
           después del cierre de una planilla.
         </p>
       </div>
       {canWrite && (
         <button type="button" id="btn-new-run" class="tr-btn-primary px-3.5 py-2 rounded-md text-sm font-medium">
-          + Nueva corrida
+          + Generar Cheques
         </button>
       )}
     </div>
 
     {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Corrida creada.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Lote de pago creado.</div>
     )}
     {flash === 'error' && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Error.'}</div>
@@ -111,7 +111,7 @@ function fmtMoney(s: string): string {
       <div id="new-run-modal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-200">
           <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
-            <h3 class="font-semibold text-gray-900">Nueva corrida de pago</h3>
+            <h3 class="font-semibold text-gray-900">Generar Cheques</h3>
             <button type="button" id="new-run-close" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
           </div>
           <form method="POST" action="/api/treasury/action?op=run-create" class="p-5 space-y-3">
@@ -133,7 +133,7 @@ function fmtMoney(s: string): string {
             </div>
             <div class="flex justify-end gap-2 pt-2">
               <button type="button" id="new-run-cancel" class="px-3 py-2 text-sm text-gray-600">Cancelar</button>
-              <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">Crear corrida</button>
+              <button type="submit" class="px-4 py-2 text-white text-sm rounded-md font-medium tr-btn-primary">Generar</button>
             </div>
           </form>
         </div>
@@ -170,7 +170,7 @@ function fmtMoney(s: string): string {
                 <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(r.checkTotal)}</td>
                 <td class="px-5 py-3 align-top text-xs tr-mute whitespace-nowrap">{fmtDate(r.createdAt)}</td>
                 <td class="px-5 py-3 align-top text-right">
-                  <a href={`/treasury/${r.id}`} class="text-xs tr-link">Abrir →</a>
+                  <a href={`/treasury/${r.id}`} class="tr-btn-ghost">Ver detalle</a>
                 </td>
               </tr>
             ))}
@@ -203,10 +203,15 @@ function fmtMoney(s: string): string {
     .tr-mute     { color: var(--mute); }
     .tr-card { background: var(--ink-2); border-color: var(--rule); }
     .tr-rule { border-color: var(--rule); }
-    .tr-link { color: #60a5fa; }
-    .tr-link:hover { text-decoration: underline; }
-    .tr-btn-primary { background: #2563eb; color: white; }
-    .tr-btn-primary:hover { background: #1d4ed8; }
+    .tr-btn-primary { background: var(--navy); color: white; }
+    .tr-btn-primary:hover { background: var(--navy-hi); }
+    .tr-btn-ghost {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:5px 12px; border-radius:6px; font-size:12px; font-weight:500;
+      border:1px solid var(--rule); color:var(--fore-dim); text-decoration:none;
+      transition:border-color 140ms, background 140ms, color 140ms;
+    }
+    .tr-btn-ghost:hover { border-color:var(--rule-hi); background:var(--ink-4); color:var(--fore); }
     .tr-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
     .tr-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
     .tr-table tbody tr:hover { background: var(--ink-4); }
