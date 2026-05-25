@@ -4,6 +4,7 @@ import {
   jsonb,
   pgTable,
   primaryKey,
+  text,
   timestamp,
   uuid,
   varchar,
@@ -40,6 +41,7 @@ export const employees = pgTable('employees', {
   accountType: varchar('account_type', { length: 20 }),
   /** 'ach' | 'check' | 'cash' */
   paymentMethod: varchar('payment_method', { length: 10 }).notNull().default('check'),
+  photo: text('photo'),
   isActive: boolean('is_active').notNull().default(true),
   customFields: jsonb('custom_fields').default({}),
   createdAt: timestamp('created_at').notNull().defaultNow(),

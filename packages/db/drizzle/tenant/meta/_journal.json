@@ -323,6 +323,13 @@
       "when": 1762128025000,
       "tag": "0046_portal_access_modules",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1762128026000,
+      "tag": "0047_employee_photo",
+      "breakpoints": true
     }
   ]
 }
