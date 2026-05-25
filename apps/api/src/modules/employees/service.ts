@@ -4,6 +4,7 @@ import {
   customFieldDefinitions,
   customFieldValueHistory,
   deactivateEmployee,
+  employees,
   getCargoById,
   getDefaultPayrollType,
   getDepartamentoById,
@@ -11,12 +12,13 @@ import {
   getEmployeeByCode,
   getFuncionById,
   listEmployees,
+  positions,
   recomputePositionStatus,
   setEmployeePayrollTypes,
   updateEmployee,
 } from '@payroll/db'
 import type { PaginationOptions } from '@payroll/db'
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -280,7 +282,31 @@ export async function updateEmployeeService(
   if (input.baseSalary !== undefined) patch.baseSalary = input.baseSalary
   if (input.payFrequency !== undefined) patch.payFrequency = input.payFrequency
   if (input.customFields !== undefined) patch.customFields = input.customFields
-  if ('positionId' in input) patch.positionId = input.positionId || null
+  if ('positionId' in input) {
+    const newPosId = input.positionId || null
+    if (newPosId && newPosId !== existing.positionId) {
+      const [posRow] = await db
+        .select({ status: positions.status })
+        .from(positions)
+        .where(eq(positions.id, newPosId))
+        .limit(1)
+      if (posRow?.status === 'en_uso') {
+        const [occupant] = await db
+          .select({ id: employees.id })
+          .from(employees)
+          .where(and(eq(employees.positionId, newPosId), eq(employees.isActive, true)))
+          .limit(1)
+        if (occupant && occupant.id !== id) {
+          return {
+            success: false as const,
+            error: 'position_occupied',
+            message: 'La posición seleccionada ya está ocupada por otro empleado.',
+          }
+        }
+      }
+    }
+    patch.positionId = newPosId
+  }
   // Datos bancarios
   if ('bankId' in input) patch.bankId = input.bankId || null
   if ('accountNumber' in input) patch.accountNumber = input.accountNumber?.trim() || null
