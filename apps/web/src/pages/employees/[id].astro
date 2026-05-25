@@ -386,6 +386,12 @@ const freqLabel: Record<string, string> = {
         <button type="button" class="tab-btn" data-tab="vacaciones" onclick="switchTab('vacaciones', this)">
           Vacaciones
         </button>
+        <button type="button" class="tab-btn" data-tab="compensatorios" onclick="switchTab('compensatorios', this)">
+          Tiempos comp.
+        </button>
+        <button type="button" class="tab-btn" data-tab="incapacidades" onclick="switchTab('incapacidades', this)">
+          Incapacidades
+        </button>
         <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
           Bancario
         </button>
@@ -1019,6 +1025,47 @@ const freqLabel: Record<string, string> = {
       </div>
 
       <!-- TAB: Bancario -->
+      <!-- TAB: Tiempos compensatorios -->
+      <div id="tab-compensatorios" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
+          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas.</p>
+          <div class="py-8 text-center">
+            <p class="text-sm text-gray-400">Módulo pendiente de implementación.</p>
+            <p class="text-xs text-gray-400 mt-1">Los tiempos compensatorios se registrarán desde el módulo de asistencia.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Incapacidades -->
+      <div id="tab-incapacidades" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Incapacidades</h3>
+              <p class="text-xs text-gray-500">Registro de incapacidades del empleado y familiares con incapacidades.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Incapacidades del empleado</h4>
+              <div class="py-4 text-center">
+                <p class="text-sm text-gray-400">Sin registros.</p>
+                <p class="text-xs text-gray-400 mt-1">Se alimenta desde expedientes de tipo licencia especial.</p>
+              </div>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Familiares con incapacidades</h4>
+              <div class="py-4 text-center">
+                <p class="text-sm text-gray-400">Sin registros.</p>
+                <p class="text-xs text-gray-400 mt-1">Se alimenta desde la pestaña de dependientes.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="tab-bancario" style="display:none">
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <h3 class="font-semibold text-gray-800 mb-1">Datos bancarios</h3>
