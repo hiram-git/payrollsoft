@@ -11,6 +11,7 @@ import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { justificationRoutes } from './modules/attendance/justification-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
 import { unifiedPunchRoutes } from './modules/attendance/unified-routes'
+import { auditRoutes } from './modules/audit/routes'
 import { authRoutes } from './modules/auth/routes'
 import { calendarRoutes } from './modules/calendar/routes'
 import { budgetItemsRoutes } from './modules/catalogs/budget-items/routes'
@@ -78,6 +79,7 @@ const app = new Elysia()
   .use(conceptsRoutes)
   .use(dashboardRoutes)
   .use(acumuladosRoutes)
+  .use(auditRoutes)
   .use(attendanceRoutes)
   .use(attendanceDevicesRoutes)
   .use(attendanceImportRoutes)
