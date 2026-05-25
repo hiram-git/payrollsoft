@@ -272,15 +272,63 @@ export async function updateEmployeeService(
   const patch: Record<string, unknown> = {}
   if (input.code !== undefined) patch.code = input.code.trim().toUpperCase()
   if (input.firstName !== undefined) patch.firstName = input.firstName.trim()
+  if (input.secondName !== undefined) patch.secondName = input.secondName?.trim() || null
   if (input.lastName !== undefined) patch.lastName = input.lastName.trim()
+  if (input.secondSurname !== undefined) patch.secondSurname = input.secondSurname?.trim() || null
+  if (input.marriedSurname !== undefined)
+    patch.marriedSurname = input.marriedSurname?.trim() || null
   if (input.idNumber !== undefined) patch.idNumber = input.idNumber.trim()
+  if (input.idPrefix !== undefined) patch.idPrefix = input.idPrefix?.trim() || null
+  if (input.idProvince !== undefined) patch.idProvince = input.idProvince?.trim() || null
+  if (input.idVolume !== undefined) patch.idVolume = input.idVolume?.trim() || null
+  if (input.idFolio !== undefined) patch.idFolio = input.idFolio?.trim() || null
   if (input.socialSecurityNumber !== undefined)
     patch.socialSecurityNumber = input.socialSecurityNumber?.trim() || null
+  if (input.sex !== undefined) patch.sex = input.sex || null
+  if (input.maritalStatus !== undefined) patch.maritalStatus = input.maritalStatus || null
+  if (input.nationality !== undefined) patch.nationality = input.nationality?.trim() || null
+  if (input.birthDate !== undefined) patch.birthDate = input.birthDate || null
+  if (input.birthPlace !== undefined) patch.birthPlace = input.birthPlace?.trim() || null
   if (input.email !== undefined) patch.email = input.email?.trim().toLowerCase() || null
+  if (input.personalEmail !== undefined) patch.personalEmail = input.personalEmail?.trim() || null
   if (input.phone !== undefined) patch.phone = input.phone?.trim() || null
+  if (input.addressProvince !== undefined)
+    patch.addressProvince = input.addressProvince?.trim() || null
+  if (input.addressDistrict !== undefined)
+    patch.addressDistrict = input.addressDistrict?.trim() || null
+  if (input.addressTownship !== undefined)
+    patch.addressTownship = input.addressTownship?.trim() || null
+  if (input.address !== undefined) patch.address = input.address?.trim() || null
+  if (input.otherAddress !== undefined) patch.otherAddress = input.otherAddress?.trim() || null
   if (input.hireDate !== undefined) patch.hireDate = input.hireDate
   if (input.baseSalary !== undefined) patch.baseSalary = input.baseSalary
   if (input.payFrequency !== undefined) patch.payFrequency = input.payFrequency
+  if (input.decreeNumber !== undefined) patch.decreeNumber = input.decreeNumber?.trim() || null
+  if (input.resolutionNumber !== undefined)
+    patch.resolutionNumber = input.resolutionNumber?.trim() || null
+  if (input.decreeDate !== undefined) patch.decreeDate = input.decreeDate || null
+  if (input.resolutionDate !== undefined) patch.resolutionDate = input.resolutionDate || null
+  if (input.collaboratorNumber !== undefined)
+    patch.collaboratorNumber = input.collaboratorNumber?.trim() || null
+  if (input.externalUserRef !== undefined)
+    patch.externalUserRef = input.externalUserRef?.trim() || null
+  if (input.contractType !== undefined) patch.contractType = input.contractType || null
+  if (input.irKey !== undefined) patch.irKey = input.irKey?.trim() || null
+  if (input.shiftId !== undefined) patch.shiftId = input.shiftId || null
+  if (input.weeklyBaseHours !== undefined)
+    patch.weeklyBaseHours = input.weeklyBaseHours?.trim() || null
+  if (input.observations !== undefined) patch.observations = input.observations?.trim() || null
+  if (input.terminationDecree !== undefined)
+    patch.terminationDecree = input.terminationDecree?.trim() || null
+  if (input.terminationResolution !== undefined)
+    patch.terminationResolution = input.terminationResolution?.trim() || null
+  if (input.terminationDecreeDate !== undefined)
+    patch.terminationDecreeDate = input.terminationDecreeDate || null
+  if (input.terminationResolutionDate !== undefined)
+    patch.terminationResolutionDate = input.terminationResolutionDate || null
+  if (input.terminationReason !== undefined)
+    patch.terminationReason = input.terminationReason?.trim() || null
+  if (input.siacapPct !== undefined) patch.siacapPct = input.siacapPct?.trim() || null
   if (input.customFields !== undefined) patch.customFields = input.customFields
   if ('positionId' in input) {
     const newPosId = input.positionId || null
