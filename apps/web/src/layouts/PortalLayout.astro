@@ -138,6 +138,22 @@ const userCode = identity.employeeCode || ''
     .pt-ts-btn[data-active="true"]  { color: var(--fore); }
     .pt-ts-btn[data-active="false"] { color: var(--mute); }
 
+    /* Page loader */
+    .pt-loader {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 16px; padding: 120px 24px;
+      color: var(--mute); font-size: 13px; font-family: var(--f-sans);
+    }
+    .pt-loader-ring {
+      width: 28px; height: 28px;
+      border: 2.5px solid var(--rule);
+      border-top-color: var(--navy-hi);
+      border-radius: 50%;
+      animation: pt-ring .7s linear infinite;
+    }
+    @keyframes pt-ring { to { transform: rotate(360deg); } }
+    .pt-loader.hidden { display: none; }
+
     [data-theme="dark"] .pt-content .bg-white { background-color: var(--ink-2); }
     [data-theme="dark"] .pt-content .bg-gray-50 { background-color: var(--ink-3); }
     [data-theme="dark"] .pt-content .border-gray-200 { border-color: var(--rule); }
@@ -364,12 +380,30 @@ const userCode = identity.employeeCode || ''
           <span style="font-size:12.5px; font-weight:500; color:var(--fore-dim);">{userName}</span>
         </div>
       </header>
-      <main class="pt-content"><slot /></main>
+      <main class="pt-content">
+        <div class="pt-loader" id="pt-loader">
+          <div class="pt-loader-ring"></div>
+          <span>Cargando...</span>
+        </div>
+        <div id="pt-page" style="opacity:0;transition:opacity 180ms ease;">
+          <slot />
+        </div>
+      </main>
     </div>
   </div>
 
   <script is:inline>
     (function() {
+      // Reveal page content once styles have been applied
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
+          var loader = document.getElementById('pt-loader');
+          var page = document.getElementById('pt-page');
+          if (loader) loader.classList.add('hidden');
+          if (page) page.style.opacity = '1';
+        });
+      });
+
       var logoutBtn = document.getElementById('logout-btn');
       if (logoutBtn) {
         logoutBtn.addEventListener('click', function() {
