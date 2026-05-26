@@ -164,7 +164,7 @@ const ROLE_OPTIONS = [
           {types.map((t) => {
             const subs = subtypesByType.get(t.id) ?? []
             return (
-              <details class="cfg-type-block" open={subs.length > 0 ? true : false}>
+              <details class="cfg-type-block">
                 <summary class="cfg-type-summary px-5 py-3 flex items-center justify-between gap-3 cursor-pointer select-none">
                   <div class="flex items-center gap-3 min-w-0 flex-1">
                     <svg class="cfg-chevron w-4 h-4 cfg-mute flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
