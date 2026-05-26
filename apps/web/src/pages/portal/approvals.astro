@@ -52,7 +52,7 @@ if (!identity.isApprover) return Astro.redirect('/portal')
     </div>
   </div>
 
-  <style>
+  <style is:global>
     .ap-wrap { max-width:960px; margin:0 auto; padding:32px 24px; }
     .ap-title { font-family:var(--f-display); font-weight:300; font-size:24px; letter-spacing:-0.02em; margin:0 0 4px; color:var(--fore); }
     .ap-sub { font-size:13px; color:var(--mute-2); margin:0 0 24px; }
