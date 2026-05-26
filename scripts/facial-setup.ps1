@@ -106,16 +106,19 @@ Write-Host ""
 Write-Host "  # Terminal 1: API" -ForegroundColor Yellow
 Write-Host "  bun run --filter @payroll/api dev"
 Write-Host ""
-Write-Host "  # Terminal 2: Web con HTTPS" -ForegroundColor Yellow
-Write-Host '  $env:HTTPS_LOCAL="true"; bun run --filter @payroll/web dev'
+Write-Host "  # Terminal 2: Web (HTTP normal)" -ForegroundColor Yellow
+Write-Host "  bun run --filter @payroll/web dev"
 Write-Host ""
-Write-Host "  # En tu navegador (admin):" -ForegroundColor Yellow
-Write-Host "  https://${LocalIP}:4321/facial"
+Write-Host "  # Terminal 3: Proxy HTTPS (para tablet)" -ForegroundColor Yellow
+Write-Host "  bun scripts/https-proxy.mjs"
 Write-Host ""
-Write-Host "  # En la tablet (kiosko):" -ForegroundColor Yellow
-Write-Host "  https://${LocalIP}:4321/kiosk/setup"
+Write-Host "  # En tu navegador (admin, HTTP normal):" -ForegroundColor Yellow
+Write-Host "  http://${LocalIP}:4321/facial"
 Write-Host ""
-Write-Host "  Acepta la advertencia de certificado en el navegador."
+Write-Host "  # En la tablet (HTTPS para camara):" -ForegroundColor Yellow
+Write-Host "  https://${LocalIP}:4322/kiosk/setup"
+Write-Host ""
+Write-Host "  Acepta la advertencia de certificado en la tablet."
 Write-Host ""
 
 }
