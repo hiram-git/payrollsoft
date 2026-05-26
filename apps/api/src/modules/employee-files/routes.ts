@@ -19,6 +19,7 @@
 import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
+import { applyCompensatoryTimeOnApproval } from '../compensatory-time/approval-hook'
 import { getFieldsFor } from './dynamic-fields'
 import {
   type EmployeeFileInput,
@@ -499,6 +500,7 @@ export const employeeFilesRoutes = new Elysia({ prefix: '/employee-files' })
         set.status = 422
         return { success: false, error: result.error }
       }
+      applyCompensatoryTimeOnApproval(db, params.id, user?.userId ?? '')
       return { success: true }
     },
     {
