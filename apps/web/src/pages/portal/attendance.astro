@@ -53,13 +53,13 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
       letter-spacing:.1em; text-transform:uppercase;
     }
     .at-filter-input {
-      padding:6px 10px; font-size:13px; background:var(--ink-3);
-      border:1px solid var(--rule); color:var(--fore); border-radius:4px;
-      font-family:var(--f-sans);
+      padding:8px 12px; font-size:13px; background:var(--ink-3);
+      border:1px solid var(--rule); color:var(--fore); border-radius:6px;
+      font-family:var(--f-sans); outline:none;
     }
-    .at-filter-input:focus { outline:none; border-color:var(--navy-hi); }
+    .at-filter-input:focus { border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft); }
     .at-search-btn {
-      padding:6px 16px; font-size:13px; font-weight:500;
+      padding:8px 16px; font-size:13px; font-weight:500;
       background:var(--navy); color:#fff; border:none; border-radius:4px;
       cursor:pointer; font-family:var(--f-sans);
       transition:background 140ms ease;

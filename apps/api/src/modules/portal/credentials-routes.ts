@@ -6,7 +6,7 @@
  *   POST /portal/credentials/unlock   — unlock a locked account
  *   GET  /portal/credentials/status   — list employees with/without credentials
  */
-import { employeeCredentials, employees, portalAccess } from '@payroll/db'
+import { employeeCredentials, employees, portalAccess, portalAllowedFileTypes } from '@payroll/db'
 import { and, eq, sql } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { hashPassword } from '../../lib/password'
@@ -262,6 +262,69 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
         portalEnabled: t.Optional(t.Boolean()),
         isApprover: t.Optional(t.Boolean()),
         modules: t.Optional(t.Array(t.Object({ module: t.String(), isEnabled: t.Boolean() }))),
+      }),
+    }
+  )
+
+  .get(
+    '/allowed-types/:employeeId',
+    async ({ db, params, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      try {
+        const rows = await db
+          .select()
+          .from(portalAllowedFileTypes)
+          .where(eq(portalAllowedFileTypes.employeeId, params.employeeId))
+        return { success: true, data: rows }
+      } catch {
+        return { success: true, data: [] }
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:read')],
+      params: t.Object({ employeeId: t.String() }),
+    }
+  )
+
+  .post(
+    '/allowed-types/:employeeId',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      try {
+        await db
+          .delete(portalAllowedFileTypes)
+          .where(eq(portalAllowedFileTypes.employeeId, params.employeeId))
+        if (body.allowedTypes && body.allowedTypes.length > 0) {
+          for (const at of body.allowedTypes) {
+            await db
+              .insert(portalAllowedFileTypes)
+              .values({
+                employeeId: params.employeeId,
+                typeId: at.typeId,
+                subtypeId: at.subtypeId ?? null,
+                grantedBy: user?.userId ?? null,
+              })
+              .onConflictDoNothing()
+          }
+        }
+        return { success: true }
+      } catch {
+        return { success: true }
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:write')],
+      params: t.Object({ employeeId: t.String() }),
+      body: t.Object({
+        allowedTypes: t.Array(
+          t.Object({ typeId: t.Integer(), subtypeId: t.Optional(t.Nullable(t.Integer())) })
+        ),
       }),
     }
   )

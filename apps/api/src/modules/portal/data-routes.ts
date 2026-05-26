@@ -179,12 +179,12 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
 
   .get(
     '/file-types',
-    async ({ db, set }) => {
-      if (!db) {
+    async ({ db, portalEmployee, set }) => {
+      if (!db || !portalEmployee) {
         set.status = 400
-        return { success: false, error: 'Tenant required' }
+        return { success: false, error: 'Context required' }
       }
-      const data = await (db as AnyDb)
+      const allTypes = await (db as AnyDb)
         .select({
           id: employeeFileTypes.id,
           code: employeeFileTypes.code,
@@ -193,6 +193,20 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
         .from(employeeFileTypes)
         .where(eq(employeeFileTypes.isActive, 1))
         .orderBy(asc(employeeFileTypes.sortOrder), asc(employeeFileTypes.name))
+
+      let allowedTypeIds: number[] | null = null
+      try {
+        const allowed: AnyDb[] = await (db as AnyDb).execute(
+          sql`SELECT DISTINCT type_id FROM portal_allowed_file_types WHERE employee_id = ${portalEmployee.employeeId}`
+        )
+        if (allowed.length > 0) {
+          allowedTypeIds = allowed.map((r: AnyDb) => r.type_id)
+        }
+      } catch {}
+
+      const data = allowedTypeIds
+        ? allTypes.filter((t: AnyDb) => allowedTypeIds?.includes(t.id))
+        : allTypes
       return { success: true, data }
     },
     { beforeHandle: [guardPortal] }
