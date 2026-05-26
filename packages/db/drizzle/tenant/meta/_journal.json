@@ -358,6 +358,13 @@
       "when": 1762128030000,
       "tag": "0051_portal_allowed_file_types",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1762128031000,
+      "tag": "0052_compensatory_time",
+      "breakpoints": true
     }
   ]
 }
