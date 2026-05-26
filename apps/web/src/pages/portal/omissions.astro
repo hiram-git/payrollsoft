@@ -30,15 +30,25 @@ if (!identity) return Astro.redirect('/portal/login')
             </select>
           </div>
           <div>
-            <label class="ds-label">Fecha del documento</label>
-            <input type="date" name="documentDate" class="ds-input" required />
+            <label class="ds-label">Fecha de la omisión *</label>
+            <input type="date" name="documentDate" id="pf-omission-date" class="ds-input" required />
           </div>
         </div>
       </section>
 
+      <section class="pt-card pf-section" id="time-section" style="display:none;">
+        <h2 class="pf-section-title">Horario real</h2>
+        <div class="pf-grid-2" id="time-fields"></div>
+      </section>
+
       <section class="pt-card pf-section" id="dyn-section" style="display:none;">
-        <h2 class="pf-section-title">Datos de la omisión</h2>
+        <h2 class="pf-section-title">Datos adicionales</h2>
         <div id="dyn-fields" class="pf-grid-2"></div>
+      </section>
+
+      <section class="pt-card pf-section">
+        <h2 class="pf-section-title">Motivo de la omisión *</h2>
+        <textarea name="extra_reason_detail" rows="3" placeholder="Describe por qué no realizaste la marcación..." class="ds-input" style="resize:vertical;min-height:56px;" required></textarea>
       </section>
 
       <section class="pt-card pf-section">
@@ -61,6 +71,8 @@ if (!identity) return Astro.redirect('/portal/login')
       var FILE_TYPE_CODE = 'omisiones';
       var form = document.getElementById('pf-form');
       var subtypeEl = document.getElementById('pf-subtype');
+      var timeSection = document.getElementById('time-section');
+      var timeFields = document.getElementById('time-fields');
       var dynSection = document.getElementById('dyn-section');
       var dynFields = document.getElementById('dyn-fields');
       var submitBtn = document.getElementById('pf-submit');
@@ -70,14 +82,93 @@ if (!identity) return Astro.redirect('/portal/login')
       var okText = document.getElementById('ok-text');
       var FILE_ACCEPT = 'application/pdf,image/jpeg,image/png,image/gif';
       var typeId = null; var subtypeMap = {}; var fieldsCache = {};
+
       function showErr(m) { errText.textContent = m; errBanner.style.display = 'flex'; okBanner.style.display = 'none'; }
       function showOk(m) { okText.textContent = m; okBanner.style.display = 'flex'; errBanner.style.display = 'none'; }
       function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
       function proxyGet(p) { return fetch('/api/portal/proxy?path=' + encodeURIComponent(p)).then(function(r) { return r.json(); }); }
-      proxyGet('file-types').then(function(res) { var types = (res && res.data) || []; for (var i = 0; i < types.length; i++) { if (types[i].code === FILE_TYPE_CODE) { typeId = types[i].id; break; } } if (!typeId) return; return proxyGet('file-types/' + typeId + '/subtypes'); }).then(function(res) { if (!res) return; var subs = (res && res.data) || []; for (var j = 0; j < subs.length; j++) subtypeMap[subs[j].code] = subs[j].id; });
-      subtypeEl.addEventListener('change', function() { var code = subtypeEl.value; if (!code || !typeId) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; } var subtypeId = subtypeMap[code]; if (!subtypeId) { dynSection.style.display = 'none'; return; } var key = typeId + '/' + subtypeId; if (fieldsCache[key]) { renderFields(fieldsCache[key]); return; } proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) { var fields = (res && res.data && res.data.fields) || []; fieldsCache[key] = fields; renderFields(fields); }); });
-      function renderFields(fields) { if (fields.length === 0) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; } dynFields.innerHTML = fields.map(function(def) { var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name; var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : ''; var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file'; var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>'; var inner = ''; if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>'; else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />'; else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />'; else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />'; else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />'; return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>'; }).join(''); dynSection.style.display = 'block'; }
-      form.addEventListener('submit', function(e) { e.preventDefault(); errBanner.style.display = 'none'; var code = subtypeEl.value; if (!code || !typeId) { showErr('Selecciona un tipo de omisión.'); return; } var subtypeId = subtypeMap[code]; if (!subtypeId) { showErr('Subtipo no encontrado.'); return; } submitBtn.classList.add('loading'); submitBtn.disabled = true; var fd = new FormData(form); fd.set('typeId', String(typeId)); fd.set('subtypeId', String(subtypeId)); fetch('/api/portal/requests', { method: 'POST', body: fd }).then(function(r) { return r.json(); }).then(function(r) { if (r.success) { showOk('Solicitud creada. N° ' + (r.data && r.data.documentNumber ? r.data.documentNumber : '')); form.reset(); dynSection.style.display = 'none'; dynFields.innerHTML = ''; } else showErr(r.error || 'Error.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; }).catch(function() { showErr('Error de conexión.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; }); });
+
+      var TIME_FIELDS_MAP = {
+        omision_entrada: '<div><label class="ds-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="ds-input" required /></div>',
+        omision_salida: '<div><label class="ds-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="ds-input" required /></div>',
+        omision_ambas: '<div><label class="ds-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="ds-input" required /></div>' +
+                       '<div><label class="ds-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="ds-input" required /></div>'
+      };
+
+      subtypeEl.addEventListener('change', function() {
+        var code = subtypeEl.value;
+        if (TIME_FIELDS_MAP[code]) {
+          timeFields.innerHTML = TIME_FIELDS_MAP[code];
+          timeSection.style.display = 'block';
+        } else {
+          timeSection.style.display = 'none';
+          timeFields.innerHTML = '';
+        }
+        if (!code || !typeId) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; }
+        var subtypeId = subtypeMap[code];
+        if (!subtypeId) { dynSection.style.display = 'none'; return; }
+        var key = typeId + '/' + subtypeId;
+        if (fieldsCache[key]) { renderFields(fieldsCache[key]); return; }
+        proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) {
+          var fields = (res && res.data && res.data.fields) || [];
+          fields = fields.filter(function(f) { return f.name !== 'omission_date' && f.name !== 'reason_detail' && f.name !== 'actual_arrival' && f.name !== 'actual_departure'; });
+          fieldsCache[key] = fields;
+          renderFields(fields);
+        });
+      });
+
+      proxyGet('file-types').then(function(res) {
+        var types = (res && res.data) || [];
+        for (var i = 0; i < types.length; i++) { if (types[i].code === FILE_TYPE_CODE) { typeId = types[i].id; break; } }
+        if (!typeId) return;
+        return proxyGet('file-types/' + typeId + '/subtypes');
+      }).then(function(res) {
+        if (!res) return;
+        var subs = (res && res.data) || [];
+        for (var j = 0; j < subs.length; j++) subtypeMap[subs[j].code] = subs[j].id;
+      });
+
+      function renderFields(fields) {
+        if (fields.length === 0) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; }
+        dynFields.innerHTML = fields.map(function(def) {
+          var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name;
+          var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
+          var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file';
+          var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>';
+          var inner = '';
+          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>';
+          else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />';
+          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />';
+          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />';
+          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />';
+          return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>';
+        }).join('');
+        dynSection.style.display = 'block';
+      }
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault(); errBanner.style.display = 'none';
+        var code = subtypeEl.value;
+        if (!code || !typeId) { showErr('Selecciona un tipo de omisión.'); return; }
+        var subtypeId = subtypeMap[code];
+        if (!subtypeId) { showErr('Subtipo no encontrado.'); return; }
+        submitBtn.classList.add('loading'); submitBtn.disabled = true;
+        var fd = new FormData(form);
+        fd.set('typeId', String(typeId));
+        fd.set('subtypeId', String(subtypeId));
+        fd.set('extra_omission_date', document.getElementById('pf-omission-date').value);
+        fetch('/api/portal/requests', { method: 'POST', body: fd })
+          .then(function(r) { return r.json(); })
+          .then(function(r) {
+            if (r.success) {
+              showOk('Solicitud creada. N° ' + (r.data && r.data.documentNumber ? r.data.documentNumber : ''));
+              form.reset(); timeSection.style.display = 'none'; timeFields.innerHTML = '';
+              dynSection.style.display = 'none'; dynFields.innerHTML = '';
+            } else showErr(r.error || 'Error.');
+            submitBtn.classList.remove('loading'); submitBtn.disabled = false;
+          })
+          .catch(function() { showErr('Error de conexión.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; });
+      });
     })();
   </script>
 </PortalLayout>

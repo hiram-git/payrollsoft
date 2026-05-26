@@ -35,6 +35,28 @@ if (!identity) return Astro.redirect('/portal/login')
         </div>
       </section>
 
+      <section class="pt-card pf-section">
+        <h2 class="pf-section-title">Período de la misión</h2>
+        <div class="pf-grid-3">
+          <div>
+            <label class="ds-label">Fecha inicio *</label>
+            <input type="datetime-local" id="pf-start" name="extra_start_date" class="ds-input" required />
+          </div>
+          <div>
+            <label class="ds-label">Fecha fin *</label>
+            <input type="datetime-local" id="pf-end" name="extra_end_date" class="ds-input" required />
+          </div>
+          <div>
+            <label class="ds-label">Total de días</label>
+            <div class="pf-hours-result">
+              <span class="pf-hours-value" id="pf-calc-days">0</span>
+              <span>días</span>
+            </div>
+            <input type="hidden" id="pf-days" name="extra_total_days" value="0" />
+          </div>
+        </div>
+      </section>
+
       <section class="pt-card pf-section" id="dyn-section" style="display:none;">
         <h2 class="pf-section-title">Datos de la misión</h2>
         <div id="dyn-fields" class="pf-grid-2"></div>
@@ -67,16 +89,97 @@ if (!identity) return Astro.redirect('/portal/login')
       var errText = document.getElementById('err-text');
       var okBanner = document.getElementById('ok-banner');
       var okText = document.getElementById('ok-text');
+      var startEl = document.getElementById('pf-start');
+      var endEl = document.getElementById('pf-end');
+      var calcEl = document.getElementById('pf-calc-days');
+      var daysHidden = document.getElementById('pf-days');
       var FILE_ACCEPT = 'application/pdf,image/jpeg,image/png,image/gif';
       var typeId = null; var subtypeMap = {}; var fieldsCache = {};
+
       function showErr(m) { errText.textContent = m; errBanner.style.display = 'flex'; okBanner.style.display = 'none'; }
       function showOk(m) { okText.textContent = m; okBanner.style.display = 'flex'; errBanner.style.display = 'none'; }
       function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
       function proxyGet(p) { return fetch('/api/portal/proxy?path=' + encodeURIComponent(p)).then(function(r) { return r.json(); }); }
-      proxyGet('file-types').then(function(res) { var types = (res && res.data) || []; for (var i = 0; i < types.length; i++) { if (types[i].code === FILE_TYPE_CODE) { typeId = types[i].id; break; } } if (!typeId) return; return proxyGet('file-types/' + typeId + '/subtypes'); }).then(function(res) { if (!res) return; var subs = (res && res.data) || []; for (var j = 0; j < subs.length; j++) subtypeMap[subs[j].code] = subs[j].id; });
-      subtypeEl.addEventListener('change', function() { var code = subtypeEl.value; if (!code || !typeId) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; } var subtypeId = subtypeMap[code]; if (!subtypeId) { dynSection.style.display = 'none'; return; } var key = typeId + '/' + subtypeId; if (fieldsCache[key]) { renderFields(fieldsCache[key]); return; } proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) { var fields = (res && res.data && res.data.fields) || []; fieldsCache[key] = fields; renderFields(fields); }); });
-      function renderFields(fields) { if (fields.length === 0) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; } dynFields.innerHTML = fields.map(function(def) { var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name; var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : ''; var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file'; var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>'; var inner = ''; if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>'; else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />'; else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />'; else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />'; else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />'; return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>'; }).join(''); dynSection.style.display = 'block'; }
-      form.addEventListener('submit', function(e) { e.preventDefault(); errBanner.style.display = 'none'; var code = subtypeEl.value; if (!code || !typeId) { showErr('Selecciona un tipo de misión.'); return; } var subtypeId = subtypeMap[code]; if (!subtypeId) { showErr('Subtipo no encontrado.'); return; } submitBtn.classList.add('loading'); submitBtn.disabled = true; var fd = new FormData(form); fd.set('typeId', String(typeId)); fd.set('subtypeId', String(subtypeId)); fetch('/api/portal/requests', { method: 'POST', body: fd }).then(function(r) { return r.json(); }).then(function(r) { if (r.success) { showOk('Solicitud creada. N° ' + (r.data && r.data.documentNumber ? r.data.documentNumber : '')); form.reset(); dynSection.style.display = 'none'; dynFields.innerHTML = ''; } else showErr(r.error || 'Error.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; }).catch(function() { showErr('Error de conexión.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; }); });
+
+      function calcDays() {
+        var s = startEl.value, e = endEl.value;
+        if (!s || !e) { calcEl.textContent = '0'; daysHidden.value = '0'; return; }
+        var diff = (new Date(e).getTime() - new Date(s).getTime()) / 86400000;
+        if (diff < 0) diff = 0;
+        var rounded = Math.ceil(diff) || 1;
+        calcEl.textContent = String(rounded);
+        daysHidden.value = String(rounded);
+      }
+      startEl.addEventListener('change', calcDays);
+      endEl.addEventListener('change', calcDays);
+
+      proxyGet('file-types').then(function(res) {
+        var types = (res && res.data) || [];
+        for (var i = 0; i < types.length; i++) { if (types[i].code === FILE_TYPE_CODE) { typeId = types[i].id; break; } }
+        if (!typeId) return;
+        return proxyGet('file-types/' + typeId + '/subtypes');
+      }).then(function(res) {
+        if (!res) return;
+        var subs = (res && res.data) || [];
+        for (var j = 0; j < subs.length; j++) subtypeMap[subs[j].code] = subs[j].id;
+      });
+
+      subtypeEl.addEventListener('change', function() {
+        var code = subtypeEl.value;
+        if (!code || !typeId) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; }
+        var subtypeId = subtypeMap[code];
+        if (!subtypeId) { dynSection.style.display = 'none'; return; }
+        var key = typeId + '/' + subtypeId;
+        if (fieldsCache[key]) { renderFields(fieldsCache[key]); return; }
+        proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) {
+          var fields = (res && res.data && res.data.fields) || [];
+          fields = fields.filter(function(f) { return f.name !== 'start_date' && f.name !== 'end_date' && f.name !== 'total_days'; });
+          fieldsCache[key] = fields;
+          renderFields(fields);
+        });
+      });
+
+      function renderFields(fields) {
+        if (fields.length === 0) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; }
+        dynFields.innerHTML = fields.map(function(def) {
+          var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name;
+          var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
+          var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file';
+          var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>';
+          var inner = '';
+          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>';
+          else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />';
+          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />';
+          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />';
+          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />';
+          return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>';
+        }).join('');
+        dynSection.style.display = 'block';
+      }
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault(); errBanner.style.display = 'none';
+        var code = subtypeEl.value;
+        if (!code || !typeId) { showErr('Selecciona un tipo de misión.'); return; }
+        var subtypeId = subtypeMap[code];
+        if (!subtypeId) { showErr('Subtipo no encontrado.'); return; }
+        if (!startEl.value || !endEl.value) { showErr('Selecciona las fechas de la misión.'); return; }
+        submitBtn.classList.add('loading'); submitBtn.disabled = true;
+        var fd = new FormData(form);
+        fd.set('typeId', String(typeId));
+        fd.set('subtypeId', String(subtypeId));
+        fetch('/api/portal/requests', { method: 'POST', body: fd })
+          .then(function(r) { return r.json(); })
+          .then(function(r) {
+            if (r.success) {
+              showOk('Solicitud creada. N° ' + (r.data && r.data.documentNumber ? r.data.documentNumber : ''));
+              form.reset(); dynSection.style.display = 'none'; dynFields.innerHTML = '';
+              calcEl.textContent = '0'; daysHidden.value = '0';
+            } else showErr(r.error || 'Error.');
+            submitBtn.classList.remove('loading'); submitBtn.disabled = false;
+          })
+          .catch(function() { showErr('Error de conexión.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; });
+      });
     })();
   </script>
 </PortalLayout>
