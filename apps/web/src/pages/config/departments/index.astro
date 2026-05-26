@@ -21,7 +21,7 @@ let tree: DepartamentoNode[] = []
 let error = ''
 
 try {
-  const res = await fetch(`${API_URL}/departamentos/tree`, {
+  const res = await fetch(`${API_URL}/departments/tree`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.ok) {
