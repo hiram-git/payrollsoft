@@ -11,6 +11,7 @@ import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { justificationRoutes } from './modules/attendance/justification-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
 import { unifiedPunchRoutes } from './modules/attendance/unified-routes'
+import { auditRoutes } from './modules/audit/routes'
 import { authRoutes } from './modules/auth/routes'
 import { calendarRoutes } from './modules/calendar/routes'
 import { budgetItemsRoutes } from './modules/catalogs/budget-items/routes'
@@ -24,6 +25,7 @@ import { creditorRoutes } from './modules/creditors/routes'
 import { customFieldsRoutes } from './modules/custom-fields/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
 import { employeeFilesRoutes } from './modules/employee-files/routes'
+import { dependentsRoutes } from './modules/employees/dependents-routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
 import { facialRoutes } from './modules/facial/routes'
@@ -68,6 +70,7 @@ const app = new Elysia()
   .use(companyRoutes)
   .use(positionsRoutes)
   .use(employeeRoutes)
+  .use(dependentsRoutes)
   .use(jobTitlesRoutes)
   .use(jobFunctionsRoutes)
   .use(departmentsRoutes)
@@ -76,6 +79,7 @@ const app = new Elysia()
   .use(conceptsRoutes)
   .use(dashboardRoutes)
   .use(acumuladosRoutes)
+  .use(auditRoutes)
   .use(attendanceRoutes)
   .use(attendanceDevicesRoutes)
   .use(attendanceImportRoutes)

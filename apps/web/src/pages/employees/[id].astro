@@ -14,11 +14,29 @@ type Employee = {
   id: string
   code: string
   firstName: string
+  secondName: string | null
   lastName: string
+  secondSurname: string | null
+  marriedSurname: string | null
   idNumber: string
+  idPrefix: string | null
+  idProvince: string | null
+  idVolume: string | null
+  idFolio: string | null
   socialSecurityNumber: string | null
+  sex: string | null
+  maritalStatus: string | null
+  nationality: string | null
+  birthDate: string | null
+  birthPlace: string | null
   email: string | null
+  personalEmail: string | null
   phone: string | null
+  addressProvince: string | null
+  addressDistrict: string | null
+  addressTownship: string | null
+  address: string | null
+  otherAddress: string | null
   jobTitleId: string | null
   jobFunctionId: string | null
   departmentId: string | null
@@ -28,9 +46,26 @@ type Employee = {
   hireDate: string
   baseSalary: string
   payFrequency: string
+  decreeNumber: string | null
+  resolutionNumber: string | null
+  decreeDate: string | null
+  resolutionDate: string | null
+  collaboratorNumber: string | null
+  externalUserRef: string | null
+  contractType: string | null
+  irKey: string | null
+  shiftId: string | null
+  weeklyBaseHours: string | null
+  observations: string | null
+  terminationDate: string | null
+  terminationDecree: string | null
+  terminationResolution: string | null
+  terminationDecreeDate: string | null
+  terminationResolutionDate: string | null
+  terminationReason: string | null
+  siacapPct: string | null
   isActive: boolean
   payrollTypeIds?: string[]
-  // Datos bancarios (módulo de tesorería)
   bankId?: string | null
   accountNumber?: string | null
   accountType?: 'savings' | 'checking' | null
@@ -386,6 +421,15 @@ const freqLabel: Record<string, string> = {
         <button type="button" class="tab-btn" data-tab="vacaciones" onclick="switchTab('vacaciones', this)">
           Vacaciones
         </button>
+        <button type="button" class="tab-btn" data-tab="compensatorios" onclick="switchTab('compensatorios', this)">
+          Tiempos comp.
+        </button>
+        <button type="button" class="tab-btn" data-tab="incapacidades" onclick="switchTab('incapacidades', this)">
+          Incapacidades
+        </button>
+        <button type="button" class="tab-btn" data-tab="dependientes" onclick="switchTab('dependientes', this)">
+          Dependientes
+        </button>
         <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
           Bancario
         </button>
@@ -397,31 +441,133 @@ const freqLabel: Record<string, string> = {
       <!-- TAB: Datos Personales -->
       <div id="tab-personal">
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-          <h3 class="font-semibold text-gray-800 mb-4">Identificación</h3>
-          <div class="grid grid-cols-2 gap-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Nombres</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Primer nombre *</label>
               <input type="text" name="firstName" class="input" required value={emp.firstName} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Apellido *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Segundo nombre</label>
+              <input type="text" name="secondName" class="input" value={emp.secondName ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Primer apellido *</label>
               <input type="text" name="lastName" class="input" required value={emp.lastName} />
             </div>
             <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Segundo apellido</label>
+              <input type="text" name="secondSurname" class="input" value={emp.secondSurname ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Apellido de casada</label>
+              <input type="text" name="marriedSurname" class="input" value={emp.marriedSurname ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Identificación</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="col-span-2 md:col-span-1">
               <label class="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
               <input type="text" name="idNumber" class="input" required value={emp.idNumber} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Seguro Social</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sigla</label>
+              <input type="text" name="idPrefix" class="input" maxlength="5" value={emp.idPrefix ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
+              <input type="text" name="idProvince" class="input" maxlength="5" value={emp.idProvince ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tomo</label>
+              <input type="text" name="idVolume" class="input" maxlength="10" value={emp.idVolume ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Folio</label>
+              <input type="text" name="idFolio" class="input" maxlength="10" value={emp.idFolio ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Seguro social</label>
               <input type="text" name="socialSecurityNumber" class="input" value={emp.socialSecurityNumber ?? ''} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
+              <select name="sex" class="input">
+                <option value="">—</option>
+                <option value="M" selected={emp.sex === 'M'}>Masculino</option>
+                <option value="F" selected={emp.sex === 'F'}>Femenino</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Estado civil</label>
+              <select name="maritalStatus" class="input">
+                <option value="">—</option>
+                <option value="single" selected={emp.maritalStatus === 'single'}>Soltero(a)</option>
+                <option value="married" selected={emp.maritalStatus === 'married'}>Casado(a)</option>
+                <option value="divorced" selected={emp.maritalStatus === 'divorced'}>Divorciado(a)</option>
+                <option value="widowed" selected={emp.maritalStatus === 'widowed'}>Viudo(a)</option>
+                <option value="union" selected={emp.maritalStatus === 'union'}>Unión libre</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad</label>
+              <select name="nationality" class="input">
+                <option value="">—</option>
+                <option value="panamanian" selected={emp.nationality === 'panamanian'}>Panameño(a)</option>
+                <option value="foreign" selected={emp.nationality === 'foreign'}>Extranjero(a)</option>
+                <option value="naturalized" selected={emp.nationality === 'naturalized'}>Nacionalizado(a)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
+              <input type="date" name="birthDate" class="input" value={emp.birthDate ?? ''} />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Lugar de nacimiento</label>
+              <input type="text" name="birthPlace" class="input" value={emp.birthPlace ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Contacto y dirección</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email institucional</label>
               <input type="email" name="email" class="input" value={emp.email ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email personal</label>
+              <input type="email" name="personalEmail" class="input" value={emp.personalEmail ?? ''} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
               <input type="text" name="phone" class="input" value={emp.phone ?? ''} />
+            </div>
+            <div></div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
+              <input type="text" name="addressProvince" class="input" value={emp.addressProvince ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Distrito</label>
+              <input type="text" name="addressDistrict" class="input" value={emp.addressDistrict ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Corregimiento</label>
+              <input type="text" name="addressTownship" class="input" value={emp.addressTownship ?? ''} />
+            </div>
+            <div></div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+              <input type="text" name="address" class="input" value={emp.address ?? ''} />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Otra dirección</label>
+              <input type="text" name="otherAddress" class="input" value={emp.otherAddress ?? ''} />
             </div>
           </div>
         </div>
@@ -534,6 +680,88 @@ const freqLabel: Record<string, string> = {
             </div>
           </div>
         </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Datos gubernamentales y contratación</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° Decreto</label>
+              <input type="text" name="decreeNumber" class="input" value={emp.decreeNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Decreto</label>
+              <input type="date" name="decreeDate" class="input" value={emp.decreeDate ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° Resuelto</label>
+              <input type="text" name="resolutionNumber" class="input" value={emp.resolutionNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Resuelto</label>
+              <input type="date" name="resolutionDate" class="input" value={emp.resolutionDate ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° Colaborador</label>
+              <input type="text" name="collaboratorNumber" class="input" value={emp.collaboratorNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Ref. usuario externo</label>
+              <input type="text" name="externalUserRef" class="input" value={emp.externalUserRef ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato</label>
+              <select name="contractType" class="input">
+                <option value="">—</option>
+                <option value="permanent" selected={emp.contractType === 'permanent'}>Permanente</option>
+                <option value="transitory" selected={emp.contractType === 'transitory'}>Contrato transitorio</option>
+                <option value="contingent" selected={emp.contractType === 'contingent'}>Contrato contingente</option>
+                <option value="professional_services" selected={emp.contractType === 'professional_services'}>Servicios profesionales</option>
+                <option value="deputy" selected={emp.contractType === 'deputy'}>Contrato diputado</option>
+                <option value="interim" selected={emp.contractType === 'interim'}>Contrato interino</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Clave I/R</label>
+              <input type="text" name="irKey" class="input" value={emp.irKey ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Horas base semanales</label>
+              <input type="text" name="weeklyBaseHours" class="input" value={emp.weeklyBaseHours ?? ''} />
+            </div>
+            <div class="col-span-2 md:col-span-3">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
+              <input type="text" name="observations" class="input" value={emp.observations ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        {!emp.isActive && (
+          <div class="bg-white rounded-xl border border-red-200 p-6 mb-4">
+            <h3 class="font-semibold text-red-700 mb-4">Datos de baja</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Decreto baja</label>
+                <input type="text" name="terminationDecree" class="input" value={emp.terminationDecree ?? ''} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fecha decreto baja</label>
+                <input type="date" name="terminationDecreeDate" class="input" value={emp.terminationDecreeDate ?? ''} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Resuelto baja</label>
+                <input type="text" name="terminationResolution" class="input" value={emp.terminationResolution ?? ''} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fecha resuelto baja</label>
+                <input type="date" name="terminationResolutionDate" class="input" value={emp.terminationResolutionDate ?? ''} />
+              </div>
+              <div class="col-span-2 md:col-span-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Causal de baja</label>
+                <input type="text" name="terminationReason" class="input" value={emp.terminationReason ?? ''} />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <!-- TAB: Préstamos -->
@@ -1019,6 +1247,119 @@ const freqLabel: Record<string, string> = {
       </div>
 
       <!-- TAB: Bancario -->
+      <!-- TAB: Tiempos compensatorios -->
+      <div id="tab-compensatorios" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
+          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas.</p>
+          <div class="py-8 text-center">
+            <p class="text-sm text-gray-400">Módulo pendiente de implementación.</p>
+            <p class="text-xs text-gray-400 mt-1">Los tiempos compensatorios se registrarán desde el módulo de asistencia.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Incapacidades -->
+      <div id="tab-incapacidades" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Incapacidades</h3>
+              <p class="text-xs text-gray-500">Registro de incapacidades del empleado y familiares con incapacidades.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Incapacidades del empleado</h4>
+              <div class="py-4 text-center">
+                <p class="text-sm text-gray-400">Sin registros.</p>
+                <p class="text-xs text-gray-400 mt-1">Se alimenta desde expedientes de tipo licencia especial.</p>
+              </div>
+            </div>
+            <div class="border border-gray-200 rounded-lg p-4">
+              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Familiares con incapacidades</h4>
+              <div class="py-4 text-center">
+                <p class="text-sm text-gray-400">Sin registros.</p>
+                <p class="text-xs text-gray-400 mt-1">Se alimenta desde la pestaña de dependientes.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Dependientes -->
+      <div id="tab-dependientes" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Dependientes</h3>
+              <p class="text-xs text-gray-500">Carga familiar del empleado.</p>
+            </div>
+            <button type="button" id="dep-add-btn" class="px-3 py-1.5 text-xs font-medium text-white rounded-md" style="background:var(--navy)">
+              + Agregar
+            </button>
+          </div>
+
+          <div id="dep-form" class="hidden mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
+                <input type="text" id="dep-firstName" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Apellido *</label>
+                <input type="text" id="dep-lastName" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Cédula</label>
+                <input type="text" id="dep-idNumber" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Parentesco *</label>
+                <select id="dep-relationship" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                  <option value="spouse">Cónyuge</option>
+                  <option value="child">Hijo(a)</option>
+                  <option value="parent">Padre/Madre</option>
+                  <option value="sibling">Hermano(a)</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Fecha nacimiento</label>
+                <input type="date" id="dep-birthDate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Sexo</label>
+                <select id="dep-sex" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                  <option value="">—</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+              </div>
+              <div class="col-span-2 flex items-center gap-3 pt-4">
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="dep-hasDisability" class="rounded" />
+                  Con discapacidad
+                </label>
+              </div>
+            </div>
+            <div id="dep-disability-row" class="hidden mb-3">
+              <label class="block text-xs font-medium text-gray-600 mb-1">Descripción de discapacidad</label>
+              <input type="text" id="dep-disabilityDesc" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+            <div class="flex justify-end gap-2">
+              <button type="button" id="dep-cancel-btn" class="px-3 py-1.5 text-sm text-gray-600">Cancelar</button>
+              <button type="button" id="dep-save-btn" class="px-4 py-1.5 text-sm text-white rounded-md font-medium" style="background:var(--ok)">Guardar</button>
+            </div>
+          </div>
+
+          <div id="dep-list">
+            <div class="py-8 text-center text-sm text-gray-400">Cargando...</div>
+          </div>
+        </div>
+      </div>
+
       <div id="tab-bancario" style="display:none">
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <h3 class="font-semibold text-gray-800 mb-1">Datos bancarios</h3>
@@ -1069,6 +1410,13 @@ const freqLabel: Record<string, string> = {
             <div class="col-span-2">
               <label class="block text-sm text-gray-700 font-medium mb-1">Número de cuenta</label>
               <input type="text" name="accountNumber" value={emp.accountNumber ?? ''} maxlength="40" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">SIACAP %</label>
+              <input type="text" name="siacapPct" value={emp.siacapPct ?? ''} maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
             </div>
           </div>
         </div>
@@ -1615,5 +1963,99 @@ function syncToggleUI(id, val) {
   });
 
   loadPortalData();
+})();
+</script>
+
+<script is:inline>
+;(function() {
+  var empId = window.location.pathname.split('/employees/')[1]?.split('/')[0] || '';
+  if (!empId) return;
+  var listEl = document.getElementById('dep-list');
+  var formEl = document.getElementById('dep-form');
+  var addBtn = document.getElementById('dep-add-btn');
+  var cancelBtn = document.getElementById('dep-cancel-btn');
+  var saveBtn = document.getElementById('dep-save-btn');
+  var hasDis = document.getElementById('dep-hasDisability');
+  var disRow = document.getElementById('dep-disability-row');
+  if (!listEl || !formEl || !addBtn) return;
+
+  var REL_LABELS = { spouse:'Cónyuge', child:'Hijo(a)', parent:'Padre/Madre', sibling:'Hermano(a)', other:'Otro' };
+  var editingId = null;
+
+  hasDis?.addEventListener('change', function() {
+    disRow.style.display = hasDis.checked ? '' : 'none';
+  });
+  addBtn.addEventListener('click', function() { editingId = null; clearForm(); formEl.classList.remove('hidden'); });
+  cancelBtn?.addEventListener('click', function() { formEl.classList.add('hidden'); });
+
+  function clearForm() {
+    ['dep-firstName','dep-lastName','dep-idNumber','dep-birthDate','dep-disabilityDesc'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('dep-relationship').value = 'spouse';
+    document.getElementById('dep-sex').value = '';
+    hasDis.checked = false; disRow.style.display = 'none';
+  }
+
+  function loadDeps() {
+    fetch('/api/employees/' + empId + '/dependents')
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        var deps = (res.data || []).filter(function(d) { return d.isActive !== false; });
+        if (deps.length === 0) { listEl.innerHTML = '<div class="py-8 text-center text-sm text-gray-400">Sin dependientes registrados.</div>'; return; }
+        var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 bg-gray-50">' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Nombre</th>' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Cédula</th>' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Parentesco</th>' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Discapacidad</th>' +
+          '<th class="px-3 py-2"></th></tr></thead><tbody>';
+        deps.forEach(function(d) {
+          html += '<tr class="border-b border-gray-100">' +
+            '<td class="px-3 py-2.5 font-medium text-gray-900">' + d.firstName + ' ' + d.lastName + '</td>' +
+            '<td class="px-3 py-2.5 text-gray-600 font-mono text-xs">' + (d.idNumber || '—') + '</td>' +
+            '<td class="px-3 py-2.5 text-gray-600 text-xs">' + (REL_LABELS[d.relationship] || d.relationship) + '</td>' +
+            '<td class="px-3 py-2.5">' + (d.hasDisability ? '<span class="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Sí</span>' : '<span class="text-xs text-gray-400">No</span>') + '</td>' +
+            '<td class="px-3 py-2.5 text-right"><button class="text-xs text-red-500 hover:underline" onclick="window.__depDel(\'' + d.id + '\')">Eliminar</button></td></tr>';
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+      })
+      .catch(function() { listEl.innerHTML = '<div class="py-8 text-center text-sm text-red-400">Error al cargar.</div>'; });
+  }
+
+  saveBtn?.addEventListener('click', function() {
+    var fn = document.getElementById('dep-firstName').value.trim();
+    var ln = document.getElementById('dep-lastName').value.trim();
+    if (!fn || !ln) return;
+    var body = {
+      firstName: fn, lastName: ln,
+      idNumber: document.getElementById('dep-idNumber').value.trim() || null,
+      relationship: document.getElementById('dep-relationship').value,
+      birthDate: document.getElementById('dep-birthDate').value || null,
+      sex: document.getElementById('dep-sex').value || null,
+      hasDisability: hasDis.checked,
+      disabilityDescription: document.getElementById('dep-disabilityDesc').value.trim() || null,
+    };
+    if (editingId) body._id = editingId;
+    saveBtn.disabled = true;
+    fetch('/api/employees/' + empId + '/dependents', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      saveBtn.disabled = false;
+      if (res.success) { formEl.classList.add('hidden'); loadDeps(); }
+    })
+    .catch(function() { saveBtn.disabled = false; });
+  });
+
+  window.__depDel = function(depId) {
+    if (!confirm('¿Eliminar este dependiente?')) return;
+    fetch('/api/employees/' + empId + '/dependents', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dependentId: depId }),
+    }).then(function() { loadDeps(); });
+  };
+
+  loadDeps();
 })();
 </script>

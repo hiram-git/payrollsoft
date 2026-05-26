@@ -211,20 +211,33 @@ export async function createWithCorrelative(
     const sequence = maxSeq + 1
     const documentNumber = formatDocumentNumber(input.typeId, input.subtypeId, year, sequence)
 
-    // ¿El subtipo requiere aprobación? El flag declarativo
-    // `requires_approval` en `employee_file_subtypes` es el gate.
-    // Las reglas en `employee_file_approval_rules` solo declaran
-    // _quién_ aprueba (rol), no _si_ se requiere aprobación.
+    // ¿Requiere aprobación? Se evalúan dos fuentes:
+    // 1. El flag `requires_approval` en el subtipo (configuración directa)
+    // 2. Las reglas activas en `employee_file_approval_rules` (quién aprueba)
+    // Si CUALQUIERA de las dos dice "sí", el expediente nace como 'pending'.
     const subtypeRows = await tx.execute(sql`
       SELECT requires_approval
       FROM employee_file_subtypes
       WHERE id = ${input.subtypeId}
       LIMIT 1
     `)
-    const subtypeRequires =
+    const subtypeFlag =
       Number((subtypeRows as Array<{ requires_approval: number }>)[0]?.requires_approval ?? 0) === 1
-    const initialStatus = subtypeRequires ? 'pending' : 'approved'
-    const needsApproval = subtypeRequires
+
+    let hasApprovalRules = false
+    try {
+      const ruleRows = await tx.execute(sql`
+        SELECT COUNT(*)::int AS c
+        FROM employee_file_approval_rules
+        WHERE is_active = 1
+          AND type_id = ${input.typeId}
+          AND (subtype_id = ${input.subtypeId} OR subtype_id IS NULL)
+      `)
+      hasApprovalRules = Number((ruleRows as Array<{ c: number }>)[0]?.c ?? 0) > 0
+    } catch {}
+
+    const needsApproval = subtypeFlag || hasApprovalRules
+    const initialStatus = needsApproval ? 'pending' : 'approved'
 
     const [row] = await tx
       .insert(employeeFiles)
