@@ -3,15 +3,13 @@
  *
  * Responsibilities:
  *   - Enroll an employee (store a face embedding + optional photo URL).
- *   - Match an incoming embedding against the enrollments via pgvector.
+ *   - Match an incoming embedding against the enrollments (cosine
+ *     distance in JS — fast for <1000 employees).
  *   - Persist marcaciones with idempotency-key dedupe (so kiosk replays
  *     after coming back online don't double-count).
  *   - Consolidate a day's marcaciones into the existing
  *     attendance_records table so payroll keeps reading from one place.
  *   - Manage kiosk terminals (registry + token rotation).
- *
- * All DB access is funnelled through Drizzle's typed schema; raw SQL is
- * only used where pgvector operators are required.
  */
 import { randomBytes } from 'node:crypto'
 import { type ConsolidatedDay, type ShiftSnapshot, consolidateDay } from '@payroll/core/attendance'
