@@ -1,6 +1,7 @@
 ---
 import type { PermissionCode } from '@payroll/types'
 import Modals from '../components/Modals.astro'
+import Toasts from '../components/Toasts.astro'
 import { can, getIdentity } from '../lib/auth'
 
 interface Props {
@@ -1392,5 +1393,6 @@ const icons: Record<IconKey, string> = {
       })();
     </script>
     <Modals />
+    <Toasts />
   </body>
 </html>
