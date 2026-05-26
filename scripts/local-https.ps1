@@ -83,12 +83,18 @@ subjectAltName = $San
     $configFile = Join-Path $CertDir "openssl.cnf"
     Set-Content -Path $configFile -Value $configContent -Encoding UTF8
 
+    # OpenSSL writes key-generation progress to stderr which PowerShell
+    # treats as a terminating error under $ErrorActionPreference=Stop.
+    # We temporarily relax it and redirect stderr to $null.
+    $prevPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & $openssl req -x509 -newkey rsa:2048 `
         -keyout $Key `
         -out $Cert `
         -days 365 `
         -nodes `
-        -config $configFile 2>$null
+        -config $configFile 2>&1 | Out-Null
+    $ErrorActionPreference = $prevPref
 
     Remove-Item $configFile -ErrorAction SilentlyContinue
 }
