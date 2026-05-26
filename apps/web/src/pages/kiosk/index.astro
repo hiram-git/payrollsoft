@@ -263,9 +263,7 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
     async function loadFaceApi() {
       setState(true, 'Cargando modelos…', 'Inicializando face-api')
-      // ESM build pulled from CDN. Kiosk operators can also host locally
-      // by replacing the import URL with `/face-models/face-api.esm.js`.
-      const faceapi = await import('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.esm.js')
+      const faceapi = await import('/face-models/face-api.esm.js')
       const MODELS = '/face-models'
       await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
       await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
