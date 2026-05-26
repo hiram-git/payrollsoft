@@ -263,6 +263,53 @@ export async function consolidateDate(db: AnyDb, date: string): Promise<Consolid
     // config not available — skip auto-file creation
   }
 
+  // ── Birthday free day: create file for employees whose birthday is today ──
+  try {
+    const month = Number(date.substring(5, 7))
+    const day = Number(date.substring(8, 10))
+    if (isWorkday && month > 0 && day > 0) {
+      const birthdayEmps = await db.execute(sql`
+        SELECT id, first_name, last_name, code FROM employees
+        WHERE is_active = true
+          AND birth_date IS NOT NULL
+          AND EXTRACT(MONTH FROM birth_date) = ${month}
+          AND EXTRACT(DAY FROM birth_date) = ${day}
+      `)
+      for (const emp of birthdayEmps) {
+        try {
+          const bdayTypeId = await db.execute(sql`
+            SELECT id FROM employee_file_types WHERE code = 'cumpleanos' LIMIT 1
+          `)
+          const bdaySubtypeId = await db.execute(sql`
+            SELECT id FROM employee_file_subtypes
+            WHERE code = 'dia_libre' AND type_id = ${bdayTypeId[0]?.id}
+            LIMIT 1
+          `)
+          if (bdayTypeId[0] && bdaySubtypeId[0]) {
+            await db.execute(sql`
+              INSERT INTO employee_files (employee_id, type_id, subtype_id, document_date, document_year, document_sequence, document_number, extra_fields, approval_status)
+              SELECT ${emp.id}, ${bdayTypeId[0].id}, ${bdaySubtypeId[0].id}, ${date},
+                EXTRACT(YEAR FROM ${date}::date)::int,
+                COALESCE((SELECT MAX(document_sequence) FROM employee_files WHERE type_id = ${bdayTypeId[0].id} AND subtype_id = ${bdaySubtypeId[0].id} AND document_year = EXTRACT(YEAR FROM ${date}::date)::int), 0) + 1,
+                'BDAY-' || ${date} || '-' || ${emp.code},
+                jsonb_build_object('birthday_date', ${date}),
+                'approved'
+              WHERE NOT EXISTS (
+                SELECT 1 FROM employee_files
+                WHERE employee_id = ${emp.id} AND type_id = ${bdayTypeId[0].id} AND document_date = ${date}
+              )
+            `)
+            autoFiles++
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
+  } catch {
+    /* birthday check non-blocking */
+  }
+
   return { date, processed, absent, autoFiles, errors }
 }
 
