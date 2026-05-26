@@ -19,6 +19,9 @@ bun.lockb
 *.log
 npm-debug.log*
 
+# Local HTTPS certs
+.certs
+
 # OS
 .DS_Store
 Thumbs.db

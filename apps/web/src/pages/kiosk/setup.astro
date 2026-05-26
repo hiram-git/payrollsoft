@@ -107,7 +107,7 @@ const enrollEmployeeId = Astro.url.searchParams.get('enroll') ?? ''
 
       async function init() {
         status.textContent = 'Cargando modelos…'
-        faceapi = await import('https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.esm.js')
+        faceapi = await import('/face-models/face-api.esm.js')
         const MODELS = '/face-models'
         await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
         await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
