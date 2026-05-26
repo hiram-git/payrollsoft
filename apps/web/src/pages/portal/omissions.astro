@@ -7,22 +7,29 @@ if (!identity) return Astro.redirect('/portal/login')
 ---
 
 <PortalLayout title="Omisiones">
-  <div class="pf-wrap">
-    <div class="pf-header">
-      <h1 class="pf-title">Justificación de omisión de marcación</h1>
-      <p class="pf-sub">Justifica que no hayas realizado una marcación de entrada, salida o ambas.</p>
+  <div class="pr-wrap">
+    <div class="pr-header">
+      <a href="/portal" class="pr-back">← Volver al portal</a>
+      <h1 class="pr-title">Justificación de omisión de marcación</h1>
+      <p class="pr-subtitle">Justifica que no hayas realizado una marcación de entrada, salida o ambas.</p>
     </div>
 
-    <div class="pf-banner pf-banner-err" id="err-banner" style="display:none;"><span id="err-text"></span></div>
-    <div class="pf-banner pf-banner-ok" id="ok-banner" style="display:none;"><span id="ok-text"></span></div>
+    <div class="pr-banner pr-banner-err" id="err-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.5" cy="5.5" r="4.5"/><path d="M5.5 3v3M5.5 7.8v.2"/></svg>
+      <span id="err-text"></span>
+    </div>
+    <div class="pr-banner pr-banner-ok" id="ok-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5.8 4.5 8.2 9 3.4"/></svg>
+      <span id="ok-text"></span>
+    </div>
 
     <form id="pf-form" enctype="multipart/form-data" novalidate>
-      <section class="pt-card pf-section">
-        <h2 class="pf-section-title">Tipo de omisión</h2>
-        <div class="pf-grid-2">
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Tipo de omisión</h2>
+        <div class="pr-grid-2">
           <div>
-            <label class="ds-label">Omisión *</label>
-            <select id="pf-subtype" name="subtypeCode" class="ds-input" required>
+            <label class="pr-label">Omisión *</label>
+            <select id="pf-subtype" name="subtypeCode" class="pr-input pr-select-field" required>
               <option value="">Selecciona...</option>
               <option value="omision_entrada">Omisión de marcación de entrada</option>
               <option value="omision_salida">Omisión de marcación de salida</option>
@@ -30,37 +37,37 @@ if (!identity) return Astro.redirect('/portal/login')
             </select>
           </div>
           <div>
-            <label class="ds-label">Fecha de la omisión *</label>
-            <input type="date" name="documentDate" id="pf-omission-date" class="ds-input" required />
+            <label class="pr-label">Fecha de la omisión *</label>
+            <input type="date" name="documentDate" id="pf-omission-date" class="pr-input" required />
           </div>
         </div>
       </section>
 
-      <section class="pt-card pf-section" id="time-section" style="display:none;">
-        <h2 class="pf-section-title">Horario real</h2>
-        <div class="pf-grid-2" id="time-fields"></div>
+      <section class="pt-card pr-section" id="time-section" style="display:none;">
+        <h2 class="pr-section-title">Horario real</h2>
+        <div class="pr-grid-2" id="time-fields"></div>
       </section>
 
-      <section class="pt-card pf-section" id="dyn-section" style="display:none;">
-        <h2 class="pf-section-title">Datos adicionales</h2>
-        <div id="dyn-fields" class="pf-grid-2"></div>
+      <section class="pt-card pr-section" id="dyn-section" style="display:none;">
+        <h2 class="pr-section-title">Datos adicionales</h2>
+        <div id="dyn-fields" class="pr-grid-2"></div>
       </section>
 
-      <section class="pt-card pf-section">
-        <h2 class="pf-section-title">Motivo de la omisión *</h2>
-        <textarea name="extra_reason_detail" rows="3" placeholder="Describe por qué no realizaste la marcación..." class="ds-input" style="resize:vertical;min-height:56px;" required></textarea>
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Motivo de la omisión *</h2>
+        <textarea name="extra_reason_detail" rows="3" placeholder="Describe por qué no realizaste la marcación..." class="pr-input pr-textarea" required></textarea>
       </section>
 
-      <section class="pt-card pf-section">
-        <h2 class="pf-section-title">Observaciones</h2>
-        <textarea name="observations" rows="2" placeholder="Notas adicionales (opcional)" class="ds-input" style="resize:vertical;min-height:56px;"></textarea>
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Observaciones</h2>
+        <textarea name="observations" rows="2" placeholder="Notas adicionales (opcional)" class="pr-input pr-textarea"></textarea>
       </section>
 
-      <div class="pf-actions">
-        <a href="/portal" class="ds-btn-ghost">Cancelar</a>
-        <button type="submit" id="pf-submit" class="ds-btn-primary">
+      <div class="pr-actions">
+        <a href="/portal" class="pr-btn-cancel">Cancelar</a>
+        <button type="submit" id="pf-submit" class="pr-btn-submit">
           <span class="btn-text">Enviar solicitud</span>
-          <span class="pf-spinner"></span>
+          <span class="pr-spinner"></span>
         </button>
       </div>
     </form>
@@ -89,10 +96,10 @@ if (!identity) return Astro.redirect('/portal/login')
       function proxyGet(p) { return fetch('/api/portal/proxy?path=' + encodeURIComponent(p)).then(function(r) { return r.json(); }); }
 
       var TIME_FIELDS_MAP = {
-        omision_entrada: '<div><label class="ds-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="ds-input" required /></div>',
-        omision_salida: '<div><label class="ds-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="ds-input" required /></div>',
-        omision_ambas: '<div><label class="ds-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="ds-input" required /></div>' +
-                       '<div><label class="ds-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="ds-input" required /></div>'
+        omision_entrada: '<div><label class="pr-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="pr-input" required /></div>',
+        omision_salida: '<div><label class="pr-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="pr-input" required /></div>',
+        omision_ambas: '<div><label class="pr-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="pr-input" required /></div>' +
+                       '<div><label class="pr-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="pr-input" required /></div>'
       };
 
       subtypeEl.addEventListener('change', function() {
@@ -134,14 +141,14 @@ if (!identity) return Astro.redirect('/portal/login')
           var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name;
           var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
           var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file';
-          var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>';
+          var label = '<label class="pr-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>';
           var inner = '';
-          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>';
-          else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />';
-          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />';
-          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />';
-          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />';
-          return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>';
+          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
+          else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="pr-file-input" />';
+          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="pr-input" />';
+          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="pr-input" />';
+          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="pr-input" />';
+          return '<div' + (full ? ' class="pr-full"' : '') + '>' + label + inner + '</div>';
         }).join('');
         dynSection.style.display = 'block';
       }

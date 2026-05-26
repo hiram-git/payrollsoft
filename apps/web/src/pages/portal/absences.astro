@@ -7,26 +7,33 @@ if (!identity) return Astro.redirect('/portal/login')
 ---
 
 <PortalLayout title="Ausencias">
-  <div class="pf-wrap">
-    <div class="pf-header">
-      <h1 class="pf-title">Solicitud de ausencia</h1>
-      <p class="pf-sub">Justifica una ausencia para que se descuente del tiempo compensatorio.</p>
+  <div class="pr-wrap">
+    <div class="pr-header">
+      <a href="/portal" class="pr-back">← Volver al portal</a>
+      <h1 class="pr-title">Solicitud de ausencia</h1>
+      <p class="pr-subtitle">Justifica una ausencia para que se descuente del tiempo compensatorio.</p>
     </div>
 
-    <div class="pf-banner pf-banner-err" id="err-banner" style="display:none;">
+    <div class="pr-banner pr-banner-err" id="err-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3">
+        <circle cx="5.5" cy="5.5" r="4.5"/><path d="M5.5 3v3M5.5 7.8v.2"/>
+      </svg>
       <span id="err-text"></span>
     </div>
-    <div class="pf-banner pf-banner-ok" id="ok-banner" style="display:none;">
+    <div class="pr-banner pr-banner-ok" id="ok-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="2 5.8 4.5 8.2 9 3.4"/>
+      </svg>
       <span id="ok-text"></span>
     </div>
 
     <form id="pf-form" enctype="multipart/form-data" novalidate>
-      <section class="pt-card pf-section">
-        <h2 class="pf-section-title">Tipo de ausencia</h2>
-        <div class="pf-grid-2">
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Tipo de ausencia</h2>
+        <div class="pr-grid-2">
           <div>
-            <label class="ds-label">Motivo *</label>
-            <select id="pf-subtype" name="subtypeCode" class="ds-input" required>
+            <label class="pr-label">Motivo <span class="pr-label-req">*</span></label>
+            <select id="pf-subtype" name="subtypeCode" class="pr-input pr-select-field" required>
               <option value="">Selecciona...</option>
               <option value="enfermedad">Enfermedad</option>
               <option value="duelo">Duelo</option>
@@ -38,27 +45,27 @@ if (!identity) return Astro.redirect('/portal/login')
             </select>
           </div>
           <div>
-            <label class="ds-label">Fecha del documento</label>
-            <input type="date" name="documentDate" class="ds-input" required />
+            <label class="pr-label">Fecha del documento</label>
+            <input type="date" name="documentDate" class="pr-input" required />
           </div>
         </div>
       </section>
 
-      <section class="pt-card pf-section">
-        <h2 class="pf-section-title">Período de ausencia</h2>
-        <div class="pf-grid-3">
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Período de ausencia</h2>
+        <div class="pr-grid-3">
           <div>
-            <label class="ds-label">Inicio *</label>
-            <input type="datetime-local" id="pf-start" name="extra_absence_start" class="ds-input" required />
+            <label class="pr-label">Inicio <span class="pr-label-req">*</span></label>
+            <input type="datetime-local" id="pf-start" name="extra_absence_start" class="pr-input" required />
           </div>
           <div>
-            <label class="ds-label">Fin *</label>
-            <input type="datetime-local" id="pf-end" name="extra_absence_end" class="ds-input" required />
+            <label class="pr-label">Fin <span class="pr-label-req">*</span></label>
+            <input type="datetime-local" id="pf-end" name="extra_absence_end" class="pr-input" required />
           </div>
           <div>
-            <label class="ds-label">Horas solicitadas</label>
-            <div class="pf-hours-result">
-              <span class="pf-hours-value" id="pf-calc-hours">0</span>
+            <label class="pr-label">Horas solicitadas</label>
+            <div class="pr-calc-result">
+              <span class="pr-calc-value" id="pf-calc-hours">0</span>
               <span>horas</span>
             </div>
             <input type="hidden" id="pf-hours" name="extra_hours" value="0" />
@@ -66,21 +73,21 @@ if (!identity) return Astro.redirect('/portal/login')
         </div>
       </section>
 
-      <section class="pt-card pf-section" id="dyn-section" style="display:none;">
-        <h2 class="pf-section-title">Datos adicionales</h2>
-        <div id="dyn-fields" class="pf-grid-2"></div>
+      <section class="pt-card pr-section" id="dyn-section" style="display:none;">
+        <h2 class="pr-section-title">Datos adicionales</h2>
+        <div id="dyn-fields" class="pr-grid-2"></div>
       </section>
 
-      <section class="pt-card pf-section">
-        <h2 class="pf-section-title">Observaciones</h2>
-        <textarea name="observations" rows="2" placeholder="Notas adicionales (opcional)" class="ds-input" style="resize:vertical;min-height:56px;"></textarea>
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Observaciones</h2>
+        <textarea name="observations" rows="2" placeholder="Notas adicionales (opcional)" class="pr-input pr-textarea"></textarea>
       </section>
 
-      <div class="pf-actions">
-        <a href="/portal" class="ds-btn-ghost">Cancelar</a>
-        <button type="submit" id="pf-submit" class="ds-btn-primary">
+      <div class="pr-actions">
+        <a href="/portal" class="pr-btn-cancel">Cancelar</a>
+        <button type="submit" id="pf-submit" class="pr-btn-submit">
           <span class="btn-text">Enviar solicitud</span>
-          <span class="pf-spinner"></span>
+          <span class="pr-spinner"></span>
         </button>
       </div>
     </form>
@@ -159,18 +166,18 @@ if (!identity) return Astro.redirect('/portal/login')
           var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
           var val = def.default != null ? esc(String(def.default)) : '';
           var full = def.type === 'textarea' || def.type === 'file';
-          var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>';
+          var label = '<label class="pr-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span class="pr-label-req">*</span>' : '') + '</label>';
           var inner = '';
-          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>';
+          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
           else if (def.type === 'select') {
             var opts = (def.options || []).map(function(o) { return '<option value="' + esc(o.value) + '">' + esc(o.label) + '</option>'; }).join('');
-            inner = '<select id="' + id + '" name="' + name + '"' + req + ' class="ds-input"><option value="">Selecciona…</option>' + opts + '</select>';
-          } else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />';
-          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />';
-          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />';
-          else if (def.type === 'datetime') inner = '<input id="' + id + '" type="datetime-local" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />';
-          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />';
-          return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>';
+            inner = '<select id="' + id + '" name="' + name + '"' + req + ' class="pr-input pr-select-field"><option value="">Selecciona…</option>' + opts + '</select>';
+          } else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="pr-file-input" />';
+          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="pr-input" />';
+          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="pr-input" />';
+          else if (def.type === 'datetime') inner = '<input id="' + id + '" type="datetime-local" name="' + name + '"' + req + ' value="' + val + '" class="pr-input" />';
+          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="pr-input" />';
+          return '<div class="pr-dyn-field' + (full ? ' pr-full' : '') + '">' + label + inner + '</div>';
         }).join('');
         dynSection.style.display = 'block';
       }
