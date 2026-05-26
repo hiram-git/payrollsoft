@@ -159,6 +159,93 @@ const userCode = identity.employeeCode || ''
       color: var(--fore);
       margin: 0 0 16px;
     }
+
+    /* ── Shared design system classes for portal pages ── */
+
+    /* Inputs / selects / textareas */
+    .ds-input {
+      width: 100%;
+      padding: 8px 12px;
+      font-size: 13px;
+      font-family: var(--f-sans);
+      background: var(--ink-3);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      color: var(--fore);
+      outline: none;
+      transition: border-color 140ms, box-shadow 140ms;
+    }
+    .ds-input:focus { border-color: var(--navy-hi); box-shadow: 0 0 0 2px var(--navy-soft); }
+    .ds-input:disabled { opacity: .5; cursor: not-allowed; }
+    .ds-input::placeholder { color: var(--mute); }
+    select.ds-input { cursor: pointer; }
+
+    /* Tables */
+    .ds-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .ds-table thead th {
+      font-family: var(--f-mono); font-size: 10px; color: var(--mute);
+      letter-spacing: .1em; text-transform: uppercase; text-align: left;
+      padding: 10px 14px; border-bottom: 1px solid var(--rule);
+      background: var(--ink-3); position: sticky; top: 0;
+    }
+    .ds-table tbody td {
+      padding: 10px 14px; color: var(--fore-dim);
+      border-bottom: 1px solid var(--rule);
+    }
+    .ds-table tbody tr:last-child td { border-bottom: none; }
+    .ds-table tbody tr:hover td { background: var(--ink-4); }
+
+    /* Badges / chips */
+    .ds-chip {
+      display: inline-block; padding: 2px 8px; border-radius: 3px;
+      font-family: var(--f-mono); font-size: 10px; letter-spacing: .06em;
+      text-transform: uppercase; font-weight: 500;
+    }
+    .ds-chip-pending  { background: rgba(227,178,90,0.15); color: var(--warn); }
+    .ds-chip-approved { background: rgba(111,181,140,0.15); color: var(--ok); }
+    .ds-chip-rejected { background: rgba(224,107,92,0.15); color: var(--err); }
+    .ds-chip-present  { background: rgba(111,181,140,0.15); color: var(--ok); }
+    .ds-chip-late     { background: rgba(227,178,90,0.15); color: var(--warn); }
+    .ds-chip-absent   { background: rgba(224,107,92,0.15); color: var(--err); }
+    .ds-chip-default  { background: var(--ink-4); color: var(--mute-2); }
+
+    /* Buttons */
+    .ds-btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; background: var(--navy); color: #fff;
+      border: none; border-radius: 6px; font-family: var(--f-sans);
+      font-weight: 500; font-size: 13px; cursor: pointer;
+      transition: background 140ms;
+    }
+    .ds-btn-primary:hover { background: var(--navy-hi); }
+    .ds-btn-ghost {
+      padding: 8px 16px; border-radius: 6px;
+      border: 1px solid var(--rule); background: transparent;
+      color: var(--fore-dim); font-size: 13px; cursor: pointer;
+      font-family: var(--f-sans); transition: border-color 140ms, background 140ms;
+    }
+    .ds-btn-ghost:hover { border-color: var(--rule-hi); background: var(--ink-4); }
+
+    /* Labels */
+    .ds-label {
+      display: block; font-size: 12px; font-weight: 500;
+      color: var(--fore-dim); margin-bottom: 6px;
+    }
+
+    /* Empty state */
+    .ds-empty {
+      padding: 48px 16px; text-align: center;
+      color: var(--mute); font-size: 13px;
+    }
+
+    /* Mono text */
+    .ds-mono { font-family: var(--f-mono); font-size: 11px; color: var(--mute-2); }
+
+    /* Card wrapper (for tables) */
+    .ds-card-table {
+      background: var(--ink-2); border: 1px solid var(--rule);
+      border-radius: 8px; overflow: hidden;
+    }
   </style>
 </head>
 <body>

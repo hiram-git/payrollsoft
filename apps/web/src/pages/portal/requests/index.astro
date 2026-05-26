@@ -24,8 +24,8 @@ if (!identity) return Astro.redirect('/portal/login')
     <!-- Filters -->
     <div class="rq-filters">
       <div class="rq-filter-group">
-        <label class="rq-filter-label">Estado</label>
-        <select id="filter-status" class="rq-filter-select">
+        <label class="ds-label">Estado</label>
+        <select id="filter-status" class="ds-input" style="width:auto;">
           <option value="">Todos</option>
           <option value="pending">Pendiente</option>
           <option value="approved">Aprobada</option>
@@ -33,16 +33,16 @@ if (!identity) return Astro.redirect('/portal/login')
         </select>
       </div>
       <div class="rq-filter-group">
-        <label class="rq-filter-label">Buscar</label>
-        <input type="text" id="filter-search" placeholder="N° documento, tipo, observaciones..." class="rq-filter-input" />
+        <label class="ds-label">Buscar</label>
+        <input type="text" id="filter-search" placeholder="N° documento, tipo, observaciones..." class="ds-input" style="width:240px;" />
       </div>
       <div class="rq-stats" id="rq-stats"></div>
     </div>
 
     <!-- Table -->
-    <div class="pt-card rq-table-card">
+    <div class="ds-card-table">
       <div id="rq-body">
-        <div class="rq-empty">Cargando solicitudes...</div>
+        <div class="ds-empty">Cargando solicitudes...</div>
       </div>
     </div>
   </div>
@@ -75,59 +75,13 @@ if (!identity) return Astro.redirect('/portal/login')
       font-family:var(--f-mono); font-size:10px; color:var(--mute);
       letter-spacing:.1em; text-transform:uppercase;
     }
-    .rq-filter-select, .rq-filter-input {
-      padding:8px 12px; font-size:13px; background:var(--ink-3);
-      border:1px solid var(--rule); color:var(--fore); border-radius:6px;
-      font-family:var(--f-sans); outline:none;
-    }
-    .rq-filter-input { width:240px; }
-    .rq-filter-select:focus, .rq-filter-input:focus {
-      border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft);
-    }
     .rq-stats {
       margin-left:auto; font-family:var(--f-mono); font-size:11px;
       color:var(--mute); letter-spacing:.06em;
     }
 
-    .rq-table-card { padding:0; overflow:hidden; }
-    .rq-table {
-      width:100%; border-collapse:collapse;
-    }
-    .rq-table th {
-      font-family:var(--f-mono); font-size:10px; color:var(--mute);
-      letter-spacing:.1em; text-transform:uppercase; text-align:left;
-      padding:12px 16px; border-bottom:1px solid var(--rule);
-      background:var(--ink-3); position:sticky; top:0;
-    }
-    .rq-table td {
-      font-size:13px; color:var(--fore-dim); padding:10px 16px;
-      border-bottom:1px solid var(--rule);
-    }
-    .rq-table tr:last-child td { border-bottom:none; }
-    .rq-table tr:hover td { background:var(--ink-4); }
-    .rq-table .rq-doc-num {
-      font-family:var(--f-mono); font-size:12px; color:var(--fore);
-      font-weight:500;
-    }
-    .rq-table .rq-type { color:var(--fore-dim); }
-    .rq-table .rq-obs {
-      max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-      color:var(--mute-2); font-size:12px;
-    }
-
-    .rq-chip {
-      display:inline-block; padding:2px 8px; border-radius:3px;
-      font-family:var(--f-mono); font-size:10px; letter-spacing:.06em;
-      text-transform:uppercase; font-weight:500;
-    }
-    .rq-chip-pending  { background:rgba(227,178,90,0.15); color:var(--warn); }
-    .rq-chip-approved { background:rgba(111,181,140,0.15); color:var(--ok); }
-    .rq-chip-rejected { background:rgba(224,107,92,0.15); color:var(--err); }
-
-    .rq-empty {
-      padding:48px 16px; text-align:center; color:var(--mute); font-size:13px;
-    }
-
+    .rq-doc-num { font-family:var(--f-mono); font-size:12px; color:var(--fore); font-weight:500; }
+    .rq-obs { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--mute-2); font-size:12px; }
     .rq-rejection {
       font-size:11px; color:var(--err); margin-top:2px;
       max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -135,7 +89,7 @@ if (!identity) return Astro.redirect('/portal/login')
 
     @media (max-width:640px) {
       .rq-filter-input { width:100%; }
-      .rq-table th:nth-child(4), .rq-table td:nth-child(4) { display:none; }
+      .ds-table th:nth-child(4), .ds-table td:nth-child(4) { display:none; }
     }
   </style>
 
@@ -151,7 +105,7 @@ if (!identity) return Astro.redirect('/portal/login')
       var STATUS_CLS = { pending: 'pending', approved: 'approved', rejected: 'rejected' };
 
       function chip(s) {
-        return '<span class="rq-chip rq-chip-' + (STATUS_CLS[s] || 'pending') + '">' + (STATUS_LABEL[s] || s) + '</span>';
+        return '<span class="ds-chip ds-chip-' + (STATUS_CLS[s] || 'pending') + '">' + (STATUS_LABEL[s] || s) + '</span>';
       }
       function fmtDate(d) {
         if (!d) return '—';
@@ -164,11 +118,11 @@ if (!identity) return Astro.redirect('/portal/login')
 
       function render(rows) {
         if (rows.length === 0) {
-          body.innerHTML = '<div class="rq-empty">No se encontraron solicitudes.</div>';
+          body.innerHTML = '<div class="ds-empty">No se encontraron solicitudes.</div>';
           statsEl.textContent = '';
           return;
         }
-        var html = '<table class="rq-table"><thead><tr>' +
+        var html = '<table class="ds-table"><thead><tr>' +
           '<th>N° Documento</th><th>Tipo</th><th>Fecha</th><th>Observaciones</th><th>Estado</th>' +
           '</tr></thead><tbody>';
         for (var i = 0; i < rows.length; i++) {
@@ -220,7 +174,7 @@ if (!identity) return Astro.redirect('/portal/login')
           render(allRows);
         })
         .catch(function() {
-          body.innerHTML = '<div class="rq-empty">Error al cargar solicitudes.</div>';
+          body.innerHTML = '<div class="ds-empty">Error al cargar solicitudes.</div>';
         });
     })();
   </script>
