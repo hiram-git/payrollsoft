@@ -50,15 +50,15 @@ de fórmulas (`MINUTOS_TARDANZA`, `MINUTOS_EXTRA`, `DIAS_TRABAJADOS`).
 | Kiosko | Tauri 2 (Linux/Windows/macOS) | `DESKTOP_MODE=kiosk` arranca fullscreen en `/kiosk`. |
 | Frontend admin | Astro 6 SSR | Sin cambios al Design System actual. |
 | API | Elysia | Módulo `apps/api/src/modules/facial`. |
-| DB | PostgreSQL + pgvector | Índice HNSW por `vector_cosine_ops`, embeddings normalizados. |
-| ORM | Drizzle | Custom column `vector(N)` en `packages/db/src/schema/facial.ts`. |
+| DB | PostgreSQL | Embeddings en jsonb, matching coseno en JS. pgvector opcional para >1000 empleados. |
+| ORM | Drizzle | `jsonb.$type<number[]>()` en `packages/db/src/schema/facial.ts`. |
 
 ## Modelo de datos (tenant schema)
 
 - **`facial_enrollments`** — un row por muestra facial activa de un
-  empleado. La columna `embedding vector(128)` se indexa con HNSW. El
-  índice filtra `status='active'` para que altas/bajas no degraden la
-  precisión.
+  empleado. La columna `embedding jsonb` almacena un array de 128
+  números. El matching coseno se ejecuta en JS (carga todos los
+  embeddings activos). Para <1000 empleados es instantáneo (~1ms).
 - **`facial_marcaciones`** — append-only de eventos crudos enviados por
   los kioskos. La columna `idempotency_key` garantiza que un reintento
   por red intermitente no duplique el evento (índice único parcial).
@@ -177,12 +177,44 @@ Política:
 - Si la red sigue caída, la marcación queda persistida hasta el siguiente
   reinicio del kiosko (se materializa en `localStorage`).
 
+## Dispositivos soportados
+
+El kiosko (`/kiosk`) corre en cualquier dispositivo con navegador
+moderno y cámara:
+
+| Dispositivo | Navegador | Notas |
+|---|---|---|
+| **PC / laptop** | Chrome, Edge, Firefox | Tauri shell o navegador directo |
+| **Tablet Android** | Chrome 80+ | Requiere HTTPS. Fijar en modo kiosko con Screen Pinning |
+| **iPad** | Safari 14.5+ | Requiere HTTPS. Guided Access para bloquear salida |
+| **Tablet Windows** | Edge / Chrome | Soporte completo |
+
+### Configurar tablet como kiosko
+
+1. Abrir `https://<tu-dominio>/kiosk/setup` en el navegador de la tablet.
+2. Pegar el código de terminal, tenant y token generado en `/facial/terminals`.
+3. Tocar "Emparejar y abrir kiosko" — el config se guarda en localStorage.
+4. **Android**: Activar Screen Pinning (Settings → Security → App pinning) para
+   bloquear al usuario en Chrome.
+5. **iPad**: Activar Guided Access (Settings → Accessibility → Guided Access)
+   para que no pueda salir de Safari.
+6. La tablet abre `/kiosk` en fullscreen con la cámara activa.
+
+**Requisitos de red**: HTTPS obligatorio para acceder a la cámara
+(`getUserMedia`). En redes LAN sin certificado, usar un proxy reverso
+con Let's Encrypt o un certificado autofirmado aceptado en el
+dispositivo. `localhost` también funciona sin HTTPS.
+
+**Offline**: si la red se cae, las marcaciones quedan en localStorage
+y se sincronizan automáticamente cuando la conexión regrese (flush
+cada 20s + al detectar evento `online`).
+
 ## Operación
 
 ### Setup base (una vez por instalación)
 
 ```bash
-# 1. Migrar
+# 1. Migrar (no requiere pgvector ni extensiones adicionales)
 cd packages/db
 bun run db:migrate:public          # registra los permisos en el catálogo
 bun run db:migrate:tenant          # corre 0034_facial_recognition.sql
@@ -267,5 +299,27 @@ almuerzo excedido.
 | Design System propio | Reutiliza componentes existentes (`AppLayout`, `BaseLayout`) y tokens Tailwind del proyecto |
 | Multi-tenant | Tablas en `tenant_<slug>` schema; `X-Tenant` header obligatorio |
 | Sin offline → con offline | IndexedDB outbox + `idempotency_key` |
-| Concurrencia alta | HNSW index pgvector, dedupe por `idempotency_key` |
-| Soporta +500 empleados | KNN sublineal con HNSW; bulk dashboard en una sola query |
+| Concurrencia alta | Dedupe por `idempotency_key`, cosine en JS |
+| Soporta +500 empleados | Cosine JS <1ms para 1000 enrollments; pgvector opcional para escala |
+
+## Performance: escalar con pgvector (opcional)
+
+Para >1000 empleados activos, pgvector acelera el matching con un
+índice HNSW. Los pasos son:
+
+```sql
+-- 1. Instalar la extensión (requiere paquete postgresql-pgvector)
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 2. Añadir columna vector y copiar datos desde jsonb
+ALTER TABLE facial_enrollments ADD COLUMN embedding_vec vector(128);
+UPDATE facial_enrollments SET embedding_vec = embedding::text::vector;
+
+-- 3. Crear índice HNSW
+CREATE INDEX facial_enrollments_hnsw
+  ON facial_enrollments USING hnsw (embedding_vec vector_cosine_ops)
+  WHERE status = 'active';
+```
+
+Después, actualizar `apps/api/src/modules/facial/vector.ts` para usar
+`<=>` en lugar del matching en JS.

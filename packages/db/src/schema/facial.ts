@@ -2,8 +2,12 @@
  * Facial-recognition attendance schema.
  *
  * All tables live in the tenant schema (one set per company). Embeddings
- * are stored as pgvector(128) — the dimension produced by the
+ * are stored as jsonb arrays (number[128]) — the 128-dim output of the
  * @vladmandic/face-api recognition net used by the kiosk.
+ *
+ * Matching (cosine distance) runs in application code, which handles
+ * <1000 employees easily. For larger deployments, pgvector can be
+ * layered on top (see docs/FACIAL-RECOGNITION.md § performance).
  *
  * Raw events arrive from kiosks into `facial_marcaciones`. A periodic
  * consolidator (see packages/core/attendance/consolidator) folds those
@@ -13,9 +17,7 @@
 import { sql } from 'drizzle-orm'
 import {
   boolean,
-  customType,
   index,
-  integer,
   jsonb,
   numeric,
   pgTable,
@@ -25,31 +27,6 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core'
-
-/**
- * pgvector column. Drizzle doesn't ship a first-class vector type, so we
- * declare a custom column that serialises arrays to the `[a,b,c]` literal
- * pgvector expects and parses on read.
- */
-export const vector = (name: string, dim: number) =>
-  customType<{ data: number[]; driverData: string }>({
-    dataType() {
-      return `vector(${dim})`
-    },
-    toDriver(value) {
-      if (!Array.isArray(value)) throw new Error('vector value must be a number[]')
-      if (value.length !== dim) {
-        throw new Error(`vector dim mismatch: expected ${dim}, got ${value.length}`)
-      }
-      return `[${value.join(',')}]`
-    },
-    fromDriver(value) {
-      if (typeof value !== 'string') return value as unknown as number[]
-      // pgvector returns "[1,2,3]" — strip brackets and parse.
-      const inner = value.startsWith('[') ? value.slice(1, -1) : value
-      return inner.split(',').map((n) => Number(n))
-    },
-  })(name)
 
 // ─── Terminals (kiosks) ───────────────────────────────────────────────────────
 
@@ -80,7 +57,7 @@ export const facialEnrollments = pgTable(
   {
     id: uuid('id').defaultRandom().primaryKey(),
     employeeId: uuid('employee_id').notNull(),
-    embedding: vector('embedding', 128).notNull(),
+    embedding: jsonb('embedding').$type<number[]>().notNull(),
     photoUrl: text('photo_url'),
     qualityScore: numeric('quality_score', { precision: 5, scale: 4 }),
     isPrimary: boolean('is_primary').notNull().default(false),

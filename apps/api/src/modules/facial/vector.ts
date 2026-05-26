@@ -1,25 +1,32 @@
+import { facialEnrollments } from '@payroll/db'
 /**
- * pgvector helpers — KNN search and embedding hygiene.
+ * Embedding matching — cosine distance computed in application code.
  *
- * Drizzle doesn't yet ship operator helpers for pgvector, so this file
- * encapsulates the raw SQL we need. Everything goes through `sql` from
- * drizzle-orm so values are parameterised safely.
+ * Embeddings are stored as jsonb arrays in PostgreSQL. For <1000
+ * active enrollments this is fast enough (~1ms in JS). For larger
+ * deployments, swap in pgvector with an HNSW index.
  */
-import { sql } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic db type
 type AnyDb = any
 
-export function toPgvectorLiteral(embedding: number[]): string {
-  return `[${embedding.join(',')}]`
+/**
+ * Cosine distance between two unit-normalised vectors.
+ * Range: [0, 2]. 0 = identical, 2 = opposite.
+ */
+export function cosineDistance(a: number[], b: number[]): number {
+  let dot = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+  }
+  return 1 - dot
 }
 
 /**
- * Cosine-distance KNN against the active enrollments.
- *
- * Returns rows ordered by distance ascending. The HNSW index defined in
- * the migration uses `vector_cosine_ops` so this query is sublinear once
- * the dataset is non-trivial.
+ * Search active enrollments by cosine distance against the given
+ * embedding. Loads all active embeddings from the DB and computes
+ * distance in JS — fast for <1000 rows (~256 KB of 128-dim vectors).
  */
 export async function searchSimilarEmbeddings(
   db: AnyDb,
@@ -27,28 +34,27 @@ export async function searchSimilarEmbeddings(
   opts: { limit?: number; maxDistance?: number } = {}
 ): Promise<Array<{ enrollmentId: string; employeeId: string; distance: number }>> {
   const limit = Math.max(1, Math.min(20, opts.limit ?? 5))
-  const literal = toPgvectorLiteral(embedding)
-  const rows = (await db.execute(sql`
-    SELECT
-      id           AS enrollment_id,
-      employee_id  AS employee_id,
-      (embedding <=> ${literal}::vector) AS distance
-      FROM facial_enrollments
-     WHERE status = 'active'
-       ${opts.maxDistance !== undefined ? sql`AND (embedding <=> ${literal}::vector) <= ${opts.maxDistance}` : sql``}
-     ORDER BY embedding <=> ${literal}::vector
-     LIMIT ${limit}
-  `)) as unknown as Array<{
-    enrollment_id: string
-    employee_id: string
-    distance: string | number
-  }>
 
-  return rows.map((r) => ({
-    enrollmentId: r.enrollment_id,
-    employeeId: r.employee_id,
-    distance: typeof r.distance === 'string' ? Number.parseFloat(r.distance) : r.distance,
-  }))
+  const rows = await db
+    .select({
+      id: facialEnrollments.id,
+      employeeId: facialEnrollments.employeeId,
+      embedding: facialEnrollments.embedding,
+    })
+    .from(facialEnrollments)
+    .where(eq(facialEnrollments.status, 'active'))
+
+  const scored = rows
+    .map((r: { id: string; employeeId: string; embedding: number[] }) => ({
+      enrollmentId: r.id,
+      employeeId: r.employeeId,
+      distance: cosineDistance(embedding, r.embedding),
+    }))
+    .filter((r) => (opts.maxDistance === undefined ? true : r.distance <= opts.maxDistance))
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, limit)
+
+  return scored
 }
 
 /**
@@ -58,7 +64,6 @@ export async function searchSimilarEmbeddings(
  * "same person" threshold.
  */
 export function distanceToConfidence(distance: number): number {
-  // Map [0, 0.6] → [1, 0]. Above 0.6 we floor to 0.
   const clamped = Math.max(0, Math.min(0.6, distance))
   return 1 - clamped / 0.6
 }

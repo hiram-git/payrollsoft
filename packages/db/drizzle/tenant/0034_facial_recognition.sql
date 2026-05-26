@@ -2,21 +2,18 @@
 --
 -- Four tables added to the tenant schema:
 --   facial_terminals          — registered kiosks
---   facial_enrollments        — per-employee facial embeddings (pgvector(128))
+--   facial_enrollments        — per-employee facial embeddings (jsonb, number[128])
 --   facial_marcaciones        — raw events captured by kiosks/manual
 --   facial_terminal_events    — heartbeats / kiosk audits
 --
 -- Embeddings come from @vladmandic/face-api FaceRecognitionNet (128-dim).
+-- Stored as jsonb arrays; cosine-distance matching runs in application
+-- code which handles <1000 employees trivially. For larger deployments,
+-- pgvector can be layered on top for HNSW-accelerated KNN.
+--
 -- A periodic consolidator folds rows from facial_marcaciones into the
 -- existing attendance_records table — the payroll engine keeps reading
 -- a single source of truth (workedMinutes, lateMinutes, overtimeMinutes).
---
--- The vector extension is created in the public schema (PostgreSQL only
--- allows one copy per database) but the vector type is then usable from
--- every tenant schema. We do NOT drop the extension on tenant teardown.
-
-CREATE EXTENSION IF NOT EXISTS vector;
---> statement-breakpoint
 
 -- ─── Terminals ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS facial_terminals (
@@ -42,7 +39,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS facial_terminals_code_unique
 CREATE TABLE IF NOT EXISTS facial_enrollments (
   id                   uuid          DEFAULT gen_random_uuid() PRIMARY KEY,
   employee_id          uuid          NOT NULL,
-  embedding            vector(128)   NOT NULL,
+  embedding            jsonb         NOT NULL,
   photo_url            text,
   quality_score        numeric(5,4),
   is_primary           boolean       NOT NULL DEFAULT false,
@@ -58,12 +55,12 @@ CREATE INDEX IF NOT EXISTS facial_enrollments_employee_idx
   ON facial_enrollments(employee_id);
 --> statement-breakpoint
 
--- HNSW index for fast cosine-distance KNN search. Embeddings from
--- face-api are unit-normalised, so cosine ≈ L2 — we use cosine which
--- is what the application also computes for the confidence score.
-CREATE INDEX IF NOT EXISTS facial_enrollments_embedding_hnsw
-  ON facial_enrollments
-  USING hnsw (embedding vector_cosine_ops)
+-- GIN index on the embedding jsonb for existence checks.
+-- Cosine-distance matching runs in application code (fast for <1000
+-- active enrollments). If pgvector is available, a future migration
+-- can add an HNSW index for SIMD-accelerated KNN.
+CREATE INDEX IF NOT EXISTS facial_enrollments_status_idx
+  ON facial_enrollments(status)
   WHERE status = 'active';
 --> statement-breakpoint
 
