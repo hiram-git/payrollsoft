@@ -16,6 +16,12 @@
 
 $ErrorActionPreference = "Stop"
 
+function Format-FileSize([long]$size) {
+    if ($size -ge 1MB) { return "{0:N1} MB" -f ($size / 1MB) }
+    if ($size -ge 1KB) { return "{0:N0} KB" -f ($size / 1KB) }
+    return "$size B"
+}
+
 $RootDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 Push-Location $RootDir
 
@@ -114,9 +120,3 @@ Write-Host ""
 
 }
 finally { Pop-Location }
-
-function Format-FileSize([long]$size) {
-    if ($size -ge 1MB) { return "{0:N1} MB" -f ($size / 1MB) }
-    if ($size -ge 1KB) { return "{0:N0} KB" -f ($size / 1KB) }
-    return "$size B"
-}
