@@ -282,6 +282,57 @@ const userCode = identity.employeeCode || ''
       background: var(--ink-2); border: 1px solid var(--rule);
       border-radius: 8px; overflow: hidden;
     }
+
+    /* ── Portal form pages (pf-*) ── */
+    .pf-wrap { max-width:800px; margin:0 auto; padding:32px 24px; }
+    .pf-header { margin-bottom:24px; }
+    .pf-title {
+      font-family:var(--f-display); font-weight:300; font-size:24px;
+      letter-spacing:-0.02em; margin:0 0 4px; color:var(--fore);
+    }
+    .pf-sub { font-size:13px; color:var(--mute-2); margin:0; }
+    .pf-banner {
+      font-family:var(--f-mono); font-size:11.5px; padding:10px 12px;
+      border-radius:3px; margin-bottom:16px; letter-spacing:.04em;
+      display:flex; align-items:center; gap:10px;
+    }
+    .pf-banner-err { color:var(--err); border:1px solid rgba(224,107,92,0.35); background:rgba(224,107,92,0.06); }
+    .pf-banner-ok { color:var(--ok); border:1px solid rgba(111,181,140,0.35); background:rgba(111,181,140,0.06); }
+    .pf-section { padding:24px; margin-bottom:16px; border-radius:10px; }
+    .pf-section-title {
+      font-family:var(--f-sans); font-weight:600; font-size:15px;
+      color:var(--fore); margin:0 0 18px;
+    }
+    .pf-grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; }
+    .pf-grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .pf-full { grid-column:1/-1; }
+    @media (max-width:640px) {
+      .pf-grid-2 { grid-template-columns:1fr; }
+      .pf-grid-3 { grid-template-columns:1fr; }
+    }
+    .pf-actions {
+      display:flex; align-items:center; justify-content:flex-end;
+      gap:12px; padding-top:16px; border-top:1px solid var(--rule);
+    }
+    .pf-spinner {
+      width:14px; height:14px; border:2px solid rgba(255,255,255,.3);
+      border-top-color:#fff; border-radius:50%;
+      animation:pf-spin .6s linear infinite; display:none;
+    }
+    .ds-btn-primary.loading .btn-text { display:none; }
+    .ds-btn-primary.loading .pf-spinner { display:block; }
+    @keyframes pf-spin { to { transform:rotate(360deg); } }
+
+    /* Computed hours display */
+    .pf-hours-result {
+      display:flex; align-items:center; gap:8px;
+      padding:10px 14px; background:var(--ink-3); border:1px solid var(--rule);
+      border-radius:8px; font-family:var(--f-mono); font-size:13px; color:var(--fore);
+    }
+    .pf-hours-value {
+      font-family:var(--f-display); font-size:22px; font-weight:300;
+      color:var(--fore); letter-spacing:-0.02em;
+    }
   </style>
 </head>
 <body>
