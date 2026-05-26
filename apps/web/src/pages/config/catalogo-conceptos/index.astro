@@ -70,8 +70,6 @@ const isCuentasTab = activeTab === 'cuentas'
     </div>
 
     {loadError && <div class="alert alert-err">{loadError}</div>}
-    {success && <div class="alert alert-ok">Guardado correctamente.</div>}
-    {error && <div class="alert alert-err">{errorMessages[error] ?? 'Ocurrió un error inesperado.'}</div>}
 
     <!-- Tab Navigation -->
     <div class="tabs-bar">
@@ -558,4 +556,28 @@ const isCuentasTab = activeTab === 'cuentas'
       if (rowC) closeEdit(rowC)
     }
   })
+
+  // Toast feedback from query params
+  ;(function() {
+    var params = new URLSearchParams(window.location.search);
+    var ERR_MSGS = {
+      code_taken: 'El código ya está en uso.',
+      has_links: 'No se puede eliminar: está siendo usado por conceptos.',
+      'server-error': 'Error del servidor.',
+      'missing-fields': 'Completa todos los campos.',
+    };
+    if (params.get('success') === '1' && window.toast) {
+      window.toast.success('Guardado correctamente.');
+    }
+    var err = params.get('error');
+    if (err && window.toast) {
+      window.toast.error(ERR_MSGS[err] || 'Ocurrió un error inesperado.');
+    }
+    if (params.has('success') || params.has('error')) {
+      var url = new URL(window.location);
+      url.searchParams.delete('success');
+      url.searchParams.delete('error');
+      history.replaceState(null, '', url.pathname + url.search);
+    }
+  })();
 </script>
