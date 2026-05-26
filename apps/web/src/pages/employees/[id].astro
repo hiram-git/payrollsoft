@@ -1241,36 +1241,13 @@ const freqLabel: Record<string, string> = {
 
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4 mt-4">
           <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
-          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas.</p>
-          <div class="py-8 text-center">
-            <p class="text-sm text-gray-400">Módulo pendiente de implementación.</p>
-            <p class="text-xs text-gray-400 mt-1">Los tiempos compensatorios se registrarán desde el módulo de asistencia.</p>
+          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas por pool.</p>
+          <div id="comp-time-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div class="text-center py-6 text-sm text-gray-400">Cargando...</div>
           </div>
-        </div>
-
-        <div class="bg-white rounded-xl border border-gray-200 p-6 mt-4">
-          <div class="flex items-end justify-between mb-4">
-            <div>
-              <h3 class="font-semibold text-gray-800 mb-1">Incapacidades</h3>
-              <p class="text-xs text-gray-500">Registro de incapacidades del empleado y familiares con incapacidades.</p>
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div class="border border-gray-200 rounded-lg p-4">
-              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Incapacidades del empleado</h4>
-              <div class="py-4 text-center">
-                <p class="text-sm text-gray-400">Sin registros.</p>
-                <p class="text-xs text-gray-400 mt-1">Se alimenta desde expedientes de tipo licencia especial.</p>
-              </div>
-            </div>
-            <div class="border border-gray-200 rounded-lg p-4">
-              <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Familiares con incapacidades</h4>
-              <div class="py-4 text-center">
-                <p class="text-sm text-gray-400">Sin registros.</p>
-                <p class="text-xs text-gray-400 mt-1">Se alimenta desde la pestaña de dependientes.</p>
-              </div>
-            </div>
+          <div id="comp-time-movements">
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movimientos recientes</h4>
+            <div id="comp-time-mov-body" class="text-center py-4 text-sm text-gray-400">Cargando...</div>
           </div>
         </div>
       </div>
@@ -1982,5 +1959,72 @@ function syncToggleUI(id, val) {
   };
 
   loadDeps();
+})();
+</script>
+
+<script is:inline define:vars={{ empId: emp?.id ?? '' }}>
+(function() {
+  if (!empId) return;
+  var cardsEl = document.getElementById('comp-time-cards');
+  var movEl = document.getElementById('comp-time-mov-body');
+  var POOL_LABELS = { compensatory: 'Tiempo Compensatorio', disability: 'Incapacidad', family_disability: 'Familiar con Discapacidad' };
+
+  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('balance/' + empId))
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      var balances = (res && res.data) || [];
+      if (balances.length === 0) {
+        cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Sin saldos de tiempo compensatorio para este año.</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < balances.length; i++) {
+        var b = balances[i];
+        var label = POOL_LABELS[b.pool] || b.pool;
+        html += '<div class="border border-gray-200 rounded-lg p-4">' +
+          '<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">' + label + '</h4>' +
+          '<div class="text-2xl font-light text-gray-900 mb-2">' + b.available.toFixed(1) + ' <span class="text-sm text-gray-500">hrs</span></div>' +
+          '<div class="flex gap-4 text-xs text-gray-500">' +
+            '<span>Ganadas: <b class="text-gray-700">' + b.earned.toFixed(1) + '</b></span>' +
+            '<span>Usadas: <b class="text-gray-700">' + b.used.toFixed(1) + '</b></span>' +
+            '<span>Reservadas: <b class="text-gray-700">' + b.reserved.toFixed(1) + '</b></span>' +
+          '</div></div>';
+      }
+      cardsEl.innerHTML = html;
+    })
+    .catch(function() {
+      cardsEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar saldos.</div>';
+    });
+
+  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('movements/' + empId + '?limit=10'))
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      var movs = (res && res.data) || [];
+      if (movs.length === 0) {
+        movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Sin movimientos registrados.</div>';
+        return;
+      }
+      var MOV_LABELS = { initialization: 'Inicialización', overtime: 'Horas extra', absence: 'Ausencia', lateness: 'Tardanza', permission: 'Permiso', birthday: 'Cumpleaños', adjustment: 'Ajuste', ausencias: 'Ausencia', tardanzas: 'Tardanza', permisos: 'Permiso', horas_extra: 'Horas extra' };
+      var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">' +
+        '<th class="text-left py-2 px-2">Fecha</th><th class="text-left py-2 px-2">Pool</th><th class="text-left py-2 px-2">Tipo</th><th class="text-right py-2 px-2">Horas</th><th class="text-left py-2 px-2">Notas</th></tr></thead><tbody>';
+      for (var j = 0; j < movs.length; j++) {
+        var m = movs[j];
+        var hrs = Number(m.hours);
+        var color = hrs >= 0 ? 'text-green-600' : 'text-red-600';
+        var poolLabel = (POOL_LABELS[m.pool] || m.pool).substring(0, 15);
+        var typeLabel = MOV_LABELS[m.movementType] || m.movementType;
+        html += '<tr class="border-b border-gray-100">' +
+          '<td class="py-2 px-2 text-gray-600">' + (m.createdAt ? m.createdAt.substring(0, 10) : '—') + '</td>' +
+          '<td class="py-2 px-2 text-gray-500 text-xs">' + poolLabel + '</td>' +
+          '<td class="py-2 px-2">' + typeLabel + '</td>' +
+          '<td class="py-2 px-2 text-right font-medium ' + color + '">' + (hrs >= 0 ? '+' : '') + hrs.toFixed(1) + '</td>' +
+          '<td class="py-2 px-2 text-gray-400 text-xs truncate max-w-[200px]">' + (m.notes || '—') + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      movEl.innerHTML = html;
+    })
+    .catch(function() {
+      movEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar movimientos.</div>';
+    });
 })();
 </script>
