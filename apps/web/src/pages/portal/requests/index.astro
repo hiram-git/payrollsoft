@@ -76,13 +76,13 @@ if (!identity) return Astro.redirect('/portal/login')
       letter-spacing:.1em; text-transform:uppercase;
     }
     .rq-filter-select, .rq-filter-input {
-      padding:6px 10px; font-size:13px; background:var(--ink-3);
-      border:1px solid var(--rule); color:var(--fore); border-radius:4px;
-      font-family:var(--f-sans);
+      padding:8px 12px; font-size:13px; background:var(--ink-3);
+      border:1px solid var(--rule); color:var(--fore); border-radius:6px;
+      font-family:var(--f-sans); outline:none;
     }
     .rq-filter-input { width:240px; }
     .rq-filter-select:focus, .rq-filter-input:focus {
-      outline:none; border-color:var(--navy-hi);
+      border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft);
     }
     .rq-stats {
       margin-left:auto; font-family:var(--f-mono); font-size:11px;
