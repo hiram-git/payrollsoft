@@ -221,6 +221,187 @@ export const DYNAMIC_FIELDS: Record<string, TypeConfig> = {
       { name: 'balance_after', label: 'Saldo posterior', type: 'number', step: 0.25 },
     ],
   },
+  ausencias: {
+    base: [
+      { name: 'absence_date', label: 'Fecha de ausencia', type: 'date', required: true },
+      { name: 'end_date', label: 'Fecha fin (si aplica)', type: 'date' },
+      { name: 'hours', label: 'Horas solicitadas', type: 'number', step: 0.5, required: true },
+      { name: 'reason_detail', label: 'Motivo detallado', type: 'textarea', required: true },
+      {
+        name: 'justification_file',
+        label: 'Documento justificativo',
+        type: 'file',
+        accept: FILE_ACCEPT,
+      },
+    ],
+    bySubtype: {
+      enfermedad: [
+        { name: 'medical_center', label: 'Centro médico', type: 'text' },
+        {
+          name: 'medical_certificate',
+          label: 'Certificado médico',
+          type: 'file',
+          required: true,
+          accept: FILE_ACCEPT,
+        },
+      ],
+      duelo: [
+        {
+          name: 'relationship',
+          label: 'Parentesco con el fallecido',
+          type: 'text',
+          required: true,
+        },
+        {
+          name: 'death_certificate',
+          label: 'Certificado de defunción',
+          type: 'file',
+          accept: FILE_ACCEPT,
+        },
+      ],
+      matrimonio: [
+        { name: 'wedding_date', label: 'Fecha de matrimonio', type: 'date', required: true },
+      ],
+      nacimiento_hijo: [
+        { name: 'child_birth_date', label: 'Fecha de nacimiento', type: 'date', required: true },
+        {
+          name: 'birth_certificate',
+          label: 'Certificado de nacimiento',
+          type: 'file',
+          accept: FILE_ACCEPT,
+        },
+      ],
+      enfermedad_pariente: [
+        { name: 'relative_name', label: 'Nombre del pariente', type: 'text', required: true },
+        { name: 'relationship', label: 'Parentesco', type: 'text', required: true },
+        {
+          name: 'medical_certificate',
+          label: 'Certificado médico',
+          type: 'file',
+          accept: FILE_ACCEPT,
+        },
+      ],
+    },
+  },
+  tardanzas: {
+    base: [
+      { name: 'tardiness_date', label: 'Fecha de tardanza', type: 'date', required: true },
+      {
+        name: 'minutes_late',
+        label: 'Minutos de tardanza',
+        type: 'number',
+        step: 1,
+        required: true,
+      },
+      { name: 'reason_detail', label: 'Motivo detallado', type: 'textarea', required: true },
+      {
+        name: 'justification_file',
+        label: 'Documento justificativo',
+        type: 'file',
+        accept: FILE_ACCEPT,
+      },
+    ],
+    bySubtype: {
+      cita_medica: [
+        {
+          name: 'appointment_proof',
+          label: 'Comprobante de cita',
+          type: 'file',
+          required: true,
+          accept: FILE_ACCEPT,
+        },
+      ],
+    },
+  },
+  horas_extra: {
+    base: [
+      { name: 'overtime_date', label: 'Fecha', type: 'date', required: true },
+      {
+        name: 'hours_worked',
+        label: 'Horas trabajadas',
+        type: 'number',
+        step: 0.5,
+        required: true,
+      },
+      {
+        name: 'start_time',
+        label: 'Hora inicio',
+        type: 'text',
+        required: true,
+        placeholder: 'HH:MM',
+      },
+      { name: 'end_time', label: 'Hora fin', type: 'text', required: true, placeholder: 'HH:MM' },
+      { name: 'reason', label: 'Motivo', type: 'textarea', required: true },
+      { name: 'authorized_by', label: 'Autorizado por', type: 'text' },
+    ],
+  },
+  omisiones: {
+    base: [
+      { name: 'omission_date', label: 'Fecha de la omisión', type: 'date', required: true },
+      { name: 'reason_detail', label: 'Motivo de la omisión', type: 'textarea', required: true },
+    ],
+    bySubtype: {
+      omision_entrada: [
+        {
+          name: 'actual_arrival',
+          label: 'Hora real de llegada',
+          type: 'text',
+          required: true,
+          placeholder: 'HH:MM',
+        },
+      ],
+      omision_salida: [
+        {
+          name: 'actual_departure',
+          label: 'Hora real de salida',
+          type: 'text',
+          required: true,
+          placeholder: 'HH:MM',
+        },
+      ],
+      omision_ambas: [
+        {
+          name: 'actual_arrival',
+          label: 'Hora real de llegada',
+          type: 'text',
+          required: true,
+          placeholder: 'HH:MM',
+        },
+        {
+          name: 'actual_departure',
+          label: 'Hora real de salida',
+          type: 'text',
+          required: true,
+          placeholder: 'HH:MM',
+        },
+      ],
+    },
+  },
+  cumpleanos: {
+    base: [{ name: 'birthday_date', label: 'Fecha de cumpleaños', type: 'date', required: true }],
+  },
+  mision_oficial: {
+    base: [
+      { name: 'start_date', label: 'Fecha inicio', type: 'date', required: true },
+      { name: 'end_date', label: 'Fecha fin', type: 'date', required: true },
+      { name: 'destination', label: 'Destino', type: 'text', required: true },
+      { name: 'purpose', label: 'Propósito de la misión', type: 'textarea', required: true },
+      { name: 'total_days', label: 'Total de días', type: 'number', step: 1, required: true },
+      { name: 'authorized_by', label: 'Autorizado por', type: 'text' },
+      {
+        name: 'authorization_file',
+        label: 'Documento de autorización',
+        type: 'file',
+        accept: FILE_ACCEPT,
+      },
+    ],
+    bySubtype: {
+      internacional: [
+        { name: 'country', label: 'País de destino', type: 'text', required: true },
+        { name: 'per_diem', label: 'Viáticos diarios (USD)', type: 'number', step: 0.01 },
+      ],
+    },
+  },
   documento: {
     base: [
       { name: 'document_type', label: 'Tipo de documento', type: 'text' },
