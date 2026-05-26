@@ -1,0 +1,83 @@
+---
+import PortalLayout from '../../layouts/PortalLayout.astro'
+import { getPortalIdentity } from '../../lib/portal-auth'
+
+const identity = getPortalIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/portal/login')
+---
+
+<PortalLayout title="Omisiones">
+  <div class="pf-wrap">
+    <div class="pf-header">
+      <h1 class="pf-title">Justificación de omisión de marcación</h1>
+      <p class="pf-sub">Justifica que no hayas realizado una marcación de entrada, salida o ambas.</p>
+    </div>
+
+    <div class="pf-banner pf-banner-err" id="err-banner" style="display:none;"><span id="err-text"></span></div>
+    <div class="pf-banner pf-banner-ok" id="ok-banner" style="display:none;"><span id="ok-text"></span></div>
+
+    <form id="pf-form" enctype="multipart/form-data" novalidate>
+      <section class="pt-card pf-section">
+        <h2 class="pf-section-title">Tipo de omisión</h2>
+        <div class="pf-grid-2">
+          <div>
+            <label class="ds-label">Omisión *</label>
+            <select id="pf-subtype" name="subtypeCode" class="ds-input" required>
+              <option value="">Selecciona...</option>
+              <option value="omision_entrada">Omisión de marcación de entrada</option>
+              <option value="omision_salida">Omisión de marcación de salida</option>
+              <option value="omision_ambas">Omisión de ambas marcaciones</option>
+            </select>
+          </div>
+          <div>
+            <label class="ds-label">Fecha del documento</label>
+            <input type="date" name="documentDate" class="ds-input" required />
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-card pf-section" id="dyn-section" style="display:none;">
+        <h2 class="pf-section-title">Datos de la omisión</h2>
+        <div id="dyn-fields" class="pf-grid-2"></div>
+      </section>
+
+      <section class="pt-card pf-section">
+        <h2 class="pf-section-title">Observaciones</h2>
+        <textarea name="observations" rows="2" placeholder="Notas adicionales (opcional)" class="ds-input" style="resize:vertical;min-height:56px;"></textarea>
+      </section>
+
+      <div class="pf-actions">
+        <a href="/portal" class="ds-btn-ghost">Cancelar</a>
+        <button type="submit" id="pf-submit" class="ds-btn-primary">
+          <span class="btn-text">Enviar solicitud</span>
+          <span class="pf-spinner"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script is:inline>
+    ;(function() {
+      var FILE_TYPE_CODE = 'omisiones';
+      var form = document.getElementById('pf-form');
+      var subtypeEl = document.getElementById('pf-subtype');
+      var dynSection = document.getElementById('dyn-section');
+      var dynFields = document.getElementById('dyn-fields');
+      var submitBtn = document.getElementById('pf-submit');
+      var errBanner = document.getElementById('err-banner');
+      var errText = document.getElementById('err-text');
+      var okBanner = document.getElementById('ok-banner');
+      var okText = document.getElementById('ok-text');
+      var FILE_ACCEPT = 'application/pdf,image/jpeg,image/png,image/gif';
+      var typeId = null; var subtypeMap = {}; var fieldsCache = {};
+      function showErr(m) { errText.textContent = m; errBanner.style.display = 'flex'; okBanner.style.display = 'none'; }
+      function showOk(m) { okText.textContent = m; okBanner.style.display = 'flex'; errBanner.style.display = 'none'; }
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+      function proxyGet(p) { return fetch('/api/portal/proxy?path=' + encodeURIComponent(p)).then(function(r) { return r.json(); }); }
+      proxyGet('file-types').then(function(res) { var types = (res && res.data) || []; for (var i = 0; i < types.length; i++) { if (types[i].code === FILE_TYPE_CODE) { typeId = types[i].id; break; } } if (!typeId) return; return proxyGet('file-types/' + typeId + '/subtypes'); }).then(function(res) { if (!res) return; var subs = (res && res.data) || []; for (var j = 0; j < subs.length; j++) subtypeMap[subs[j].code] = subs[j].id; });
+      subtypeEl.addEventListener('change', function() { var code = subtypeEl.value; if (!code || !typeId) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; } var subtypeId = subtypeMap[code]; if (!subtypeId) { dynSection.style.display = 'none'; return; } var key = typeId + '/' + subtypeId; if (fieldsCache[key]) { renderFields(fieldsCache[key]); return; } proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) { var fields = (res && res.data && res.data.fields) || []; fieldsCache[key] = fields; renderFields(fields); }); });
+      function renderFields(fields) { if (fields.length === 0) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; } dynFields.innerHTML = fields.map(function(def) { var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name; var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : ''; var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file'; var label = '<label class="ds-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>'; var inner = ''; if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="ds-input" style="resize:vertical;min-height:56px;">' + val + '</textarea>'; else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="ds-input" style="padding:8px;" />'; else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="ds-input" />'; else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="ds-input" />'; else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="ds-input" />'; return '<div' + (full ? ' class="pf-full"' : '') + '>' + label + inner + '</div>'; }).join(''); dynSection.style.display = 'block'; }
+      form.addEventListener('submit', function(e) { e.preventDefault(); errBanner.style.display = 'none'; var code = subtypeEl.value; if (!code || !typeId) { showErr('Selecciona un tipo de omisión.'); return; } var subtypeId = subtypeMap[code]; if (!subtypeId) { showErr('Subtipo no encontrado.'); return; } submitBtn.classList.add('loading'); submitBtn.disabled = true; var fd = new FormData(form); fd.set('typeId', String(typeId)); fd.set('subtypeId', String(subtypeId)); fetch('/api/portal/requests', { method: 'POST', body: fd }).then(function(r) { return r.json(); }).then(function(r) { if (r.success) { showOk('Solicitud creada. N° ' + (r.data && r.data.documentNumber ? r.data.documentNumber : '')); form.reset(); dynSection.style.display = 'none'; dynFields.innerHTML = ''; } else showErr(r.error || 'Error.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; }).catch(function() { showErr('Error de conexión.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; }); });
+    })();
+  </script>
+</PortalLayout>

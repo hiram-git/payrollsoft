@@ -238,6 +238,14 @@ export async function createEmployeeService(
   // Newly assigned position flips to 'en_uso' automatically.
   await recomputePositionStatus(db, employee.positionId)
 
+  // Initialize compensatory time balance for the new employee
+  try {
+    const { initializeEmployeeBalances } = await import('../compensatory-time/service')
+    await initializeEmployeeBalances(db, employee.id, { performedBy: undefined })
+  } catch (_) {
+    /* non-blocking: table may not exist yet */
+  }
+
   return { success: true as const, data: employee }
 }
 

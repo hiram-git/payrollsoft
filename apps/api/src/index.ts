@@ -21,6 +21,7 @@ import { departmentsRoutes } from './modules/catalogs/departments/routes'
 import { jobFunctionsRoutes } from './modules/catalogs/job-functions/routes'
 import { jobTitlesRoutes } from './modules/catalogs/job-titles/routes'
 import { companyRoutes } from './modules/company/routes'
+import { compensatoryTimeRoutes } from './modules/compensatory-time/routes'
 import { creditorRoutes } from './modules/creditors/routes'
 import { customFieldsRoutes } from './modules/custom-fields/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
@@ -91,6 +92,7 @@ const app = new Elysia()
   .use(customFieldsRoutes)
   .use(employeeFilesRoutes)
   .use(vacationsRoutes)
+  .use(compensatoryTimeRoutes)
   .use(payrollRoutes)
   .use(reportsRoutes)
   .use(facialRoutes)
