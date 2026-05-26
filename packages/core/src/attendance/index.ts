@@ -2,6 +2,7 @@
 // Handles: marcaciones, tolerancias, horas extra, descuento almuerzo, Base44 webhook
 
 export * from './consolidator'
+export * from './txt-parser'
 
 export type AttendanceWebhookPayload = {
   employeeCode: string

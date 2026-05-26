@@ -16,12 +16,12 @@
  * to send the marcacion `capturedAt` already aligned to the company's
  * timezone (the rest of the system uses America/Panama).
  */
-import type { MarcacionKind } from '@payroll/types'
+import type { PunchKind } from '@payroll/types'
 
 export type RawMarcacion = {
   id?: string
   employeeId: string
-  kind: MarcacionKind
+  kind: PunchKind
   capturedAt: Date | string
   status?: 'verified' | 'pending' | 'rejected' | 'manual'
 }

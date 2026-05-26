@@ -1,0 +1,181 @@
+---
+import PortalLayout from '../../layouts/PortalLayout.astro'
+import { getPortalIdentity } from '../../lib/portal-auth'
+
+const identity = getPortalIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/portal/login')
+---
+
+<PortalLayout title="Omisiones">
+  <div class="pr-wrap">
+    <div class="pr-header">
+      <a href="/portal" class="pr-back">← Volver al portal</a>
+      <h1 class="pr-title">Justificación de omisión de marcación</h1>
+      <p class="pr-subtitle">Justifica que no hayas realizado una marcación de entrada, salida o ambas.</p>
+    </div>
+
+    <div class="pr-banner pr-banner-err" id="err-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="5.5" cy="5.5" r="4.5"/><path d="M5.5 3v3M5.5 7.8v.2"/></svg>
+      <span id="err-text"></span>
+    </div>
+    <div class="pr-banner pr-banner-ok" id="ok-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5.8 4.5 8.2 9 3.4"/></svg>
+      <span id="ok-text"></span>
+    </div>
+
+    <form id="pf-form" enctype="multipart/form-data" novalidate>
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Tipo de omisión</h2>
+        <div class="pr-grid-2">
+          <div>
+            <label class="pr-label">Omisión *</label>
+            <select id="pf-subtype" name="subtypeCode" class="pr-input pr-select-field" required>
+              <option value="">Selecciona...</option>
+              <option value="omision_entrada">Omisión de marcación de entrada</option>
+              <option value="omision_salida">Omisión de marcación de salida</option>
+              <option value="omision_ambas">Omisión de ambas marcaciones</option>
+            </select>
+          </div>
+          <div>
+            <label class="pr-label">Fecha de la omisión *</label>
+            <input type="date" name="documentDate" id="pf-omission-date" class="pr-input" required />
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-card pr-section" id="time-section" style="display:none;">
+        <h2 class="pr-section-title">Horario real</h2>
+        <div class="pr-grid-2" id="time-fields"></div>
+      </section>
+
+      <section class="pt-card pr-section" id="dyn-section" style="display:none;">
+        <h2 class="pr-section-title">Datos adicionales</h2>
+        <div id="dyn-fields" class="pr-grid-2"></div>
+      </section>
+
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Motivo de la omisión *</h2>
+        <textarea name="extra_reason_detail" rows="3" placeholder="Describe por qué no realizaste la marcación..." class="pr-input pr-textarea" required></textarea>
+      </section>
+
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Observaciones</h2>
+        <textarea name="observations" rows="2" placeholder="Notas adicionales (opcional)" class="pr-input pr-textarea"></textarea>
+      </section>
+
+      <div class="pr-actions">
+        <a href="/portal" class="pr-btn-cancel">Cancelar</a>
+        <button type="submit" id="pf-submit" class="pr-btn-submit">
+          <span class="btn-text">Enviar solicitud</span>
+          <span class="pr-spinner"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script is:inline>
+    ;(function() {
+      var FILE_TYPE_CODE = 'omisiones';
+      var form = document.getElementById('pf-form');
+      var subtypeEl = document.getElementById('pf-subtype');
+      var timeSection = document.getElementById('time-section');
+      var timeFields = document.getElementById('time-fields');
+      var dynSection = document.getElementById('dyn-section');
+      var dynFields = document.getElementById('dyn-fields');
+      var submitBtn = document.getElementById('pf-submit');
+      var errBanner = document.getElementById('err-banner');
+      var errText = document.getElementById('err-text');
+      var okBanner = document.getElementById('ok-banner');
+      var okText = document.getElementById('ok-text');
+      var FILE_ACCEPT = 'application/pdf,image/jpeg,image/png,image/gif';
+      var typeId = null; var subtypeMap = {}; var fieldsCache = {};
+
+      function showErr(m) { errText.textContent = m; errBanner.style.display = 'flex'; okBanner.style.display = 'none'; }
+      function showOk(m) { okText.textContent = m; okBanner.style.display = 'flex'; errBanner.style.display = 'none'; }
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+      function proxyGet(p) { return fetch('/api/portal/proxy?path=' + encodeURIComponent(p)).then(function(r) { return r.json(); }); }
+
+      var TIME_FIELDS_MAP = {
+        omision_entrada: '<div><label class="pr-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="pr-input" required /></div>',
+        omision_salida: '<div><label class="pr-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="pr-input" required /></div>',
+        omision_ambas: '<div><label class="pr-label">Hora real de llegada *</label><input type="time" name="extra_actual_arrival" class="pr-input" required /></div>' +
+                       '<div><label class="pr-label">Hora real de salida *</label><input type="time" name="extra_actual_departure" class="pr-input" required /></div>'
+      };
+
+      subtypeEl.addEventListener('change', function() {
+        var code = subtypeEl.value;
+        if (TIME_FIELDS_MAP[code]) {
+          timeFields.innerHTML = TIME_FIELDS_MAP[code];
+          timeSection.style.display = 'block';
+        } else {
+          timeSection.style.display = 'none';
+          timeFields.innerHTML = '';
+        }
+        if (!code || !typeId) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; }
+        var subtypeId = subtypeMap[code];
+        if (!subtypeId) { dynSection.style.display = 'none'; return; }
+        var key = typeId + '/' + subtypeId;
+        if (fieldsCache[key]) { renderFields(fieldsCache[key]); return; }
+        proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) {
+          var fields = (res && res.data && res.data.fields) || [];
+          fields = fields.filter(function(f) { return f.name !== 'omission_date' && f.name !== 'reason_detail' && f.name !== 'actual_arrival' && f.name !== 'actual_departure'; });
+          fieldsCache[key] = fields;
+          renderFields(fields);
+        });
+      });
+
+      proxyGet('file-types').then(function(res) {
+        var types = (res && res.data) || [];
+        for (var i = 0; i < types.length; i++) { if (types[i].code === FILE_TYPE_CODE) { typeId = types[i].id; break; } }
+        if (!typeId) return;
+        return proxyGet('file-types/' + typeId + '/subtypes');
+      }).then(function(res) {
+        if (!res) return;
+        var subs = (res && res.data) || [];
+        for (var j = 0; j < subs.length; j++) subtypeMap[subs[j].code] = subs[j].id;
+      });
+
+      function renderFields(fields) {
+        if (fields.length === 0) { dynSection.style.display = 'none'; dynFields.innerHTML = ''; return; }
+        dynFields.innerHTML = fields.map(function(def) {
+          var id = 'dyn-' + def.name; var name = (def.type === 'file' ? 'file' : 'extra') + '_' + def.name;
+          var req = def.required ? ' required' : ''; var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
+          var val = def.default != null ? esc(String(def.default)) : ''; var full = def.type === 'textarea' || def.type === 'file';
+          var label = '<label class="pr-label" for="' + id + '">' + esc(def.label) + (def.required ? ' <span style="color:var(--err)">*</span>' : '') + '</label>';
+          var inner = '';
+          if (def.type === 'textarea') inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
+          else if (def.type === 'file') inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + FILE_ACCEPT + '" class="pr-file-input" />';
+          else if (def.type === 'number') inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + (def.step != null ? ' step="' + def.step + '"' : '') + ph + ' value="' + val + '" class="pr-input" />';
+          else if (def.type === 'date') inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ' value="' + val + '" class="pr-input" />';
+          else inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ph + ' value="' + val + '" class="pr-input" />';
+          return '<div' + (full ? ' class="pr-full"' : '') + '>' + label + inner + '</div>';
+        }).join('');
+        dynSection.style.display = 'block';
+      }
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault(); errBanner.style.display = 'none';
+        var code = subtypeEl.value;
+        if (!code || !typeId) { showErr('Selecciona un tipo de omisión.'); return; }
+        var subtypeId = subtypeMap[code];
+        if (!subtypeId) { showErr('Subtipo no encontrado.'); return; }
+        submitBtn.classList.add('loading'); submitBtn.disabled = true;
+        var fd = new FormData(form);
+        fd.set('typeId', String(typeId));
+        fd.set('subtypeId', String(subtypeId));
+        fd.set('extra_omission_date', document.getElementById('pf-omission-date').value);
+        fetch('/api/portal/requests', { method: 'POST', body: fd })
+          .then(function(r) { return r.json(); })
+          .then(function(r) {
+            if (r.success) {
+              showOk('Solicitud creada. N° ' + (r.data && r.data.documentNumber ? r.data.documentNumber : ''));
+              form.reset(); timeSection.style.display = 'none'; timeFields.innerHTML = '';
+              dynSection.style.display = 'none'; dynFields.innerHTML = '';
+            } else showErr(r.error || 'Error.');
+            submitBtn.classList.remove('loading'); submitBtn.disabled = false;
+          })
+          .catch(function() { showErr('Error de conexión.'); submitBtn.classList.remove('loading'); submitBtn.disabled = false; });
+      });
+    })();
+  </script>
+</PortalLayout>

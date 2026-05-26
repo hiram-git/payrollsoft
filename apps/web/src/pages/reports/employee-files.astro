@@ -19,9 +19,9 @@ const to = sp.get('to') ?? today.toISOString().slice(0, 10)
 const filterTypeId = sp.get('typeId') ?? ''
 const filterSubtypeId = sp.get('subtypeId') ?? ''
 const filterEmployeeId = sp.get('employeeId') ?? ''
-const filterDepartamentoId = sp.get('departamentoId') ?? ''
-const filterFuncionId = sp.get('funcionId') ?? ''
-const filterCargoId = sp.get('cargoId') ?? ''
+const filterDepartamentoId = sp.get('departmentId') ?? ''
+const filterFuncionId = sp.get('jobFunctionId') ?? ''
+const filterCargoId = sp.get('jobTitleId') ?? ''
 const filterCreatedBy = sp.get('createdBy') ?? ''
 
 type TypeRow = { id: number; name: string }
@@ -46,9 +46,9 @@ type Report = {
     lastName: string
     count: number
   }[]
-  byDepartamento: { departamentoId: string | null; departamentoName: string; count: number }[]
-  byFuncion: { funcionId: string | null; funcionName: string; count: number }[]
-  byCargo: { cargoId: string | null; cargoName: string; count: number }[]
+  byDepartamento: { departmentId: string | null; departamentoName: string; count: number }[]
+  byFuncion: { jobFunctionId: string | null; funcionName: string; count: number }[]
+  byCargo: { jobTitleId: string | null; cargoName: string; count: number }[]
   byMonth: { ym: string; count: number }[]
 }
 
@@ -58,9 +58,9 @@ if (to) params.set('to', to)
 if (filterTypeId) params.set('typeId', filterTypeId)
 if (filterSubtypeId) params.set('subtypeId', filterSubtypeId)
 if (filterEmployeeId) params.set('employeeId', filterEmployeeId)
-if (filterDepartamentoId) params.set('departamentoId', filterDepartamentoId)
-if (filterFuncionId) params.set('funcionId', filterFuncionId)
-if (filterCargoId) params.set('cargoId', filterCargoId)
+if (filterDepartamentoId) params.set('departmentId', filterDepartamentoId)
+if (filterFuncionId) params.set('jobFunctionId', filterFuncionId)
+if (filterCargoId) params.set('jobTitleId', filterCargoId)
 if (filterCreatedBy) params.set('createdBy', filterCreatedBy)
 
 let report: Report | null = null
@@ -75,9 +75,9 @@ try {
   const [repRes, tRes, dRes, fRes, cRes] = await Promise.all([
     fetch(`${API_URL}/reports/employee-files?${params}`, { headers }),
     fetch(`${API_URL}/employee-files/types`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/cargos`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
   ])
   if (repRes.status === 401) return Astro.redirect('/login')
   if (repRes.ok) report = ((await repRes.json()) as { data: Report }).data

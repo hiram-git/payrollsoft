@@ -235,9 +235,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   let positions: Map<string, string> = new Map()
   try {
     const [cargosRes, funcionesRes, deptosRes, positionsRes] = await Promise.all([
-      fetch(`${API_URL}/cargos`, { headers }),
-      fetch(`${API_URL}/funciones`, { headers }),
-      fetch(`${API_URL}/departamentos`, { headers }),
+      fetch(`${API_URL}/job-titles`, { headers }),
+      fetch(`${API_URL}/job-functions`, { headers }),
+      fetch(`${API_URL}/departments`, { headers }),
       fetch(`${API_URL}/positions?isActive=true`, { headers }),
     ])
     const buildMap = async (res: Response) => {
@@ -362,9 +362,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       email,
       phone,
       socialSecurityNumber: ssn,
-      cargoId: cargo.id,
-      funcionId: funcion.id,
-      departamentoId: departamento.id,
+      jobTitleId: cargo.id,
+      jobFunctionId: funcion.id,
+      departmentId: departamento.id,
       positionId: position.id,
     }
     if (payFrequency) payload.payFrequency = payFrequency

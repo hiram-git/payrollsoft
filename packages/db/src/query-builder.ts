@@ -2,7 +2,8 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql } from 'dr
 import type { createPublicDb, createTenantDb } from './client'
 import {
   attendanceRecords,
-  cargos,
+  budgetItems,
+  chartOfAccounts,
   companyConfig,
   conceptAccumulatorLinks,
   conceptAccumulators,
@@ -14,16 +15,15 @@ import {
   conceptSituations,
   concepts,
   creditors,
-  cuentasContables,
-  departamentos,
+  departments,
   employeePayrollTypes,
   employees,
-  funciones,
+  jobFunctions,
+  jobTitles,
   loanInstallments,
   loans,
-  partidasPresupuestarias,
   passwordResets,
-  payrollAcumulados,
+  payrollAccumulators,
   payrollLines,
   payrollReports,
   payrolls,
@@ -58,7 +58,7 @@ async function paginate<T>(
   options: PaginationOptions
 ): Promise<PaginatedResult<T>> {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20))
+  const limit = Math.min(10000, Math.max(1, options.limit ?? 50))
   const offset = (page - 1) * limit
 
   const [totalResult] = await db.select({ count: count() }).from(table as never)
@@ -92,7 +92,7 @@ export async function listEmployees(
   options: PaginationOptions = {}
 ) {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20))
+  const limit = Math.min(10000, Math.max(1, options.limit ?? 50))
   const offset = (page - 1) * limit
 
   const conditions = []
@@ -309,7 +309,7 @@ export async function listPayrolls(
   options: PaginationOptions = {}
 ) {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 20))
+  const limit = Math.min(10000, Math.max(1, options.limit ?? 50))
   const offset = (page - 1) * limit
 
   const conditions = []
@@ -484,22 +484,22 @@ export async function insertPayrollAcumulados(db: Db, items: PayrollAcumuladoIns
   if (items.length === 0) return
   const CHUNK = 500
   for (let i = 0; i < items.length; i += CHUNK) {
-    await db.insert(payrollAcumulados).values(items.slice(i, i + CHUNK))
+    await db.insert(payrollAccumulators).values(items.slice(i, i + CHUNK))
   }
 }
 
 export async function deletePayrollAcumulados(db: Db, payrollId: string) {
-  await db.delete(payrollAcumulados).where(eq(payrollAcumulados.payrollId, payrollId))
+  await db.delete(payrollAccumulators).where(eq(payrollAccumulators.payrollId, payrollId))
 }
 
 export async function getPayrollAcumulados(db: Db, payrollId: string, employeeId?: string) {
-  const conditions = [eq(payrollAcumulados.payrollId, payrollId)]
-  if (employeeId) conditions.push(eq(payrollAcumulados.employeeId, employeeId))
+  const conditions = [eq(payrollAccumulators.payrollId, payrollId)]
+  if (employeeId) conditions.push(eq(payrollAccumulators.employeeId, employeeId))
   return db
     .select()
-    .from(payrollAcumulados)
+    .from(payrollAccumulators)
     .where(and(...conditions))
-    .orderBy(asc(payrollAcumulados.conceptCode))
+    .orderBy(asc(payrollAccumulators.conceptCode))
 }
 
 export type AcumuladosFilter = {
@@ -521,13 +521,13 @@ export async function queryAcumulados(db: Db, filter: AcumuladosFilter, page = 1
 
   const rows = await db
     .select({
-      id: payrollAcumulados.id,
-      payrollId: payrollAcumulados.payrollId,
-      employeeId: payrollAcumulados.employeeId,
-      conceptCode: payrollAcumulados.conceptCode,
-      conceptName: payrollAcumulados.conceptName,
-      conceptType: payrollAcumulados.conceptType,
-      amount: payrollAcumulados.amount,
+      id: payrollAccumulators.id,
+      payrollId: payrollAccumulators.payrollId,
+      employeeId: payrollAccumulators.employeeId,
+      conceptCode: payrollAccumulators.conceptCode,
+      conceptName: payrollAccumulators.conceptName,
+      conceptType: payrollAccumulators.conceptType,
+      amount: payrollAccumulators.amount,
       payrollName: payrolls.name,
       periodStart: payrolls.periodStart,
       periodEnd: payrolls.periodEnd,
@@ -536,22 +536,22 @@ export async function queryAcumulados(db: Db, filter: AcumuladosFilter, page = 1
       firstName: employees.firstName,
       lastName: employees.lastName,
     })
-    .from(payrollAcumulados)
-    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
-    .leftJoin(employees, eq(payrollAcumulados.employeeId, employees.id))
+    .from(payrollAccumulators)
+    .leftJoin(payrolls, eq(payrollAccumulators.payrollId, payrolls.id))
+    .leftJoin(employees, eq(payrollAccumulators.employeeId, employees.id))
     .where(where)
     .orderBy(
       desc(payrolls.periodStart),
       asc(employees.lastName),
-      asc(payrollAcumulados.conceptCode)
+      asc(payrollAccumulators.conceptCode)
     )
     .limit(limit)
     .offset((page - 1) * limit)
 
   const [{ total }] = await db
     .select({ total: count() })
-    .from(payrollAcumulados)
-    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
+    .from(payrollAccumulators)
+    .leftJoin(payrolls, eq(payrollAccumulators.payrollId, payrolls.id))
     .where(where)
 
   return { rows, total: Number(total) }
@@ -563,35 +563,39 @@ export async function getAcumuladosSummary(db: Db, filter: AcumuladosFilter) {
 
   return db
     .select({
-      employeeId: payrollAcumulados.employeeId,
-      conceptCode: payrollAcumulados.conceptCode,
-      conceptName: payrollAcumulados.conceptName,
-      conceptType: payrollAcumulados.conceptType,
-      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+      employeeId: payrollAccumulators.employeeId,
+      conceptCode: payrollAccumulators.conceptCode,
+      conceptName: payrollAccumulators.conceptName,
+      conceptType: payrollAccumulators.conceptType,
+      total: sql<string>`COALESCE(SUM(${payrollAccumulators.amount}::numeric), 0)`,
       occurrences: count(),
       employeeCode: employees.code,
       firstName: employees.firstName,
       lastName: employees.lastName,
     })
-    .from(payrollAcumulados)
-    .leftJoin(payrolls, eq(payrollAcumulados.payrollId, payrolls.id))
-    .leftJoin(employees, eq(payrollAcumulados.employeeId, employees.id))
+    .from(payrollAccumulators)
+    .leftJoin(payrolls, eq(payrollAccumulators.payrollId, payrolls.id))
+    .leftJoin(employees, eq(payrollAccumulators.employeeId, employees.id))
     .where(where)
     .groupBy(
-      payrollAcumulados.employeeId,
-      payrollAcumulados.conceptCode,
-      payrollAcumulados.conceptName,
-      payrollAcumulados.conceptType,
+      payrollAccumulators.employeeId,
+      payrollAccumulators.conceptCode,
+      payrollAccumulators.conceptName,
+      payrollAccumulators.conceptType,
       employees.code,
       employees.firstName,
       employees.lastName
     )
-    .orderBy(asc(employees.lastName), asc(employees.firstName), asc(payrollAcumulados.conceptCode))
+    .orderBy(
+      asc(employees.lastName),
+      asc(employees.firstName),
+      asc(payrollAccumulators.conceptCode)
+    )
 }
 
 function buildAcumuladosConditions(filter: AcumuladosFilter) {
   const conditions = []
-  if (filter.employeeId) conditions.push(eq(payrollAcumulados.employeeId, filter.employeeId))
+  if (filter.employeeId) conditions.push(eq(payrollAccumulators.employeeId, filter.employeeId))
   if (filter.employeeSearch) {
     const q = `%${filter.employeeSearch}%`
     conditions.push(
@@ -604,8 +608,8 @@ function buildAcumuladosConditions(filter: AcumuladosFilter) {
     )
   }
   if (filter.conceptCode)
-    conditions.push(eq(payrollAcumulados.conceptCode, filter.conceptCode.toUpperCase()))
-  if (filter.conceptType) conditions.push(eq(payrollAcumulados.conceptType, filter.conceptType))
+    conditions.push(eq(payrollAccumulators.conceptCode, filter.conceptCode.toUpperCase()))
+  if (filter.conceptType) conditions.push(eq(payrollAccumulators.conceptType, filter.conceptType))
   if (filter.from) conditions.push(gte(payrolls.periodStart, filter.from))
   if (filter.to) conditions.push(lte(payrolls.periodEnd, filter.to))
   if (filter.payrollTypeId) {
@@ -613,7 +617,7 @@ function buildAcumuladosConditions(filter: AcumuladosFilter) {
     // listEmployees / listAllLoans). No JOIN — semi-join via subquery.
     conditions.push(
       inArray(
-        payrollAcumulados.employeeId,
+        payrollAccumulators.employeeId,
         sql`(SELECT employee_id FROM employee_payroll_types WHERE payroll_type_id = ${filter.payrollTypeId})`
       )
     )
@@ -666,9 +670,12 @@ export async function deletePayrollAcumuladosByEmployee(
   employeeId: string
 ) {
   await db
-    .delete(payrollAcumulados)
+    .delete(payrollAccumulators)
     .where(
-      and(eq(payrollAcumulados.payrollId, payrollId), eq(payrollAcumulados.employeeId, employeeId))
+      and(
+        eq(payrollAccumulators.payrollId, payrollId),
+        eq(payrollAccumulators.employeeId, employeeId)
+      )
     )
 }
 
@@ -1078,6 +1085,7 @@ export type CreateAttendanceData = {
   lunchStart?: string | null
   lunchEnd?: string | null
   checkOut?: string | null
+  source?: 'manual' | 'import' | 'webhook'
 }
 
 export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData) {
@@ -1129,7 +1137,7 @@ export async function upsertAttendanceRecord(db: Db, data: CreateAttendanceData)
       lunchEnd,
       checkOut,
       workedMinutes,
-      source: 'manual',
+      source: data.source ?? 'manual',
     })
     .returning()
   return row
@@ -1206,14 +1214,14 @@ export async function loadAccumulated(
 
   const result = await db
     .select({
-      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+      total: sql<string>`COALESCE(SUM(${payrollAccumulators.amount}::numeric), 0)`,
     })
-    .from(payrollAcumulados)
+    .from(payrollAccumulators)
     .where(
       and(
-        eq(payrollAcumulados.employeeId, employeeId),
-        eq(payrollAcumulados.conceptCode, conceptCode),
-        sql`${payrollAcumulados.payrollId} = ANY(${sql.raw(`ARRAY['${payrollIds.join("','")}'::uuid]`)})`
+        eq(payrollAccumulators.employeeId, employeeId),
+        eq(payrollAccumulators.conceptCode, conceptCode),
+        sql`${payrollAccumulators.payrollId} = ANY(${sql.raw(`ARRAY['${payrollIds.join("','")}'::uuid]`)})`
       )
     )
 
@@ -1249,14 +1257,14 @@ export async function loadAccumulatedByDateRange(
 
   const result = await db
     .select({
-      total: sql<string>`COALESCE(SUM(${payrollAcumulados.amount}::numeric), 0)`,
+      total: sql<string>`COALESCE(SUM(${payrollAccumulators.amount}::numeric), 0)`,
     })
-    .from(payrollAcumulados)
+    .from(payrollAccumulators)
     .where(
       and(
-        eq(payrollAcumulados.employeeId, employeeId),
-        eq(payrollAcumulados.conceptCode, conceptCode),
-        inArray(payrollAcumulados.payrollId, payrollIds)
+        eq(payrollAccumulators.employeeId, employeeId),
+        eq(payrollAccumulators.conceptCode, conceptCode),
+        inArray(payrollAccumulators.payrollId, payrollIds)
       )
     )
 
@@ -1266,10 +1274,10 @@ export async function loadAccumulatedByDateRange(
 // ─── Catalog Helpers ──────────────────────────────────────────────────────────
 
 type CatalogTable =
-  | typeof cargos
-  | typeof funciones
-  | typeof partidasPresupuestarias
-  | typeof cuentasContables
+  | typeof jobTitles
+  | typeof jobFunctions
+  | typeof budgetItems
+  | typeof chartOfAccounts
 
 async function listCatalog(db: Db, table: CatalogTable, search?: string) {
   const conditions = search
@@ -1302,38 +1310,38 @@ async function getCatalogByCode(db: Db, table: CatalogTable, code: string) {
 // ─── Cargos ───────────────────────────────────────────────────────────────────
 
 export function listCargos(db: Db, search?: string) {
-  return listCatalog(db, cargos, search)
+  return listCatalog(db, jobTitles, search)
 }
 
 export function getCargoById(db: Db, id: string) {
-  return getCatalogById(db, cargos, id)
+  return getCatalogById(db, jobTitles, id)
 }
 
 export function getCargoByCode(db: Db, code: string) {
-  return getCatalogByCode(db, cargos, code)
+  return getCatalogByCode(db, jobTitles, code)
 }
 
-export type CreateCargoData = typeof cargos.$inferInsert
+export type CreateCargoData = typeof jobTitles.$inferInsert
 
 export async function createCargo(db: Db, data: CreateCargoData) {
-  const [row] = await db.insert(cargos).values(data).returning()
+  const [row] = await db.insert(jobTitles).values(data).returning()
   return row
 }
 
 export async function updateCargo(db: Db, id: string, data: Partial<CreateCargoData>) {
   const [row] = await db
-    .update(cargos)
+    .update(jobTitles)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(cargos.id, id))
+    .where(eq(jobTitles.id, id))
     .returning()
   return row ?? null
 }
 
 export async function deactivateCargo(db: Db, id: string) {
   const [row] = await db
-    .update(cargos)
+    .update(jobTitles)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(cargos.id, id))
+    .where(eq(jobTitles.id, id))
     .returning()
   return row ?? null
 }
@@ -1341,38 +1349,38 @@ export async function deactivateCargo(db: Db, id: string) {
 // ─── Funciones ────────────────────────────────────────────────────────────────
 
 export function listFunciones(db: Db, search?: string) {
-  return listCatalog(db, funciones, search)
+  return listCatalog(db, jobFunctions, search)
 }
 
 export function getFuncionById(db: Db, id: string) {
-  return getCatalogById(db, funciones, id)
+  return getCatalogById(db, jobFunctions, id)
 }
 
 export function getFuncionByCode(db: Db, code: string) {
-  return getCatalogByCode(db, funciones, code)
+  return getCatalogByCode(db, jobFunctions, code)
 }
 
-export type CreateFuncionData = typeof funciones.$inferInsert
+export type CreateFuncionData = typeof jobFunctions.$inferInsert
 
 export async function createFuncion(db: Db, data: CreateFuncionData) {
-  const [row] = await db.insert(funciones).values(data).returning()
+  const [row] = await db.insert(jobFunctions).values(data).returning()
   return row
 }
 
 export async function updateFuncion(db: Db, id: string, data: Partial<CreateFuncionData>) {
   const [row] = await db
-    .update(funciones)
+    .update(jobFunctions)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(funciones.id, id))
+    .where(eq(jobFunctions.id, id))
     .returning()
   return row ?? null
 }
 
 export async function deactivateFuncion(db: Db, id: string) {
   const [row] = await db
-    .update(funciones)
+    .update(jobFunctions)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(funciones.id, id))
+    .where(eq(jobFunctions.id, id))
     .returning()
   return row ?? null
 }
@@ -1381,26 +1389,26 @@ export async function deactivateFuncion(db: Db, id: string) {
 
 export async function listDepartamentos(db: Db, search?: string) {
   const conditions = search
-    ? [or(ilike(departamentos.code, `%${search}%`), ilike(departamentos.name, `%${search}%`))]
+    ? [or(ilike(departments.code, `%${search}%`), ilike(departments.name, `%${search}%`))]
     : []
   const where = conditions.length > 0 ? and(...conditions) : undefined
-  return db.select().from(departamentos).where(where).orderBy(asc(departamentos.name))
+  return db.select().from(departments).where(where).orderBy(asc(departments.name))
 }
 
 export async function getDepartamentoById(db: Db, id: string) {
-  const [row] = await db.select().from(departamentos).where(eq(departamentos.id, id))
+  const [row] = await db.select().from(departments).where(eq(departments.id, id))
   return row ?? null
 }
 
 export async function getDepartamentoByCode(db: Db, code: string) {
-  const [row] = await db.select().from(departamentos).where(eq(departamentos.code, code))
+  const [row] = await db.select().from(departments).where(eq(departments.code, code))
   return row ?? null
 }
 
-export type CreateDepartamentoData = typeof departamentos.$inferInsert
+export type CreateDepartamentoData = typeof departments.$inferInsert
 
 export async function createDepartamento(db: Db, data: CreateDepartamentoData) {
-  const [row] = await db.insert(departamentos).values(data).returning()
+  const [row] = await db.insert(departments).values(data).returning()
   return row
 }
 
@@ -1410,18 +1418,18 @@ export async function updateDepartamento(
   data: Partial<CreateDepartamentoData>
 ) {
   const [row] = await db
-    .update(departamentos)
+    .update(departments)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(departamentos.id, id))
+    .where(eq(departments.id, id))
     .returning()
   return row ?? null
 }
 
 export async function deactivateDepartamento(db: Db, id: string) {
   const [row] = await db
-    .update(departamentos)
+    .update(departments)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(departamentos.id, id))
+    .where(eq(departments.id, id))
     .returning()
   return row ?? null
 }
@@ -1429,8 +1437,8 @@ export async function deactivateDepartamento(db: Db, id: string) {
 export async function getActiveChildCount(db: Db, parentId: string): Promise<number> {
   const [result] = await db
     .select({ total: count() })
-    .from(departamentos)
-    .where(and(eq(departamentos.parentId, parentId), eq(departamentos.isActive, true)))
+    .from(departments)
+    .where(and(eq(departments.parentId, parentId), eq(departments.isActive, true)))
   return Number(result?.total ?? 0)
 }
 
@@ -1808,7 +1816,7 @@ export async function listAllLoans(
   }>
 > {
   const page = Math.max(1, options.page ?? 1)
-  const limit = Math.min(100, Math.max(1, options.limit ?? 50))
+  const limit = Math.min(10000, Math.max(1, options.limit ?? 50))
   const offset = (page - 1) * limit
 
   const conditions = []
@@ -2291,38 +2299,38 @@ export async function loadInstallmentsByCreditor(
 // ─── Partidas Presupuestarias ─────────────────────────────────────────────────
 
 export function listPartidas(db: Db, search?: string) {
-  return listCatalog(db, partidasPresupuestarias, search)
+  return listCatalog(db, budgetItems, search)
 }
 
 export function getPartidaById(db: Db, id: string) {
-  return getCatalogById(db, partidasPresupuestarias, id)
+  return getCatalogById(db, budgetItems, id)
 }
 
 export function getPartidaByCode(db: Db, code: string) {
-  return getCatalogByCode(db, partidasPresupuestarias, code)
+  return getCatalogByCode(db, budgetItems, code)
 }
 
-export type CreatePartidaData = typeof partidasPresupuestarias.$inferInsert
+export type CreatePartidaData = typeof budgetItems.$inferInsert
 
 export async function createPartida(db: Db, data: CreatePartidaData) {
-  const [row] = await db.insert(partidasPresupuestarias).values(data).returning()
+  const [row] = await db.insert(budgetItems).values(data).returning()
   return row
 }
 
 export async function updatePartida(db: Db, id: string, data: Partial<CreatePartidaData>) {
   const [row] = await db
-    .update(partidasPresupuestarias)
+    .update(budgetItems)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(partidasPresupuestarias.id, id))
+    .where(eq(budgetItems.id, id))
     .returning()
   return row ?? null
 }
 
 export async function deactivatePartida(db: Db, id: string) {
   const [row] = await db
-    .update(partidasPresupuestarias)
+    .update(budgetItems)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(partidasPresupuestarias.id, id))
+    .where(eq(budgetItems.id, id))
     .returning()
   return row ?? null
 }
@@ -2330,21 +2338,21 @@ export async function deactivatePartida(db: Db, id: string) {
 // ─── Cuentas Contables ────────────────────────────────────────────────────────
 
 export function listCuentasContables(db: Db, search?: string) {
-  return listCatalog(db, cuentasContables, search)
+  return listCatalog(db, chartOfAccounts, search)
 }
 
 export function getCuentaContableById(db: Db, id: string) {
-  return getCatalogById(db, cuentasContables, id)
+  return getCatalogById(db, chartOfAccounts, id)
 }
 
 export function getCuentaContableByCode(db: Db, code: string) {
-  return getCatalogByCode(db, cuentasContables, code)
+  return getCatalogByCode(db, chartOfAccounts, code)
 }
 
-export type CreateCuentaContableData = typeof cuentasContables.$inferInsert
+export type CreateCuentaContableData = typeof chartOfAccounts.$inferInsert
 
 export async function createCuentaContable(db: Db, data: CreateCuentaContableData) {
-  const [row] = await db.insert(cuentasContables).values(data).returning()
+  const [row] = await db.insert(chartOfAccounts).values(data).returning()
   return row
 }
 
@@ -2354,18 +2362,18 @@ export async function updateCuentaContable(
   data: Partial<CreateCuentaContableData>
 ) {
   const [row] = await db
-    .update(cuentasContables)
+    .update(chartOfAccounts)
     .set({ ...data, updatedAt: new Date() })
-    .where(eq(cuentasContables.id, id))
+    .where(eq(chartOfAccounts.id, id))
     .returning()
   return row ?? null
 }
 
 export async function deactivateCuentaContable(db: Db, id: string) {
   const [row] = await db
-    .update(cuentasContables)
+    .update(chartOfAccounts)
     .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(cuentasContables.id, id))
+    .where(eq(chartOfAccounts.id, id))
     .returning()
   return row ?? null
 }
@@ -2432,10 +2440,10 @@ export type CreatePositionData = {
   code: string
   name: string
   salary: string
-  cargoId?: string | null
-  departamentoId?: string | null
-  funcionId?: string | null
-  partidaId?: string | null
+  jobTitleId?: string | null
+  departmentId?: string | null
+  jobFunctionId?: string | null
+  budgetItemId?: string | null
   status?: 'en_uso' | 'vacante'
 }
 

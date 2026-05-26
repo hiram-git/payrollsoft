@@ -124,11 +124,11 @@ CREATE INDEX IF NOT EXISTS facial_terminal_events_terminal_idx
   ON facial_terminal_events(terminal_id, created_at DESC);
 --> statement-breakpoint
 
--- Grant the system tenant_admin role the new permission codes registered
--- in the public catalog. We do this in plain SQL because the role row
--- is seeded by the provisioning service (it may not exist when this
--- migration runs against a freshly-created schema), so we use a
--- defensive WHERE that is a no-op when the role isn't there yet.
+-- Grants de permisos del módulo facial a los roles seedeados.
+-- Se ejecutan SIEMPRE (no requieren pgvector) — los permission codes
+-- están en payroll_auth.permissions_catalog independientemente de si
+-- las tablas facial existen o no. Si el módulo se habilita después,
+-- los roles ya tendrán los grants.
 INSERT INTO role_permissions (role_id, permission_code)
 SELECT r.id, p.code
   FROM roles r

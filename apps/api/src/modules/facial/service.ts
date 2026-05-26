@@ -17,7 +17,7 @@ import {
   attendanceRecords,
   employees,
   facialEnrollments,
-  facialMarcaciones,
+  facialPunches,
   facialTerminalEvents,
   facialTerminals,
   shifts,
@@ -30,7 +30,7 @@ import type {
   FacialMatchResult,
   FacialTerminalInput,
   MarcacionInput,
-  MarcacionKind,
+  PunchKind,
 } from '@payroll/types'
 import { and, asc, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import { distanceToConfidence, normaliseEmbedding, searchSimilarEmbeddings } from './vector'
@@ -198,9 +198,9 @@ export async function ingestMarcacionesService(db: AnyDb, input: FacialMarcacion
     const terminalId = await resolveTerminalId(db, m.terminalCode)
     // Idempotency: a kiosk replay must not duplicate the event.
     const [existing] = await db
-      .select({ id: facialMarcaciones.id })
-      .from(facialMarcaciones)
-      .where(eq(facialMarcaciones.idempotencyKey, m.idempotencyKey))
+      .select({ id: facialPunches.id })
+      .from(facialPunches)
+      .where(eq(facialPunches.idempotencyKey, m.idempotencyKey))
       .limit(1)
     if (existing) {
       accepted.push({ id: existing.id, idempotencyKey: m.idempotencyKey, deduped: true })
@@ -214,7 +214,7 @@ export async function ingestMarcacionesService(db: AnyDb, input: FacialMarcacion
     }
 
     const [row] = await db
-      .insert(facialMarcaciones)
+      .insert(facialPunches)
       .values({
         employeeId: m.employeeId ?? null,
         terminalId,
@@ -231,7 +231,7 @@ export async function ingestMarcacionesService(db: AnyDb, input: FacialMarcacion
         status: m.employeeId ? 'verified' : 'pending',
         deviceMeta: m.deviceMeta ?? {},
       })
-      .returning({ id: facialMarcaciones.id })
+      .returning({ id: facialPunches.id })
 
     accepted.push({ id: row.id, idempotencyKey: m.idempotencyKey, deduped: false })
     if (m.employeeId) {
@@ -258,19 +258,19 @@ export async function listMarcacionesService(
     const day = filter.date
     conditions.push(
       and(
-        gte(facialMarcaciones.capturedAt, new Date(`${day}T00:00:00`)),
-        lte(facialMarcaciones.capturedAt, new Date(`${day}T23:59:59.999`))
+        gte(facialPunches.capturedAt, new Date(`${day}T00:00:00`)),
+        lte(facialPunches.capturedAt, new Date(`${day}T23:59:59.999`))
       )
     )
   }
-  if (filter.from) conditions.push(gte(facialMarcaciones.capturedAt, new Date(filter.from)))
-  if (filter.to) conditions.push(lte(facialMarcaciones.capturedAt, new Date(filter.to)))
-  if (filter.employeeId) conditions.push(eq(facialMarcaciones.employeeId, filter.employeeId))
-  if (filter.status) conditions.push(eq(facialMarcaciones.status, filter.status))
+  if (filter.from) conditions.push(gte(facialPunches.capturedAt, new Date(filter.from)))
+  if (filter.to) conditions.push(lte(facialPunches.capturedAt, new Date(filter.to)))
+  if (filter.employeeId) conditions.push(eq(facialPunches.employeeId, filter.employeeId))
+  if (filter.status) conditions.push(eq(facialPunches.status, filter.status))
 
   const rows = await db
     .select({
-      marcacion: facialMarcaciones,
+      marcacion: facialPunches,
       employee: {
         id: employees.id,
         code: employees.code,
@@ -280,10 +280,10 @@ export async function listMarcacionesService(
         position: employees.position,
       },
     })
-    .from(facialMarcaciones)
-    .leftJoin(employees, eq(facialMarcaciones.employeeId, employees.id))
+    .from(facialPunches)
+    .leftJoin(employees, eq(facialPunches.employeeId, employees.id))
     .where(conditions.length > 0 ? and(...conditions) : undefined)
-    .orderBy(desc(facialMarcaciones.capturedAt))
+    .orderBy(desc(facialPunches.capturedAt))
     .limit(500)
 
   return rows
@@ -291,14 +291,14 @@ export async function listMarcacionesService(
 
 export async function recordManualMarcacionService(
   db: AnyDb,
-  input: { employeeId: string; kind: MarcacionKind; capturedAt: string; justification: string },
+  input: { employeeId: string; kind: PunchKind; capturedAt: string; justification: string },
   supervisorUserId: string
 ) {
   const idempotencyKey = `manual_${input.employeeId}_${input.kind}_${input.capturedAt}_${randomBytes(4).toString('hex')}`
   const capturedAt = new Date(input.capturedAt)
 
   const [row] = await db
-    .insert(facialMarcaciones)
+    .insert(facialPunches)
     .values({
       employeeId: input.employeeId,
       kind: input.kind,
@@ -309,7 +309,7 @@ export async function recordManualMarcacionService(
       supervisorUserId,
       justification: input.justification,
     })
-    .returning({ id: facialMarcaciones.id })
+    .returning({ id: facialPunches.id })
 
   await consolidateAttendanceForEmployee(
     db,
@@ -327,13 +327,13 @@ export async function justifyMarcacionService(
   supervisorUserId: string
 ) {
   const [row] = await db
-    .update(facialMarcaciones)
+    .update(facialPunches)
     .set({ status: 'manual', justification, supervisorUserId })
-    .where(eq(facialMarcaciones.id, id))
+    .where(eq(facialPunches.id, id))
     .returning({
-      id: facialMarcaciones.id,
-      employeeId: facialMarcaciones.employeeId,
-      capturedAt: facialMarcaciones.capturedAt,
+      id: facialPunches.id,
+      employeeId: facialPunches.employeeId,
+      capturedAt: facialPunches.capturedAt,
     })
   if (!row)
     return { success: false as const, error: 'not_found', message: 'Marcación no encontrada' }
@@ -383,20 +383,20 @@ export async function consolidateAttendanceForEmployee(
 
   const rows = await db
     .select({
-      id: facialMarcaciones.id,
-      kind: facialMarcaciones.kind,
-      capturedAt: facialMarcaciones.capturedAt,
-      status: facialMarcaciones.status,
+      id: facialPunches.id,
+      kind: facialPunches.kind,
+      capturedAt: facialPunches.capturedAt,
+      status: facialPunches.status,
     })
-    .from(facialMarcaciones)
+    .from(facialPunches)
     .where(
       and(
-        eq(facialMarcaciones.employeeId, employeeId),
-        gte(facialMarcaciones.capturedAt, dayStart),
-        lte(facialMarcaciones.capturedAt, dayEnd)
+        eq(facialPunches.employeeId, employeeId),
+        gte(facialPunches.capturedAt, dayStart),
+        lte(facialPunches.capturedAt, dayEnd)
       )
     )
-    .orderBy(asc(facialMarcaciones.capturedAt))
+    .orderBy(asc(facialPunches.capturedAt))
 
   const shift = await loadShiftForEmployee(db)
   const calendarRow = await loadCalendarEntry(db, date)
@@ -408,7 +408,7 @@ export async function consolidateAttendanceForEmployee(
     calendar: calendarRow ? { date, isWorkday: calendarRow.isWorkday, shiftOverride: null } : null,
     marcaciones: rows.map((r) => ({
       employeeId,
-      kind: r.kind as MarcacionKind,
+      kind: r.kind as PunchKind,
       capturedAt: r.capturedAt as Date,
       status: r.status as 'verified' | 'pending' | 'rejected' | 'manual',
     })),
@@ -453,11 +453,9 @@ export async function consolidateAttendanceForDayService(db: AnyDb, date: string
   const dayStart = new Date(`${date}T00:00:00`)
   const dayEnd = new Date(`${date}T23:59:59.999`)
   const rows = await db
-    .selectDistinct({ employeeId: facialMarcaciones.employeeId })
-    .from(facialMarcaciones)
-    .where(
-      and(gte(facialMarcaciones.capturedAt, dayStart), lte(facialMarcaciones.capturedAt, dayEnd))
-    )
+    .selectDistinct({ employeeId: facialPunches.employeeId })
+    .from(facialPunches)
+    .where(and(gte(facialPunches.capturedAt, dayStart), lte(facialPunches.capturedAt, dayEnd)))
 
   const results: ConsolidatedDay[] = []
   for (const r of rows) {
@@ -477,14 +475,12 @@ export async function dashboardService(db: AnyDb, date: string) {
 
   const marcacionesToday = await db
     .select({
-      employeeId: facialMarcaciones.employeeId,
-      kind: facialMarcaciones.kind,
-      capturedAt: facialMarcaciones.capturedAt,
+      employeeId: facialPunches.employeeId,
+      kind: facialPunches.kind,
+      capturedAt: facialPunches.capturedAt,
     })
-    .from(facialMarcaciones)
-    .where(
-      and(gte(facialMarcaciones.capturedAt, dayStart), lte(facialMarcaciones.capturedAt, dayEnd))
-    )
+    .from(facialPunches)
+    .where(and(gte(facialPunches.capturedAt, dayStart), lte(facialPunches.capturedAt, dayEnd)))
 
   const seen = new Set<string>()
   for (const m of marcacionesToday) {

@@ -185,9 +185,9 @@ export async function seedEmployees(
 
   // Catálogos: requeridos por el seed base (cargos/funciones/departamentos).
   const [cargos, funciones, departamentos] = await Promise.all([
-    sql<{ id: string }[]>`SELECT id FROM cargos LIMIT 20`,
-    sql<{ id: string }[]>`SELECT id FROM funciones LIMIT 20`,
-    sql<{ id: string }[]>`SELECT id FROM departamentos LIMIT 20`,
+    sql<{ id: string }[]>`SELECT id FROM job_titles LIMIT 20`,
+    sql<{ id: string }[]>`SELECT id FROM job_functions LIMIT 20`,
+    sql<{ id: string }[]>`SELECT id FROM departments LIMIT 20`,
   ])
   if (cargos.length === 0 || funciones.length === 0 || departamentos.length === 0) {
     throw new Error(
@@ -238,9 +238,9 @@ export async function seedEmployees(
         id_number: cedula(i + 10000),
         social_security_number: `${(i % 9) + 1}-${String(i + 1000).padStart(6, '0')}`,
         email: `emp${i + 1}@demo.internal`,
-        cargo_id: pick(cargos, i).id,
-        funcion_id: pick(funciones, i).id,
-        departamento_id: pick(departamentos, i).id,
+        job_title_id: pick(cargos, i).id,
+        job_function_id: pick(funciones, i).id,
+        department_id: pick(departamentos, i).id,
         hire_date: hireDate(i),
         base_salary: salary(i),
         pay_frequency: pick(FREQUENCIES, i),
@@ -257,9 +257,9 @@ export async function seedEmployees(
         'id_number',
         'social_security_number',
         'email',
-        'cargo_id',
-        'funcion_id',
-        'departamento_id',
+        'job_title_id',
+        'job_function_id',
+        'department_id',
         'hire_date',
         'base_salary',
         'pay_frequency',

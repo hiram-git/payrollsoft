@@ -1,6 +1,7 @@
 ---
 import type { PermissionCode } from '@payroll/types'
 import Modals from '../components/Modals.astro'
+import Toasts from '../components/Toasts.astro'
 import { can, getIdentity } from '../lib/auth'
 
 interface Props {
@@ -102,10 +103,10 @@ const navAll: NavEntry[] = [
     icon: 'building',
     children: [
       { href: '/config/estructura', label: 'Posición', require: 'positions:read' },
-      { href: '/config/cargos', label: 'Cargos', require: 'catalogs:read' },
-      { href: '/config/funciones', label: 'Funciones', require: 'catalogs:read' },
-      { href: '/config/departamentos', label: 'Departamentos', require: 'catalogs:read' },
-      { href: '/config/partidas', label: 'Partidas', require: 'catalogs:read' },
+      { href: '/config/job-titles', label: 'Cargos', require: 'catalogs:read' },
+      { href: '/config/job-functions', label: 'Funciones', require: 'catalogs:read' },
+      { href: '/config/departments', label: 'Departamentos', require: 'catalogs:read' },
+      { href: '/config/budget-items', label: 'Partidas', require: 'catalogs:read' },
     ],
   },
   {
@@ -139,20 +140,13 @@ const navAll: NavEntry[] = [
     label: 'Asistencia',
     icon: 'clock',
     children: [
-      { href: '/attendance', label: 'Marcaciones', require: 'attendance:read' },
+      { href: '/attendance', label: 'Resumen diario', require: 'attendance:read' },
+      { href: '/attendance/punches', label: 'Timeline', require: 'attendance:read' },
+      { href: '/attendance/import', label: 'Importar TXT', require: 'attendance:mark' },
+      { href: '/attendance/manual', label: 'Marcación manual', require: 'facial:override' },
+      { href: '/attendance/devices', label: 'Dispositivos', require: 'terminals:read' },
+      { href: '/attendance/enroll', label: 'Enrolar rostros', require: 'facial:enroll' },
       { href: '/attendance/shifts', label: 'Horarios', require: 'shifts:read' },
-    ],
-  },
-  {
-    kind: 'group',
-    label: 'Reconocimiento facial',
-    icon: 'clock',
-    children: [
-      { href: '/facial', label: 'Dashboard', require: 'facial:read' },
-      { href: '/facial/marcaciones', label: 'Marcaciones', require: 'facial:read' },
-      { href: '/facial/enrollments', label: 'Enrolar empleados', require: 'facial:enroll' },
-      { href: '/facial/manual', label: 'Marcación manual', require: 'facial:override' },
-      { href: '/facial/terminals', label: 'Terminales', require: 'terminals:read' },
     ],
   },
   {
@@ -189,11 +183,20 @@ const navAll: NavEntry[] = [
     ],
   },
   {
-    kind: 'item',
-    href: '/vacations',
+    kind: 'group',
     label: 'Vacaciones',
     icon: 'calendar',
-    require: 'vacations:read',
+    children: [
+      { href: '/vacations', label: 'Solicitudes', require: 'vacations:read' },
+      { href: '/vacations/approvals', label: 'Aprobaciones', require: 'vacations:approve' },
+    ],
+  },
+  {
+    kind: 'item',
+    href: '/treasury',
+    label: 'Tesorería',
+    icon: 'payroll',
+    require: 'treasury:read',
   },
   {
     kind: 'item',
@@ -216,6 +219,10 @@ const navAll: NavEntry[] = [
         label: 'Expedientes',
         require: 'employee_files:approve',
       },
+      { href: '/config/portal-credentials', label: 'Portal empleados', require: 'users:write' },
+      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
+      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
+      { href: '/audit', label: 'Auditoría', require: 'audit:read' },
     ],
   },
 ]
@@ -1386,5 +1393,6 @@ const icons: Record<IconKey, string> = {
       })();
     </script>
     <Modals />
+    <Toasts />
   </body>
 </html>

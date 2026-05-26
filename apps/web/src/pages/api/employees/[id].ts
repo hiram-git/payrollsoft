@@ -83,13 +83,18 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     email: g('email') || null,
     phone: g('phone') || null,
     positionId: g('positionId') || null,
-    cargoId: g('cargoId') || null,
-    funcionId: g('funcionId') || null,
-    departamentoId: g('departamentoId') || null,
+    jobTitleId: g('jobTitleId') || null,
+    jobFunctionId: g('jobFunctionId') || null,
+    departmentId: g('departmentId') || null,
     hireDate: g('hireDate'),
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
+    // Datos bancarios (tesorería) — string vacío se mapea a null
+    bankId: g('bankId') || null,
+    accountNumber: g('accountNumber') || null,
+    accountType: g('accountType') || null,
+    paymentMethod: g('paymentMethod') || 'check',
     ...(customFields !== undefined ? { customFields } : {}),
   }
 

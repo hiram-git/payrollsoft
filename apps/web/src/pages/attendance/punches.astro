@@ -1,0 +1,257 @@
+---
+/**
+ * Timeline unificada de marcaciones — muestra TODOS los punches
+ * de todas las fuentes (TXT, API, facial, manual) en una sola
+ * tabla filtrable.
+ */
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'attendance:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+const qDate = Astro.url.searchParams.get('date') ?? new Date().toISOString().slice(0, 10)
+const qSource = Astro.url.searchParams.get('source') ?? ''
+const qEmployeeId = Astro.url.searchParams.get('employeeId') ?? ''
+
+type Punch = {
+  id: string
+  employeeId: string
+  employeeCode: string | null
+  employeeName: string | null
+  punchedAt: string
+  punchType: number
+  source: string
+  deviceId: string | null
+}
+
+let punches: Punch[] = []
+let error = ''
+
+try {
+  const params = new URLSearchParams({ date: qDate, limit: '500' })
+  if (qSource) params.set('source', qSource)
+  if (qEmployeeId) params.set('employeeId', qEmployeeId)
+
+  const res = await fetch(`${API_URL}/attendance/punches?${params}`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) punches = ((await res.json()) as { data: Punch[] }).data ?? []
+  else error = `Error al cargar marcaciones (HTTP ${res.status}).`
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const PUNCH_LABELS: Record<number, string> = {
+  0: 'Entrada',
+  1: 'Salida almuerzo',
+  2: 'Regreso almuerzo',
+  3: 'Salida',
+  9: 'Desconocido',
+}
+const PUNCH_COLORS: Record<number, string> = {
+  0: 'att-type-entry',
+  1: 'att-type-lunch-out',
+  2: 'att-type-lunch-in',
+  3: 'att-type-exit',
+  9: 'att-type-unknown',
+}
+const SOURCE_LABELS: Record<string, string> = {
+  import: 'TXT',
+  api: 'API',
+  facial: 'Facial',
+  manual: 'Manual',
+  webhook: 'Webhook',
+}
+
+function fmtTime(iso: string): string {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`
+}
+function fmtDate(s: string): string {
+  const [y, m, d] = s.split('-')
+  return `${d}/${m}/${y}`
+}
+
+const uniqueEmployees = [
+  ...new Map(
+    punches.map((p) => [
+      p.employeeId,
+      { id: p.employeeId, code: p.employeeCode, name: p.employeeName },
+    ])
+  ).values(),
+].sort((a, b) => (a.code ?? '').localeCompare(b.code ?? ''))
+---
+<AppLayout title="Marcaciones — Timeline">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight att-title">Timeline de marcaciones</h1>
+        <p class="text-sm mt-0.5 att-subtitle">
+          {punches.length} punches del {fmtDate(qDate)} — todas las fuentes en una sola vista.
+        </p>
+      </div>
+      <a href="/attendance" class="shrink-0 att-btn-secondary px-3.5 py-2 rounded-md border text-sm font-medium">
+        ← Resumen diario
+      </a>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <!-- Filtros -->
+    <form method="GET" class="att-card border rounded-lg p-4 mb-5">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="block text-xs font-medium att-label mb-1.5">Fecha</label>
+          <input type="date" name="date" value={qDate} class="att-input w-full px-3 py-2 text-sm rounded-md" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium att-label mb-1.5">Fuente</label>
+          <select name="source" class="att-input w-full px-3 py-2 text-sm rounded-md">
+            <option value="" selected={qSource === ''}>Todas</option>
+            <option value="import" selected={qSource === 'import'}>TXT</option>
+            <option value="facial" selected={qSource === 'facial'}>Facial</option>
+            <option value="manual" selected={qSource === 'manual'}>Manual</option>
+            <option value="api" selected={qSource === 'api'}>API</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium att-label mb-1.5">Empleado</label>
+          <select name="employeeId" class="att-input w-full px-3 py-2 text-sm rounded-md">
+            <option value="" selected={qEmployeeId === ''}>Todos</option>
+            {uniqueEmployees.map((e) => (
+              <option value={e.id} selected={qEmployeeId === e.id}>
+                {e.code} — {e.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <button type="submit" class="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+            Filtrar
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Stats rápidas -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+      <div class="att-card border rounded-lg p-3 text-center">
+        <div class="text-2xl font-bold att-title">{punches.length}</div>
+        <div class="text-[10px] uppercase tracking-wide att-mute">Total</div>
+      </div>
+      {Object.entries(SOURCE_LABELS).map(([key, label]) => {
+        const count = punches.filter((p) => p.source === key).length
+        if (count === 0) return null
+        return (
+          <div class="att-card border rounded-lg p-3 text-center">
+            <div class="text-2xl font-bold att-title">{count}</div>
+            <div class="text-[10px] uppercase tracking-wide att-mute">{label}</div>
+          </div>
+        )
+      })}
+    </div>
+
+    <!-- Tabla -->
+    <section class="att-card border rounded-lg overflow-hidden">
+      {punches.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm att-subtitle">Sin marcaciones para {fmtDate(qDate)}.</p>
+        </div>
+      ) : (
+        <table class="att-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Hora</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Tipo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Fuente</th>
+            </tr>
+          </thead>
+          <tbody>
+            {punches.map((p) => (
+              <tr class="border-b last:border-0 att-rule">
+                <td class="px-5 py-2.5 font-mono text-xs att-cell whitespace-nowrap">{fmtTime(p.punchedAt)}</td>
+                <td class="px-5 py-2.5">
+                  <div class="text-sm att-cell">{p.employeeName ?? '—'}</div>
+                  <div class="text-[10px] font-mono att-mute">{p.employeeCode}</div>
+                </td>
+                <td class="px-5 py-2.5">
+                  <span class={`att-punch-badge ${PUNCH_COLORS[p.punchType] ?? 'att-type-unknown'}`}>
+                    {PUNCH_LABELS[p.punchType] ?? `Tipo ${p.punchType}`}
+                  </span>
+                </td>
+                <td class="px-5 py-2.5">
+                  <span class={`att-source-badge att-source-${p.source}`}>
+                    {SOURCE_LABELS[p.source] ?? p.source}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <style>
+    .att-title    { color: var(--fore); }
+    .att-subtitle { color: var(--fore-dim); }
+    .att-cell     { color: var(--fore-dim); }
+    .att-label    { color: var(--fore-dim); }
+    .att-mute     { color: var(--mute); }
+    .att-card { background: var(--ink-2); border-color: var(--rule); }
+    .att-rule { border-color: var(--rule); }
+    .att-input { background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore); }
+    .att-input:focus { border-color: var(--rule-hi); outline: none; }
+    .att-btn-secondary { background: var(--ink-2); border-color: var(--rule); color: var(--fore-dim); }
+    .att-btn-secondary:hover { background: var(--ink-4); color: var(--fore); }
+
+    .att-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
+    .att-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .att-table tbody tr:hover { background: var(--ink-4); }
+
+    .att-punch-badge {
+      display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem;
+      font-size: 0.6875rem; font-weight: 500;
+    }
+    .att-type-entry     { background: rgba(16,185,129,0.18); color: #34d399; }
+    .att-type-lunch-out { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .att-type-lunch-in  { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .att-type-exit      { background: rgba(248,113,113,0.18); color: #f87171; }
+    .att-type-unknown   { background: rgba(156,163,175,0.18); color: var(--mute); }
+
+    .att-source-badge {
+      display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px;
+      font-size: 0.625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .att-source-import { background: rgba(16,185,129,0.12); color: #34d399; }
+    .att-source-facial { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .att-source-manual { background: rgba(96,165,250,0.15); color: #60a5fa; }
+    .att-source-api    { background: rgba(245,158,11,0.12); color: #fbbf24; }
+    .att-source-webhook { background: rgba(236,72,153,0.12); color: #f472b6; }
+
+    [data-theme='light'] .att-card { background: #ffffff; }
+    [data-theme='light'] .att-input { background: #ffffff; }
+    [data-theme='light'] .att-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .att-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .att-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .att-type-entry     { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .att-type-lunch-out { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .att-type-lunch-in  { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .att-type-exit      { background: #fee2e2; color: #991b1b; }
+    [data-theme='light'] .att-type-unknown   { background: #f3f4f6; color: #6b7280; }
+    [data-theme='light'] .att-source-import { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .att-source-facial { background: #ede9fe; color: #6d28d9; }
+    [data-theme='light'] .att-source-manual { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .att-source-api    { background: #fef3c7; color: #92400e; }
+  </style>
+</AppLayout>

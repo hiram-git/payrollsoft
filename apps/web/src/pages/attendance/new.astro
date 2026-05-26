@@ -19,7 +19,7 @@ type Employee = {
 let employees: Employee[] = []
 
 try {
-  const res = await fetch(`${API_URL}/employees?isActive=true&limit=200`, {
+  const res = await fetch(`${API_URL}/employees?isActive=true&limit=5000`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.status === 401) return Astro.redirect('/login')

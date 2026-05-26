@@ -25,7 +25,7 @@ let cuentasContables: CuentaContable[] = []
 try {
   const [configRes, cuentasRes] = await Promise.all([
     fetch(`${API_URL}/concepts/config`, { headers }),
-    fetch(`${API_URL}/cuentas-contables`, { headers }),
+    fetch(`${API_URL}/chart-of-accounts`, { headers }),
   ])
   if (configRes.status === 401) return Astro.redirect('/login')
   if (configRes.ok) config = ((await configRes.json()) as { data: ConceptConfig }).data

@@ -1,0 +1,181 @@
+---
+import PortalLayout from '../../../layouts/PortalLayout.astro'
+import { getPortalIdentity } from '../../../lib/portal-auth'
+
+const identity = getPortalIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/portal/login')
+---
+
+<PortalLayout title="Solicitudes">
+  <div class="rq-wrap">
+    <div class="rq-header">
+      <div>
+        <h1 class="rq-title">Mis solicitudes</h1>
+        <p class="rq-subtitle">Historial de solicitudes y documentos del expediente.</p>
+      </div>
+      <a href="/portal/requests/new" class="rq-new-btn">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <path d="M7 2v10M2 7h10"/>
+        </svg>
+        Nueva solicitud
+      </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="rq-filters">
+      <div class="rq-filter-group">
+        <label class="ds-label">Estado</label>
+        <select id="filter-status" class="ds-input" style="width:auto;">
+          <option value="">Todos</option>
+          <option value="pending">Pendiente</option>
+          <option value="approved">Aprobada</option>
+          <option value="rejected">Rechazada</option>
+        </select>
+      </div>
+      <div class="rq-filter-group">
+        <label class="ds-label">Buscar</label>
+        <input type="text" id="filter-search" placeholder="N° documento, tipo, observaciones..." class="ds-input" style="width:240px;" />
+      </div>
+      <div class="rq-stats" id="rq-stats"></div>
+    </div>
+
+    <!-- Table -->
+    <div class="ds-card-table">
+      <div id="rq-body">
+        <div class="ds-empty">Cargando solicitudes...</div>
+      </div>
+    </div>
+  </div>
+
+  <style is:global>
+    .rq-wrap { max-width:960px; margin:0 auto; padding:32px 24px; }
+    .rq-header {
+      display:flex; justify-content:space-between; align-items:flex-start;
+      gap:16px; margin-bottom:24px; flex-wrap:wrap;
+    }
+    .rq-title {
+      font-family:var(--f-display); font-weight:300; font-size:24px;
+      letter-spacing:-0.02em; margin:0 0 4px; color:var(--fore);
+    }
+    .rq-subtitle { font-size:13px; color:var(--mute-2); margin:0; }
+    .rq-new-btn {
+      display:inline-flex; align-items:center; gap:6px;
+      padding:9px 18px; background:var(--navy); color:#fff;
+      border:none; border-radius:4px; font-family:var(--f-sans);
+      font-weight:500; font-size:13px; text-decoration:none;
+      transition:background 140ms ease; flex-shrink:0;
+    }
+    .rq-new-btn:hover { background:var(--navy-hi); }
+
+    .rq-filters {
+      display:flex; align-items:flex-end; gap:16px; margin-bottom:16px; flex-wrap:wrap;
+    }
+    .rq-filter-group { display:flex; flex-direction:column; gap:4px; }
+    .rq-filter-label {
+      font-family:var(--f-mono); font-size:10px; color:var(--mute);
+      letter-spacing:.1em; text-transform:uppercase;
+    }
+    .rq-stats {
+      margin-left:auto; font-family:var(--f-mono); font-size:11px;
+      color:var(--mute); letter-spacing:.06em;
+    }
+
+    .rq-doc-num { font-family:var(--f-mono); font-size:12px; color:var(--fore); font-weight:500; }
+    .rq-obs { max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--mute-2); font-size:12px; }
+    .rq-rejection {
+      font-size:11px; color:var(--err); margin-top:2px;
+      max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    }
+
+    @media (max-width:640px) {
+      .rq-filter-input { width:100%; }
+      .ds-table th:nth-child(4), .ds-table td:nth-child(4) { display:none; }
+    }
+  </style>
+
+  <script is:inline>
+    ;(function() {
+      var body = document.getElementById('rq-body');
+      var filterStatus = document.getElementById('filter-status');
+      var filterSearch = document.getElementById('filter-search');
+      var statsEl = document.getElementById('rq-stats');
+      var allRows = [];
+
+      var STATUS_LABEL = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
+      var STATUS_CLS = { pending: 'pending', approved: 'approved', rejected: 'rejected' };
+
+      function chip(s) {
+        return '<span class="ds-chip ds-chip-' + (STATUS_CLS[s] || 'pending') + '">' + (STATUS_LABEL[s] || s) + '</span>';
+      }
+      function fmtDate(d) {
+        if (!d) return '—';
+        return String(d).substring(0, 10);
+      }
+      function esc(s) {
+        if (!s) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      }
+
+      function render(rows) {
+        if (rows.length === 0) {
+          body.innerHTML = '<div class="ds-empty">No se encontraron solicitudes.</div>';
+          statsEl.textContent = '';
+          return;
+        }
+        var html = '<table class="ds-table"><thead><tr>' +
+          '<th>N° Documento</th><th>Tipo</th><th>Fecha</th><th>Observaciones</th><th>Estado</th>' +
+          '</tr></thead><tbody>';
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i];
+          var rejection = r.approval_status === 'rejected' && r.rejection_reason
+            ? '<div class="rq-rejection" title="' + esc(r.rejection_reason) + '">' + esc(r.rejection_reason) + '</div>'
+            : '';
+          html += '<tr>' +
+            '<td class="rq-doc-num">' + esc(r.document_number) + '</td>' +
+            '<td class="rq-type">' + esc(r.type_name) + '<br><span style="font-size:11px;color:var(--mute)">' + esc(r.subtype_name) + '</span></td>' +
+            '<td>' + fmtDate(r.document_date) + '</td>' +
+            '<td class="rq-obs" title="' + esc(r.observations) + '">' + esc(r.observations || '—') + '</td>' +
+            '<td>' + chip(r.approval_status) + rejection + '</td>' +
+            '</tr>';
+        }
+        html += '</tbody></table>';
+        body.innerHTML = html;
+        statsEl.textContent = rows.length + ' solicitud' + (rows.length !== 1 ? 'es' : '');
+      }
+
+      function applyFilters() {
+        var status = filterStatus.value;
+        var search = filterSearch.value.trim().toLowerCase();
+        var filtered = allRows.filter(function(r) {
+          if (status && r.approval_status !== status) return false;
+          if (search) {
+            var haystack = [
+              r.document_number, r.type_name, r.subtype_name,
+              r.observations, r.approval_status
+            ].join(' ').toLowerCase();
+            if (haystack.indexOf(search) === -1) return false;
+          }
+          return true;
+        });
+        render(filtered);
+      }
+
+      filterStatus.addEventListener('change', applyFilters);
+      var searchTimer;
+      filterSearch.addEventListener('input', function() {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(applyFilters, 200);
+      });
+
+      fetch('/api/portal/proxy?path=requests')
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          allRows = (res && res.data) || [];
+          render(allRows);
+        })
+        .catch(function() {
+          body.innerHTML = '<div class="ds-empty">Error al cargar solicitudes.</div>';
+        });
+    })();
+  </script>
+</PortalLayout>

@@ -1,0 +1,229 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
+---
+
+<AppLayout title="Portal de empleados">
+  <div class="p-8">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Portal de empleados</h1>
+        <p class="text-sm text-gray-500 mt-0.5">Gestión de credenciales de acceso al portal de colaboradores.</p>
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="mb-5 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">
+      Los empleados acceden al portal con su <strong>cédula</strong> y la contraseña que usted les asigne.
+      Los aprobadores pueden aprobar o rechazar solicitudes de su departamento.
+    </div>
+
+    <!-- Filters -->
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <select id="pc-filter" class="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">
+        <option value="all">Todos los empleados</option>
+        <option value="with">Con credenciales</option>
+        <option value="without">Sin credenciales</option>
+        <option value="locked">Bloqueados</option>
+        <option value="approver">Aprobadores</option>
+      </select>
+      <input id="pc-search" type="text" placeholder="Buscar por nombre, código o cédula..." class="px-3 py-1.5 text-sm border border-gray-300 rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-gray-900" />
+      <span id="pc-count" class="ml-auto text-xs text-gray-400 font-mono"></span>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div id="pc-body">
+        <div class="text-center text-sm text-gray-400 py-12">Cargando empleados...</div>
+      </div>
+    </div>
+
+    <!-- Create/Reset modal -->
+    <div id="pc-modal" class="fixed inset-0 z-50 bg-black/50 flex items-center justify-center" style="display:none;">
+      <div class="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl">
+        <h3 id="pc-modal-title" class="text-base font-semibold text-gray-900 mb-4"></h3>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Empleado</label>
+            <input id="pc-modal-emp" type="text" disabled class="w-full px-3 py-2 text-sm border border-gray-200 rounded-md bg-gray-50 text-gray-500" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Contraseña</label>
+            <input id="pc-modal-pw" type="text" placeholder="Mínimo 6 caracteres" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 mt-5">
+          <button id="pc-modal-cancel" class="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+          <button id="pc-modal-save" class="px-4 py-1.5 text-sm bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 disabled:opacity-50">Guardar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    ;(function() {
+      var body = document.getElementById('pc-body');
+      var filterSel = document.getElementById('pc-filter');
+      var searchInput = document.getElementById('pc-search');
+      var countEl = document.getElementById('pc-count');
+      var modal = document.getElementById('pc-modal');
+      var modalTitle = document.getElementById('pc-modal-title');
+      var modalEmp = document.getElementById('pc-modal-emp');
+      var modalPw = document.getElementById('pc-modal-pw');
+      var modalCancel = document.getElementById('pc-modal-cancel');
+      var modalSave = document.getElementById('pc-modal-save');
+      var allRows = [];
+      var pendingAction = null;
+
+      function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;') : ''; }
+
+      function badge(text, color) {
+        var colors = {
+          green: 'bg-green-100 text-green-700',
+          red: 'bg-red-100 text-red-700',
+          gray: 'bg-gray-100 text-gray-500',
+          amber: 'bg-amber-100 text-amber-700',
+          blue: 'bg-blue-100 text-blue-700',
+        };
+        return '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium ' + (colors[color] || colors.gray) + '">' + text + '</span>';
+      }
+
+      function render(rows) {
+        countEl.textContent = rows.length + ' empleado' + (rows.length !== 1 ? 's' : '');
+        if (rows.length === 0) {
+          body.innerHTML = '<div class="text-center text-sm text-gray-400 py-12">Sin resultados.</div>';
+          return;
+        }
+        var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">' +
+          '<th class="px-4 py-3 text-left font-medium">Empleado</th>' +
+          '<th class="px-4 py-3 text-left font-medium">Cédula</th>' +
+          '<th class="px-4 py-3 text-left font-medium">Estado</th>' +
+          '<th class="px-4 py-3 text-left font-medium">Último acceso</th>' +
+          '<th class="px-4 py-3 text-right font-medium">Acciones</th>' +
+          '</tr></thead><tbody>';
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i];
+          var status = '';
+          if (!r.has_credentials) status = badge('Sin acceso', 'gray');
+          else if (r.cred_locked) status = badge('Bloqueado', 'red');
+          else if (!r.cred_active) status = badge('Inactivo', 'amber');
+          else status = badge('Activo', 'green');
+          if (r.is_approver) status += ' ' + badge('Aprobador', 'blue');
+
+          var lastLogin = r.last_login_at ? new Date(r.last_login_at).toLocaleDateString('es-PA') : '—';
+          var actions = '';
+          if (!r.has_credentials) {
+            actions = '<button class="text-blue-600 hover:underline text-xs font-medium" onclick="window.__pcCreate(\'' + r.id + '\',\'' + esc(r.code) + ' — ' + esc(r.last_name) + ', ' + esc(r.first_name) + '\')">Crear acceso</button>';
+          } else {
+            actions = '<button class="text-blue-600 hover:underline text-xs font-medium mr-3" onclick="window.__pcReset(\'' + r.id + '\',\'' + esc(r.code) + ' — ' + esc(r.last_name) + ', ' + esc(r.first_name) + '\')">Resetear</button>';
+            if (r.cred_locked) {
+              actions += '<button class="text-amber-600 hover:underline text-xs font-medium mr-3" onclick="window.__pcUnlock(\'' + r.id + '\')">Desbloquear</button>';
+            }
+            actions += '<button class="text-xs font-medium mr-3 ' + (r.is_approver ? 'text-red-500 hover:underline' : 'text-green-600 hover:underline') + '" onclick="window.__pcToggleApprover(\'' + r.id + '\',' + !r.is_approver + ')">' + (r.is_approver ? 'Quitar aprobador' : 'Hacer aprobador') + '</button>';
+          }
+
+          html += '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+            '<td class="px-4 py-3"><span class="font-medium text-gray-900">' + esc(r.last_name) + ', ' + esc(r.first_name) + '</span> <span class="text-gray-400 font-mono text-xs ml-1">' + esc(r.code) + '</span></td>' +
+            '<td class="px-4 py-3 font-mono text-xs text-gray-600">' + esc(r.id_number) + '</td>' +
+            '<td class="px-4 py-3">' + status + '</td>' +
+            '<td class="px-4 py-3 text-gray-500">' + lastLogin + '</td>' +
+            '<td class="px-4 py-3 text-right whitespace-nowrap">' + actions + '</td>' +
+            '</tr>';
+        }
+        html += '</tbody></table>';
+        body.innerHTML = html;
+      }
+
+      function applyFilters() {
+        var filter = filterSel.value;
+        var search = searchInput.value.trim().toLowerCase();
+        var filtered = allRows.filter(function(r) {
+          if (filter === 'with' && !r.has_credentials) return false;
+          if (filter === 'without' && r.has_credentials) return false;
+          if (filter === 'locked' && !r.cred_locked) return false;
+          if (filter === 'approver' && !r.is_approver) return false;
+          if (search) {
+            var hay = [r.code, r.first_name, r.last_name, r.id_number].join(' ').toLowerCase();
+            if (hay.indexOf(search) === -1) return false;
+          }
+          return true;
+        });
+        render(filtered);
+      }
+
+      function postAction(payload) {
+        return fetch('/api/portal/credentials', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(function(r) { return r.json(); });
+      }
+
+      function reload() {
+        fetch('/api/portal/credentials')
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            allRows = (res && res.data) || [];
+            applyFilters();
+          })
+          .catch(function() {
+            body.innerHTML = '<div class="text-center text-sm text-red-400 py-12">Error al cargar datos.</div>';
+          });
+      }
+
+      filterSel.addEventListener('change', applyFilters);
+      var timer;
+      searchInput.addEventListener('input', function() {
+        clearTimeout(timer);
+        timer = setTimeout(applyFilters, 200);
+      });
+
+      // Modal
+      function openModal(title, empLabel, action, empId) {
+        modalTitle.textContent = title;
+        modalEmp.value = empLabel;
+        modalPw.value = '';
+        pendingAction = { action: action, employeeId: empId };
+        modal.style.display = 'flex';
+        modalPw.focus();
+      }
+      modalCancel.addEventListener('click', function() { modal.style.display = 'none'; });
+      modalSave.addEventListener('click', function() {
+        if (!pendingAction) return;
+        var pw = modalPw.value.trim();
+        if (pw.length < 6) { modalPw.focus(); return; }
+        modalSave.disabled = true;
+        postAction({ action: pendingAction.action, employeeId: pendingAction.employeeId, password: pw })
+          .then(function(res) {
+            modal.style.display = 'none';
+            modalSave.disabled = false;
+            if (res.success) reload();
+            else alert(res.error || 'Error');
+          })
+          .catch(function() { modalSave.disabled = false; alert('Error de conexión.'); });
+      });
+
+      window.__pcCreate = function(id, label) { openModal('Crear acceso al portal', label, 'create', id); };
+      window.__pcReset = function(id, label) { openModal('Resetear contraseña', label, 'reset', id); };
+      window.__pcUnlock = function(id) {
+        if (!confirm('¿Desbloquear esta cuenta?')) return;
+        postAction({ action: 'unlock', employeeId: id }).then(function(res) {
+          if (res.success) reload(); else alert(res.error || 'Error');
+        });
+      };
+      window.__pcToggleApprover = function(id, val) {
+        var msg = val ? '¿Designar como aprobador?' : '¿Quitar rol de aprobador?';
+        if (!confirm(msg)) return;
+        postAction({ action: 'toggle-approver', employeeId: id, isApprover: val }).then(function(res) {
+          if (res.success) reload(); else alert(res.error || 'Error');
+        });
+      };
+
+      reload();
+    })();
+  </script>
+</AppLayout>

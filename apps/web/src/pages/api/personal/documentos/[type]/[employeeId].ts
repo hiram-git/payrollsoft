@@ -58,6 +58,10 @@ export const GET: APIRoute = async ({ params, cookies }) => {
           companyName: null,
           ruc: null,
           address: null,
+          phone: null,
+          email: null,
+          legalRepresentative: null,
+          companyLogo: null,
         } as CompanyForDoc)
   } catch (err) {
     return new Response(

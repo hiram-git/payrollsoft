@@ -1,0 +1,364 @@
+---
+import PortalLayout from '../../../layouts/PortalLayout.astro'
+import { getPortalIdentity } from '../../../lib/portal-auth'
+
+const identity = getPortalIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/portal/login')
+
+const today = new Date().toISOString().slice(0, 10)
+---
+
+<PortalLayout title="Nueva solicitud">
+  <div class="pr-wrap">
+    <div class="pr-header">
+      <a href="/portal/requests" class="pr-back">← Volver a solicitudes</a>
+      <h1 class="pr-title">Nueva solicitud</h1>
+      <p class="pr-subtitle">
+        Empleado: <span class="pr-emp-name">{identity.name}</span>
+        <span class="pr-emp-code">{identity.employeeCode}</span>
+      </p>
+    </div>
+
+    <div class="pr-banner pr-banner-err" id="err-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.3">
+        <circle cx="5.5" cy="5.5" r="4.5"/>
+        <path d="M5.5 3v3M5.5 7.8v.2"/>
+      </svg>
+      <span id="err-text"></span>
+    </div>
+
+    <div class="pr-banner pr-banner-ok" id="ok-banner" style="display:none;">
+      <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="2 5.8 4.5 8.2 9 3.4"/>
+      </svg>
+      <span id="ok-text"></span>
+    </div>
+
+    <form id="req-form" enctype="multipart/form-data" novalidate>
+      <!-- Document identification -->
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Documento</h2>
+        <div class="pr-grid-3">
+          <div>
+            <label class="pr-label">Tipo</label>
+            <input type="hidden" name="typeId" id="pr-type-id" required />
+            <div class="pr-combo-wrap">
+              <input type="text" id="pr-type-text" placeholder="Buscar tipo…" autocomplete="off" class="pr-input" />
+              <button type="button" id="pr-type-clear" class="pr-combo-clear" style="display:none" aria-label="Limpiar">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+              </button>
+              <ul id="pr-type-dropdown" class="pr-combo-list" role="listbox"></ul>
+            </div>
+          </div>
+          <div>
+            <label class="pr-label">Subtipo</label>
+            <input type="hidden" name="subtypeId" id="pr-subtype-id" required />
+            <div class="pr-combo-wrap">
+              <input type="text" id="pr-subtype-text" placeholder="Selecciona un tipo primero" autocomplete="off" class="pr-input" disabled />
+              <button type="button" id="pr-subtype-clear" class="pr-combo-clear" style="display:none" aria-label="Limpiar">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 2l8 8M10 2l-8 8"/></svg>
+              </button>
+              <ul id="pr-subtype-dropdown" class="pr-combo-list" role="listbox"></ul>
+            </div>
+          </div>
+          <div>
+            <label class="pr-label" for="pr-date">Fecha del documento</label>
+            <input type="date" id="pr-date" name="documentDate" required value={today} class="pr-input" />
+          </div>
+        </div>
+        <div>
+          <label class="pr-label" for="pr-obs">Observaciones</label>
+          <textarea id="pr-obs" name="observations" rows="2" placeholder="Notas sobre esta solicitud (opcional)" class="pr-input pr-textarea"></textarea>
+        </div>
+      </section>
+
+      <!-- Dynamic fields -->
+      <section class="pt-card pr-section" id="dyn-section" style="display:none;">
+        <h2 class="pr-section-title">Datos específicos</h2>
+        <p class="pr-section-hint">Estos campos dependen del tipo y subtipo seleccionado.</p>
+        <div id="dyn-fields" class="pr-grid-2"></div>
+      </section>
+
+      <!-- Attachments -->
+      <section class="pt-card pr-section">
+        <h2 class="pr-section-title">Adjuntos adicionales</h2>
+        <p class="pr-section-hint">PDFs o imágenes hasta 5 MB cada uno.</p>
+        <input
+          type="file"
+          name="attachments"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/gif"
+          class="pr-file-input"
+        />
+      </section>
+
+      <div class="pr-actions">
+        <a href="/portal/requests" class="pr-btn-cancel">Cancelar</a>
+        <button type="submit" id="pr-submit" class="pr-btn-submit">
+          <span class="btn-text">Enviar solicitud</span>
+          <span class="pr-spinner"></span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script is:inline>
+    ;(function() {
+      var typeIdInput = document.getElementById('pr-type-id');
+      var typeText = document.getElementById('pr-type-text');
+      var typeDropdown = document.getElementById('pr-type-dropdown');
+      var typeClear = document.getElementById('pr-type-clear');
+      var subtypeIdInput = document.getElementById('pr-subtype-id');
+      var subtypeText = document.getElementById('pr-subtype-text');
+      var subtypeDropdown = document.getElementById('pr-subtype-dropdown');
+      var subtypeClear = document.getElementById('pr-subtype-clear');
+      var dateEl = document.getElementById('pr-date');
+      var dynSection = document.getElementById('dyn-section');
+      var dynFields = document.getElementById('dyn-fields');
+      var form = document.getElementById('req-form');
+      var submitBtn = document.getElementById('pr-submit');
+      var errBanner = document.getElementById('err-banner');
+      var errText = document.getElementById('err-text');
+      var okBanner = document.getElementById('ok-banner');
+      var okText = document.getElementById('ok-text');
+
+      var allTypes = [];
+      var subtypesCache = {};
+      var fieldsCache = {};
+
+      function showErr(msg) {
+        errText.textContent = msg;
+        errBanner.style.display = 'flex';
+        okBanner.style.display = 'none';
+      }
+      function showOk(msg) {
+        okText.textContent = msg;
+        okBanner.style.display = 'flex';
+        errBanner.style.display = 'none';
+      }
+      function hideMessages() {
+        errBanner.style.display = 'none';
+        okBanner.style.display = 'none';
+      }
+
+      function proxyGet(path) {
+        return fetch('/api/portal/proxy?path=' + encodeURIComponent(path))
+          .then(function(r) { return r.json(); });
+      }
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+      // ── Combobox helper ──
+      function setupCombo(textEl, dropdownEl, clearEl, idInputEl, items, onSelect) {
+        var blurTimeout = null;
+
+        function filter(q) {
+          var lq = q.toLowerCase();
+          return items.filter(function(i) { return i.name.toLowerCase().indexOf(lq) !== -1; }).slice(0, 30);
+        }
+        function openList(list) {
+          if (list.length === 0) { dropdownEl.classList.remove('open'); return; }
+          dropdownEl.innerHTML = list.map(function(i) {
+            return '<li data-id="' + i.id + '" data-label="' + esc(i.name) + '">' + esc(i.name) + '</li>';
+          }).join('');
+          dropdownEl.classList.add('open');
+        }
+        function showAll() {
+          var q = textEl.value.trim();
+          openList(q.length === 0 ? items.slice(0, 30) : filter(q));
+        }
+
+        dropdownEl.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        clearEl.addEventListener('mousedown', function(e) { e.preventDefault(); });
+
+        dropdownEl.addEventListener('click', function(e) {
+          var li = e.target.closest('li[data-id]');
+          if (!li) return;
+          idInputEl.value = li.dataset.id;
+          textEl.value = li.dataset.label;
+          dropdownEl.classList.remove('open');
+          clearEl.style.display = '';
+          if (onSelect) onSelect(li.dataset.id);
+        });
+
+        textEl.addEventListener('input', function() {
+          idInputEl.value = '';
+          clearEl.style.display = 'none';
+          showAll();
+          if (onSelect) onSelect('');
+        });
+
+        textEl.addEventListener('focus', function() {
+          if (blurTimeout) { clearTimeout(blurTimeout); blurTimeout = null; }
+          if (!idInputEl.value) showAll();
+        });
+
+        textEl.addEventListener('blur', function() {
+          blurTimeout = setTimeout(function() { dropdownEl.classList.remove('open'); }, 150);
+        });
+
+        clearEl.addEventListener('click', function() {
+          idInputEl.value = '';
+          textEl.value = '';
+          clearEl.style.display = 'none';
+          textEl.focus();
+          showAll();
+          if (onSelect) onSelect('');
+        });
+      }
+
+      // ── Load types ──
+      proxyGet('file-types').then(function(res) {
+        allTypes = (res && res.data) || [];
+        typeText.placeholder = allTypes.length > 0 ? 'Buscar tipo…' : 'Sin tipos disponibles';
+        setupCombo(typeText, typeDropdown, typeClear, typeIdInput, allTypes, function(typeId) {
+          subtypeIdInput.value = '';
+          subtypeText.value = '';
+          subtypeClear.style.display = 'none';
+          if (!typeId) {
+            subtypeText.disabled = true;
+            subtypeText.placeholder = 'Selecciona un tipo primero';
+            loadFields('', '');
+            return;
+          }
+          loadSubtypes(typeId);
+        });
+      });
+
+      function loadSubtypes(typeId) {
+        if (subtypesCache[typeId]) {
+          activateSubtypeCombo(subtypesCache[typeId]);
+          return;
+        }
+        subtypeText.placeholder = 'Cargando…';
+        proxyGet('file-types/' + typeId + '/subtypes').then(function(res) {
+          var subs = (res && res.data) || [];
+          subtypesCache[typeId] = subs;
+          activateSubtypeCombo(subs);
+        });
+      }
+      function activateSubtypeCombo(subs) {
+        subtypeText.disabled = false;
+        subtypeText.placeholder = subs.length > 0 ? 'Buscar subtipo…' : 'Sin subtipos';
+        setupCombo(subtypeText, subtypeDropdown, subtypeClear, subtypeIdInput, subs, function(subId) {
+          loadFields(typeIdInput.value, subId);
+        });
+      }
+
+      function loadFields(typeId, subtypeId) {
+        if (!typeId || !subtypeId) {
+          dynSection.style.display = 'none';
+          dynFields.innerHTML = '';
+          return Promise.resolve();
+        }
+        var key = typeId + '/' + subtypeId;
+        if (fieldsCache[key]) {
+          renderFields(fieldsCache[key]);
+          return Promise.resolve();
+        }
+        return proxyGet('file-fields?typeId=' + typeId + '&subtypeId=' + subtypeId).then(function(res) {
+          var fields = (res && res.data && res.data.fields) || [];
+          fieldsCache[key] = fields;
+          renderFields(fields);
+        });
+      }
+
+      function renderFields(fields) {
+        if (fields.length === 0) {
+          dynSection.style.display = 'none';
+          dynFields.innerHTML = '';
+          return;
+        }
+        dynFields.innerHTML = fields.map(function(def) {
+          return renderField(def, def.type === 'file' ? 'file' : 'extra');
+        }).join('');
+        dynSection.style.display = 'block';
+      }
+
+      function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
+
+      function renderField(def, prefix) {
+        var id = 'dyn-' + def.name;
+        var name = prefix + '_' + def.name;
+        var req = def.required ? ' required' : '';
+        var ro = def.readonly ? ' readonly' : '';
+        var ph = def.placeholder ? ' placeholder="' + esc(def.placeholder) + '"' : '';
+        var val = def.default != null ? esc(String(def.default)) : '';
+        var full = false;
+        var inner = '';
+
+        var labelHtml = '<label class="pr-label" for="' + id + '">' +
+          esc(def.label) + (def.required ? ' <span class="pr-label-req">*</span>' : '') +
+          '</label>';
+
+        switch (def.type) {
+          case 'textarea':
+            full = true;
+            inner = '<textarea id="' + id + '" name="' + name + '" rows="3"' + req + ro + ph + ' class="pr-input pr-textarea">' + val + '</textarea>';
+            break;
+          case 'select':
+            var opts = (def.options || []).map(function(o) {
+              return '<option value="' + esc(o.value) + '"' + (val === o.value ? ' selected' : '') + '>' + esc(o.label) + '</option>';
+            }).join('');
+            inner = '<select id="' + id + '" name="' + name + '"' + req + ro + ' class="pr-input pr-select-field"><option value="">Selecciona…</option>' + opts + '</select>';
+            break;
+          case 'file':
+            full = true;
+            inner = '<input id="' + id + '" type="file" name="' + name + '"' + req + ' accept="' + esc(def.accept || '') + '" class="pr-file-input" />';
+            break;
+          case 'number':
+            var step = def.step != null ? ' step="' + def.step + '"' : '';
+            inner = '<input id="' + id + '" type="number" name="' + name + '"' + req + ro + step + ph + ' value="' + val + '" class="pr-input" />';
+            break;
+          case 'datetime':
+            inner = '<input id="' + id + '" type="datetime-local" name="' + name + '"' + req + ro + ' value="' + val + '" class="pr-input" />';
+            break;
+          case 'date':
+            inner = '<input id="' + id + '" type="date" name="' + name + '"' + req + ro + ' value="' + val + '" class="pr-input" />';
+            break;
+          default:
+            inner = '<input id="' + id + '" type="text" name="' + name + '"' + req + ro + ph + ' value="' + val + '" class="pr-input" />';
+        }
+        return '<div class="pr-dyn-field' + (full ? ' pr-full' : '') + '">' + labelHtml + inner + '</div>';
+      }
+
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        hideMessages();
+
+        if (!typeIdInput.value || !subtypeIdInput.value || !dateEl.value) {
+          showErr('Selecciona tipo, subtipo y fecha.');
+          return;
+        }
+
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+
+        var fd = new FormData(form);
+
+        fetch('/api/portal/requests', { method: 'POST', body: fd })
+          .then(function(r) { return r.json().then(function(d) { return { status: r.status, data: d }; }); })
+          .then(function(r) {
+            if (r.data.success) {
+              showOk('Solicitud creada exitosamente. N° ' + (r.data.data && r.data.data.documentNumber ? r.data.data.documentNumber : ''));
+              form.reset();
+              typeIdInput.value = ''; typeText.value = ''; typeClear.style.display = 'none';
+              subtypeIdInput.value = ''; subtypeText.value = ''; subtypeClear.style.display = 'none';
+              subtypeText.disabled = true; subtypeText.placeholder = 'Selecciona un tipo primero';
+              dynSection.style.display = 'none';
+              dynFields.innerHTML = '';
+              dateEl.value = new Date().toISOString().slice(0, 10);
+            } else {
+              showErr(r.data.error || 'Error al crear la solicitud.');
+            }
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+          })
+          .catch(function() {
+            showErr('Error de conexión. Intenta de nuevo.');
+            submitBtn.classList.remove('loading');
+            submitBtn.disabled = false;
+          });
+      });
+    })();
+  </script>
+</PortalLayout>
