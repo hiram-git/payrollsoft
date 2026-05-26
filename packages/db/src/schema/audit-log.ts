@@ -1,6 +1,6 @@
 import { index, jsonb, pgTable, timestamp, uuid, varchar } from 'drizzle-orm/pg-core'
 
-export const auditLog = pgTable(
+export const tenantAuditLog = pgTable(
   'audit_log',
   {
     id: uuid('id').defaultRandom().primaryKey(),
@@ -20,5 +20,5 @@ export const auditLog = pgTable(
   })
 )
 
-export type AuditLogEntry = typeof auditLog.$inferSelect
-export type NewAuditLogEntry = typeof auditLog.$inferInsert
+export type TenantAuditLogEntry = typeof tenantAuditLog.$inferSelect
+export type NewTenantAuditLogEntry = typeof tenantAuditLog.$inferInsert

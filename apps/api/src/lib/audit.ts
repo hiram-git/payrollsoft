@@ -1,4 +1,4 @@
-import { auditLog } from '@payroll/db'
+import { tenantAuditLog } from '@payroll/db'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
 type AnyDb = any
@@ -14,7 +14,7 @@ export type AuditEntry = {
 
 export async function writeAuditLog(db: AnyDb, entry: AuditEntry): Promise<void> {
   try {
-    await db.insert(auditLog).values({
+    await db.insert(tenantAuditLog).values({
       userId: entry.userId ?? null,
       userName: entry.userName ?? null,
       action: entry.action,

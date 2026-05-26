@@ -1,4 +1,4 @@
-import { auditLog } from '@payroll/db'
+import { tenantAuditLog } from '@payroll/db'
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
@@ -20,11 +20,11 @@ export const auditRoutes = new Elysia({ prefix: '/audit' })
       }
 
       const conditions = []
-      if (query.userId) conditions.push(eq(auditLog.userId, query.userId))
-      if (query.entity) conditions.push(eq(auditLog.entity, query.entity))
-      if (query.action) conditions.push(eq(auditLog.action, query.action))
-      if (query.from) conditions.push(gte(auditLog.createdAt, new Date(query.from)))
-      if (query.to) conditions.push(lte(auditLog.createdAt, new Date(query.to)))
+      if (query.userId) conditions.push(eq(tenantAuditLog.userId, query.userId))
+      if (query.entity) conditions.push(eq(tenantAuditLog.entity, query.entity))
+      if (query.action) conditions.push(eq(tenantAuditLog.action, query.action))
+      if (query.from) conditions.push(gte(tenantAuditLog.createdAt, new Date(query.from)))
+      if (query.to) conditions.push(lte(tenantAuditLog.createdAt, new Date(query.to)))
 
       const where = conditions.length > 0 ? and(...conditions) : undefined
       const limit = Math.min(500, Math.max(1, Number(query.limit) || 100))
@@ -33,12 +33,12 @@ export const auditRoutes = new Elysia({ prefix: '/audit' })
       const [data, totalResult] = await Promise.all([
         (db as AnyDb)
           .select()
-          .from(auditLog)
+          .from(tenantAuditLog)
           .where(where)
-          .orderBy(desc(auditLog.createdAt))
+          .orderBy(desc(tenantAuditLog.createdAt))
           .limit(limit)
           .offset(offset),
-        (db as AnyDb).select({ total: sql`COUNT(*)::int` }).from(auditLog).where(where),
+        (db as AnyDb).select({ total: sql`COUNT(*)::int` }).from(tenantAuditLog).where(where),
       ])
 
       return { success: true, data, total: Number(totalResult[0]?.total ?? 0) }
