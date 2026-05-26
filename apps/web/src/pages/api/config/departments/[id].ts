@@ -14,7 +14,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   if (method === 'DELETE') {
     try {
-      const res = await fetch(`${API_URL}/departamentos/${id}`, {
+      const res = await fetch(`${API_URL}/departments/${id}`, {
         method: 'DELETE',
         headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
       })
@@ -44,7 +44,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}/departamentos/${id}`, {
+    res = await fetch(`${API_URL}/departments/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',

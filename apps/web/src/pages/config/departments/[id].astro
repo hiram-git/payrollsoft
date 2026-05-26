@@ -22,7 +22,7 @@ let allDepts: Departamento[] = []
 
 try {
   const [deptRes, allRes] = await Promise.all([
-    fetch(`${API_URL}/departamentos/${id}`, {
+    fetch(`${API_URL}/departments/${id}`, {
       headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
     }),
     fetch(`${API_URL}/departments`, {

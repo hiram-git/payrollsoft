@@ -9,12 +9,9 @@ if (!identity.isApprover) return Astro.redirect('/portal')
 
 <PortalLayout title="Aprobaciones">
   <div class="ap-wrap">
-    <div class="ap-header">
-      <h1 class="ap-title">Bandeja de aprobaciones</h1>
-      <p class="ap-subtitle">Solicitudes pendientes de empleados de tu departamento.</p>
-    </div>
+    <h1 class="ap-title">Bandeja de aprobaciones</h1>
+    <p class="ap-sub">Solicitudes pendientes de empleados de tu departamento.</p>
 
-    <!-- Tabs -->
     <div class="ap-tabs">
       <button class="ap-tab ap-tab-active" id="tab-files" data-tab="files">
         Expedientes <span class="ap-badge" id="badge-files">0</span>
@@ -24,25 +21,32 @@ if (!identity.isApprover) return Astro.redirect('/portal')
       </button>
     </div>
 
-    <!-- Files panel -->
-    <div class="ap-panel" id="panel-files">
-      <div id="files-body"><div class="ap-empty">Cargando...</div></div>
-    </div>
+    <div id="panel-files"><div class="ap-empty">Cargando...</div></div>
+    <div id="panel-vacations" style="display:none;"><div class="ap-empty">Cargando...</div></div>
 
-    <!-- Vacations panel -->
-    <div class="ap-panel" id="panel-vacations" style="display:none;">
-      <div id="vac-body"><div class="ap-empty">Cargando...</div></div>
+    <!-- Detail modal -->
+    <div class="ap-overlay" id="detail-overlay" style="display:none;">
+      <div class="ap-detail-card">
+        <div class="ap-detail-header">
+          <h3 class="ap-detail-title" id="detail-title"></h3>
+          <button class="ap-detail-close" id="detail-close" aria-label="Cerrar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="ap-detail-body" id="detail-body"></div>
+        <div class="ap-detail-actions" id="detail-actions"></div>
+      </div>
     </div>
 
     <!-- Reject modal -->
     <div class="ap-overlay" id="reject-overlay" style="display:none;">
-      <div class="ap-modal">
-        <h3 class="ap-modal-title">Rechazar solicitud</h3>
-        <p class="ap-modal-hint">Ingresa el motivo del rechazo.</p>
-        <textarea id="reject-reason" rows="3" class="ap-modal-textarea" placeholder="Motivo del rechazo..."></textarea>
-        <div class="ap-modal-actions">
-          <button class="ap-modal-cancel" id="reject-cancel">Cancelar</button>
-          <button class="ap-modal-confirm" id="reject-confirm">Rechazar</button>
+      <div class="ap-detail-card" style="max-width:420px;">
+        <h3 class="ap-detail-title" style="margin-bottom:8px;">Rechazar solicitud</h3>
+        <p style="font-size:12.5px;color:var(--mute-2);margin:0 0 16px;">Ingresa el motivo del rechazo.</p>
+        <textarea id="reject-reason" rows="3" class="ap-textarea" placeholder="Motivo del rechazo..."></textarea>
+        <div class="ap-detail-actions">
+          <button class="ap-btn-ghost" id="reject-cancel">Cancelar</button>
+          <button class="ap-btn-danger" id="reject-confirm">Rechazar</button>
         </div>
       </div>
     </div>
@@ -50,340 +54,232 @@ if (!identity.isApprover) return Astro.redirect('/portal')
 
   <style>
     .ap-wrap { max-width:960px; margin:0 auto; padding:32px 24px; }
-    .ap-header { margin-bottom:24px; }
-    .ap-title {
-      font-family:var(--f-display); font-weight:300; font-size:24px;
-      letter-spacing:-0.02em; margin:0 0 4px; color:var(--fore);
-    }
-    .ap-subtitle { font-size:13px; color:var(--mute-2); margin:0; }
+    .ap-title { font-family:var(--f-display); font-weight:300; font-size:24px; letter-spacing:-0.02em; margin:0 0 4px; color:var(--fore); }
+    .ap-sub { font-size:13px; color:var(--mute-2); margin:0 0 24px; }
 
-    .ap-tabs {
-      display:flex; gap:0; border-bottom:1px solid var(--rule); margin-bottom:0;
-    }
-    .ap-tab {
-      padding:10px 20px; font-family:var(--f-sans); font-size:13.5px;
-      color:var(--mute-2); background:none; border:none; cursor:pointer;
-      border-bottom:2px solid transparent; transition:color 140ms ease;
-      display:flex; align-items:center; gap:8px;
-    }
+    .ap-tabs { display:flex; gap:0; border-bottom:1px solid var(--rule); margin-bottom:16px; }
+    .ap-tab { padding:10px 20px; font-family:var(--f-sans); font-size:13.5px; color:var(--mute-2); background:none; border:none; cursor:pointer; border-bottom:2px solid transparent; transition:color 140ms; display:flex; align-items:center; gap:8px; }
     .ap-tab:hover { color:var(--fore); }
     .ap-tab-active { color:var(--fore); border-bottom-color:var(--navy); font-weight:500; }
-    .ap-badge {
-      font-family:var(--f-mono); font-size:10px; padding:1px 6px;
-      border-radius:10px; background:var(--ink-4); color:var(--mute);
-    }
+    .ap-badge { font-family:var(--f-mono); font-size:10px; padding:1px 6px; border-radius:10px; background:var(--ink-4); color:var(--mute); }
     .ap-tab-active .ap-badge { background:var(--navy-soft); color:var(--navy-hi); }
 
-    .ap-panel { }
+    .ap-empty { padding:48px 16px; text-align:center; color:var(--mute); font-size:13px; }
 
-    .ap-empty {
-      padding:48px 16px; text-align:center; color:var(--mute); font-size:13px;
-    }
+    .ap-tbl { width:100%; border-collapse:collapse; font-size:13px; }
+    .ap-tbl thead th { font-family:var(--f-mono); font-size:10px; color:var(--mute); letter-spacing:.1em; text-transform:uppercase; text-align:left; padding:10px 14px; border-bottom:1px solid var(--rule); background:var(--ink-3); }
+    .ap-tbl tbody td { padding:12px 14px; border-bottom:1px solid var(--rule); color:var(--fore-dim); }
+    .ap-tbl tbody tr:last-child td { border-bottom:none; }
+    .ap-tbl tbody tr:hover td { background:var(--ink-4); }
+    .ap-tbl .ap-emp { font-weight:500; color:var(--fore); }
+    .ap-tbl .ap-code { font-family:var(--f-mono); font-size:11px; color:var(--mute); margin-left:6px; }
+    .ap-tbl .ap-meta { font-size:12px; color:var(--mute-2); }
 
-    .ap-card {
-      background:var(--ink-2); border:1px solid var(--rule); border-radius:6px;
-      padding:20px 24px; margin-top:12px;
-      transition:border-color 140ms ease;
-    }
-    .ap-card:hover { border-color:var(--rule-hi); }
-    .ap-card-top {
-      display:flex; justify-content:space-between; align-items:flex-start;
-      gap:16px; margin-bottom:12px; flex-wrap:wrap;
-    }
-    .ap-card-emp {
-      font-size:14px; font-weight:500; color:var(--fore);
-    }
-    .ap-card-code {
-      font-family:var(--f-mono); font-size:11px; color:var(--mute);
-      margin-left:8px;
-    }
-    .ap-card-meta {
-      display:flex; gap:16px; flex-wrap:wrap; font-size:12.5px; color:var(--mute-2);
-    }
-    .ap-card-meta span { display:flex; align-items:center; gap:4px; }
-    .ap-card-meta b { color:var(--fore-dim); font-weight:500; }
-    .ap-card-obs {
-      font-size:12.5px; color:var(--mute-2); margin-bottom:16px;
-      line-height:1.5;
-    }
-    .ap-card-actions {
-      display:flex; gap:8px; justify-content:flex-end;
-    }
-    .ap-btn-approve {
-      padding:7px 16px; border-radius:4px; border:none;
-      background:var(--ok); color:#fff; font-size:12.5px;
-      font-weight:500; cursor:pointer; font-family:var(--f-sans);
-      transition:opacity 140ms ease;
-    }
-    .ap-btn-approve:hover { opacity:.85; }
-    .ap-btn-reject {
-      padding:7px 16px; border-radius:4px;
-      border:1px solid var(--err); background:transparent;
-      color:var(--err); font-size:12.5px; font-weight:500;
-      cursor:pointer; font-family:var(--f-sans);
-      transition:background 140ms ease;
-    }
-    .ap-btn-reject:hover { background:rgba(224,107,92,0.08); }
-    .ap-btn-approve:disabled, .ap-btn-reject:disabled {
-      opacity:.5; cursor:not-allowed;
-    }
+    .ap-actions { display:flex; gap:4px; justify-content:flex-end; }
+    .ap-icon-btn { display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px; border-radius:6px; border:none; background:transparent; cursor:pointer; transition:background 140ms, color 140ms; color:var(--mute); }
+    .ap-icon-btn:hover { color:var(--fore); }
+    .ap-icon-btn svg { width:15px; height:15px; }
+    .ap-icon-view:hover { background:var(--navy-soft); color:var(--navy-hi); }
+    .ap-icon-approve:hover { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
+    .ap-icon-reject:hover { background:color-mix(in srgb, var(--err) 14%, transparent); color:var(--err); }
+    .ap-icon-btn:disabled { opacity:.4; cursor:not-allowed; }
 
-    .ap-chip {
-      display:inline-block; padding:2px 8px; border-radius:3px;
-      font-family:var(--f-mono); font-size:10px; letter-spacing:.06em;
-      text-transform:uppercase; font-weight:500;
-      background:rgba(227,178,90,0.15); color:var(--warn);
-    }
+    .ap-chip { display:inline-block; padding:2px 8px; border-radius:3px; font-family:var(--f-mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; font-weight:500; background:rgba(227,178,90,0.15); color:var(--warn); }
 
-    .ap-overlay {
-      position:fixed; inset:0; z-index:100;
-      background:rgba(0,0,0,0.5); display:flex;
-      align-items:center; justify-content:center;
-    }
-    .ap-modal {
-      background:var(--ink-2); border:1px solid var(--rule);
-      border-radius:8px; padding:24px; width:100%; max-width:420px;
-    }
-    .ap-modal-title {
-      font-family:var(--f-sans); font-weight:600; font-size:15px;
-      color:var(--fore); margin:0 0 4px;
-    }
-    .ap-modal-hint { font-size:12.5px; color:var(--mute-2); margin:0 0 16px; }
-    .ap-modal-textarea {
-      width:100%; padding:10px; font-size:13px; font-family:var(--f-sans);
-      background:var(--ink-3); border:1px solid var(--rule); color:var(--fore);
-      border-radius:4px; resize:vertical; min-height:60px;
-    }
-    .ap-modal-textarea:focus { outline:none; border-color:var(--navy-hi); }
-    .ap-modal-actions {
-      display:flex; justify-content:flex-end; gap:8px; margin-top:16px;
-    }
-    .ap-modal-cancel {
-      padding:8px 16px; border:none; background:none;
-      color:var(--mute-2); font-size:13px; cursor:pointer;
-      font-family:var(--f-sans);
-    }
-    .ap-modal-confirm {
-      padding:8px 16px; border-radius:4px; border:none;
-      background:var(--err); color:#fff; font-size:13px;
-      font-weight:500; cursor:pointer; font-family:var(--f-sans);
-    }
+    .ap-overlay { position:fixed; inset:0; z-index:100; background:rgba(0,0,0,0.5); backdrop-filter:blur(2px); display:flex; align-items:center; justify-content:center; padding:24px; }
+    .ap-detail-card { background:var(--ink-2); border:1px solid var(--rule); border-radius:10px; padding:24px; width:100%; max-width:600px; box-shadow:0 24px 60px rgba(0,0,0,0.45); animation:apIn 140ms ease-out; }
+    @keyframes apIn { from { opacity:0; transform:translateY(6px) scale(.98); } to { opacity:1; transform:none; } }
+    .ap-detail-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+    .ap-detail-title { font-family:var(--f-display); font-size:18px; font-weight:400; color:var(--fore); margin:0; }
+    .ap-detail-close { background:none; border:none; color:var(--mute); cursor:pointer; padding:4px; border-radius:4px; }
+    .ap-detail-close:hover { color:var(--fore); background:var(--ink-4); }
+    .ap-detail-body { font-size:13px; color:var(--fore-dim); line-height:1.6; }
+    .ap-detail-row { display:flex; gap:8px; padding:6px 0; border-bottom:1px solid var(--rule); }
+    .ap-detail-label { font-family:var(--f-mono); font-size:11px; color:var(--mute); width:120px; flex-shrink:0; text-transform:uppercase; letter-spacing:.06em; padding-top:2px; }
+    .ap-detail-value { flex:1; color:var(--fore-dim); }
+    .ap-detail-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+    .ap-btn-ghost { padding:8px 16px; border-radius:6px; border:1px solid var(--rule); background:transparent; color:var(--fore-dim); font-size:13px; cursor:pointer; font-family:var(--f-sans); }
+    .ap-btn-ghost:hover { background:var(--ink-4); }
+    .ap-btn-approve { padding:8px 16px; border-radius:6px; border:none; background:var(--ok); color:#fff; font-size:13px; font-weight:500; cursor:pointer; font-family:var(--f-sans); }
+    .ap-btn-approve:hover { opacity:.88; }
+    .ap-btn-danger { padding:8px 16px; border-radius:6px; border:none; background:var(--err); color:#fff; font-size:13px; font-weight:500; cursor:pointer; font-family:var(--f-sans); }
+    .ap-btn-danger:hover { opacity:.88; }
+    .ap-textarea { width:100%; padding:10px; font-size:13px; font-family:var(--f-sans); background:var(--ink-3); border:1px solid var(--rule); color:var(--fore); border-radius:6px; resize:vertical; min-height:60px; }
+    .ap-textarea:focus { outline:none; border-color:var(--navy-hi); }
 
-    .ap-success-msg {
-      padding:10px 14px; border-radius:4px; font-size:12.5px;
-      background:rgba(111,181,140,0.1); border:1px solid rgba(111,181,140,0.3);
-      color:var(--ok); text-align:center; margin-top:12px;
-      font-family:var(--f-mono); letter-spacing:.04em;
-    }
+    .ap-success { padding:10px 14px; border-radius:4px; font-size:12px; background:color-mix(in srgb, var(--ok) 10%, var(--ink-2)); border:1px solid var(--ok); color:var(--ok); text-align:center; font-family:var(--f-mono); letter-spacing:.04em; }
+    .ap-rejected { padding:10px 14px; border-radius:4px; font-size:12px; background:color-mix(in srgb, var(--err) 10%, var(--ink-2)); border:1px solid var(--err); color:var(--err); text-align:center; font-family:var(--f-mono); }
   </style>
 
   <script is:inline>
     ;(function() {
-      var filesBody = document.getElementById('files-body');
-      var vacBody = document.getElementById('vac-body');
+      var filesBody = document.getElementById('panel-files');
+      var vacBody = document.getElementById('panel-vacations');
       var badgeFiles = document.getElementById('badge-files');
       var badgeVac = document.getElementById('badge-vacations');
       var tabFiles = document.getElementById('tab-files');
       var tabVac = document.getElementById('tab-vacations');
-      var panelFiles = document.getElementById('panel-files');
-      var panelVac = document.getElementById('panel-vacations');
-      var overlay = document.getElementById('reject-overlay');
-      var reasonInput = document.getElementById('reject-reason');
+      var detailOverlay = document.getElementById('detail-overlay');
+      var detailTitle = document.getElementById('detail-title');
+      var detailBody = document.getElementById('detail-body');
+      var detailActions = document.getElementById('detail-actions');
+      var detailClose = document.getElementById('detail-close');
+      var rejectOverlay = document.getElementById('reject-overlay');
+      var rejectReason = document.getElementById('reject-reason');
       var rejectCancel = document.getElementById('reject-cancel');
       var rejectConfirm = document.getElementById('reject-confirm');
-
       var pendingReject = null;
 
       function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;') : ''; }
       function fmtDate(d) { return d ? String(d).substring(0,10) : '—'; }
 
-      // Tabs
       tabFiles.addEventListener('click', function() {
-        tabFiles.classList.add('ap-tab-active');
-        tabVac.classList.remove('ap-tab-active');
-        panelFiles.style.display = '';
-        panelVac.style.display = 'none';
+        tabFiles.classList.add('ap-tab-active'); tabVac.classList.remove('ap-tab-active');
+        filesBody.style.display = ''; vacBody.style.display = 'none';
       });
       tabVac.addEventListener('click', function() {
-        tabVac.classList.add('ap-tab-active');
-        tabFiles.classList.remove('ap-tab-active');
-        panelVac.style.display = '';
-        panelFiles.style.display = 'none';
+        tabVac.classList.add('ap-tab-active'); tabFiles.classList.remove('ap-tab-active');
+        vacBody.style.display = ''; filesBody.style.display = 'none';
       });
 
       function proxyPost(path, body) {
         return fetch('/api/portal/proxy?path=' + encodeURIComponent(path), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body || {}),
         }).then(function(r) { return r.json(); });
       }
 
-      function handleApprove(type, id, cardEl) {
-        var btns = cardEl.querySelectorAll('button');
-        btns.forEach(function(b) { b.disabled = true; });
-        var path = type === 'file'
-          ? 'approvals/files/' + id + '/approve'
-          : 'approvals/vacations/' + id + '/approve';
+      // Detail modal
+      detailClose.addEventListener('click', function() { detailOverlay.style.display = 'none'; });
+      detailOverlay.addEventListener('click', function(e) { if (e.target === detailOverlay) detailOverlay.style.display = 'none'; });
+
+      function showDetail(data, type) {
+        var rows = '';
+        if (type === 'file') {
+          rows = '<div class="ap-detail-row"><span class="ap-detail-label">Empleado</span><span class="ap-detail-value">' + esc(data.employee_last_name) + ', ' + esc(data.employee_first_name) + ' <span class="ap-code">' + esc(data.employee_code) + '</span></span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Tipo</span><span class="ap-detail-value">' + esc(data.type_name) + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Subtipo</span><span class="ap-detail-value">' + esc(data.subtype_name) + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">N° Documento</span><span class="ap-detail-value" style="font-family:var(--f-mono);font-size:12px">' + esc(data.document_number) + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Fecha</span><span class="ap-detail-value">' + fmtDate(data.document_date) + '</span></div>' +
+            (data.observations ? '<div class="ap-detail-row"><span class="ap-detail-label">Observaciones</span><span class="ap-detail-value">' + esc(data.observations) + '</span></div>' : '');
+          detailTitle.textContent = 'Expediente: ' + (data.document_number || '—');
+        } else {
+          var typeLabel = data.request_type === 'enjoy' ? 'Disfrute' : data.request_type === 'pay' ? 'Pago' : 'Mixta';
+          var days = (data.enjoy_days || 0) + (data.paid_days || 0);
+          rows = '<div class="ap-detail-row"><span class="ap-detail-label">Empleado</span><span class="ap-detail-value">' + esc(data.employee_last_name) + ', ' + esc(data.employee_first_name) + ' <span class="ap-code">' + esc(data.employee_code) + '</span></span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">N° Solicitud</span><span class="ap-detail-value" style="font-family:var(--f-mono);font-size:12px">' + esc(data.request_number) + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Tipo</span><span class="ap-detail-value">' + typeLabel + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Días</span><span class="ap-detail-value">' + days + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Desde</span><span class="ap-detail-value">' + fmtDate(data.start_date) + '</span></div>' +
+            '<div class="ap-detail-row"><span class="ap-detail-label">Hasta</span><span class="ap-detail-value">' + fmtDate(data.end_date) + '</span></div>' +
+            (data.reason ? '<div class="ap-detail-row"><span class="ap-detail-label">Motivo</span><span class="ap-detail-value">' + esc(data.reason) + '</span></div>' : '');
+          detailTitle.textContent = 'Vacación: ' + (data.request_number || '—');
+        }
+        detailBody.innerHTML = rows;
+        detailActions.innerHTML =
+          '<button class="ap-btn-ghost" onclick="document.getElementById(\'detail-overlay\').style.display=\'none\'">Cerrar</button>' +
+          '<button class="ap-btn-danger" onclick="document.getElementById(\'detail-overlay\').style.display=\'none\';window.__startReject(\'' + type + '\',\'' + data.id + '\')">Rechazar</button>' +
+          '<button class="ap-btn-approve" onclick="document.getElementById(\'detail-overlay\').style.display=\'none\';window.__doApprove(\'' + type + '\',\'' + data.id + '\')">Aprobar</button>';
+        detailOverlay.style.display = 'flex';
+      }
+
+      // Approve
+      window.__doApprove = function(type, id) {
+        var path = type === 'file' ? 'approvals/files/' + id + '/approve' : 'approvals/vacations/' + id + '/approve';
         proxyPost(path).then(function(res) {
-          if (res.success) {
-            cardEl.innerHTML = '<div class="ap-success-msg">Solicitud aprobada.</div>';
-            updateBadges();
-          } else {
-            alert(res.error || 'Error al aprobar.');
-            btns.forEach(function(b) { b.disabled = false; });
-          }
-        }).catch(function() {
-          alert('Error de conexión.');
-          btns.forEach(function(b) { b.disabled = false; });
-        });
-      }
+          if (res.success) { window.toast?.success('Solicitud aprobada.'); loadData(); }
+          else { window.toast?.error(res.error || 'Error al aprobar.'); }
+        }).catch(function() { window.toast?.error('Error de conexión.'); });
+      };
 
-      function handleReject(type, id, cardEl) {
-        pendingReject = { type: type, id: id, cardEl: cardEl };
-        reasonInput.value = '';
-        overlay.style.display = 'flex';
-        reasonInput.focus();
-      }
-
-      rejectCancel.addEventListener('click', function() {
-        overlay.style.display = 'none';
-        pendingReject = null;
-      });
-
+      // Reject
+      window.__startReject = function(type, id) {
+        pendingReject = { type: type, id: id };
+        rejectReason.value = '';
+        rejectOverlay.style.display = 'flex';
+        rejectReason.focus();
+      };
+      rejectCancel.addEventListener('click', function() { rejectOverlay.style.display = 'none'; pendingReject = null; });
       rejectConfirm.addEventListener('click', function() {
         if (!pendingReject) return;
-        var reason = reasonInput.value.trim();
-        if (!reason) { reasonInput.focus(); return; }
-
+        var reason = rejectReason.value.trim();
+        if (!reason) { rejectReason.focus(); return; }
         var p = pendingReject;
-        overlay.style.display = 'none';
-        var btns = p.cardEl.querySelectorAll('button');
-        btns.forEach(function(b) { b.disabled = true; });
-
-        var path = p.type === 'file'
-          ? 'approvals/files/' + p.id + '/reject'
-          : 'approvals/vacations/' + p.id + '/reject';
-
+        rejectOverlay.style.display = 'none';
+        var path = p.type === 'file' ? 'approvals/files/' + p.id + '/reject' : 'approvals/vacations/' + p.id + '/reject';
         proxyPost(path, { reason: reason }).then(function(res) {
-          if (res.success) {
-            p.cardEl.innerHTML = '<div class="ap-success-msg" style="color:var(--err);border-color:rgba(224,107,92,0.3);background:rgba(224,107,92,0.06);">Solicitud rechazada.</div>';
-            updateBadges();
-          } else {
-            alert(res.error || 'Error al rechazar.');
-            btns.forEach(function(b) { b.disabled = false; });
-          }
-        }).catch(function() {
-          alert('Error de conexión.');
-          btns.forEach(function(b) { b.disabled = false; });
-        });
+          if (res.success) { window.toast?.success('Solicitud rechazada.'); loadData(); }
+          else { window.toast?.error(res.error || 'Error al rechazar.'); }
+        }).catch(function() { window.toast?.error('Error de conexión.'); });
         pendingReject = null;
       });
 
-      function updateBadges() {
-        var fc = panelFiles.querySelectorAll('.ap-card').length;
-        var vc = panelVac.querySelectorAll('.ap-card').length;
-        var fSuccess = panelFiles.querySelectorAll('.ap-success-msg').length;
-        var vSuccess = panelVac.querySelectorAll('.ap-success-msg').length;
-        badgeFiles.textContent = Math.max(0, fc - fSuccess);
-        badgeVac.textContent = Math.max(0, vc - vSuccess);
-      }
+      // View detail
+      window.__viewFile = function(idx) { showDetail(window.__filesData[idx], 'file'); };
+      window.__viewVac = function(idx) { showDetail(window.__vacsData[idx], 'vacation'); };
 
-      function renderFileCard(f) {
-        var id = 'fc-' + f.id;
-        return '<div class="ap-card" id="' + id + '">' +
-          '<div class="ap-card-top">' +
-            '<div>' +
-              '<span class="ap-card-emp">' + esc(f.employee_last_name) + ', ' + esc(f.employee_first_name) + '</span>' +
-              '<span class="ap-card-code">' + esc(f.employee_code) + '</span>' +
-            '</div>' +
-            '<span class="ap-chip">Pendiente</span>' +
-          '</div>' +
-          '<div class="ap-card-meta">' +
-            '<span>Tipo: <b>' + esc(f.type_name) + '</b></span>' +
-            '<span>Subtipo: <b>' + esc(f.subtype_name) + '</b></span>' +
-            '<span>N°: <b>' + esc(f.document_number) + '</b></span>' +
-            '<span>Fecha: <b>' + fmtDate(f.document_date) + '</b></span>' +
-          '</div>' +
-          (f.observations ? '<div class="ap-card-obs">' + esc(f.observations) + '</div>' : '') +
-          '<div class="ap-card-actions">' +
-            '<button class="ap-btn-reject" onclick="window.__rejectFile(\'' + f.id + '\')">Rechazar</button>' +
-            '<button class="ap-btn-approve" onclick="window.__approveFile(\'' + f.id + '\')">Aprobar</button>' +
-          '</div>' +
-        '</div>';
-      }
-
-      function renderVacCard(v) {
-        var id = 'vc-' + v.id;
-        var typeLabel = v.request_type === 'enjoy' ? 'Disfrute' : v.request_type === 'pay' ? 'Pago' : 'Mixta';
-        var days = (v.enjoy_days || 0) + (v.paid_days || 0);
-        return '<div class="ap-card" id="' + id + '">' +
-          '<div class="ap-card-top">' +
-            '<div>' +
-              '<span class="ap-card-emp">' + esc(v.employee_last_name) + ', ' + esc(v.employee_first_name) + '</span>' +
-              '<span class="ap-card-code">' + esc(v.employee_code) + '</span>' +
-            '</div>' +
-            '<span class="ap-chip">Pendiente</span>' +
-          '</div>' +
-          '<div class="ap-card-meta">' +
-            '<span>N°: <b>' + esc(v.request_number) + '</b></span>' +
-            '<span>Tipo: <b>' + typeLabel + '</b></span>' +
-            '<span>Días: <b>' + days + '</b></span>' +
-            '<span>Desde: <b>' + fmtDate(v.start_date) + '</b></span>' +
-            '<span>Hasta: <b>' + fmtDate(v.end_date) + '</b></span>' +
-          '</div>' +
-          (v.reason ? '<div class="ap-card-obs">' + esc(v.reason) + '</div>' : '') +
-          '<div class="ap-card-actions">' +
-            '<button class="ap-btn-reject" onclick="window.__rejectVac(\'' + v.id + '\')">Rechazar</button>' +
-            '<button class="ap-btn-approve" onclick="window.__approveVac(\'' + v.id + '\')">Aprobar</button>' +
-          '</div>' +
-        '</div>';
-      }
-
-      window.__approveFile = function(id) {
-        handleApprove('file', id, document.getElementById('fc-' + id));
-      };
-      window.__rejectFile = function(id) {
-        handleReject('file', id, document.getElementById('fc-' + id));
-      };
-      window.__approveVac = function(id) {
-        handleApprove('vacation', id, document.getElementById('vc-' + id));
-      };
-      window.__rejectVac = function(id) {
-        handleReject('vacation', id, document.getElementById('vc-' + id));
-      };
-
-      // Load data
-      fetch('/api/portal/proxy?path=approvals')
-        .then(function(r) { return r.json(); })
-        .then(function(res) {
-          if (!res.success) {
-            filesBody.innerHTML = '<div class="ap-empty">Error: ' + esc(res.error) + '</div>';
-            vacBody.innerHTML = '<div class="ap-empty">Error: ' + esc(res.error) + '</div>';
-            return;
-          }
-          var files = res.data.files || [];
-          var vacs = res.data.vacations || [];
-
-          badgeFiles.textContent = files.length;
-          badgeVac.textContent = vacs.length;
-
-          if (files.length === 0) {
-            filesBody.innerHTML = '<div class="ap-empty">No hay expedientes pendientes de aprobación.</div>';
-          } else {
-            filesBody.innerHTML = files.map(renderFileCard).join('');
-          }
-
-          if (vacs.length === 0) {
-            vacBody.innerHTML = '<div class="ap-empty">No hay solicitudes de vacaciones pendientes.</div>';
-          } else {
-            vacBody.innerHTML = vacs.map(renderVacCard).join('');
-          }
-        })
-        .catch(function() {
-          filesBody.innerHTML = '<div class="ap-empty">Error al cargar aprobaciones.</div>';
-          vacBody.innerHTML = '<div class="ap-empty">Error al cargar aprobaciones.</div>';
+      function renderFiles(files) {
+        window.__filesData = files;
+        badgeFiles.textContent = files.length;
+        if (files.length === 0) { filesBody.innerHTML = '<div class="ap-empty">No hay expedientes pendientes de aprobación.</div>'; return; }
+        var html = '<div class="pt-card" style="padding:0;overflow:hidden;"><table class="ap-tbl"><thead><tr><th>Empleado</th><th>Tipo / Subtipo</th><th>N° Doc</th><th>Fecha</th><th></th></tr></thead><tbody>';
+        files.forEach(function(f, i) {
+          html += '<tr><td><span class="ap-emp">' + esc(f.employee_last_name) + ', ' + esc(f.employee_first_name) + '</span><span class="ap-code">' + esc(f.employee_code) + '</span></td>' +
+            '<td><span class="ap-meta">' + esc(f.type_name) + ' → ' + esc(f.subtype_name) + '</span></td>' +
+            '<td style="font-family:var(--f-mono);font-size:11px;color:var(--mute-2)">' + esc(f.document_number) + '</td>' +
+            '<td class="ap-meta">' + fmtDate(f.document_date) + '</td>' +
+            '<td><div class="ap-actions">' +
+              '<button class="ap-icon-btn ap-icon-view" title="Ver detalle" aria-label="Ver detalle" onclick="window.__viewFile(' + i + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
+              '<button class="ap-icon-btn ap-icon-approve" title="Aprobar" aria-label="Aprobar" onclick="window.__doApprove(\'file\',\'' + f.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>' +
+              '<button class="ap-icon-btn ap-icon-reject" title="Rechazar" aria-label="Rechazar" onclick="window.__startReject(\'file\',\'' + f.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+            '</div></td></tr>';
         });
+        html += '</tbody></table></div>';
+        filesBody.innerHTML = html;
+      }
+
+      function renderVacs(vacs) {
+        window.__vacsData = vacs;
+        badgeVac.textContent = vacs.length;
+        if (vacs.length === 0) { vacBody.innerHTML = '<div class="ap-empty">No hay solicitudes de vacaciones pendientes.</div>'; return; }
+        var html = '<div class="pt-card" style="padding:0;overflow:hidden;"><table class="ap-tbl"><thead><tr><th>Empleado</th><th>N° Solicitud</th><th>Tipo</th><th>Días</th><th>Desde</th><th></th></tr></thead><tbody>';
+        vacs.forEach(function(v, i) {
+          var typeLabel = v.request_type === 'enjoy' ? 'Disfrute' : v.request_type === 'pay' ? 'Pago' : 'Mixta';
+          var days = (v.enjoy_days || 0) + (v.paid_days || 0);
+          html += '<tr><td><span class="ap-emp">' + esc(v.employee_last_name) + ', ' + esc(v.employee_first_name) + '</span><span class="ap-code">' + esc(v.employee_code) + '</span></td>' +
+            '<td style="font-family:var(--f-mono);font-size:11px;color:var(--mute-2)">' + esc(v.request_number) + '</td>' +
+            '<td class="ap-meta">' + typeLabel + '</td>' +
+            '<td>' + days + '</td>' +
+            '<td class="ap-meta">' + fmtDate(v.start_date) + '</td>' +
+            '<td><div class="ap-actions">' +
+              '<button class="ap-icon-btn ap-icon-view" title="Ver detalle" aria-label="Ver detalle" onclick="window.__viewVac(' + i + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
+              '<button class="ap-icon-btn ap-icon-approve" title="Aprobar" aria-label="Aprobar" onclick="window.__doApprove(\'vacation\',\'' + v.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></button>' +
+              '<button class="ap-icon-btn ap-icon-reject" title="Rechazar" aria-label="Rechazar" onclick="window.__startReject(\'vacation\',\'' + v.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+            '</div></td></tr>';
+        });
+        html += '</tbody></table></div>';
+        vacBody.innerHTML = html;
+      }
+
+      function loadData() {
+        fetch('/api/portal/proxy?path=approvals')
+          .then(function(r) { return r.json(); })
+          .then(function(res) {
+            if (!res.success) {
+              filesBody.innerHTML = '<div class="ap-empty">Error: ' + esc(res.error) + '</div>';
+              vacBody.innerHTML = '<div class="ap-empty">Error: ' + esc(res.error) + '</div>';
+              return;
+            }
+            renderFiles(res.data.files || []);
+            renderVacs(res.data.vacations || []);
+          })
+          .catch(function() {
+            filesBody.innerHTML = '<div class="ap-empty">Error al cargar aprobaciones.</div>';
+            vacBody.innerHTML = '<div class="ap-empty">Error al cargar aprobaciones.</div>';
+          });
+      }
+
+      loadData();
     })();
   </script>
 </PortalLayout>
