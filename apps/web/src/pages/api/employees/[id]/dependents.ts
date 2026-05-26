@@ -9,7 +9,7 @@ export const GET: APIRoute = async ({ params, cookies }) => {
   const tenant = identity.tenantSlug ?? 'demo'
 
   try {
-    const res = await fetch(`${API_URL}/employees/${params.id}/dependents`, {
+    const res = await fetch(`${API_URL}/dependents/${params.id}`, {
       headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenant },
     })
     const data = await res.json()
@@ -28,8 +28,8 @@ export const POST: APIRoute = async ({ params, request, cookies }) => {
   if (!body) return Response.json({ success: false, error: 'Invalid body' }, { status: 400 })
 
   const url = body._id
-    ? `${API_URL}/employees/${params.id}/dependents/${body._id}`
-    : `${API_URL}/employees/${params.id}/dependents`
+    ? `${API_URL}/dependents/${params.id}/${body._id}`
+    : `${API_URL}/dependents/${params.id}`
   const method = body._id ? 'PUT' : 'POST'
 
   try {
@@ -59,7 +59,7 @@ export const DELETE: APIRoute = async ({ params, request, cookies }) => {
   if (!depId) return Response.json({ success: false, error: 'Missing id' }, { status: 400 })
 
   try {
-    const res = await fetch(`${API_URL}/employees/${params.id}/dependents/${depId}`, {
+    const res = await fetch(`${API_URL}/dependents/${params.id}/${depId}`, {
       method: 'DELETE',
       headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenant },
     })

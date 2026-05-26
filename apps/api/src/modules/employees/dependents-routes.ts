@@ -4,12 +4,12 @@ import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 
-export const dependentsRoutes = new Elysia({ prefix: '/employees/:employeeId/dependents' })
+export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
   .use(authPlugin)
   .use(tenantPlugin)
 
   .get(
-    '/',
+    '/:employeeId',
     async ({ db, params, set }) => {
       if (!db) {
         set.status = 400
@@ -29,7 +29,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/employees/:employeeId/dep
   )
 
   .post(
-    '/',
+    '/:employeeId',
     async ({ db, params, body, set }) => {
       if (!db) {
         set.status = 400
@@ -69,7 +69,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/employees/:employeeId/dep
   )
 
   .put(
-    '/:id',
+    '/:employeeId/:id',
     async ({ db, params, body, set }) => {
       if (!db) {
         set.status = 400
@@ -113,7 +113,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/employees/:employeeId/dep
   )
 
   .delete(
-    '/:id',
+    '/:employeeId/:id',
     async ({ db, params, set }) => {
       if (!db) {
         set.status = 400
