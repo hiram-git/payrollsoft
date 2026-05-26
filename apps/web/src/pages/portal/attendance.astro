@@ -17,19 +17,19 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
     <div class="at-filters">
       <div class="at-filter-group">
         <label class="at-filter-label">Desde</label>
-        <input type="date" id="at-from" value={thirtyDaysAgo} class="at-filter-input" />
+        <input type="date" id="at-from" value={thirtyDaysAgo} class="ds-input" style="width:auto;" />
       </div>
       <div class="at-filter-group">
         <label class="at-filter-label">Hasta</label>
-        <input type="date" id="at-to" value={today} class="at-filter-input" />
+        <input type="date" id="at-to" value={today} class="ds-input" style="width:auto;" />
       </div>
-      <button type="button" id="at-search" class="at-search-btn">Buscar</button>
+      <button type="button" id="at-search" class="ds-btn-primary">Buscar</button>
       <div class="at-stats" id="at-stats"></div>
     </div>
 
-    <div class="pt-card at-table-card">
+    <div class="ds-card-table">
       <div id="at-body">
-        <div class="at-empty">Cargando marcaciones...</div>
+        <div class="ds-empty">Cargando marcaciones...</div>
       </div>
     </div>
 
@@ -52,54 +52,13 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
       font-family:var(--f-mono); font-size:10px; color:var(--mute);
       letter-spacing:.1em; text-transform:uppercase;
     }
-    .at-filter-input {
-      padding:8px 12px; font-size:13px; background:var(--ink-3);
-      border:1px solid var(--rule); color:var(--fore); border-radius:6px;
-      font-family:var(--f-sans); outline:none;
-    }
-    .at-filter-input:focus { border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft); }
-    .at-search-btn {
-      padding:8px 16px; font-size:13px; font-weight:500;
-      background:var(--navy); color:#fff; border:none; border-radius:4px;
-      cursor:pointer; font-family:var(--f-sans);
-      transition:background 140ms ease;
-    }
-    .at-search-btn:hover { background:var(--navy-hi); }
+    .at-search-btn { /* uses ds-btn-primary inline or keep minimal */ }
     .at-stats {
       margin-left:auto; font-family:var(--f-mono); font-size:11px;
       color:var(--mute); letter-spacing:.06em;
     }
 
-    .at-table-card { padding:0; overflow:hidden; }
-    .at-table { width:100%; border-collapse:collapse; }
-    .at-table th {
-      font-family:var(--f-mono); font-size:10px; color:var(--mute);
-      letter-spacing:.1em; text-transform:uppercase; text-align:left;
-      padding:12px 16px; border-bottom:1px solid var(--rule);
-      background:var(--ink-3); position:sticky; top:0;
-    }
-    .at-table td {
-      font-size:13px; color:var(--fore-dim); padding:10px 16px;
-      border-bottom:1px solid var(--rule);
-    }
-    .at-table tr:last-child td { border-bottom:none; }
-    .at-table tr:hover td { background:var(--ink-4); }
-    .at-table .at-time { font-family:var(--f-mono); font-size:12px; }
-
-    .at-chip {
-      display:inline-block; padding:2px 8px; border-radius:3px;
-      font-family:var(--f-mono); font-size:10px; letter-spacing:.06em;
-      text-transform:uppercase; font-weight:500;
-    }
-    .at-chip-present  { background:rgba(111,181,140,0.15); color:var(--ok); }
-    .at-chip-late     { background:rgba(227,178,90,0.15); color:var(--warn); }
-    .at-chip-absent   { background:rgba(224,107,92,0.15); color:var(--err); }
-    .at-chip-partial  { background:rgba(227,178,90,0.15); color:var(--warn); }
-    .at-chip-holiday  { background:var(--ink-4); color:var(--mute-2); }
-    .at-chip-justified { background:rgba(111,181,140,0.15); color:var(--ok); }
-    .at-chip-default  { background:var(--ink-4); color:var(--mute-2); }
-
-    .at-empty { padding:48px 16px; text-align:center; color:var(--mute); font-size:13px; }
+    .at-time { font-family:var(--f-mono); font-size:12px; }
 
     .at-summary {
       display:flex; gap:16px; margin-top:16px; flex-wrap:wrap;
@@ -118,8 +77,8 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
     }
 
     @media (max-width:640px) {
-      .at-table th:nth-child(5), .at-table td:nth-child(5),
-      .at-table th:nth-child(6), .at-table td:nth-child(6) { display:none; }
+      .ds-table th:nth-child(5), .ds-table td:nth-child(5),
+      .ds-table th:nth-child(6), .ds-table td:nth-child(6) { display:none; }
     }
   </style>
 
@@ -142,7 +101,7 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
       };
 
       function chip(s) {
-        return '<span class="at-chip at-chip-' + (STATUS_CLS[s] || 'default') + '">' + (STATUS_LABEL[s] || s || '—') + '</span>';
+        return '<span class="ds-chip ds-chip-' + (STATUS_CLS[s] || 'default') + '">' + (STATUS_LABEL[s] || s || '—') + '</span>';
       }
       function fmtDate(d) { return d ? String(d).substring(0, 10) : '—'; }
       function fmtTime(t) {
@@ -164,7 +123,7 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
         var qs = '';
         if (from) qs += 'from=' + from;
         if (to) qs += (qs ? '&' : '') + 'to=' + to;
-        body.innerHTML = '<div class="at-empty">Cargando...</div>';
+        body.innerHTML = '<div class="ds-empty">Cargando...</div>';
 
         fetch('/api/portal/proxy?path=' + encodeURIComponent('attendance' + (qs ? '?' + qs : '')))
           .then(function(r) { return r.json(); })
@@ -173,12 +132,12 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
             statsEl.textContent = rows.length + ' registro' + (rows.length !== 1 ? 's' : '');
 
             if (rows.length === 0) {
-              body.innerHTML = '<div class="at-empty">Sin registros en el período seleccionado.</div>';
+              body.innerHTML = '<div class="ds-empty">Sin registros en el período seleccionado.</div>';
               summaryEl.innerHTML = '';
               return;
             }
 
-            var html = '<table class="at-table"><thead><tr>' +
+            var html = '<table class="ds-table"><thead><tr>' +
               '<th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th><th>Trabajado</th><th>Tardanza</th>' +
               '</tr></thead><tbody>';
             var totalWorked = 0, totalLate = 0, presents = 0, lates = 0, absents = 0;
@@ -208,7 +167,7 @@ const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0
               '<div class="at-summary-item"><div class="at-summary-label">Horas totales</div><div class="at-summary-value">' + fmtMinutes(totalWorked) + '</div></div>';
           })
           .catch(function() {
-            body.innerHTML = '<div class="at-empty">Error al cargar marcaciones.</div>';
+            body.innerHTML = '<div class="ds-empty">Error al cargar marcaciones.</div>';
           });
       }
 

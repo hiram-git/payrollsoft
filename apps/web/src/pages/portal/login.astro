@@ -15,7 +15,7 @@ if (identity) return Astro.redirect('/portal')
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <script is:inline>
-    try { document.documentElement.dataset.theme = localStorage.getItem('payroll.theme') || 'dark'; } catch(e) {}
+    try { document.documentElement.dataset.theme = localStorage.getItem('portal.theme') || 'dark'; } catch(e) {}
   </script>
   <style>
     :root, [data-theme="dark"] {
@@ -578,7 +578,7 @@ if (identity) return Astro.redirect('/portal')
 
     function applyTheme(t) {
       html.dataset.theme = t;
-      try { localStorage.setItem('payroll.theme', t); } catch(e) {}
+      try { localStorage.setItem('portal.theme', t); } catch(e) {}
       var isDark = t === 'dark';
       btnLight.dataset.active = (!isDark).toString();
       btnDark.dataset.active  = isDark.toString();

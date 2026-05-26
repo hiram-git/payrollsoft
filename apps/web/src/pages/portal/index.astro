@@ -87,7 +87,7 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
           <a href="/portal/requests" class="pd-view-all">Ver todas</a>
         </div>
         <div id="vac-table-body">
-          <div class="pd-empty">Cargando...</div>
+          <div class="ds-empty">Cargando...</div>
         </div>
       </div>
 
@@ -98,7 +98,7 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
           <a href="/portal/attendance" class="pd-view-all">Ver más</a>
         </div>
         <div id="att-table-body">
-          <div class="pd-empty">Cargando...</div>
+          <div class="ds-empty">Cargando...</div>
         </div>
       </div>
     </div>
@@ -160,34 +160,9 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
     }
     .pd-view-all:hover { text-decoration:underline; }
 
-    .pd-empty {
-      padding:24px 0; text-align:center; color:var(--mute); font-size:13px;
-    }
-
-    .pd-mini-table { width:100%; border-collapse:collapse; }
-    .pd-mini-table th {
-      font-family:var(--f-mono); font-size:10px; color:var(--mute);
-      letter-spacing:.1em; text-transform:uppercase; text-align:left;
-      padding:6px 8px; border-bottom:1px solid var(--rule);
-    }
-    .pd-mini-table td {
-      font-size:13px; color:var(--fore-dim); padding:8px 8px;
-      border-bottom:1px solid var(--rule);
-    }
-    .pd-mini-table tr:last-child td { border-bottom:none; }
-
-    .pd-chip {
-      display:inline-block; padding:2px 8px; border-radius:3px;
-      font-family:var(--f-mono); font-size:10px; letter-spacing:.06em;
-      text-transform:uppercase; font-weight:500;
-    }
-    .pd-chip-pending  { background:rgba(227,178,90,0.15); color:var(--warn); }
-    .pd-chip-approved { background:rgba(111,181,140,0.15); color:var(--ok); }
-    .pd-chip-rejected { background:rgba(224,107,92,0.15); color:var(--err); }
-    .pd-chip-present  { background:rgba(111,181,140,0.15); color:var(--ok); }
-    .pd-chip-late     { background:rgba(227,178,90,0.15); color:var(--warn); }
-    .pd-chip-absent   { background:rgba(224,107,92,0.15); color:var(--err); }
-    .pd-chip-default  { background:var(--ink-4); color:var(--mute-2); }
+    /* ds-table in dashboard uses tighter padding */
+    .pd-tables-row .ds-table th { padding:6px 8px; }
+    .pd-tables-row .ds-table td { padding:8px 8px; }
   </style>
 
   <script is:inline>
@@ -208,7 +183,7 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
       function chip(status) {
         var cls = STATUS_CHIP[status] || 'default';
         var label = STATUS_LABELS[status] || status;
-        return '<span class="pd-chip pd-chip-' + cls + '">' + label + '</span>';
+        return '<span class="ds-chip ds-chip-' + cls + '">' + label + '</span>';
       }
       function fmtDate(d) {
         if (!d) return '—';
@@ -246,9 +221,9 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
           var vacBody = document.getElementById('vac-table-body');
           var vr = d.recentVacationRequests || [];
           if (vr.length === 0) {
-            vacBody.innerHTML = '<div class="pd-empty">Sin solicitudes de vacaciones.</div>';
+            vacBody.innerHTML = '<div class="ds-empty">Sin solicitudes de vacaciones.</div>';
           } else {
-            var html = '<table class="pd-mini-table"><thead><tr><th>N°</th><th>Tipo</th><th>Días</th><th>Estado</th></tr></thead><tbody>';
+            var html = '<table class="ds-table"><thead><tr><th>N°</th><th>Tipo</th><th>Días</th><th>Estado</th></tr></thead><tbody>';
             for (var i = 0; i < vr.length; i++) {
               var r = vr[i];
               var typeLabel = r.requestType === 'enjoy' ? 'Disfrute' : r.requestType === 'pay' ? 'Pago' : 'Mixta';
@@ -262,9 +237,9 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
           var attBody = document.getElementById('att-table-body');
           var att = d.recentAttendance || [];
           if (att.length === 0) {
-            attBody.innerHTML = '<div class="pd-empty">Sin registros de asistencia recientes.</div>';
+            attBody.innerHTML = '<div class="ds-empty">Sin registros de asistencia recientes.</div>';
           } else {
-            var ahtml = '<table class="pd-mini-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead><tbody>';
+            var ahtml = '<table class="ds-table"><thead><tr><th>Fecha</th><th>Entrada</th><th>Salida</th><th>Estado</th></tr></thead><tbody>';
             for (var j = 0; j < att.length; j++) {
               var a = att[j];
               ahtml += '<tr><td>' + fmtDate(a.date) + '</td><td>' + fmtTime(a.checkIn) + '</td><td>' + fmtTime(a.checkOut) + '</td><td>' + chip(a.status) + '</td></tr>';
@@ -274,8 +249,8 @@ const firstName = identity.name?.split(' ')[0] ?? 'Colaborador'
           }
         })
         .catch(function() {
-          document.getElementById('vac-table-body').innerHTML = '<div class="pd-empty">Error al cargar datos.</div>';
-          document.getElementById('att-table-body').innerHTML = '<div class="pd-empty">Error al cargar datos.</div>';
+          document.getElementById('vac-table-body').innerHTML = '<div class="ds-empty">Error al cargar datos.</div>';
+          document.getElementById('att-table-body').innerHTML = '<div class="ds-empty">Error al cargar datos.</div>';
         });
     })();
   </script>
