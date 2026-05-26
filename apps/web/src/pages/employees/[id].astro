@@ -397,6 +397,9 @@ const freqLabel: Record<string, string> = {
         <button type="button" class="tab-btn" data-tab="laboral" onclick="switchTab('laboral', this)">
           Datos Laborales
         </button>
+        <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
+          Bancario
+        </button>
         <button type="button" class="tab-btn" data-tab="prestamos" onclick="switchTab('prestamos', this)">
           Préstamos
         </button>
@@ -410,28 +413,14 @@ const freqLabel: Record<string, string> = {
             Campos adicionales
           </button>
         )}
-        {customFieldDefs.length > 0 && (
-          <button type="button" class="tab-btn" data-tab="historial" onclick="switchTab('historial', this)">
-            Historial
-          </button>
-        )}
         <button type="button" class="tab-btn" data-tab="expedientes" onclick="switchTab('expedientes', this)">
           Expedientes{efFiles.length > 0 ? ` (${efFiles.length})` : ''}
         </button>
-        <button type="button" class="tab-btn" data-tab="vacaciones" onclick="switchTab('vacaciones', this)">
-          Vacaciones
-        </button>
-        <button type="button" class="tab-btn" data-tab="compensatorios" onclick="switchTab('compensatorios', this)">
-          Tiempos comp.
-        </button>
-        <button type="button" class="tab-btn" data-tab="incapacidades" onclick="switchTab('incapacidades', this)">
-          Incapacidades
+        <button type="button" class="tab-btn" data-tab="saldos" onclick="switchTab('saldos', this)">
+          Saldos
         </button>
         <button type="button" class="tab-btn" data-tab="dependientes" onclick="switchTab('dependientes', this)">
           Dependientes
-        </button>
-        <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
-          Bancario
         </button>
         <button type="button" class="tab-btn" data-tab="portal" onclick="switchTab('portal', this)">
           Portal
@@ -764,6 +753,69 @@ const freqLabel: Record<string, string> = {
         )}
       </div>
 
+      <!-- TAB: Bancario -->
+      <div id="tab-bancario" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Datos bancarios</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Configura cómo el empleado recibe su pago. El campo <strong>método</strong>
+            determina si entra al lote ACH automático o si se le emite cheque manual
+            desde el módulo de Tesorería.
+          </p>
+
+          <div>
+            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago</label>
+            <div class="bank-radio-group">
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} class="bank-radio-input" />
+                <span class="bank-radio-card">Cheque</span>
+              </label>
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="ach" checked={emp.paymentMethod === 'ach'} class="bank-radio-input" />
+                <span class="bank-radio-card">ACH</span>
+              </label>
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="cash" checked={emp.paymentMethod === 'cash'} class="bank-radio-input" />
+                <span class="bank-radio-card">Efectivo</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="bank-fields" class="grid grid-cols-2 gap-4 mt-4" style={emp.paymentMethod === 'cash' ? 'display:none' : ''}>
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">Banco</label>
+              <select name="bankId" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="">— Sin banco —</option>
+                {banksCatalog.filter((b) => b.isActive === 1).map((b) => (
+                  <option value={b.id} selected={emp.bankId === b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">Tipo de cuenta</label>
+              <select name="accountType" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="" selected={!emp.accountType}>— Sin cuenta —</option>
+                <option value="savings" selected={emp.accountType === 'savings'}>Ahorros (SC)</option>
+                <option value="checking" selected={emp.accountType === 'checking'}>Corriente (DC)</option>
+              </select>
+            </div>
+
+            <div class="col-span-2">
+              <label class="block text-sm text-gray-700 font-medium mb-1">Número de cuenta</label>
+              <input type="text" name="accountNumber" value={emp.accountNumber ?? ''} maxlength="40" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">SIACAP %</label>
+              <input type="text" name="siacapPct" value={emp.siacapPct ?? ''} maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- TAB: Préstamos -->
       <div id="tab-prestamos" style="display:none">
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
@@ -927,64 +979,6 @@ const freqLabel: Record<string, string> = {
         </div>
       )}
 
-      <!-- TAB: Historial de campos adicionales -->
-      {customFieldDefs.length > 0 && (
-        <div id="tab-historial" style="display:none">
-          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-            <h3 class="font-semibold text-gray-800 mb-1">Historial de campos adicionales</h3>
-            <p class="text-xs text-gray-500 mb-4">
-              Cada cambio en los valores de campos adicionales queda registrado aquí (append-only).
-              {cfHistory.length} {cfHistory.length === 1 ? 'cambio' : 'cambios'} registrados.
-            </p>
-            {cfHistory.length === 0 ? (
-              <p class="text-sm text-gray-400 py-6 text-center">
-                Aún no hay cambios registrados para este empleado.
-              </p>
-            ) : (
-              <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                  <thead>
-                    <tr class="border-b border-gray-200 bg-gray-50">
-                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Cuándo</th>
-                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Campo</th>
-                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Anterior</th>
-                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Nuevo</th>
-                      <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Por</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cfHistory.map((h) => {
-                      const def = customFieldDefs.find((d) => d.code === h.fieldCode)
-                      const fmtVal = (v: unknown) => {
-                        if (v == null || v === '') return '—'
-                        if (typeof v === 'object') return JSON.stringify(v)
-                        return String(v)
-                      }
-                      return (
-                        <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-                          <td class="px-3 py-2 text-xs text-gray-500 font-mono whitespace-nowrap">
-                            {new Date(h.changedAt).toLocaleString('es-PA')}
-                          </td>
-                          <td class="px-3 py-2">
-                            <div class="font-mono text-xs text-gray-700">{h.fieldCode}</div>
-                            {def && <div class="text-xs text-gray-500">{def.name}</div>}
-                          </td>
-                          <td class="px-3 py-2 text-xs text-gray-600">{fmtVal(h.oldValue)}</td>
-                          <td class="px-3 py-2 text-xs text-gray-900 font-medium">{fmtVal(h.newValue)}</td>
-                          <td class="px-3 py-2 text-xs text-gray-400 font-mono">
-                            {h.changedBy ? (userNameMap.get(h.changedBy) ?? h.changedBy.slice(0, 8)) : '—'}
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
       <!-- TAB: Expedientes -->
       <div id="tab-expedientes" style="display:none">
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
@@ -1066,8 +1060,8 @@ const freqLabel: Record<string, string> = {
         </div>
       </div>
 
-      <!-- TAB: Vacaciones -->
-      <div id="tab-vacaciones" style="display:none">
+      <!-- TAB: Saldos (vacaciones + compensatorios + incapacidades) -->
+      <div id="tab-saldos" style="display:none">
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <div class="flex items-end justify-between mb-4">
             <div>
@@ -1244,12 +1238,8 @@ const freqLabel: Record<string, string> = {
             </form>
           </div>
         </div>
-      </div>
 
-      <!-- TAB: Bancario -->
-      <!-- TAB: Tiempos compensatorios -->
-      <div id="tab-compensatorios" style="display:none">
-        <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4 mt-4">
           <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
           <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas.</p>
           <div class="py-8 text-center">
@@ -1257,11 +1247,8 @@ const freqLabel: Record<string, string> = {
             <p class="text-xs text-gray-400 mt-1">Los tiempos compensatorios se registrarán desde el módulo de asistencia.</p>
           </div>
         </div>
-      </div>
 
-      <!-- TAB: Incapacidades -->
-      <div id="tab-incapacidades" style="display:none">
-        <div class="bg-white rounded-xl border border-gray-200 p-6">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mt-4">
           <div class="flex items-end justify-between mb-4">
             <div>
               <h3 class="font-semibold text-gray-800 mb-1">Incapacidades</h3>
@@ -1356,68 +1343,6 @@ const freqLabel: Record<string, string> = {
 
           <div id="dep-list">
             <div class="py-8 text-center text-sm text-gray-400">Cargando...</div>
-          </div>
-        </div>
-      </div>
-
-      <div id="tab-bancario" style="display:none">
-        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-          <h3 class="font-semibold text-gray-800 mb-1">Datos bancarios</h3>
-          <p class="text-xs text-gray-500 mb-4">
-            Configura cómo el empleado recibe su pago. El campo <strong>método</strong>
-            determina si entra al lote ACH automático o si se le emite cheque manual
-            desde el módulo de Tesorería.
-          </p>
-
-          <div>
-            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago</label>
-            <div class="bank-radio-group">
-              <label class="bank-radio-label">
-                <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} class="bank-radio-input" />
-                <span class="bank-radio-card">Cheque</span>
-              </label>
-              <label class="bank-radio-label">
-                <input type="radio" name="paymentMethod" value="ach" checked={emp.paymentMethod === 'ach'} class="bank-radio-input" />
-                <span class="bank-radio-card">ACH</span>
-              </label>
-              <label class="bank-radio-label">
-                <input type="radio" name="paymentMethod" value="cash" checked={emp.paymentMethod === 'cash'} class="bank-radio-input" />
-                <span class="bank-radio-card">Efectivo</span>
-              </label>
-            </div>
-          </div>
-
-          <div id="bank-fields" class="grid grid-cols-2 gap-4 mt-4" style={emp.paymentMethod === 'cash' ? 'display:none' : ''}>
-            <div>
-              <label class="block text-sm text-gray-700 font-medium mb-1">Banco</label>
-              <select name="bankId" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                <option value="">— Sin banco —</option>
-                {banksCatalog.filter((b) => b.isActive === 1).map((b) => (
-                  <option value={b.id} selected={emp.bankId === b.id}>{b.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-sm text-gray-700 font-medium mb-1">Tipo de cuenta</label>
-              <select name="accountType" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
-                <option value="" selected={!emp.accountType}>— Sin cuenta —</option>
-                <option value="savings" selected={emp.accountType === 'savings'}>Ahorros (SC)</option>
-                <option value="checking" selected={emp.accountType === 'checking'}>Corriente (DC)</option>
-              </select>
-            </div>
-
-            <div class="col-span-2">
-              <label class="block text-sm text-gray-700 font-medium mb-1">Número de cuenta</label>
-              <input type="text" name="accountNumber" value={emp.accountNumber ?? ''} maxlength="40" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4 mt-4">
-            <div>
-              <label class="block text-sm text-gray-700 font-medium mb-1">SIACAP %</label>
-              <input type="text" name="siacapPct" value={emp.siacapPct ?? ''} maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
-            </div>
           </div>
         </div>
       </div>
