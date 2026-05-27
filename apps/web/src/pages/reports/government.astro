@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 
@@ -29,12 +31,12 @@ let payrolls: Payroll[] = []
 let total = 0
 let totalPages = 1
 let error = ''
-let payrollReportMode: 'on_demand' | 'file_storage' = 'on_demand'
+let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
 
 try {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
   const params = new URLSearchParams({ page: '1', limit: '500' })
   if (activeTypeId) params.set('payrollTypeId', activeTypeId)
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 
   const [res, companyRes] = await Promise.all([
     fetch(`${API_URL}/payroll?${params}`, { headers }),
@@ -43,10 +45,12 @@ try {
   if (res.status === 401) return Astro.redirect('/login')
   if (res.ok) {
     const json = (await res.json()) as { data: Payroll[] }
-    const all = (json.data ?? []).filter((p) => p.status === 'generated' || p.status === 'closed')
-    const matching = search
-      ? all.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-      : all
+    const all = json.data ?? []
+    const matching = all.filter((p) => {
+      if (p.status !== 'generated' && p.status !== 'closed') return false
+      if (!search) return true
+      return p.name.toLowerCase().includes(search.toLowerCase())
+    })
     total = matching.length
     totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     const from = (page - 1) * PAGE_SIZE
@@ -55,12 +59,12 @@ try {
     error = 'Error al cargar las planillas'
   }
   if (companyRes.ok) {
-    const json = (await companyRes.json()) as {
+    const companyJson = (await companyRes.json()) as {
       data: { payrollReportMode?: string | null } | null
     }
-    if (json.data?.payrollReportMode === 'file_storage') {
-      payrollReportMode = 'file_storage'
-    }
+    const mode = companyJson.data?.payrollReportMode
+    if (mode === 'file_storage') payrollReportMode = 'file_storage'
+    else if (mode === 'local_storage') payrollReportMode = 'local_storage'
   }
 } catch {
   error = 'No se pudo conectar con el servidor'
