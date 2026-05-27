@@ -105,7 +105,7 @@ const reportTypes = [
   { key: 'siacap', label: 'SIACAP', desc: 'Aportes mensuales' },
 ]
 
-const isOnDemand = payrollReportMode === 'on_demand'
+const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'local_storage'
 ---
 
 <AppLayout title="Reportes de Gobierno">
@@ -124,6 +124,20 @@ const isOnDemand = payrollReportMode === 'on_demand'
               Filtrado por tipo de planilla
             </span>
           )}
+          <span
+            class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+              payrollReportMode === 'on_demand'
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : payrollReportMode === 'local_storage'
+                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}
+            title="Modo de generación PDF — configurable en Configuración → Empresa"
+          >
+            {payrollReportMode === 'on_demand' && 'Bajo demanda'}
+            {payrollReportMode === 'local_storage' && 'Disco local'}
+            {payrollReportMode === 'file_storage' && 'Nube (S3/R2)'}
+          </span>
         </div>
         <p class="text-sm text-gray-500 mt-0.5">
           Transferencias, Recapitulación y SIACAP agrupados por partida presupuestaria.
@@ -220,7 +234,7 @@ const isOnDemand = payrollReportMode === 'on_demand'
                               role="menuitem"
                               data-gov-report={r.key}
                               data-payroll-id={p.id}
-                              data-mode={isOnDemand ? 'preview' : 'download'}
+                              data-mode={usePreview ? 'preview' : 'download'}
                               class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-start gap-2"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
