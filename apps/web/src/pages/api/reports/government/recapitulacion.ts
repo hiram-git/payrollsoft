@@ -3,15 +3,17 @@ import type { APIRoute } from 'astro'
 import React from 'react'
 import { type RecapitulacionGroup, RecapitulacionPdf } from '../../../../lib/pdf/recapitulacion-pdf'
 import { computeBuckets, fetchGovernmentReportData } from '../../../../lib/reports/government-data'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
   const payrollId = url.searchParams.get('payrollId')
   if (!payrollId) return new Response('payrollId requerido', { status: 400 })
 
-  const result = await fetchGovernmentReportData(payrollId, authCookie)
+  const result = await fetchGovernmentReportData(payrollId, authCookie, tenantSlug)
   if (result.kind === 'unauthorized') return redirect('/login')
   if (result.kind === 'not-found') return new Response('Planilla no encontrada', { status: 404 })
   if (result.kind === 'bad-status') return new Response('Planilla no generada', { status: 409 })
