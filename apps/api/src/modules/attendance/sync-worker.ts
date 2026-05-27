@@ -1,106 +1,165 @@
-import { attendanceSyncState, createPublicDb, createTenantDb, tenants } from '@payroll/db'
+import {
+  attendanceConsolidationState,
+  attendanceIngestionState,
+  createPublicDb,
+  createTenantDb,
+  tenants,
+} from '@payroll/db'
 import { and, eq } from 'drizzle-orm'
-import { runSyncCycle } from './sync-service'
+import { runIngestionCycle } from './ingestion-service'
+import { runConsolidationCycle } from './sync-service'
 
 type TimerHandle = ReturnType<typeof setInterval>
 
-type WorkerEntry = {
-  tenantSlug: string
-  deviceId: string
-  timer: TimerHandle
-  intervalMinutes: number
+// ── Ingestion workers (one per tenant+device) ───────────────────────────────
+
+type IngestionEntry = { tenantSlug: string; deviceId: string; timer: TimerHandle }
+const ingestionWorkers = new Map<string, IngestionEntry>()
+
+function ingestionKey(tenantSlug: string, deviceId: string) {
+  return `ing:${tenantSlug}:${deviceId}`
 }
 
-const activeWorkers = new Map<string, WorkerEntry>()
-
-function workerKey(tenantSlug: string, deviceId: string) {
-  return `${tenantSlug}:${deviceId}`
-}
-
-export function startDeviceWorker(
+export function startIngestionWorker(
   tenantSlug: string,
   deviceId: string,
   intervalMinutes: number,
   databaseUrl: string
 ) {
-  const key = workerKey(tenantSlug, deviceId)
-  const existing = activeWorkers.get(key)
-  if (existing) {
-    clearInterval(existing.timer)
-  }
+  const key = ingestionKey(tenantSlug, deviceId)
+  const existing = ingestionWorkers.get(key)
+  if (existing) clearInterval(existing.timer)
 
   const db = createTenantDb(tenantSlug, databaseUrl)
-
   const tick = async () => {
     try {
-      await runSyncCycle(db, deviceId)
+      await runIngestionCycle(db, deviceId)
     } catch (err) {
-      console.error(`[sync-worker] ${key} error:`, err instanceof Error ? err.message : err)
+      console.error(`[ingestion] ${key}:`, err instanceof Error ? err.message : err)
     }
   }
 
   const timer = setInterval(tick, intervalMinutes * 60 * 1000)
-  activeWorkers.set(key, { tenantSlug, deviceId, timer, intervalMinutes })
+  ingestionWorkers.set(key, { tenantSlug, deviceId, timer })
 }
 
-export function stopDeviceWorker(tenantSlug: string, deviceId: string) {
-  const key = workerKey(tenantSlug, deviceId)
-  const entry = activeWorkers.get(key)
+export function stopIngestionWorker(tenantSlug: string, deviceId: string) {
+  const key = ingestionKey(tenantSlug, deviceId)
+  const entry = ingestionWorkers.get(key)
   if (entry) {
     clearInterval(entry.timer)
-    activeWorkers.delete(key)
+    ingestionWorkers.delete(key)
   }
 }
 
-export function isWorkerRunning(tenantSlug: string, deviceId: string): boolean {
-  return activeWorkers.has(workerKey(tenantSlug, deviceId))
+export function isIngestionRunning(tenantSlug: string, deviceId: string): boolean {
+  return ingestionWorkers.has(ingestionKey(tenantSlug, deviceId))
 }
 
-export function getActiveWorkerCount(): number {
-  return activeWorkers.size
+// ── Consolidation workers (one per tenant) ──────────────────────────────────
+
+type ConsolidationEntry = { tenantSlug: string; timer: TimerHandle }
+const consolidationWorkers = new Map<string, ConsolidationEntry>()
+
+function consolidationKey(tenantSlug: string) {
+  return `con:${tenantSlug}`
 }
+
+export function startConsolidationWorker(
+  tenantSlug: string,
+  intervalMinutes: number,
+  databaseUrl: string
+) {
+  const key = consolidationKey(tenantSlug)
+  const existing = consolidationWorkers.get(key)
+  if (existing) clearInterval(existing.timer)
+
+  const db = createTenantDb(tenantSlug, databaseUrl)
+  const tick = async () => {
+    try {
+      await runConsolidationCycle(db)
+    } catch (err) {
+      console.error(`[consolidation] ${key}:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  const timer = setInterval(tick, intervalMinutes * 60 * 1000)
+  consolidationWorkers.set(key, { tenantSlug, timer })
+}
+
+export function stopConsolidationWorker(tenantSlug: string) {
+  const key = consolidationKey(tenantSlug)
+  const entry = consolidationWorkers.get(key)
+  if (entry) {
+    clearInterval(entry.timer)
+    consolidationWorkers.delete(key)
+  }
+}
+
+export function isConsolidationRunning(tenantSlug: string): boolean {
+  return consolidationWorkers.has(consolidationKey(tenantSlug))
+}
+
+// ── Bootstrap on server start ───────────────────────────────────────────────
 
 export async function bootstrapWorkers(databaseUrl: string) {
   const publicDb = createPublicDb(databaseUrl)
-
   const activeTenants = await publicDb
     .select({ slug: tenants.slug })
     .from(tenants)
     .where(and(eq(tenants.status, 'ACTIVE'), eq(tenants.isActive, true)))
 
-  let started = 0
+  let ingestionStarted = 0
+  let consolidationStarted = 0
 
   for (const tenant of activeTenants as Array<{ slug: string }>) {
     const tenantDb = createTenantDb(tenant.slug, databaseUrl)
 
     try {
-      const configs = await tenantDb
+      const ingestionConfigs = await tenantDb
         .select({
-          deviceId: attendanceSyncState.deviceId,
-          intervalMinutes: attendanceSyncState.intervalMinutes,
-          status: attendanceSyncState.status,
-          autoStart: attendanceSyncState.autoStart,
+          deviceId: attendanceIngestionState.deviceId,
+          intervalMinutes: attendanceIngestionState.intervalMinutes,
         })
-        .from(attendanceSyncState)
+        .from(attendanceIngestionState)
         .where(
-          and(eq(attendanceSyncState.autoStart, true), eq(attendanceSyncState.status, 'running'))
+          and(
+            eq(attendanceIngestionState.autoStart, true),
+            eq(attendanceIngestionState.status, 'running')
+          )
         )
 
-      for (const cfg of configs as Array<{
-        deviceId: string
-        intervalMinutes: number
-        status: string
-        autoStart: boolean
-      }>) {
-        startDeviceWorker(tenant.slug, cfg.deviceId, cfg.intervalMinutes, databaseUrl)
-        started++
+      for (const cfg of ingestionConfigs as Array<{ deviceId: string; intervalMinutes: number }>) {
+        startIngestionWorker(tenant.slug, cfg.deviceId, cfg.intervalMinutes, databaseUrl)
+        ingestionStarted++
       }
     } catch {
-      // tenant may not have the migration yet — skip silently
+      /* migration not applied yet */
+    }
+
+    try {
+      const [conState] = await tenantDb
+        .select({
+          intervalMinutes: attendanceConsolidationState.intervalMinutes,
+          status: attendanceConsolidationState.status,
+          autoStart: attendanceConsolidationState.autoStart,
+        })
+        .from(attendanceConsolidationState)
+        .limit(1)
+
+      if (conState?.autoStart && conState.status === 'running') {
+        startConsolidationWorker(tenant.slug, conState.intervalMinutes as number, databaseUrl)
+        consolidationStarted++
+      }
+    } catch {
+      /* migration not applied yet */
     }
   }
 
-  if (started > 0) {
-    console.log(`[sync-worker] bootstrapped ${started} device worker(s)`)
+  const total = ingestionStarted + consolidationStarted
+  if (total > 0) {
+    console.log(
+      `[sync-worker] bootstrapped ${ingestionStarted} ingestion + ${consolidationStarted} consolidation worker(s)`
+    )
   }
 }
