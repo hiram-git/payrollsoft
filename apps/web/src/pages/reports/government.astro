@@ -1,0 +1,167 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+if (!authCookie) return Astro.redirect('/login')
+
+const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
+
+type Payroll = {
+  id: string
+  name: string
+  type: string
+  frequency: string
+  periodStart: string
+  periodEnd: string
+  status: string
+}
+
+let payrolls: Payroll[] = []
+let error = ''
+
+try {
+  const params = new URLSearchParams({ page: '1', limit: '500' })
+  if (activeTypeId) params.set('payrollTypeId', activeTypeId)
+  const res = await fetch(`${API_URL}/payroll?${params}`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' },
+  })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { data: Payroll[] }
+    payrolls = (json.data ?? []).filter((p) => p.status === 'generated' || p.status === 'closed')
+  } else {
+    error = 'Error al cargar las planillas'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor'
+}
+
+const typeLabel: Record<string, string> = {
+  regular: 'Regular',
+  thirteenth: 'XIII Mes',
+  special: 'Especial',
+}
+---
+
+<AppLayout title="Reportes de Gobierno">
+  <div class="p-8">
+
+    <div class="mb-6">
+      <h1 class="text-2xl font-bold text-gray-900">Reportes de Gobierno</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Documentos oficiales agrupados por partida presupuestaria. Selecciona una planilla generada para descargar cada reporte.
+      </p>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <div class="mb-6">
+      <label for="payroll-select" class="block text-sm font-medium text-gray-700 mb-1">Planilla</label>
+      <select
+        id="payroll-select"
+        class="w-full max-w-md px-3 py-2 text-sm border border-gray-300 rounded-md bg-white text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      >
+        {payrolls.length === 0 ? (
+          <option value="">No hay planillas generadas</option>
+        ) : (
+          payrolls.map((p) => (
+            <option value={p.id}>
+              {p.name} · {typeLabel[p.type] ?? p.type} · {p.periodStart} → {p.periodEnd}
+            </option>
+          ))
+        )}
+      </select>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="border border-gray-200 rounded-lg bg-white p-5 flex flex-col">
+        <div class="flex items-center gap-2 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <h2 class="text-sm font-semibold text-gray-900">Transferencias</h2>
+        </div>
+        <p class="text-xs text-gray-500 mb-4 flex-1">
+          Imputación a las partidas del presupuesto. Incluye deducciones del empleado y cuotas patronales (SS, SE, Riesgo Profesional, SIACAP).
+        </p>
+        <button
+          type="button"
+          data-gov-report="transferencias"
+          class="inline-flex items-center justify-center gap-1.5 w-full px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-wait"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar PDF
+        </button>
+      </div>
+
+      <div class="border border-gray-200 rounded-lg bg-white p-5 flex flex-col">
+        <div class="flex items-center gap-2 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-emerald-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <h2 class="text-sm font-semibold text-gray-900">Recapitulación</h2>
+        </div>
+        <p class="text-xs text-gray-500 mb-4 flex-1">
+          Resumen del período por partida. Detalla sueldo, deducciones legales, otros descuentos, devengado y neto a pagar.
+        </p>
+        <button
+          type="button"
+          data-gov-report="recapitulacion"
+          class="inline-flex items-center justify-center gap-1.5 w-full px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-wait"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar PDF
+        </button>
+      </div>
+
+      <div class="border border-gray-200 rounded-lg bg-white p-5 flex flex-col">
+        <div class="flex items-center gap-2 mb-2">
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <h2 class="text-sm font-semibold text-gray-900">SIACAP</h2>
+        </div>
+        <p class="text-xs text-gray-500 mb-4 flex-1">
+          Aportes mensuales por empleado. Calcula el 2% del salario devengado y el 30% de la cuota, con recargos cuando aplique.
+        </p>
+        <button
+          type="button"
+          data-gov-report="siacap"
+          class="inline-flex items-center justify-center gap-1.5 w-full px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-wait"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Descargar PDF
+        </button>
+      </div>
+    </div>
+  </div>
+</AppLayout>
+
+<script>
+  import { downloadPdfWithModal } from '../../lib/reports/pdf-download-modal'
+
+  const titles: Record<string, string> = {
+    transferencias: 'Generando Transferencias',
+    recapitulacion: 'Generando Recapitulación',
+    siacap: 'Generando SIACAP',
+  }
+
+  const successTitles: Record<string, string> = {
+    transferencias: 'Transferencias descargada',
+    recapitulacion: 'Recapitulación descargada',
+    siacap: 'SIACAP descargado',
+  }
+
+  const select = document.getElementById('payroll-select') as HTMLSelectElement | null
+
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-gov-report]')) {
+    btn.addEventListener('click', () => {
+      const payrollId = select?.value
+      if (!payrollId) return
+      const report = btn.dataset.govReport ?? ''
+      const url = `/api/reports/government/${report}?payrollId=${encodeURIComponent(payrollId)}`
+      void downloadPdfWithModal(url, {
+        title: titles[report] ?? 'Generando reporte',
+        successTitle: successTitles[report] ?? 'Reporte descargado',
+        filenameHint: `${report}-${payrollId.slice(0, 8)}.pdf`,
+      })
+    })
+  }
+</script>

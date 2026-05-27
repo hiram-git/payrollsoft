@@ -176,19 +176,10 @@ const navAll: NavEntry[] = [
     label: 'Reportes',
     icon: 'chart',
     children: [
-      { href: '/reports/personal', label: 'Personal', require: 'reports:personnel.view' },
-      { href: '/reports/payroll', label: 'Planilla', require: 'reports:payroll.view' },
-      { href: '/reports/creditors', label: 'Acreedores', require: 'reports:loans.view' },
-      { href: '/reports/employee-files', label: 'Expedientes', require: 'employee_files:read' },
-    ],
-  },
-  {
-    kind: 'group',
-    label: 'Vacaciones',
-    icon: 'calendar',
-    children: [
-      { href: '/vacations', label: 'Solicitudes', require: 'vacations:read' },
-      { href: '/vacations/approvals', label: 'Aprobaciones', require: 'vacations:approve' },
+      { href: '/reports/personal', label: 'Personal' },
+      { href: '/reports/payroll', label: 'Planilla' },
+      { href: '/reports/movements', label: 'Movimientos' },
+      { href: '/reports/government', label: 'Gobierno' },
     ],
   },
   {
