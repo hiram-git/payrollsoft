@@ -39,6 +39,7 @@ export type CreateDeviceInput = {
   serialNumber?: string | null
   manufacturer?: string | null
   model?: string | null
+  syncSourcePath?: string | null
 }
 
 /**
@@ -73,6 +74,7 @@ export async function createDevice(
       serialNumber: input.serialNumber?.trim() || null,
       manufacturer: input.manufacturer?.trim() || null,
       model: input.model?.trim() || null,
+      syncSourcePath: input.syncSourcePath?.trim() || null,
       apiTokenHash,
     })
     .returning({ id: attendanceDevices.id })
@@ -89,6 +91,7 @@ export type UpdateDeviceInput = {
   serialNumber?: string | null
   manufacturer?: string | null
   model?: string | null
+  syncSourcePath?: string | null
   status?: string
   isActive?: number
 }
@@ -103,6 +106,7 @@ export async function updateDevice(db: AnyDb, id: string, input: UpdateDeviceInp
   if (input.serialNumber !== undefined) set.serialNumber = input.serialNumber?.trim() || null
   if (input.manufacturer !== undefined) set.manufacturer = input.manufacturer?.trim() || null
   if (input.model !== undefined) set.model = input.model?.trim() || null
+  if (input.syncSourcePath !== undefined) set.syncSourcePath = input.syncSourcePath?.trim() || null
   if (input.status !== undefined) set.status = input.status
   if (input.isActive !== undefined) set.isActive = input.isActive
 
