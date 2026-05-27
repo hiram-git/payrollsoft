@@ -12,7 +12,6 @@
  */
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 const REPORT_LINES_LIMIT = 100000
 
 // ─── Types shared across all three reports ─────────────────────────────────
@@ -192,9 +191,10 @@ function round2(v: number): number {
 
 export async function fetchGovernmentReportData(
   payrollId: string,
-  authCookie: string
+  authCookie: string,
+  tenantSlug: string
 ): Promise<GovFetchResult> {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 
   // Parallel: payroll + company + positions + partidas
   let payrollRes: Response

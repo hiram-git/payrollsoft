@@ -3,18 +3,19 @@ import type { APIRoute } from 'astro'
 import React from 'react'
 import { type SiacapEmployee, SiacapPdf } from '../../../../lib/pdf/siacap-pdf'
 import { computeBuckets, fetchGovernmentReportData } from '../../../../lib/reports/government-data'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
   const payrollId = url.searchParams.get('payrollId')
   if (!payrollId) return new Response('payrollId requerido', { status: 400 })
 
-  const result = await fetchGovernmentReportData(payrollId, authCookie)
+  const result = await fetchGovernmentReportData(payrollId, authCookie, tenantSlug)
   if (result.kind === 'unauthorized') return redirect('/login')
   if (result.kind === 'not-found') return new Response('Planilla no encontrada', { status: 404 })
   if (result.kind === 'bad-status') return new Response('Planilla no generada', { status: 409 })
@@ -24,7 +25,7 @@ export const GET: APIRoute = async ({ url, cookies, redirect }) => {
   const allLines = [...groups.flatMap((g) => g.lines), ...ungrouped]
 
   // Resolve socialSecurityNumber per employee via the /employees/:id endpoint
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const ssnCache = new Map<string, string | null>()
   async function resolveSsn(empId: string): Promise<string | null> {
     if (ssnCache.has(empId)) return ssnCache.get(empId) ?? null
