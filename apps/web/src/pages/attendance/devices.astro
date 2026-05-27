@@ -183,6 +183,10 @@ function fmtDate(s: string | null): string {
                 <input type="text" name="serialNumber" maxlength="100" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono" />
               </div>
             </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Ruta de sincronización (TXT o URL API)</label>
+                <input type="text" name="syncSourcePath" maxlength="500" placeholder="ej. /mnt/reloj/REL-01/data.txt o http://192.168.1.1:8080/api/punches" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono" />
+              </div>
             <div id="form-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
             <div class="flex justify-end gap-2 pt-2">
               <button type="button" id="modal-cancel" class="px-3 py-2 text-sm text-gray-600">Cancelar</button>
