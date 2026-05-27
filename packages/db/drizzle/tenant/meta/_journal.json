@@ -372,6 +372,20 @@
       "when": 1762128032000,
       "tag": "0053_new_file_types",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1762128033000,
+      "tag": "0054_attendance_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1762128034000,
+      "tag": "0055_attendance_sync_v2",
+      "breakpoints": true
     }
   ]
 }

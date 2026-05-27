@@ -40,6 +40,7 @@ export const attendanceDevices = pgTable(
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     apiTokenHash: varchar('api_token_hash', { length: 128 }),
     facialTerminalId: uuid('facial_terminal_id'),
+    syncSourcePath: varchar('sync_source_path', { length: 500 }),
     meta: jsonb('meta').notNull().default({}),
     isActive: integer('is_active').notNull().default(1),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

@@ -10,6 +10,8 @@ import { attendanceDevicesRoutes } from './modules/attendance/devices-routes'
 import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { justificationRoutes } from './modules/attendance/justification-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
+import { syncRoutes } from './modules/attendance/sync-routes'
+import { bootstrapWorkers } from './modules/attendance/sync-worker'
 import { unifiedPunchRoutes } from './modules/attendance/unified-routes'
 import { auditRoutes } from './modules/audit/routes'
 import { authRoutes } from './modules/auth/routes'
@@ -100,10 +102,15 @@ const app = new Elysia()
   .use(portalAuthRoutes)
   .use(portalCredentialsRoutes)
   .use(portalDataRoutes)
+  .use(syncRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen({ port: env.PORT, hostname: env.HOST })
 
 console.log(`API running at http://${env.HOST}:${app.server?.port}`)
+
+bootstrapWorkers(env.DATABASE_URL).catch((err) =>
+  console.error('[sync-worker] bootstrap failed:', err instanceof Error ? err.message : err)
+)
 
 export type App = typeof app

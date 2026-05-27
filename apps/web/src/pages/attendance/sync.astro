@@ -1,0 +1,428 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'attendance:sync')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type Device = {
+  id: string
+  code: string
+  name: string
+  deviceType: string
+  connectionMethod: string
+  status: string
+  location: string | null
+  syncSourcePath: string | null
+}
+
+type IngestionState = {
+  id: string
+  deviceId: string
+  status: string
+  intervalMinutes: number
+  highWaterMark: string | null
+  lastFileHash: string | null
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastError: string | null
+  punchesIngested: number
+  autoStart: boolean
+}
+
+type ConsolidationState = {
+  id: string
+  status: string
+  intervalMinutes: number
+  highWaterMark: number
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastError: string | null
+  daysConsolidated: number
+  autoStart: boolean
+}
+
+let devices: Device[] = []
+let ingestionStates: IngestionState[] = []
+let consolidationState: ConsolidationState | null = null
+let error = ''
+
+try {
+  const [devRes, ingRes, conRes] = await Promise.all([
+    fetch(`${API_URL}/attendance/devices`, { headers }),
+    fetch(`${API_URL}/attendance/ingestion/status`, { headers }),
+    fetch(`${API_URL}/attendance/consolidation/status`, { headers }),
+  ])
+  if (devRes.status === 401) return Astro.redirect('/login')
+  if (devRes.ok) devices = ((await devRes.json()) as { data: Device[] }).data ?? []
+  if (ingRes.ok) ingestionStates = ((await ingRes.json()) as { data: IngestionState[] }).data ?? []
+  if (conRes.ok)
+    consolidationState = ((await conRes.json()) as { data: ConsolidationState }).data ?? null
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const ingByDevice = new Map(ingestionStates.map((s) => [s.deviceId, s]))
+const conRunning = consolidationState?.status === 'running'
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleString('es-PA')
+}
+---
+<AppLayout title="Sincronización de marcaciones">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold tracking-tight sync-title">Sincronización de marcaciones</h1>
+      <p class="text-sm mt-0.5 sync-subtitle">
+        Dos workers independientes: ingesta desde dispositivos y consolidación de punches.
+      </p>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+    <div id="flash-msg" class="mb-4 rounded-md px-4 py-3 text-sm hidden"></div>
+
+    {/* ── Section 1: Ingesta ─────────────────────────────────────────────── */}
+    <h2 class="text-base font-semibold sync-title mb-3 mt-2">Ingesta de marcaciones</h2>
+    <p class="text-xs sync-subtitle mb-4">
+      Lee TXT de carpeta compartida o consulta API del reloj e inserta punches en el sistema.
+    </p>
+
+    {devices.length === 0 ? (
+      <section class="sync-card border rounded-lg px-8 py-12 text-center mb-8">
+        <p class="text-sm sync-subtitle">No hay dispositivos registrados.</p>
+        <a href="/attendance/devices" class="text-sm text-blue-500 hover:underline mt-1 inline-block">
+          Ir a Dispositivos
+        </a>
+      </section>
+    ) : (
+      <section class="space-y-3 mb-8">
+        {devices.map((d) => {
+          const s = ingByDevice.get(d.id)
+          const isRunning = s?.status === 'running'
+          return (
+            <div class="sync-card border rounded-lg overflow-hidden">
+              <div class="px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-3 min-w-0">
+                  <span class={`sync-dot ${isRunning ? 'sync-dot-on' : 'sync-dot-off'}`}></span>
+                  <div class="min-w-0">
+                    <div class="font-medium sync-title text-sm truncate">
+                      {d.name}
+                      <span class="ml-2 font-mono text-xs sync-mute">{d.code}</span>
+                    </div>
+                    <div class="text-xs sync-subtitle mt-0.5">
+                      {d.syncSourcePath ?? d.connectionMethod}
+                      {s && (
+                        <span class="ml-2">
+                          — cada {s.intervalMinutes} min
+                          {s.autoStart && <span class="ml-1 sync-badge-auto">auto</span>}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  {isRunning ? (
+                    <button type="button" class="sync-btn sync-btn-stop px-3 py-1.5 rounded-md text-xs font-medium"
+                      data-action="stop" data-worker="ingestion" data-device-id={d.id}>Detener</button>
+                  ) : (
+                    <button type="button" class="sync-btn sync-btn-start px-3 py-1.5 rounded-md text-xs font-medium"
+                      data-action="start" data-worker="ingestion" data-device-id={d.id}>Iniciar</button>
+                  )}
+                  <button type="button" class="sync-btn sync-btn-trigger px-3 py-1.5 rounded-md text-xs font-medium"
+                    data-action="trigger" data-worker="ingestion" data-device-id={d.id}>Ingestar ahora</button>
+                  <button type="button" class="sync-btn-config px-2 py-1.5 rounded-md text-xs"
+                    data-toggle-config={`ing-${d.id}`} title="Configuración">&#9881;</button>
+                </div>
+              </div>
+
+              {s && (
+                <div class="px-5 pb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                  <div><span class="sync-label">Última ingesta:</span><span class="sync-mute ml-1">{fmtDate(s.lastRunAt)}</span></div>
+                  <div><span class="sync-label">Punches ingresados:</span><span class="sync-mute ml-1">{s.punchesIngested.toLocaleString()}</span></div>
+                  {s.lastError && (
+                    <div class="basis-full"><span class="sync-label text-red-400">Error:</span><span class="text-red-400 ml-1">{s.lastError}</span></div>
+                  )}
+                </div>
+              )}
+
+              <div class="sync-config-panel hidden border-t px-5 py-3" id={`config-ing-${d.id}`}>
+                <div class="flex flex-wrap gap-4 items-end">
+                  <div>
+                    <label class="block text-xs font-medium sync-label mb-1">Intervalo (min)</label>
+                    <input type="number" min="1" max="1440" value={s?.intervalMinutes ?? 5}
+                      class="w-24 px-2 py-1.5 text-sm border rounded-md sync-input" data-interval-input={`ing-${d.id}`} />
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <input type="checkbox" id={`auto-ing-${d.id}`} checked={s?.autoStart ?? false} data-autostart-input={`ing-${d.id}`} />
+                    <label for={`auto-ing-${d.id}`} class="text-xs sync-label">Auto-inicio</label>
+                  </div>
+                  <button type="button" class="sync-btn sync-btn-start px-3 py-1.5 rounded-md text-xs font-medium"
+                    data-action="restart" data-worker="ingestion" data-device-id={d.id}>Aplicar</button>
+                </div>
+              </div>
+
+              <div class="border-t sync-rule">
+                <button type="button" class="w-full px-5 py-2 text-xs sync-mute hover:underline text-left"
+                  data-toggle-log={`ing-${d.id}`}>Ver historial &#9662;</button>
+                <div class="hidden px-5 pb-3" id={`log-ing-${d.id}`}>
+                  <table class="sync-log-table w-full text-xs">
+                    <thead><tr>
+                      <th class="text-left py-1.5 px-2">Fecha</th>
+                      <th class="text-left py-1.5 px-2">Estado</th>
+                      <th class="text-right py-1.5 px-2">Nuevos</th>
+                      <th class="text-right py-1.5 px-2">Duplicados</th>
+                      <th class="text-left py-1.5 px-2">Error</th>
+                    </tr></thead>
+                    <tbody id={`log-body-ing-${d.id}`}>
+                      <tr><td colspan="5" class="py-4 text-center sync-mute">Cargando...</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </section>
+    )}
+
+    {/* ── Section 2: Consolidación ───────────────────────────────────────── */}
+    <h2 class="text-base font-semibold sync-title mb-3">Consolidación automática</h2>
+    <p class="text-xs sync-subtitle mb-4">
+      Toma punches nuevos (de cualquier fuente) y genera el resumen diario por empleado.
+    </p>
+
+    <section class="sync-card border rounded-lg overflow-hidden mb-8">
+      <div class="px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-3">
+          <span class={`sync-dot ${conRunning ? 'sync-dot-on' : 'sync-dot-off'}`}></span>
+          <div>
+            <div class="font-medium sync-title text-sm">Consolidación</div>
+            <div class="text-xs sync-subtitle mt-0.5">
+              {consolidationState
+                ? `Cada ${consolidationState.intervalMinutes} min${consolidationState.autoStart ? '' : ''}`
+                : 'No configurado'}
+              {consolidationState?.autoStart && <span class="ml-1 sync-badge-auto">auto</span>}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          {conRunning ? (
+            <button type="button" class="sync-btn sync-btn-stop px-3 py-1.5 rounded-md text-xs font-medium"
+              data-action="stop" data-worker="consolidation">Detener</button>
+          ) : (
+            <button type="button" class="sync-btn sync-btn-start px-3 py-1.5 rounded-md text-xs font-medium"
+              data-action="start" data-worker="consolidation">Iniciar</button>
+          )}
+          <button type="button" class="sync-btn sync-btn-trigger px-3 py-1.5 rounded-md text-xs font-medium"
+            data-action="trigger" data-worker="consolidation">Consolidar ahora</button>
+          <button type="button" class="sync-btn-config px-2 py-1.5 rounded-md text-xs"
+            data-toggle-config="con" title="Configuración">&#9881;</button>
+        </div>
+      </div>
+
+      {consolidationState && (
+        <div class="px-5 pb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+          <div><span class="sync-label">Última consolidación:</span><span class="sync-mute ml-1">{fmtDate(consolidationState.lastRunAt)}</span></div>
+          <div><span class="sync-label">Días consolidados:</span><span class="sync-mute ml-1">{consolidationState.daysConsolidated.toLocaleString()}</span></div>
+          <div><span class="sync-label">HWM (punch ID):</span><span class="sync-mute ml-1">{consolidationState.highWaterMark.toLocaleString()}</span></div>
+          {consolidationState.lastError && (
+            <div class="basis-full"><span class="sync-label text-red-400">Error:</span><span class="text-red-400 ml-1">{consolidationState.lastError}</span></div>
+          )}
+        </div>
+      )}
+
+      <div class="sync-config-panel hidden border-t px-5 py-3" id="config-con">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div>
+            <label class="block text-xs font-medium sync-label mb-1">Intervalo (min)</label>
+            <input type="number" min="1" max="1440" value={consolidationState?.intervalMinutes ?? 15}
+              class="w-24 px-2 py-1.5 text-sm border rounded-md sync-input" data-interval-input="con" />
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="auto-con" checked={consolidationState?.autoStart ?? false} data-autostart-input="con" />
+            <label for="auto-con" class="text-xs sync-label">Auto-inicio</label>
+          </div>
+          <button type="button" class="sync-btn sync-btn-start px-3 py-1.5 rounded-md text-xs font-medium"
+            data-action="restart" data-worker="consolidation">Aplicar</button>
+        </div>
+      </div>
+
+      <div class="border-t sync-rule">
+        <button type="button" class="w-full px-5 py-2 text-xs sync-mute hover:underline text-left"
+          data-toggle-log="con">Ver historial &#9662;</button>
+        <div class="hidden px-5 pb-3" id="log-con">
+          <table class="sync-log-table w-full text-xs">
+            <thead><tr>
+              <th class="text-left py-1.5 px-2">Fecha</th>
+              <th class="text-left py-1.5 px-2">Estado</th>
+              <th class="text-right py-1.5 px-2">Punches</th>
+              <th class="text-right py-1.5 px-2">Días</th>
+              <th class="text-left py-1.5 px-2">Error</th>
+            </tr></thead>
+            <tbody id="log-body-con">
+              <tr><td colspan="5" class="py-4 text-center sync-mute">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      var flash = document.getElementById('flash-msg')
+
+      function showFlash(msg, ok) {
+        if (!flash) return
+        flash.textContent = msg
+        flash.className = 'mb-4 rounded-md px-4 py-3 text-sm ' +
+          (ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700')
+      }
+
+      function workerAction(worker, op, deviceId, body) {
+        var qs = 'worker=' + worker + '&op=' + op
+        if (deviceId) qs += '&deviceId=' + deviceId
+        return fetch('/api/attendance/sync?' + qs, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body || {}),
+        }).then(function (r) { return r.json().catch(function () { return {} }) })
+      }
+
+      document.querySelectorAll('[data-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var action = btn.getAttribute('data-action')
+          var worker = btn.getAttribute('data-worker')
+          var deviceId = btn.getAttribute('data-device-id') || ''
+          var configKey = worker === 'consolidation' ? 'con' : 'ing-' + deviceId
+          var body = {}
+
+          if (action === 'start' || action === 'restart') {
+            var intEl = document.querySelector('[data-interval-input="' + configKey + '"]')
+            var autoEl = document.querySelector('[data-autostart-input="' + configKey + '"]')
+            if (intEl) body.intervalMinutes = parseInt(intEl.value, 10) || (worker === 'consolidation' ? 15 : 5)
+            if (autoEl) body.autoStart = autoEl.checked
+          }
+
+          workerAction(worker, action, deviceId, body).then(function (json) {
+            if (json.ok) {
+              var labels = { start: 'Iniciado', stop: 'Detenido', restart: 'Reiniciado', trigger: 'Ejecutado' }
+              showFlash((worker === 'consolidation' ? 'Consolidación' : 'Ingesta') + ': ' + (labels[action] || 'OK'), true)
+              setTimeout(function () { window.location.reload() }, 1200)
+            } else {
+              showFlash(json.error || 'Error', false)
+            }
+          }).catch(function (err) { showFlash('Error de red: ' + err, false) })
+        })
+      })
+
+      document.querySelectorAll('[data-toggle-config]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var id = btn.getAttribute('data-toggle-config')
+          var panel = document.getElementById('config-' + id)
+          if (panel) panel.classList.toggle('hidden')
+        })
+      })
+
+      document.querySelectorAll('[data-toggle-log]').forEach(function (btn) {
+        btn.addEventListener('click', async function () {
+          var key = btn.getAttribute('data-toggle-log')
+          var container = document.getElementById('log-' + key)
+          if (!container) return
+          if (!container.classList.contains('hidden')) { container.classList.add('hidden'); return }
+          container.classList.remove('hidden')
+
+          var tbody = document.getElementById('log-body-' + key)
+          if (!tbody) return
+          var isCon = key === 'con'
+          var deviceId = isCon ? '_' : key.replace('ing-', '')
+          var fetchUrl = isCon
+            ? '/api/attendance/sync/_?view=log&worker=consolidation&limit=20'
+            : '/api/attendance/sync/' + deviceId + '?view=log&worker=ingestion&limit=20'
+
+          try {
+            var res = await fetch(fetchUrl)
+            var json = await res.json().catch(function () { return {} })
+            var logs = json.data || []
+            if (logs.length === 0) {
+              tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center sync-mute">Sin registros.</td></tr>'
+              return
+            }
+            tbody.innerHTML = logs.map(function (l) {
+              var cls = l.status === 'success' ? 'sync-log-ok' : l.status === 'partial' ? 'sync-log-partial' : 'sync-log-err'
+              var dt = l.startedAt ? new Date(l.startedAt).toLocaleString('es-PA') : '—'
+              var col3 = isCon ? (l.punchesFound || 0) : (l.punchesNew || 0)
+              var col4 = isCon ? (l.daysAffected || 0) : (l.punchesSkipped || 0)
+              return '<tr class="border-t sync-rule">' +
+                '<td class="py-1.5 px-2 sync-mute whitespace-nowrap">' + dt + '</td>' +
+                '<td class="py-1.5 px-2"><span class="sync-log-badge ' + cls + '">' + l.status + '</span></td>' +
+                '<td class="py-1.5 px-2 text-right">' + col3 + '</td>' +
+                '<td class="py-1.5 px-2 text-right">' + col4 + '</td>' +
+                '<td class="py-1.5 px-2 sync-mute truncate max-w-[200px]">' + (l.errorMessage || '—') + '</td></tr>'
+            }).join('')
+          } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-red-400">Error al cargar.</td></tr>'
+          }
+        })
+      })
+    })()
+  </script>
+
+  <style>
+    .sync-title    { color: var(--fore); }
+    .sync-subtitle { color: var(--fore-dim); }
+    .sync-label    { color: var(--fore-dim); font-weight: 500; }
+    .sync-mute     { color: var(--mute); }
+    .sync-card     { background: var(--ink-2); border-color: var(--rule); }
+    .sync-rule     { border-color: var(--rule); }
+    .sync-config-panel { background: var(--ink-3); border-color: var(--rule); }
+    .sync-input    { background: var(--ink-1); border-color: var(--rule); color: var(--fore); }
+    .sync-dot      { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .sync-dot-on   { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,0.5); }
+    .sync-dot-off  { background: var(--mute); }
+    .sync-btn      { transition: background 0.15s; }
+    .sync-btn-start       { background: rgba(16,185,129,0.18); color: #34d399; }
+    .sync-btn-start:hover { background: rgba(16,185,129,0.3); }
+    .sync-btn-stop        { background: rgba(239,68,68,0.18); color: #f87171; }
+    .sync-btn-stop:hover  { background: rgba(239,68,68,0.3); }
+    .sync-btn-trigger       { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .sync-btn-trigger:hover { background: rgba(96,165,250,0.3); }
+    .sync-btn-config       { color: var(--mute); background: transparent; }
+    .sync-btn-config:hover { color: var(--fore); background: var(--ink-3); }
+    .sync-badge-auto {
+      display: inline-block; padding: 0 0.375rem; border-radius: 9999px;
+      font-size: 0.625rem; font-weight: 600; text-transform: uppercase;
+      background: rgba(96,165,250,0.18); color: #60a5fa;
+    }
+    .sync-log-table thead tr { color: var(--mute-2); }
+    .sync-log-badge {
+      display: inline-block; padding: 0.0625rem 0.375rem; border-radius: 0.25rem;
+      font-size: 0.625rem; font-weight: 600; text-transform: uppercase;
+    }
+    .sync-log-ok      { background: rgba(16,185,129,0.18); color: #34d399; }
+    .sync-log-partial  { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .sync-log-err      { background: rgba(239,68,68,0.18); color: #f87171; }
+    [data-theme='light'] .sync-card { background: #fff; }
+    [data-theme='light'] .sync-config-panel { background: #f9fafb; }
+    [data-theme='light'] .sync-input { background: #fff; }
+    [data-theme='light'] .sync-btn-start { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .sync-btn-start:hover { background: #a7f3d0; }
+    [data-theme='light'] .sync-btn-stop { background: #fee2e2; color: #991b1b; }
+    [data-theme='light'] .sync-btn-stop:hover { background: #fecaca; }
+    [data-theme='light'] .sync-btn-trigger { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .sync-btn-trigger:hover { background: #bfdbfe; }
+    [data-theme='light'] .sync-badge-auto { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .sync-log-ok      { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .sync-log-partial  { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .sync-log-err      { background: #fee2e2; color: #991b1b; }
+  </style>
+</AppLayout>
