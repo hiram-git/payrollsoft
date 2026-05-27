@@ -8,7 +8,7 @@ const msgError = Astro.url.searchParams.get('error') ?? ''
 ---
 
 <AppLayout title="Nuevo horario">
-  <div class="px-6 py-8 max-w-3xl mx-auto">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
 
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-1.5 text-sm text-gray-500 mb-6">
@@ -204,6 +204,36 @@ const msgError = Astro.url.searchParams.get('error') ?? ''
             </div>
           </div>
 
+          <!-- Días de la semana -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1.5">
+              Días de la semana <span class="text-red-500">*</span>
+            </label>
+            <p class="text-xs text-gray-500 mb-3">Seleccioná al menos un día. El calendario empresarial usa este valor para asignar este turno automáticamente.</p>
+            <div class="flex flex-wrap gap-2">
+              {[
+                { v: 1, label: 'Lun' },
+                { v: 2, label: 'Mar' },
+                { v: 3, label: 'Mié' },
+                { v: 4, label: 'Jue' },
+                { v: 5, label: 'Vie' },
+                { v: 6, label: 'Sáb' },
+                { v: 7, label: 'Dom' },
+              ].map((d) => (
+                <label class="weekday-chip">
+                  <input
+                    type="checkbox"
+                    name="weekdays"
+                    value={d.v}
+                    checked={d.v <= 5}
+                    class="weekday-chip-input"
+                  />
+                  <span class="weekday-chip-label">{d.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <!-- Default -->
           <div class="flex items-center gap-2.5">
             <input
@@ -236,4 +266,47 @@ const msgError = Astro.url.searchParams.get('error') ?? ''
       </form>
     </div>
   </div>
+
+  <style>
+    .weekday-chip {
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .weekday-chip-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .weekday-chip-label {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 56px;
+      padding: 6px 12px;
+      border: 1px solid var(--rule, #d1d5db);
+      border-radius: 999px;
+      background: var(--ink-3, #fff);
+      color: var(--mute-2, #6b7280);
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+    }
+    .weekday-chip:hover .weekday-chip-label {
+      border-color: var(--rule-hi, #9ca3af);
+      color: var(--fore-dim, #374151);
+    }
+    .weekday-chip-input:checked + .weekday-chip-label {
+      background: var(--navy, #2563eb);
+      border-color: var(--navy, #2563eb);
+      color: #fff;
+    }
+    .weekday-chip-input:focus-visible + .weekday-chip-label {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--navy-soft, rgba(37, 99, 235, 0.25));
+    }
+  </style>
 </AppLayout>

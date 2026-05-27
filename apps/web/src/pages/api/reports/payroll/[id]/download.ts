@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro'
+import { getIdentity } from '../../../../../lib/auth'
 import {
   fetchPayrollReportData,
   parsePayrollReportFilters,
@@ -6,9 +7,9 @@ import {
 } from '../../../../../lib/reports/payroll-data'
 import { renderPayrollPdfBuffer } from '../../../../../lib/reports/payroll-pdf-renderer'
 import { getReportStorage } from '../../../../../lib/reports/storage'
+import { resolveTenantSlugFromCookie } from '../../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 type ReportState = {
   status: 'generated' | 'not_generated'
@@ -19,43 +20,52 @@ type ReportState = {
 }
 
 /**
- * Stream the Planilla PDF to the browser. Strategy is dictated by the
- * tenant's `payrollReportMode`:
+ * Stream the Planilla PDF to the browser. La estrategia depende del
+ * `payrollReportMode` del tenant:
  *
- *   file_storage + valid pdfPath → fetch from R2 and stream (instant).
- *   on_demand                    → re-render live and stream.
+ *   file_storage  + pdfPath válido → leer desde R2/S3 y streamear.
+ *   local_storage + pdfPath válido → leer desde disco y streamear.
+ *   on_demand                      → siempre renderizar al vuelo.
  *
- * If the stored object is missing (e.g. the tenant just switched modes,
- * or the row carries a legacy local /tmp/... path) we fall back to a
- * live render instead of failing — the user still gets their PDF.
+ * Si el objeto persistido no se encuentra (cambio de modo, archivo
+ * borrado del bucket, etc.) caemos a render en vivo en lugar de
+ * romper la descarga — el usuario igual recibe su PDF.
  */
 export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
+  const identity = getIdentity(cookies)
 
   const { id } = params
   if (!id) return new Response('ID de planilla requerido', { status: 400 })
 
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
 
-  const stateRes = await fetch(`${API_URL}/payroll/${id}/report`, { headers })
+  const [stateRes, companyRes] = await Promise.all([
+    fetch(`${API_URL}/payroll/${id}/report`, { headers }),
+    fetch(`${API_URL}/company`, { headers }),
+  ])
   if (stateRes.status === 401) return redirect('/login')
   if (stateRes.status === 404) return new Response('Planilla no encontrada', { status: 404 })
   if (!stateRes.ok) return new Response('Error al consultar el estado del reporte', { status: 500 })
 
   const stateJson = (await stateRes.json()) as { data: ReportState }
   const state = stateJson.data
-  if (state.status !== 'generated') {
-    return new Response('El reporte no ha sido generado', { status: 409 })
+
+  let payrollReportMode: string | null = null
+  if (companyRes.ok) {
+    const cj = (await companyRes.json()) as {
+      data: { payrollReportMode?: string | null } | null
+    }
+    payrollReportMode = cj.data?.payrollReportMode ?? null
   }
 
-  // Try the stored object first. We only treat keys that *don't* look like
-  // legacy local filesystem paths (i.e. don't start with '/') as
-  // R2-addressable; anything else is silently ignored and the download
-  // falls through to a live render.
+  // Try the stored object first. Solo usamos el storage si el modo lo
+  // soporta y el pdfPath no es una ruta local-legacy absoluta (`/tmp/...`).
   let pdfBytes: Uint8Array | null = null
   if (state.pdfPath && !state.pdfPath.startsWith('/')) {
-    const storage = getReportStorage('file_storage')
+    const storage = getReportStorage(payrollReportMode)
     if (storage) {
       try {
         pdfBytes = await storage.get(state.pdfPath)
@@ -83,9 +93,15 @@ export const GET: APIRoute = async ({ params, cookies, url, redirect }) => {
     try {
       // Live re-render preserves the original generator's identity in
       // the footer so the report still answers "who produced this".
+      // If the row was never explicitly generated (typical in on_demand
+      // mode where the user hits Download directly), fall back to the
+      // current viewer so the footer still attributes the PDF.
       pdfBytes = await renderPayrollPdfBuffer({
         ...result.data,
-        generatedBy: { name: state.generatedByName, email: state.generatedByEmail },
+        generatedBy: {
+          name: state.generatedByName ?? identity?.name ?? null,
+          email: state.generatedByEmail ?? identity?.email ?? null,
+        },
       })
     } catch (err) {
       console.error('Payroll PDF render error:', err)

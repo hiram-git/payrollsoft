@@ -3,9 +3,9 @@ import type {
   PdfPersonnelEmployee,
   PdfPersonnelGeneratedBy,
 } from '../pdf/personnel-pdf'
+import { resolveTenantSlugFromCookie } from '../tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 // API clamps `limit` at 100; walk pages to gather every employee for a
 // tenant + payroll-type combo. Cap covers ~5,000 employees per type.
@@ -55,7 +55,10 @@ export async function fetchPersonnelReportData(
   authCookie: string,
   filters: PersonnelReportFilters = {}
 ): Promise<PersonnelFetchResult> {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+  const headers = {
+    Cookie: `auth=${authCookie}`,
+    'X-Tenant': resolveTenantSlugFromCookie(authCookie),
+  }
   const employees: PdfPersonnelEmployee[] = []
   const activeOnly = filters.activeOnly ?? true
 

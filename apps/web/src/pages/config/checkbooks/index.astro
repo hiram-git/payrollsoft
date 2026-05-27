@@ -1,0 +1,216 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'treasury:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canWrite = can(identity, 'treasury:write')
+
+type Bank = { id: string; name: string; isActive: number }
+type Checkbook = {
+  id: string
+  code: string
+  name: string
+  bankId: string | null
+  accountNumber: string
+  startNumber: number
+  endNumber: number
+  nextNumber: number
+  purpose: 'employees' | 'creditors' | 'general'
+  isActive: number
+}
+
+let banks: Bank[] = []
+let checkbooks: Checkbook[] = []
+let loadError = ''
+try {
+  const [bRes, cRes] = await Promise.all([
+    fetch(`${API_URL}/banks`, { headers }),
+    fetch(`${API_URL}/treasury/checkbooks`, { headers }),
+  ])
+  if (bRes.status === 401) return Astro.redirect('/login')
+  if (bRes.ok) banks = ((await bRes.json()) as { data: Bank[] }).data ?? []
+  if (cRes.ok) checkbooks = ((await cRes.json()) as { data: Checkbook[] }).data ?? []
+} catch {
+  loadError = 'No se pudo conectar con el servidor.'
+}
+
+const banksById = new Map(banks.map((b) => [b.id, b]))
+const success = Astro.url.searchParams.get('flash') === 'created'
+const error =
+  Astro.url.searchParams.get('flash') === 'error'
+    ? Astro.url.searchParams.get('msg') || 'Error.'
+    : ''
+
+function purposeLabel(p: string): string {
+  return p === 'employees' ? 'Empleados' : p === 'creditors' ? 'Acreedores' : 'General'
+}
+function pad7(n: number): string {
+  return String(n).padStart(7, '0')
+}
+---
+<AppLayout title="Configuración · Chequeras">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Chequeras</h1>
+        <p class="page-sub">{checkbooks.length} chequeras · El campo "siguiente" indica el próximo número a usar</p>
+      </div>
+    </div>
+
+    {loadError && <div class="alert alert-err">{loadError}</div>}
+    {success && <div class="alert alert-ok">Chequera creada correctamente.</div>}
+    {error && <div class="alert alert-err">{error}</div>}
+
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Chequeras registradas</span>
+        {canWrite && <button type="button" id="btnNew" class="btn-primary">+ Nueva</button>}
+      </div>
+
+      {canWrite && (
+        <div id="newItemForm" class="new-form hidden">
+          <form method="POST" action="/api/treasury/action?op=checkbook-create" class="new-form-grid">
+            <input type="hidden" name="_redirect" value="/config/checkbooks" />
+            <div class="field">
+              <label class="label">Código *</label>
+              <input type="text" name="code" class="inp" required maxlength="30" />
+            </div>
+            <div class="field flex-1">
+              <label class="label">Nombre *</label>
+              <input type="text" name="name" class="inp" required maxlength="160" placeholder="ej. Chequera BNP" />
+            </div>
+            <div class="field">
+              <label class="label">Banco</label>
+              <select name="bankId" class="inp">
+                <option value="">— Sin banco —</option>
+                {banks.filter((b) => b.isActive === 1).map((b) => (
+                  <option value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+            <div class="field">
+              <label class="label">Cuenta *</label>
+              <input type="text" name="accountNumber" class="inp" required maxlength="40" />
+            </div>
+            <div class="field">
+              <label class="label">N° inicial *</label>
+              <input type="number" name="startNumber" class="inp w-num" required min="1" />
+            </div>
+            <div class="field">
+              <label class="label">N° final *</label>
+              <input type="number" name="endNumber" class="inp w-num" required min="1" />
+            </div>
+            <div class="field">
+              <label class="label">Propósito *</label>
+              <select name="purpose" class="inp" required>
+                <option value="general">General</option>
+                <option value="employees">Empleados</option>
+                <option value="creditors">Acreedores</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-ok">Guardar</button>
+              <button type="button" id="btnCancelNew" class="btn-ghost">Cancelar</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {checkbooks.length === 0 ? (
+        <div class="empty-state">No hay chequeras registradas.</div>
+      ) : (
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th class="th w-24">Código</th>
+              <th class="th">Nombre</th>
+              <th class="th">Banco</th>
+              <th class="th w-28">Cuenta</th>
+              <th class="th w-32">Rango</th>
+              <th class="th w-24">Siguiente</th>
+              <th class="th w-24">Propósito</th>
+            </tr>
+          </thead>
+          <tbody>
+            {checkbooks.map((c) => {
+              const exhausted = c.nextNumber > c.endNumber
+              return (
+                <tr class="tr">
+                  <td class="td td-code w-24">{c.code}</td>
+                  <td class="td">{c.name}</td>
+                  <td class="td td-sub">{banksById.get(c.bankId ?? '')?.name ?? '—'}</td>
+                  <td class="td td-code w-28">{c.accountNumber}</td>
+                  <td class="td td-code w-32">{pad7(c.startNumber)} → {pad7(c.endNumber)}</td>
+                  <td class="td w-24">
+                    {exhausted ? (
+                      <span class="status-badge status-err">Agotada</span>
+                    ) : (
+                      <span class="td-code">{pad7(c.nextNumber)}</span>
+                    )}
+                  </td>
+                  <td class="td td-sub w-24">{purposeLabel(c.purpose)}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+
+  <style>
+    .page        { padding: 2rem; }
+    .page-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.5rem; }
+    .page-title  { font-size:1.25rem; font-weight:600; color:var(--fore); margin:0 0 .25rem; font-family:var(--f-display); }
+    .page-sub    { font-size:.8125rem; color:var(--mute); margin:0; }
+    .alert       { padding:.75rem 1rem; border-radius:6px; font-size:.8125rem; margin-bottom:1rem; border:1px solid; }
+    .alert-ok    { background:color-mix(in srgb, var(--ok) 10%, var(--ink-2)); border-color:var(--ok); color:var(--ok); }
+    .alert-err   { background:color-mix(in srgb, var(--err) 10%, var(--ink-2)); border-color:var(--err); color:var(--err); }
+    .card        { background:var(--ink-2); border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
+    .card-header { display:flex; align-items:center; justify-content:space-between; padding:.875rem 1.25rem; border-bottom:1px solid var(--rule); }
+    .card-title  { font-size:.875rem; font-weight:600; color:var(--fore); }
+    .new-form     { padding:1rem 1.25rem; border-bottom:1px solid var(--rule); background:var(--ink-3); }
+    .new-form-grid { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; }
+    .field       { display:flex; flex-direction:column; gap:.25rem; }
+    .flex-1      { flex:1; }
+    .w-num       { width:6rem; }
+    .label       { font-size:.75rem; font-weight:500; color:var(--mute-2); }
+    .form-actions { display:flex; gap:.5rem; align-items:flex-end; }
+    .tbl { width:100%; border-collapse:collapse; font-size:.8125rem; table-layout:fixed; }
+    .th  { padding:.625rem 1rem; text-align:left; font-size:.75rem; font-weight:600; color:var(--mute); text-transform:uppercase; letter-spacing:.04em; background:var(--ink-3); border-bottom:1px solid var(--rule); }
+    .td  { padding:.75rem 1rem; color:var(--fore); border-bottom:1px solid var(--rule); vertical-align:middle; }
+    .tr:last-child .td { border-bottom:none; }
+    .tr:hover .td { background:var(--ink-3); }
+    .td-code { font-family:var(--f-mono); font-size:.75rem; color:var(--mute-2); }
+    .td-sub  { font-size:.8125rem; color:var(--fore-dim); }
+    .w-20 { width:5rem; } .w-24 { width:6rem; } .w-28 { width:7rem; } .w-32 { width:8rem; }
+    .status-badge { display:inline-block; padding:.125rem .5rem; border-radius:9999px; font-size:.6875rem; font-weight:500; text-transform:uppercase; letter-spacing:.04em; }
+    .status-err  { background:color-mix(in srgb, var(--err) 14%, transparent); color:var(--err); }
+    .btn-primary { background:var(--navy); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; transition:background .15s; }
+    .btn-primary:hover { background:var(--navy-hi); }
+    .btn-ok      { background:var(--ok); color:#fff; border:none; padding:.5rem .875rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .btn-ok:hover { opacity:.88; }
+    .btn-ghost   { background:transparent; color:var(--mute-2); border:1px solid var(--rule); padding:.5rem .875rem; border-radius:6px; font-size:.8125rem; cursor:pointer; white-space:nowrap; }
+    .btn-ghost:hover { background:var(--ink-4); }
+    .inp { background:var(--ink); color:var(--fore); border:1px solid var(--rule); border-radius:5px; padding:.4375rem .625rem; font-size:.8125rem; outline:none; font-family:inherit; width:100%; }
+    .inp:focus { border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft); }
+    .empty-state { padding:3rem; text-align:center; color:var(--mute); font-size:.875rem; }
+    .hidden { display:none !important; }
+  </style>
+
+  <script is:inline>
+    document.getElementById('btnNew')?.addEventListener('click', function() {
+      document.getElementById('newItemForm')?.classList.toggle('hidden')
+    })
+    document.getElementById('btnCancelNew')?.addEventListener('click', function() {
+      document.getElementById('newItemForm')?.classList.add('hidden')
+    })
+  </script>
+</AppLayout>

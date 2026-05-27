@@ -1,26 +1,69 @@
 /**
- * Seed script — creates demo data for local development and Railway
- * Usage: bun --env-file ../../.env src/seed.ts   (local)
- *        bun src/seed.ts                          (Railway — DATABASE_URL injected)
+ * Seed script — datos demo idempotentes para cualquier tenant.
  *
- * Requires migrations to have been applied first.
- * All inserts are idempotent (ON CONFLICT DO UPDATE / DO NOTHING).
+ * Modos:
  *
- * Creates:
- *  Public schema:
- *    - 1 super admin  (superadmin@payroll.dev / SuperAdmin123!)
- *    - 1 tenant       (slug: demo)
+ *   bun src/seed.ts
+ *      Default: siembra el tenant `demo` (super admin global, tenant
+ *      "Demo Company", admin@demo.com con tenant_admin) más todo el
+ *      catálogo demo (cargos, conceptos, etc.).
  *
- *  Tenant demo schema:
- *    - 1 usuario admin (admin@demo.com / Admin123!)
- *    - 1 función       (ADM - Administrativo)
- *    - 1 cargo         (EMP - Empleado General)
- *    - 2 departamentos (ADMIN → RRHH)
- *    - 1 horario       (Turno Regular 8-5)
- *    - 1 acreedor      (BN - Banco Nacional) + su concepto vinculado
- *    - 5 conceptos de nómina (SUELDO, SS, SE, SSP, SEP)
+ *   bun src/seed.ts --tenant=<slug> [--name="..."] [--admin-email=...]
+ *                   [--admin-password=...] [--admin-name="..."]
+ *      Siembra el tenant indicado. Si todavía no existe en
+ *      payroll_auth.tenants, lo crea junto al usuario admin con
+ *      tenant_admin. Si ya existe (por ejemplo creado vía el wizard
+ *      del super-admin), salta la creación de auth y solo siembra los
+ *      catálogos demo en su esquema.
+ *
+ *   bun src/seed.ts --tenant=<slug> --data-only
+ *      Fuerza el modo "solo datos demo" — útil cuando un tenant ya
+ *      tiene su admin y solo quieres poblar catálogos.
+ *
+ *   bun src/seed.ts --skip-super-admin
+ *      No toca payroll_auth.super_admins (útil en producción donde
+ *      el super-admin ya está provisionado fuera de banda).
+ *
+ * Todos los inserts son idempotentes (ON CONFLICT DO UPDATE / WHERE
+ * NOT EXISTS), así que correr el seeder múltiples veces es seguro.
  */
 import postgres from 'postgres'
+import { DEFAULT_CONCEPTS } from './default-concepts'
+
+// ─── Argumentos CLI ──────────────────────────────────────────────────────────
+
+const args = process.argv.slice(2)
+function flag(name: string, fallback?: string): string | undefined {
+  const hit = args.find((a) => a === `--${name}` || a.startsWith(`--${name}=`))
+  if (!hit) return fallback
+  if (hit === `--${name}`) return ''
+  return hit.slice(`--${name}=`.length)
+}
+
+// CLI flag → env var → 'demo'. The env var fallback is the reliable
+// path when invoking through `bun run --filter`, which doesn't always
+// forward CLI args after `--`.
+const TENANT_SLUG = flag('tenant') ?? process.env.SEED_TENANT ?? 'demo'
+const TENANT_NAME =
+  flag('name') ?? (TENANT_SLUG === 'demo' ? 'Demo Company' : capitalize(TENANT_SLUG))
+const USER_EMAIL =
+  flag('admin-email') ?? (TENANT_SLUG === 'demo' ? 'admin@demo.com' : `admin@${TENANT_SLUG}.com`)
+const USER_PASSWORD =
+  flag('admin-password') ?? (TENANT_SLUG === 'demo' ? 'Admin123!' : 'ChangeMe123!')
+const USER_NAME =
+  flag('admin-name') ?? (TENANT_SLUG === 'demo' ? 'Demo Admin' : `${TENANT_NAME} Admin`)
+const SKIP_SUPER_ADMIN = flag('skip-super-admin') !== undefined
+const DATA_ONLY = flag('data-only') !== undefined
+
+const SUPER_ADMIN_EMAIL = 'superadmin@payroll.dev'
+const SUPER_ADMIN_PASSWORD = 'SuperAdmin123!'
+const SUPER_ADMIN_NAME = 'Super Admin'
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+
+// ─── Conexiones ──────────────────────────────────────────────────────────────
 
 const url = process.env.DATABASE_URL
 if (!url) {
@@ -28,59 +71,261 @@ if (!url) {
   process.exit(1)
 }
 
-const SUPER_ADMIN_EMAIL = 'superadmin@payroll.dev'
-const SUPER_ADMIN_PASSWORD = 'SuperAdmin123!'
-const SUPER_ADMIN_NAME = 'Super Admin'
-
-const TENANT_SLUG = 'demo'
-const TENANT_NAME = 'Demo Company'
-
-const USER_EMAIL = 'admin@demo.com'
-const USER_PASSWORD = 'Admin123!'
-const USER_NAME = 'Demo Admin'
-
-const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
-  algorithm: 'bcrypt',
-  cost: 12,
+const publicSql = postgres(url, {
+  prepare: false,
+  connection: { search_path: 'payroll_auth,public' },
 })
-const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
-
-const publicSql = postgres(url, { prepare: false })
 const tenantSql = postgres(url, {
   prepare: false,
-  connection: { search_path: `tenant_${TENANT_SLUG},public` },
+  connection: { search_path: `tenant_${TENANT_SLUG},payroll_auth,public` },
 })
 
+// ─── Run ─────────────────────────────────────────────────────────────────────
+
+console.log(`▸ Sembrando tenant: ${TENANT_SLUG}${DATA_ONLY ? '  (solo catálogos)' : ''}`)
+
 try {
-  // ── Super admin ──────────────────────────────────────────────────────────────
-  await publicSql`
-    INSERT INTO super_admins (email, password_hash, name)
-    VALUES (${SUPER_ADMIN_EMAIL}, ${superAdminHash}, ${SUPER_ADMIN_NAME})
-    ON CONFLICT (email) DO UPDATE
-      SET password_hash = EXCLUDED.password_hash,
-          name          = EXCLUDED.name
-  `
-  console.log(`✓ Super admin : ${SUPER_ADMIN_EMAIL}`)
+  // ── Super admin (opcional) ───────────────────────────────────────────────────
+  if (!SKIP_SUPER_ADMIN && !DATA_ONLY) {
+    const superAdminHash = await Bun.password.hash(SUPER_ADMIN_PASSWORD, {
+      algorithm: 'bcrypt',
+      cost: 12,
+    })
+    await publicSql`
+      INSERT INTO payroll_auth.super_admins (email, password_hash, name)
+      VALUES (${SUPER_ADMIN_EMAIL}, ${superAdminHash}, ${SUPER_ADMIN_NAME})
+      ON CONFLICT (email) DO UPDATE
+        SET password_hash = EXCLUDED.password_hash,
+            name          = EXCLUDED.name
+    `
+    console.log(`✓ Super admin : ${SUPER_ADMIN_EMAIL}`)
+  }
 
   // ── Tenant ───────────────────────────────────────────────────────────────────
-  await publicSql`
-    INSERT INTO tenants (slug, name, database_schema)
-    VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`})
-    ON CONFLICT (slug) DO UPDATE
-      SET name = EXCLUDED.name
+  // Si el tenant ya existe (creado vía wizard, p.ej.) no tocamos sus campos
+  // descriptivos. Solo nos aseguramos de que exista.
+  const [existingTenant] = await publicSql<{ id: string; status: string }[]>`
+    SELECT id, status FROM payroll_auth.tenants WHERE slug = ${TENANT_SLUG} LIMIT 1
   `
-  console.log(`✓ Tenant      : ${TENANT_SLUG}`)
+  const tenantPreexisting = !!existingTenant
 
-  // ── Tenant user ──────────────────────────────────────────────────────────────
-  await tenantSql`
-    INSERT INTO users (email, password_hash, name, role)
-    VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'})
-    ON CONFLICT (email) DO UPDATE
-      SET password_hash = EXCLUDED.password_hash,
-          name          = EXCLUDED.name,
-          role          = EXCLUDED.role
+  if (!tenantPreexisting && !DATA_ONLY) {
+    await publicSql`
+      INSERT INTO payroll_auth.tenants (slug, name, database_schema, status)
+      VALUES (${TENANT_SLUG}, ${TENANT_NAME}, ${`tenant_${TENANT_SLUG}`}, 'ACTIVE')
+    `
+    console.log(`✓ Tenant      : ${TENANT_SLUG} (creado)`)
+  } else if (tenantPreexisting) {
+    console.log(`✓ Tenant      : ${TENANT_SLUG} (ya existía, omito recrear)`)
+  }
+
+  // ── Tenant user (solo si no es modo data-only y el tenant lo necesita) ──────
+  // Cuando el tenant fue creado por el wizard ya tiene su admin user;
+  // tocarlo sobrescribiría su contraseña, así que solo creamos el admin
+  // por defecto cuando el tenant fue recién provisionado por este seed.
+  let adminUserId: string | null = null
+  if (!DATA_ONLY && !tenantPreexisting) {
+    const userHash = await Bun.password.hash(USER_PASSWORD, { algorithm: 'bcrypt', cost: 12 })
+    const [userRow] = await tenantSql<{ id: string }[]>`
+      INSERT INTO users (email, password_hash, name, role, is_tenant_admin)
+      VALUES (${USER_EMAIL}, ${userHash}, ${USER_NAME}, ${'ADMIN'}, true)
+      ON CONFLICT (email) DO UPDATE
+        SET password_hash    = EXCLUDED.password_hash,
+            name             = EXCLUDED.name,
+            role             = EXCLUDED.role,
+            is_tenant_admin  = true
+      RETURNING id
+    `
+    adminUserId = userRow.id
+    console.log(`✓ Usuario     : ${USER_EMAIL}`)
+  } else if (!DATA_ONLY) {
+    // Tenant pre-existente: ubicamos al admin actual para asignarle el rol
+    // tenant_admin si todavía no lo tiene.
+    const [row] = await tenantSql<{ id: string }[]>`
+      SELECT id FROM users WHERE is_tenant_admin = true LIMIT 1
+    `
+    adminUserId = row?.id ?? null
+    if (adminUserId) {
+      console.log('✓ Admin       : detectado (no se modifica su contraseña)')
+    }
+  }
+
+  // ── System roles + permissions ───────────────────────────────────────────────
+  // Los nuevos tenants creados vía el wizard ya traen estos roles, pero
+  // re-correr el seed es seguro y refresca permisos si el catálogo creció.
+  type SystemRoleSeed = {
+    code: 'tenant_admin' | 'hr' | 'accountant' | 'viewer'
+    name: string
+    description: string
+    permissions: string[]
+  }
+
+  const tenantAdminPerms = await tenantSql<{ code: string }[]>`
+    SELECT code FROM payroll_auth.permissions_catalog WHERE scope = 'tenant'
   `
-  console.log(`✓ Usuario     : ${USER_EMAIL}`)
+
+  const HR: string[] = [
+    'employees:create',
+    'employees:read',
+    'employees:update',
+    'employees:export',
+    'employees:import',
+    'positions:create',
+    'positions:read',
+    'positions:update',
+    'shifts:create',
+    'shifts:read',
+    'shifts:update',
+    'shifts:assign',
+    'attendance:read',
+    'attendance:mark',
+    'attendance:edit',
+    'attendance:approve',
+    'attendance:import',
+    'vacations:read',
+    'vacations:request',
+    'vacations:approve',
+    'vacations:reject',
+    'vacations:cancel',
+    'loans:create',
+    'loans:read',
+    'loans:update',
+    'advances:create',
+    'advances:read',
+    'creditors:read',
+    'payroll:read',
+    'concepts:read',
+    'catalogs:read',
+    'payslip:read',
+    'payslip:download',
+    'payslip:send_email',
+    'reports:personnel.view',
+    'reports:personnel.export',
+    'reports:attendance.view',
+    'reports:attendance.export',
+  ]
+  const ACCOUNTANT: string[] = [
+    'employees:read',
+    'positions:read',
+    'shifts:read',
+    'attendance:read',
+    'loans:read',
+    'loans:approve',
+    'advances:read',
+    'advances:approve',
+    'creditors:read',
+    'creditors:create',
+    'creditors:update',
+    'payroll:read',
+    'payroll:create',
+    'payroll:generate',
+    'payroll:recalculate',
+    'payroll:approve',
+    'payroll:close',
+    'payroll:export',
+    'concepts:read',
+    'concepts:create',
+    'concepts:update',
+    'catalogs:read',
+    'catalogs:create',
+    'catalogs:update',
+    'payslip:read',
+    'payslip:download',
+    'payslip:send_email',
+    'reports:payroll.view',
+    'reports:payroll.export',
+    'reports:loans.view',
+  ]
+  const VIEWER: string[] = [
+    'employees:read',
+    'positions:read',
+    'shifts:read',
+    'attendance:read',
+    'vacations:read',
+    'loans:read',
+    'advances:read',
+    'creditors:read',
+    'payroll:read',
+    'concepts:read',
+    'catalogs:read',
+    'payslip:read',
+    'reports:payroll.view',
+    'reports:personnel.view',
+    'reports:attendance.view',
+  ]
+
+  const systemRoles: SystemRoleSeed[] = [
+    {
+      code: 'tenant_admin',
+      name: 'Administrador',
+      description: 'Acceso total a la empresa: usuarios, roles, planillas y configuración.',
+      permissions: tenantAdminPerms.map((r) => r.code),
+    },
+    {
+      code: 'hr',
+      name: 'Recursos Humanos',
+      description: 'Gestión de empleados, asistencias, vacaciones y comprobantes.',
+      permissions: HR,
+    },
+    {
+      code: 'accountant',
+      name: 'Contabilidad',
+      description: 'Generación, aprobación y cierre de planillas; conceptos y reportes contables.',
+      permissions: ACCOUNTANT,
+    },
+    {
+      code: 'viewer',
+      name: 'Solo lectura',
+      description: 'Consulta de información sin permisos de edición.',
+      permissions: VIEWER,
+    },
+  ]
+
+  const roleIds = new Map<string, string>()
+  for (const r of systemRoles) {
+    const [{ id }] = await tenantSql<{ id: string }[]>`
+      INSERT INTO roles (code, name, description, is_system)
+      VALUES (${r.code}, ${r.name}, ${r.description}, true)
+      ON CONFLICT (code) DO UPDATE
+        SET name = EXCLUDED.name,
+            description = EXCLUDED.description,
+            is_system = true,
+            updated_at = now()
+      RETURNING id
+    `
+    roleIds.set(r.code, id)
+
+    await tenantSql`DELETE FROM role_permissions WHERE role_id = ${id}`
+    if (r.permissions.length > 0) {
+      const rows = r.permissions.map((code) => ({ role_id: id, permission_code: code }))
+      await tenantSql`
+        INSERT INTO role_permissions ${tenantSql(rows, 'role_id', 'permission_code')}
+        ON CONFLICT (role_id, permission_code) DO NOTHING
+      `
+    }
+  }
+  console.log('✓ Roles       : tenant_admin, hr, accountant, viewer (con permisos)')
+
+  if (adminUserId) {
+    await tenantSql`
+      INSERT INTO user_roles (user_id, role_id)
+      VALUES (${adminUserId}, ${roleIds.get('tenant_admin')})
+      ON CONFLICT (user_id, role_id) DO NOTHING
+    `
+    await tenantSql`
+      UPDATE users SET permissions_version = permissions_version + 1
+       WHERE id = ${adminUserId}
+    `
+    console.log('✓ Asignación  : admin → tenant_admin')
+  }
+
+  // ── company_config singleton ────────────────────────────────────────────────
+  // Idempotente: solo inserta si no hay fila aún (mismo patrón que provisioning).
+  await tenantSql`
+    INSERT INTO company_config (company_name)
+    SELECT ${TENANT_NAME}
+     WHERE NOT EXISTS (SELECT 1 FROM company_config)
+  `
 
   // ── Función ──────────────────────────────────────────────────────────────────
   await tenantSql`
@@ -148,48 +393,34 @@ try {
   `
   console.log('✓ Acreedor    : BN - Banco Nacional')
 
-  // ── Conceptos de nómina ──────────────────────────────────────────────────────
-  const nominaConcepts = [
-    {
-      code: 'SUELDO',
-      name: 'Sueldo',
-      type: 'income',
-      formula: 'SALARIO*0.5',
-    },
-    {
-      code: 'SS',
-      name: 'Seguro Social',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.095',
-    },
-    {
-      code: 'SE',
-      name: 'Seguro Educativo',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.0975',
-    },
-    {
-      code: 'SSP',
-      name: 'Seguro Social Patronal',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.1325',
-    },
-    {
-      code: 'SEP',
-      name: 'Seguro Educativo Patronal',
-      type: 'deduction',
-      formula: 'CONCEPTO("SUELDO")*0.015',
-    },
-  ]
-
-  for (const c of nominaConcepts) {
+  // ── Conceptos de planilla ────────────────────────────────────────────────────
+  // Lista canónica compartida con `provisionTenant` (ver
+  // packages/db/src/default-concepts.ts) para que dev y producción sigan en
+  // sincronía. El seed pisa los flags con los valores canónicos para tener
+  // el mismo punto de partida en cada ejecución.
+  for (const c of DEFAULT_CONCEPTS) {
     await tenantSql`
-      INSERT INTO concepts (code, name, type, formula, is_active)
-      VALUES (${c.code}, ${c.name}, ${c.type}, ${c.formula}, true)
+      INSERT INTO concepts (
+        code, name, type, formula, is_active, unit,
+        print_details, prorates, allow_modify,
+        is_reference_value, use_amount_calc, allow_zero
+      )
+      VALUES (
+        ${c.code}, ${c.name}, ${c.type}, ${c.formula}, true, ${c.unit},
+        ${c.printDetails}, ${c.prorates}, ${c.allowModify},
+        ${c.isReferenceValue}, ${c.useAmountCalc}, ${c.allowZero}
+      )
       ON CONFLICT (code) DO UPDATE
-        SET name    = EXCLUDED.name,
-            type    = EXCLUDED.type,
-            formula = EXCLUDED.formula
+        SET name              = EXCLUDED.name,
+            type              = EXCLUDED.type,
+            formula           = EXCLUDED.formula,
+            unit              = EXCLUDED.unit,
+            print_details     = EXCLUDED.print_details,
+            prorates          = EXCLUDED.prorates,
+            allow_modify      = EXCLUDED.allow_modify,
+            is_reference_value = EXCLUDED.is_reference_value,
+            use_amount_calc   = EXCLUDED.use_amount_calc,
+            allow_zero        = EXCLUDED.allow_zero
     `
     console.log(`✓ Concepto    : ${c.code} - ${c.name}`)
   }
@@ -254,13 +485,51 @@ try {
   }
   console.log('✓ Acumulados    : SALARIO_BASE, HORAS_EXTRAS, COMISIONES, BONIFICACIONES')
 
+  // ── Vínculos de conceptos a frecuencias / tipos de planilla ─────────────────
+  // Los catálogos ya existen en este punto; resolvemos los IDs por code y
+  // poblamos las tablas link para los conceptos que tienen restricciones
+  // declaradas (XIII_MES → solo planillas type/frequency = 'thirteenth').
+  for (const c of DEFAULT_CONCEPTS) {
+    if (!c.frequencyCodes?.length && !c.payrollTypeCodes?.length) continue
+    for (const freqCode of c.frequencyCodes ?? []) {
+      await tenantSql`
+        INSERT INTO concept_frequency_links (concept_id, frequency_id)
+        SELECT c.id, f.id
+        FROM concepts c, concept_frequencies f
+        WHERE c.code = ${c.code} AND f.code = ${freqCode}
+        ON CONFLICT DO NOTHING
+      `
+    }
+    for (const typeCode of c.payrollTypeCodes ?? []) {
+      await tenantSql`
+        INSERT INTO concept_payroll_type_links (concept_id, payroll_type_id)
+        SELECT c.id, t.id
+        FROM concepts c, concept_payroll_types t
+        WHERE c.code = ${c.code} AND t.code = ${typeCode}
+        ON CONFLICT DO NOTHING
+      `
+    }
+    console.log(
+      `✓ Concepto link : ${c.code} → freq=[${c.frequencyCodes?.join(',') ?? ''}] type=[${c.payrollTypeCodes?.join(',') ?? ''}]`
+    )
+  }
+
   console.log('\n✅  Seed completo!')
-  console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
-  console.log(`  Tenant user  : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)
+  if (!SKIP_SUPER_ADMIN && !DATA_ONLY) {
+    console.log(`  Super admin  : ${SUPER_ADMIN_EMAIL} / ${SUPER_ADMIN_PASSWORD}`)
+  }
+  if (!DATA_ONLY && !tenantPreexisting) {
+    console.log(`  Tenant user  : ${USER_EMAIL} / ${USER_PASSWORD}  (X-Tenant: ${TENANT_SLUG})`)
+  } else {
+    console.log(`  Tenant slug  : ${TENANT_SLUG}`)
+  }
 } catch (err) {
   const msg = err instanceof Error ? err.message : String(err)
   if (msg.includes('does not exist') || msg.includes('no existe')) {
-    console.error('\n✗ Tablas no encontradas. Ejecuta las migraciones primero.')
+    console.error(
+      `\n✗ Tablas no encontradas en tenant_${TENANT_SLUG}. Aplica las migraciones primero:`
+    )
+    console.error(`    bun src/migrate.ts --tenant=${TENANT_SLUG}`)
   } else {
     console.error('✗ Seed falló:', msg)
   }

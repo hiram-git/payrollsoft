@@ -1,0 +1,282 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employees:create')) return Astro.redirect('/employees')
+
+const requiredCols = [
+  { name: 'code', desc: 'Código único del empleado (≤50 caracteres).' },
+  { name: 'firstName', desc: 'Nombre.' },
+  { name: 'lastName', desc: 'Apellido.' },
+  { name: 'idNumber', desc: 'Cédula. Debe ser única en la empresa.' },
+  { name: 'hireDate', desc: 'Fecha de ingreso. YYYY-MM-DD o celda con formato fecha.' },
+  { name: 'baseSalary', desc: 'Salario base. Número (ej. 750.00).' },
+]
+
+const optionalCols = [
+  { name: 'email', desc: 'Correo electrónico válido.' },
+  { name: 'phone', desc: 'Teléfono.' },
+  { name: 'socialSecurityNumber', desc: 'Número de seguro social.' },
+  { name: 'cargoCode', desc: 'Código del cargo (debe existir en /config/job-titles).' },
+  { name: 'funcionCode', desc: 'Código de la función.' },
+  { name: 'departamentoCode', desc: 'Código del departamento.' },
+  { name: 'positionCode', desc: 'Código de la posición.' },
+  { name: 'payFrequency', desc: 'biweekly (default) / monthly / weekly.' },
+]
+---
+
+<AppLayout title="Importar empleados">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <!-- Header -->
+    <div class="mb-6">
+      <a href="/employees" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empleados</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Importar empleados</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Carga masiva desde un archivo Excel (.xlsx). Cada fila se procesa contra el endpoint de creación,
+        respetando las validaciones existentes (códigos únicos, cédula única, formatos).
+      </p>
+    </div>
+
+    <!-- Instrucciones + plantilla -->
+    <div class="bg-white border border-gray-200 rounded-lg p-6 mb-6">
+      <div class="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h2 class="text-sm font-medium text-gray-900">Estructura del archivo</h2>
+          <p class="text-xs text-gray-500 mt-0.5">
+            El archivo debe tener una sola hoja con las siguientes columnas en la primera fila.
+            Los nombres en español también son aceptados (p. ej. <code class="font-mono">cedula</code>,
+            <code class="font-mono">salario</code>, <code class="font-mono">fechaIngreso</code>).
+          </p>
+        </div>
+        <a
+          href="/api/employees/import/template"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors flex-shrink-0"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar plantilla
+        </a>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          <h3 class="text-xs font-medium text-gray-700 uppercase tracking-wide mb-2">Obligatorias</h3>
+          <ul class="space-y-1.5 text-sm">
+            {requiredCols.map((c) => (
+              <li class="flex gap-2">
+                <code class="font-mono text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{c.name}</code>
+                <span class="text-gray-500 text-xs leading-relaxed">{c.desc}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3 class="text-xs font-medium text-gray-700 uppercase tracking-wide mb-2">Opcionales</h3>
+          <ul class="space-y-1.5 text-sm">
+            {optionalCols.map((c) => (
+              <li class="flex gap-2">
+                <code class="font-mono text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-1.5 py-0.5 flex-shrink-0">{c.name}</code>
+                <span class="text-gray-500 text-xs leading-relaxed">{c.desc}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form de carga -->
+    <form
+      id="import-form"
+      method="POST"
+      action="/api/employees/import"
+      enctype="multipart/form-data"
+      class="bg-white border border-gray-200 rounded-lg p-6 mb-6"
+    >
+      <h2 class="text-sm font-medium text-gray-900 mb-4">Archivo a importar</h2>
+      <div class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Selecciona un archivo .xlsx</label>
+          <input
+            id="file-input"
+            type="file"
+            name="file"
+            accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            required
+            class="w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:text-gray-700 hover:file:bg-gray-200 file:transition-colors"
+          />
+          <p class="text-xs text-gray-400 mt-1.5">Tamaño máximo: 2 MB. Solo se procesa la primera hoja.</p>
+        </div>
+        <button
+          type="submit"
+          id="btn-submit"
+          class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <span id="btn-label">Importar</span>
+        </button>
+      </div>
+
+      <div
+        id="import-error"
+        hidden
+        class="mt-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"
+      >
+        <div id="import-error-msg" class="font-medium"></div>
+        <pre id="import-error-detail" hidden class="mt-2 whitespace-pre-wrap break-words text-xs font-mono opacity-80"></pre>
+      </div>
+    </form>
+
+    <!-- Resultados -->
+    <section id="import-results" hidden>
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4">
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Total</div>
+          <div class="mt-1 text-2xl font-semibold text-gray-900 tabular-nums" data-stat="total">0</div>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Creadas</div>
+          <div class="mt-1 text-2xl font-semibold text-emerald-700 tabular-nums" data-stat="created">0</div>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Omitidas</div>
+          <div class="mt-1 text-2xl font-semibold text-amber-600 tabular-nums" data-stat="skipped">0</div>
+        </div>
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">Con error</div>
+          <div class="mt-1 text-2xl font-semibold text-red-600 tabular-nums" data-stat="failed">0</div>
+        </div>
+      </div>
+
+      <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <h2 class="text-sm font-medium text-gray-900">Detalle por fila</h2>
+          <a href="/employees" class="text-xs text-blue-600 hover:text-blue-800">Ver lista de empleados →</a>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200 bg-gray-50">
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-16">Fila</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Código</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide w-28">Estado</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Mensaje</th>
+              </tr>
+            </thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    (function () {
+      const form = document.getElementById('import-form')
+      if (!form) return
+      const fileInput = document.getElementById('file-input')
+      const btnSubmit = document.getElementById('btn-submit')
+      const btnLabel = document.getElementById('btn-label')
+      const errorBox = document.getElementById('import-error')
+      const errorMsg = document.getElementById('import-error-msg')
+      const errorDetail = document.getElementById('import-error-detail')
+      const resultsSection = document.getElementById('import-results')
+      const resultsBody = document.getElementById('results-body')
+
+      function showError(message, detail) {
+        errorMsg.textContent = message
+        if (detail) {
+          errorDetail.textContent = detail
+          errorDetail.hidden = false
+        } else {
+          errorDetail.hidden = true
+        }
+        errorBox.hidden = false
+      }
+      function clearError() {
+        errorBox.hidden = true
+        errorDetail.hidden = true
+      }
+
+      const STATUS_LABEL = { created: 'Creada', skipped: 'Omitida', failed: 'Error' }
+      const STATUS_CLASS = {
+        created: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        skipped: 'bg-amber-50 text-amber-700 border-amber-200',
+        failed: 'bg-red-50 text-red-700 border-red-200',
+      }
+
+      function escapeHtml(s) {
+        return String(s ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+      }
+
+      function renderResults(data) {
+        document.querySelector('[data-stat="total"]').textContent   = String(data.summary.total)
+        document.querySelector('[data-stat="created"]').textContent = String(data.summary.created)
+        document.querySelector('[data-stat="skipped"]').textContent = String(data.summary.skipped)
+        document.querySelector('[data-stat="failed"]').textContent  = String(data.summary.failed)
+
+        resultsBody.innerHTML = data.rows
+          .map((r) => `
+            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+              <td class="px-4 py-3 font-mono text-xs text-gray-500 tabular-nums">${r.rowNumber}</td>
+              <td class="px-4 py-3 font-mono text-xs text-gray-700">${escapeHtml(r.code) || '—'}</td>
+              <td class="px-4 py-3 text-gray-900">${escapeHtml(r.fullName) || '—'}</td>
+              <td class="px-4 py-3">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_CLASS[r.status]}">
+                  ${STATUS_LABEL[r.status] ?? r.status}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-xs text-gray-600">${escapeHtml(r.message ?? '')}</td>
+            </tr>
+          `)
+          .join('')
+
+        resultsSection.hidden = false
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        clearError()
+        if (!fileInput.files || fileInput.files.length === 0) {
+          showError('Selecciona un archivo antes de importar.')
+          return
+        }
+        btnSubmit.disabled = true
+        btnLabel.textContent = 'Importando…'
+        try {
+          const res = await fetch('/api/employees/import', {
+            method: 'POST',
+            body: new FormData(form),
+            credentials: 'same-origin',
+          })
+          let payload = null
+          try { payload = await res.json() } catch { /* not JSON */ }
+
+          if (!res.ok || !payload || payload.ok === false) {
+            const message = (payload && (payload.error || payload.message)) || `HTTP ${res.status}`
+            const detail = payload && payload.detail ? payload.detail : undefined
+            showError(message, detail)
+            resultsSection.hidden = true
+            return
+          }
+
+          renderResults(payload)
+        } catch (err) {
+          showError('No se pudo conectar con el servidor.', err && err.message ? err.message : String(err))
+        } finally {
+          btnSubmit.disabled = false
+          btnLabel.textContent = 'Importar'
+        }
+      })
+    })()
+  </script>
+</AppLayout>

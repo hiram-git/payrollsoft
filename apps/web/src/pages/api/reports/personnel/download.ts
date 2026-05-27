@@ -1,9 +1,10 @@
 import type { APIRoute } from 'astro'
 import { fetchPersonnelReportData, personnelFileSlug } from '../../../../lib/reports/personnel-data'
 import { renderPersonnelPdfBuffer } from '../../../../lib/reports/personnel-pdf-renderer'
+import { getReportStorage, isPersistentMode } from '../../../../lib/reports/storage'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 /**
  * Decode the auth JWT (payload only) so we can stamp the generator
@@ -39,6 +40,7 @@ function decodeJwtPayload(token: string): { name?: string; email?: string } | nu
 export const GET: APIRoute = async ({ cookies, url, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const cookieTypeId = cookies.get('payroll.activeTypeId')?.value ?? null
   const queryTypeId = url.searchParams.get('payrollTypeId')
@@ -65,25 +67,67 @@ export const GET: APIRoute = async ({ cookies, url, redirect }) => {
     }
   }
 
-  const fetchResult = await fetchPersonnelReportData(authCookie, {
-    payrollTypeId,
-    payrollTypeName,
-    activeOnly: true,
-  })
-  if (fetchResult.kind === 'unauthorized') return redirect('/login')
-  if (fetchResult.kind === 'error') {
-    return new Response(fetchResult.message, { status: fetchResult.status })
+  // Resolver el modo de almacenamiento del tenant para decidir si
+  // cacheamos el PDF entre descargas. Para persistent modes intentamos
+  // primero leer el objeto guardado; si está, lo servimos al instante.
+  let payrollReportMode: string | null = null
+  try {
+    const cRes = await fetch(`${API_URL}/company`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
+    })
+    if (cRes.ok) {
+      const cj = (await cRes.json()) as {
+        data: { payrollReportMode?: string | null } | null
+      }
+      payrollReportMode = cj.data?.payrollReportMode ?? null
+    }
+  } catch {
+    /* default on_demand */
   }
 
-  const jwt = decodeJwtPayload(authCookie)
-  const generatedBy = jwt ? { name: jwt.name ?? null, email: jwt.email ?? null } : null
+  const storage = isPersistentMode(payrollReportMode) ? getReportStorage(payrollReportMode) : null
+  const storageKey = `reports/personnel/${TENANT}/${payrollTypeId ?? 'all'}.pdf`
 
-  let pdfBytes: Uint8Array
-  try {
-    pdfBytes = await renderPersonnelPdfBuffer({ ...fetchResult.data, generatedBy })
-  } catch (err) {
-    console.error('Personnel PDF render error:', err)
-    return new Response('Error al renderizar el PDF', { status: 500 })
+  let pdfBytes: Uint8Array | null = null
+  if (storage) {
+    try {
+      pdfBytes = await storage.get(storageKey)
+    } catch (err) {
+      console.error('Personnel PDF storage read error:', err)
+      pdfBytes = null
+    }
+  }
+
+  if (!pdfBytes) {
+    const fetchResult = await fetchPersonnelReportData(authCookie, {
+      payrollTypeId,
+      payrollTypeName,
+      activeOnly: true,
+    })
+    if (fetchResult.kind === 'unauthorized') return redirect('/login')
+    if (fetchResult.kind === 'error') {
+      return new Response(fetchResult.message, { status: fetchResult.status })
+    }
+
+    const jwt = decodeJwtPayload(authCookie)
+    const generatedBy = jwt ? { name: jwt.name ?? null, email: jwt.email ?? null } : null
+
+    try {
+      pdfBytes = await renderPersonnelPdfBuffer({ ...fetchResult.data, generatedBy })
+    } catch (err) {
+      console.error('Personnel PDF render error:', err)
+      return new Response('Error al renderizar el PDF', { status: 500 })
+    }
+
+    if (storage) {
+      try {
+        await storage.put({ key: storageKey, bytes: pdfBytes, contentType: 'application/pdf' })
+      } catch (err) {
+        // No-op: si el upload falla igual servimos los bytes recién
+        // renderizados. El operador verá el error en logs.
+        console.error('Personnel PDF storage upload error:', err)
+      }
+    }
   }
 
   const slug = personnelFileSlug(payrollTypeName ?? 'todos')

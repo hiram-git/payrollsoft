@@ -1,0 +1,378 @@
+---
+import SuperAdminLayout from '../../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+const slug = Astro.params.slug ?? ''
+
+type SeedEntry = {
+  applied_at?: string
+  applied_by?: string | null
+  failed_at?: string
+  error?: string
+  stats?: Record<string, unknown>
+}
+type TenantMetadata = {
+  seeds?: Record<string, SeedEntry>
+} & Record<string, unknown>
+type Tenant = {
+  id: string
+  slug: string
+  name: string
+  status: string
+  contactEmail: string | null
+  databaseSchema: string
+  createdAt: string
+  updatedAt: string
+  archivedAt: string | null
+  metadata?: TenantMetadata
+}
+type Provisioning = {
+  state: 'pending' | 'running' | 'done' | 'failed'
+  error: string | null
+  startedAt: string | null
+  finishedAt: string | null
+}
+
+let tenant: Tenant | null = null
+let provisioning: Provisioning | null = null
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/superadmin/tenants/${slug}`, {
+    headers: { Cookie: `auth=${identity.raw}` },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as {
+      data: { tenant: Tenant; provisioning: Provisioning | null }
+    }
+    tenant = json.data.tenant
+    provisioning = json.data.provisioning
+  } else if (res.status === 404) {
+    return Astro.redirect('/superadmin/tenants')
+  } else {
+    error = 'No se pudo cargar la empresa.'
+  }
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+---
+<SuperAdminLayout title={tenant?.name ?? 'Empresa'}>
+  <div class="p-8 max-w-4xl">
+    <div class="mb-6">
+      <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empresas</a>
+      <div class="mt-2 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 tracking-tight">{tenant?.name}</h1>
+          <p class="text-sm text-gray-500 mt-0.5">
+            Slug: <span class="font-mono">{tenant?.slug}</span>
+            <span class="mx-1.5 text-gray-400">·</span>
+            Schema: <span class="font-mono">{tenant?.databaseSchema}</span>
+            <span class="mx-1.5 text-gray-400">·</span>
+            <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+              tenant?.status === 'ACTIVE' ? 'bg-green-50 text-green-700' :
+              tenant?.status === 'PROVISIONING' ? 'bg-amber-50 text-amber-700' :
+              tenant?.status === 'SUSPENDED' ? 'bg-gray-100 text-gray-700' :
+              'bg-gray-100 text-gray-500'
+            }`}>{tenant?.status}</span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {(tenant?.status === 'PROVISIONING' || provisioning?.state === 'running') && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+        <svg class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+          <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+        </svg>
+        Provisionando schema y aplicando migraciones — esta página se refrescará automáticamente.
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <script is:inline>
+      window.SA_FLASH_MESSAGES = {
+        created:       { title: 'Empresa creada',           message: 'La empresa fue aprovisionada correctamente. Esperando que termine la provisión…' },
+        updated:       { title: 'Estado actualizado',       message: 'El estado de la empresa fue actualizado.' },
+        'admin-reset': { title: 'Contraseña actualizada',   message: 'La contraseña del administrador fue restablecida.' },
+      };
+      window.SA_ERROR_MESSAGES = {
+        'no-admin': {
+          title: 'La empresa no tiene administrador',
+          message: 'No se encontró un usuario con is_tenant_admin = true. Re-ejecuta el seed o marca el flag manualmente antes de impersonar.',
+        },
+        'not-active': {
+          title: 'La empresa no está activa',
+          message: 'Solo se puede impersonar a empresas en estado ACTIVE.',
+        },
+        'server-error': {
+          title: 'No se pudo aplicar la acción',
+          message: 'Ocurrió un error al ejecutar la operación.',
+        },
+      };
+    </script>
+
+    {tenant && (
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Info -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Información</h2>
+          <dl class="space-y-2 text-sm">
+            <div class="flex justify-between"><dt class="text-gray-500">Contacto</dt><dd class="text-gray-900">{tenant.contactEmail ?? '—'}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Creada</dt><dd class="text-gray-900">{new Date(tenant.createdAt).toLocaleString('es-PA')}</dd></div>
+            <div class="flex justify-between"><dt class="text-gray-500">Última actualización</dt><dd class="text-gray-900">{new Date(tenant.updatedAt).toLocaleString('es-PA')}</dd></div>
+            {tenant.archivedAt && (
+              <div class="flex justify-between"><dt class="text-gray-500">Archivada</dt><dd class="text-gray-900">{new Date(tenant.archivedAt).toLocaleString('es-PA')}</dd></div>
+            )}
+          </dl>
+        </div>
+
+        <!-- Provisioning -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Provisión</h2>
+          {provisioning ? (
+            <dl class="space-y-2 text-sm">
+              <div class="flex justify-between"><dt class="text-gray-500">Estado</dt><dd class="text-gray-900 font-mono">{provisioning.state}</dd></div>
+              {provisioning.startedAt && (
+                <div class="flex justify-between"><dt class="text-gray-500">Iniciada</dt><dd class="text-gray-900">{new Date(provisioning.startedAt).toLocaleString('es-PA')}</dd></div>
+              )}
+              {provisioning.finishedAt && (
+                <div class="flex justify-between"><dt class="text-gray-500">Finalizada</dt><dd class="text-gray-900">{new Date(provisioning.finishedAt).toLocaleString('es-PA')}</dd></div>
+              )}
+              {provisioning.error && (
+                <div class="rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700 mt-2">{provisioning.error}</div>
+              )}
+            </dl>
+          ) : (
+            <p class="text-sm text-gray-500">Sin información de provisión.</p>
+          )}
+        </div>
+
+        <!-- Lifecycle -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Acciones</h2>
+          <div class="flex flex-wrap items-center gap-3">
+            {tenant.status === 'ACTIVE' && (
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/impersonate`}
+                data-saconfirm
+                data-sa-title="Entrar como administrador"
+                data-sa-message={`Vas a iniciar sesión como administrador de "${tenant.name}" durante 30 minutos. La acción queda registrada en auditoría.`}
+                data-sa-confirm-label="Iniciar sesión"
+                data-sa-tone="primary"
+                data-sa-loading-title="Iniciando sesión"
+                data-sa-loading-message="Generando token de impersonación…"
+                data-sa-success-title="Sesión iniciada"
+                data-sa-success-message="Te estamos llevando al panel del tenant."
+                data-sa-error-title="No se pudo iniciar la impersonación"
+              >
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-blue-600 text-white hover:bg-blue-700">
+                  Entrar como administrador
+                </button>
+              </form>
+            )}
+            {tenant.status !== 'ACTIVE' && tenant.status !== 'ARCHIVED' && (
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/status`}
+                data-saconfirm
+                data-sa-title="Reactivar empresa"
+                data-sa-message={`Vas a reactivar "${tenant.name}". Sus usuarios podrán volver a iniciar sesión.`}
+                data-sa-confirm-label="Reactivar"
+                data-sa-tone="primary"
+                data-sa-loading-title="Reactivando empresa"
+                data-sa-success-title="Empresa reactivada"
+                data-sa-error-title="No se pudo reactivar la empresa"
+              >
+                <input type="hidden" name="status" value="ACTIVE" />
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-green-600 text-white hover:bg-green-700">Reactivar</button>
+              </form>
+            )}
+            {tenant.status === 'ACTIVE' && (
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/status`}
+                data-saconfirm
+                data-sa-title="Suspender empresa"
+                data-sa-message={`Vas a suspender "${tenant.name}". Los usuarios no podrán iniciar sesión hasta reactivarla.`}
+                data-sa-confirm-label="Suspender"
+                data-sa-tone="warning"
+                data-sa-loading-title="Suspendiendo empresa"
+                data-sa-success-title="Empresa suspendida"
+                data-sa-error-title="No se pudo suspender la empresa"
+              >
+                <input type="hidden" name="status" value="SUSPENDED" />
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md bg-gray-700 text-white hover:bg-gray-800">Suspender</button>
+              </form>
+            )}
+            {tenant.status !== 'ARCHIVED' && (
+              <form
+                method="POST"
+                action={`/api/superadmin/tenants/${tenant.slug}/status`}
+                data-saconfirm
+                data-sa-title="Archivar empresa"
+                data-sa-message={`Vas a archivar "${tenant.name}". La acción solo es reversible cambiando el estado manualmente.`}
+                data-sa-confirm-label="Archivar"
+                data-sa-tone="danger"
+                data-sa-loading-title="Archivando empresa"
+                data-sa-success-title="Empresa archivada"
+                data-sa-error-title="No se pudo archivar la empresa"
+              >
+                <input type="hidden" name="status" value="ARCHIVED" />
+                <button type="submit" class="px-3 py-1.5 text-xs rounded-md border border-red-200 text-red-700 hover:bg-red-50">Archivar</button>
+              </form>
+            )}
+          </div>
+
+          <div class="border-t border-gray-200 mt-5 pt-5">
+            <h3 class="text-xs font-medium text-gray-600 uppercase tracking-wide mb-2">Restablecer contraseña del admin</h3>
+            <form
+              method="POST"
+              action={`/api/superadmin/tenants/${tenant.slug}/admin-reset`}
+              class="flex flex-wrap items-end gap-2"
+              data-saconfirm
+              data-sa-title="Restablecer contraseña del administrador"
+              data-sa-message={`Vas a establecer una nueva contraseña para el administrador de "${tenant.name}". El usuario deberá iniciar sesión con esta clave en su próximo acceso.`}
+              data-sa-confirm-label="Establecer contraseña"
+              data-sa-tone="warning"
+              data-sa-loading-title="Actualizando contraseña"
+              data-sa-success-title="Contraseña actualizada"
+              data-sa-error-title="No se pudo restablecer la contraseña"
+            >
+              <div>
+                <input type="password" name="password" required minlength="12" maxlength="256"
+                  class="w-72 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                  placeholder="Nueva contraseña (>=12 caracteres)" />
+              </div>
+              <button type="submit" class="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Establecer contraseña</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Seeds aplicados -->
+        <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2">
+          <h2 class="text-sm font-medium text-gray-700 mb-3">Datos de prueba (seeds)</h2>
+          <p class="text-xs text-gray-500 mb-4">
+            Cada seed se aplica una sola vez por empresa. Una vez ejecutado correctamente, la
+            UI bloquea reaplicaciones; revertir requiere intervenir directamente en la base de
+            datos.
+          </p>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(['employees', 'loans'] as const).map((code) => {
+              const seedMeta = tenant?.metadata?.seeds?.[code]
+              const isApplied = Boolean(seedMeta?.applied_at)
+              const failedAt = seedMeta?.failed_at
+              const labels = {
+                employees: {
+                  name: 'Empleados',
+                  desc: 'Empleados de prueba con cargos, funciones y departamentos asignados.',
+                },
+                loans: {
+                  name: 'Préstamos',
+                  desc: '10 acreedores y 1–4 préstamos quincenales por empleado activo. Requiere haber sembrado empleados primero.',
+                },
+              } as const
+              const label = labels[code]
+              return (
+                <div class="border border-gray-200 rounded-lg p-4 flex flex-col gap-2">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-medium text-gray-900">{label.name}</p>
+                      <p class="text-xs text-gray-500 mt-0.5">{label.desc}</p>
+                    </div>
+                    {isApplied ? (
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">
+                        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 5.8 4.5 8.2 9 3.4"/></svg>
+                        Aplicado
+                      </span>
+                    ) : failedAt ? (
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200 flex-shrink-0">
+                        Falló
+                      </span>
+                    ) : (
+                      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200 flex-shrink-0">
+                        Pendiente
+                      </span>
+                    )}
+                  </div>
+
+                  {isApplied && seedMeta?.applied_at && (
+                    <p class="text-xs text-gray-400 font-mono">
+                      Aplicado: {new Date(seedMeta.applied_at).toLocaleString('es-PA')}
+                    </p>
+                  )}
+                  {failedAt && seedMeta?.error && (
+                    <pre class="text-xs text-red-700 font-mono whitespace-pre-wrap break-words bg-red-50 border border-red-200 rounded px-2 py-1.5">{seedMeta.error}</pre>
+                  )}
+
+                  {!isApplied && tenant?.status === 'ACTIVE' && (
+                    <form
+                      method="POST"
+                      action={`/api/superadmin/tenants/${tenant.slug}/seeds/${code}`}
+                      class="mt-1"
+                      data-saconfirm
+                      data-sa-title={`Aplicar seed: ${label.name}`}
+                      data-sa-message={`Vas a sembrar datos de prueba (${label.name}) en "${tenant.name}". Esta operación no puede revertirse desde la UI.`}
+                      data-sa-confirm-label="Aplicar seed"
+                      data-sa-tone="warning"
+                      data-sa-loading-title={`Aplicando seed: ${label.name}`}
+                      data-sa-loading-message="Generando datos. Puede tardar varios segundos."
+                      data-sa-success-title="Seed aplicado"
+                      data-sa-success-message={`Los datos de ${label.name} ya están disponibles.`}
+                      data-sa-error-title={`No se pudo aplicar el seed: ${label.name}`}
+                    >
+                      {code === 'employees' && (
+                        <div class="flex items-end gap-2 mb-2">
+                          <div>
+                            <label class="block text-xs text-gray-600 mb-1">Cantidad</label>
+                            <input
+                              type="number"
+                              name="employeesTotal"
+                              min="1"
+                              max="10000"
+                              value="200"
+                              class="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        type="submit"
+                        class="w-full px-3 py-1.5 text-xs rounded-md border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors"
+                      >
+                        Aplicar seed
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+
+  {(tenant?.status === 'PROVISIONING' || provisioning?.state === 'running') && (
+    <script is:inline>
+      // While the schema is still being built we re-render the page every
+      // 2.5s so the user sees PROVISIONING → ACTIVE without manually
+      // refreshing. The query string is preserved (so the "created" flash
+      // sticks until status flips), and the timer self-clears when the
+      // server-rendered status no longer matches.
+      setTimeout(() => {
+        window.location.reload()
+      }, 2500)
+    </script>
+  )}
+</SuperAdminLayout>

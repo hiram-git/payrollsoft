@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
@@ -33,7 +34,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     address: gn('address'),
     phone: gn('phone'),
     email: gn('email'),
-    tipoInstitucion: g('tipoInstitucion') || 'privada',
+    institutionType: g('institutionType') || 'privada',
     currencyCode: g('currencyCode') || 'USD',
     currencySymbol: g('currencySymbol') || '$',
     mailHost: gn('mailHost'),
@@ -42,14 +43,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     mailUsername: gn('mailUsername'),
     mailFromAddress: gn('mailFromAddress'),
     mailFromName: gn('mailFromName'),
-    elaboradoPor: gn('elaboradoPor'),
-    cargoElaborador: g('cargoElaborador') || 'Especialista en Planillas',
-    jefeRecursosHumanos: gn('jefeRecursosHumanos'),
-    cargoJefeRrhh: g('cargoJefeRrhh') || 'Jefe de Recursos Humanos',
+    preparedBy: gn('preparedBy'),
+    preparerTitle: g('preparerTitle') || 'Especialista en Planillas',
+    hrDirectorName: gn('hrDirectorName'),
+    hrDirectorTitle: g('hrDirectorTitle') || 'Jefe de Recursos Humanos',
     // Logos: base64 data URLs or empty string → null
-    logoEmpresa: gn('logoEmpresa'),
-    logoIzquierdoReportes: gn('logoIzquierdoReportes'),
-    logoDerechoReportes: gn('logoDerechoReportes'),
+    companyLogo: gn('companyLogo'),
+    reportLogoLeft: gn('reportLogoLeft'),
+    reportLogoRight: gn('reportLogoRight'),
     // Per-tenant Planilla PDF lifecycle. The API validates the value
     // against an allow-list and falls back to the existing setting if
     // anything unexpected slips through.

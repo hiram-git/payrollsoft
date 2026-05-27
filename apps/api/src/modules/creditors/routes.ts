@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import {
   createCreditorService,
@@ -36,7 +36,7 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('creditors:read')],
       query: t.Object({ all: t.Optional(t.String()) }),
     }
   )
@@ -56,7 +56,10 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
       }
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('creditors:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // POST /creditors
@@ -75,7 +78,7 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], body: CreateBody }
+    { beforeHandle: [guardAuth, guardPermission('creditors:create')], body: CreateBody }
   )
 
   // PUT /creditors/:id
@@ -94,7 +97,7 @@ export const creditorRoutes = new Elysia({ prefix: '/creditors' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('creditors:update')],
       params: t.Object({ id: t.String() }),
       body: UpdateBody,
     }

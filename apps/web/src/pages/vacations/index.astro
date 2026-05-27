@@ -1,0 +1,175 @@
+---
+/**
+ * Hub del módulo de vacaciones — listado global de solicitudes recientes
+ * de toda la empresa para HR / contadores / admin.
+ *
+ * El detalle del saldo y el botón "Solicitar" viven en el tab Vacaciones
+ * del expediente del empleado (`/employees/[id]`).
+ */
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'vacations:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canApprove = can(identity, 'vacations:approve')
+
+type RequestRow = {
+  id: string
+  request_number: string
+  employee_id: string
+  request_type: 'enjoy' | 'pay' | 'mixed'
+  start_date: string | null
+  end_date: string | null
+  enjoy_days: number
+  paid_days: number
+  status: string
+  created_at: string
+  rejection_reason: string | null
+  employee_code: string
+  employee_first_name: string
+  employee_last_name: string
+}
+
+let allRequests: RequestRow[] = []
+let pendingCount = 0
+
+try {
+  const res = await fetch(`${API_URL}/vacations?limit=200`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) allRequests = ((await res.json()) as { data: RequestRow[] }).data ?? []
+  pendingCount = allRequests.filter((r) => r.status === 'pending').length
+} catch {
+  /* empty */
+}
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+function typeLabel(t: string): string {
+  return t === 'enjoy' ? 'Disfrute' : t === 'pay' ? 'Pago' : 'Mixto'
+}
+function statusLabel(s: string): string {
+  if (s === 'pending') return 'Pendiente'
+  if (s === 'approved') return 'Aprobada'
+  if (s === 'rejected') return 'Rechazada'
+  if (s === 'processed') return 'Procesada'
+  return 'Cancelada'
+}
+function statusClass(s: string): string {
+  if (s === 'pending') return 'vac-status-pending'
+  if (s === 'approved' || s === 'processed') return 'vac-status-approved'
+  if (s === 'rejected') return 'vac-status-rejected'
+  return 'vac-status-cancelled'
+}
+---
+<AppLayout title="Vacaciones">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-end justify-between gap-2">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight vac-title">Vacaciones</h1>
+        <p class="text-sm mt-0.5 vac-subtitle">
+          Solicitudes recientes. Para solicitar o ver saldo, abre el expediente del empleado.
+        </p>
+      </div>
+      {canApprove && (
+        <a href="/vacations/approvals" class="vac-btn-primary px-3.5 py-2 rounded-md text-sm font-medium">
+          Aprobaciones{pendingCount > 0 ? ` (${pendingCount})` : ''}
+        </a>
+      )}
+    </div>
+
+    <section class="vac-card border rounded-lg overflow-hidden">
+      {allRequests.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm vac-subtitle">Sin solicitudes registradas todavía.</p>
+        </div>
+      ) : (
+        <table class="vac-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Número</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Empleado</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Tipo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Período</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Días</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Estado</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {allRequests.map((r) => (
+              <tr class="border-b last:border-0 vac-rule">
+                <td class="px-5 py-3 font-mono text-xs vac-cell align-top">{r.request_number}</td>
+                <td class="px-5 py-3 align-top">
+                  <a href={`/employees/${r.employee_id}`} class="vac-cell hover:underline">
+                    {r.employee_last_name}, {r.employee_first_name}
+                  </a>
+                  <div class="text-[10px] font-mono vac-mute">{r.employee_code}</div>
+                </td>
+                <td class="px-5 py-3 align-top text-xs vac-cell">{typeLabel(r.request_type)}</td>
+                <td class="px-5 py-3 align-top text-xs vac-cell whitespace-nowrap">
+                  {r.start_date && r.end_date ? `${fmtDate(r.start_date)} → ${fmtDate(r.end_date)}` : '—'}
+                </td>
+                <td class="px-5 py-3 align-top text-xs vac-cell">
+                  {r.enjoy_days > 0 && <div>{r.enjoy_days} disfrute</div>}
+                  {r.paid_days > 0 && <div>{r.paid_days} pago</div>}
+                </td>
+                <td class="px-5 py-3 align-top">
+                  <span class={`vac-status-badge ${statusClass(r.status)}`}>{statusLabel(r.status)}</span>
+                </td>
+                <td class="px-5 py-3 align-top text-right">
+                  <a href={`/employees/${r.employee_id}`} class="text-xs vac-mute hover:underline">Ver</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <style>
+    .vac-title    { color: var(--fore); }
+    .vac-subtitle { color: var(--fore-dim); }
+    .vac-cell     { color: var(--fore-dim); }
+    .vac-mute     { color: var(--mute); }
+    .vac-card { background: var(--ink-2); border-color: var(--rule); }
+    .vac-rule { border-color: var(--rule); }
+
+    .vac-btn-primary { background: #2563eb; color: white; }
+    .vac-btn-primary:hover { background: #1d4ed8; }
+
+    .vac-table thead tr {
+      background: var(--ink-3); border-color: var(--rule); color: var(--mute-2);
+    }
+    .vac-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .vac-table tbody tr:hover { background: var(--ink-4); }
+
+    .vac-status-badge {
+      display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px;
+      font-size: 0.6875rem; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .vac-status-pending   { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .vac-status-approved  { background: rgba(16,185,129,0.18); color: #34d399; }
+    .vac-status-rejected  { background: rgba(239,68,68,0.18);  color: #f87171; }
+    .vac-status-cancelled { background: rgba(156,163,175,0.18); color: var(--mute); }
+
+    [data-theme='light'] .vac-card { background: #ffffff; }
+    [data-theme='light'] .vac-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .vac-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .vac-table tbody tr:hover { background: #f9fafb; }
+    [data-theme='light'] .vac-status-pending   { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .vac-status-approved  { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .vac-status-rejected  { background: #fee2e2; color: #991b1b; }
+    [data-theme='light'] .vac-status-cancelled { background: #f3f4f6; color: #6b7280; }
+  </style>
+</AppLayout>

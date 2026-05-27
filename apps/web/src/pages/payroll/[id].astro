@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 const { id } = Astro.params
 
@@ -54,9 +56,11 @@ let lines: PayrollLine[] = []
 let linesTotal = 0
 let linesTotalPages = 1
 // Per-tenant lifecycle for the Planilla PDF: 'on_demand' renders every
-// download (no state machine, single button); 'file_storage' persists
-// to R2 and is driven by the payroll_reports state machine.
-let payrollReportMode: 'on_demand' | 'file_storage' = 'on_demand'
+// download (no state machine, single button); 'file_storage' (R2/S3) y
+// 'local_storage' (disco) comparten la misma UX de generar / descargar /
+// regenerar — la diferencia entre ellos es solo el destino físico del
+// archivo, transparente para el usuario.
+let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
 
 try {
   const params = new URLSearchParams({
@@ -64,7 +68,7 @@ try {
     linesLimit: String(LINES_PER_PAGE),
   })
   if (linesSearch) params.set('search', linesSearch)
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [res, companyRes] = await Promise.all([
     fetch(`${API_URL}/payroll/${id}?${params}`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
@@ -92,6 +96,7 @@ try {
     }
     const mode = companyJson.data?.payrollReportMode
     if (mode === 'file_storage') payrollReportMode = 'file_storage'
+    else if (mode === 'local_storage') payrollReportMode = 'local_storage'
   }
 } catch {
   return Astro.redirect('/payroll')
@@ -183,143 +188,264 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
 
         <!-- Action buttons -->
         <div class="flex items-center gap-2 flex-shrink-0">
-          {(isGenerated || isClosed) && payrollReportMode === 'on_demand' && (
-            <a
-              data-planilla-pdf
-              href={`/api/reports/payroll/${id}/download`}
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-              title="Descargar Planilla PDF"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
-              Planilla PDF
-            </a>
-          )}
-          {(isGenerated || isClosed) && payrollReportMode === 'file_storage' && (
-            <div id="report-dropdown" class="relative inline-block text-left" data-payroll-id={id}>
-              <button
-                id="btn-report-dropdown"
-                type="button"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-70 disabled:cursor-wait"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                title="Acciones del reporte de Planilla PDF"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <span id="btn-report-dropdown-label">Reportes</span>
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div
-                id="report-dropdown-panel"
-                class="hidden absolute right-0 mt-1 w-72 origin-top-right rounded-lg border border-gray-200 bg-white shadow-lg z-20"
-                role="menu"
-              >
-                <ul class="py-1 text-sm">
-                  <li role="none">
-                    <button
-                      type="button"
-                      data-report-action="generate"
-                      class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
-                      role="menuitem"
-                    >
-                      <span class="w-4 h-4 mt-0.5 shrink-0">
-                        <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
-                        <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                      </span>
-                      <span class="flex-1">
-                        <span class="block font-medium" data-label>Generar</span>
-                        <span class="block text-xs text-gray-500 leading-snug mt-0.5">Renderiza el PDF y lo guarda en disco.</span>
-                        <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
-                      </span>
-                    </button>
-                  </li>
-                  <li role="none">
-                    <button
-                      type="button"
-                      data-report-action="download"
-                      class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
-                      role="menuitem"
-                    >
-                      <span class="w-4 h-4 mt-0.5 shrink-0">
-                        <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                      </span>
-                      <span class="flex-1">
-                        <span class="block font-medium" data-label>Descargar</span>
-                        <span class="block text-xs text-gray-500 leading-snug mt-0.5">Baja la última versión persistida del PDF.</span>
-                      </span>
-                    </button>
-                  </li>
-                  <li role="none">
-                    <button
-                      type="button"
-                      data-report-action="regenerate"
-                      class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed flex items-start gap-2"
-                      role="menuitem"
-                    >
-                      <span class="w-4 h-4 mt-0.5 shrink-0">
-                        <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                        <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
-                      </span>
-                      <span class="flex-1">
-                        <span class="block font-medium" data-label>Regenerar</span>
-                        <span class="block text-xs text-gray-500 leading-snug mt-0.5">Renderiza y sobrescribe el PDF actual. No re-calcula la planilla.</span>
-                        <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
-                      </span>
-                    </button>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          )}
           {(isGenerated || isClosed) && (
-            <>
-              <button
-                type="button"
-                data-send-comprobantes
-                data-payroll-id={id}
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-60 disabled:cursor-wait"
-                title="Enviar el comprobante PDF a cada empleado por correo"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                Enviar comprobantes
-              </button>
-              <a
-                href={`/api/payroll/${id}/xlsx`}
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-                title="Descargar Excel"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                Excel
-              </a>
-              <a
-                href="/reports/payroll"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-                title="Ver todos los reportes de planilla"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                Más reportes
-              </a>
-            </>
+            <span
+              class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${
+                payrollReportMode === 'on_demand'
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : payrollReportMode === 'local_storage'
+                    ? 'bg-violet-50 text-violet-700 border-violet-200'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}
+              title="Modo de almacenamiento del PDF (configurable en Configuración → Empresa)"
+            >
+              {payrollReportMode === 'on_demand' && 'Bajo demanda'}
+              {payrollReportMode === 'local_storage' && 'Disco local'}
+              {payrollReportMode === 'file_storage' && 'Nube (S3/R2)'}
+            </span>
           )}
-          {isCreated && !isProcessing && (
-            <form id="form-generate" method="POST" action={`/api/payroll/${id}`}>
-              <input type="hidden" name="_method" value="GENERATE" />
-              <button
-                type="button"
-                data-confirm
-                data-form="form-generate"
-                data-title="Generar planilla"
-                data-body="¿Calcular los conceptos para todos los empleados activos? El proceso puede tardar varios segundos."
-                data-confirm-label="Generar"
-                data-confirm-style="primary"
-                data-show-loading="true"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                Generar planilla
-              </button>
-            </form>
-          )}
+
+          <!--
+            Dropdown unificado "Acciones" — agrupa todo lo que NO es una de
+            las tres acciones principales del header (Cerrar / Revertir /
+            Regenerar). Mantiene id="report-dropdown" para que la lógica
+            existente del state-machine del PDF (controllerFor) siga
+            encontrando los items con `data-report-action` adentro del
+            mismo container.
+          -->
+          <div id="report-dropdown" class="relative inline-block text-left" data-payroll-id={id}>
+            <button
+              id="btn-report-dropdown"
+              type="button"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              title="Acciones disponibles para esta planilla"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+              <span id="btn-report-dropdown-label">Acciones</span>
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div
+              id="report-dropdown-panel"
+              class="acciones-menu hidden absolute right-0 mt-1 w-72 origin-top-right rounded-lg border shadow-lg z-20"
+              role="menu"
+            >
+              <ul class="py-1 text-sm">
+                {(isGenerated || isClosed) && payrollReportMode === 'on_demand' && (
+                  <li role="none">
+                    <a
+                      data-planilla-pdf
+                      href={`/api/reports/payroll/${id}/download`}
+                      class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                      role="menuitem"
+                    >
+                      <span class="w-4 h-4 mt-0.5 shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+                      </span>
+                      <span class="flex-1">
+                        <span class="block font-medium">Descargar Planilla PDF</span>
+                        <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">El PDF se renderiza al vuelo cada vez.</span>
+                      </span>
+                    </a>
+                  </li>
+                )}
+                {(isGenerated || isClosed) && (payrollReportMode === 'file_storage' || payrollReportMode === 'local_storage') && (
+                  <>
+                    <li role="none">
+                      <button
+                        type="button"
+                        data-report-action="generate"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+                          <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium" data-label>Generar PDF</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Renderiza el PDF y lo guarda.</span>
+                          <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
+                        </span>
+                      </button>
+                    </li>
+                    <li role="none">
+                      <button
+                        type="button"
+                        data-report-action="download"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium" data-label>Descargar PDF</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Baja la última versión persistida.</span>
+                        </span>
+                      </button>
+                    </li>
+                    <li role="none">
+                      <button
+                        type="button"
+                        data-report-action="regenerate"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg data-icon-static xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                          <svg data-icon-busy class="hidden w-4 h-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium" data-label>Regenerar PDF</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Sobreescribe el PDF actual. No re-calcula la planilla.</span>
+                          <span class="hidden text-[11px] text-red-600 mt-0.5 leading-snug" data-row-error></span>
+                        </span>
+                      </button>
+                    </li>
+                  </>
+                )}
+                {(isGenerated || isClosed) && (
+                  <>
+                    <li role="none" class="acciones-menu-divider">
+                      <button
+                        type="button"
+                        data-send-comprobantes
+                        data-payroll-id={id}
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                        title="Enviar el comprobante PDF a cada empleado por correo"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium">Enviar comprobantes</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Envía el PDF de cada empleado por correo.</span>
+                        </span>
+                      </button>
+                    </li>
+                    <li role="none">
+                      <a
+                        href={`/api/payroll/${id}/xlsx`}
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                        title="Descargar la planilla en Excel"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium">Descargar Excel</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Hoja con detalle por empleado.</span>
+                        </span>
+                      </a>
+                    </li>
+                    <li role="none">
+                      <a
+                        href="/reports/payroll"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                        title="Ver todos los reportes de planilla"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium">Más reportes</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Catálogo completo de reportes de planilla.</span>
+                        </span>
+                      </a>
+                    </li>
+                  </>
+                )}
+                {isCreated && !isProcessing && (
+                  <li role="none" class="acciones-menu-divider">
+                    <form id="form-generate" method="POST" action={`/api/payroll/${id}`}>
+                      <input type="hidden" name="_method" value="GENERATE" />
+                      <button
+                        type="button"
+                        data-confirm
+                        data-form="form-generate"
+                        data-title="Generar planilla"
+                        data-body="¿Calcular los conceptos para todos los empleados activos? El proceso puede tardar varios segundos."
+                        data-confirm-label="Generar"
+                        data-confirm-style="primary"
+                        data-show-loading="true"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium">Generar planilla</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Calcula las líneas para todos los empleados activos.</span>
+                        </span>
+                      </button>
+                    </form>
+                  </li>
+                )}
+                {isClosed && (
+                  <li role="none" class="acciones-menu-divider">
+                    <form id="form-reopen" method="POST" action={`/api/payroll/${id}`}>
+                      <input type="hidden" name="_method" value="REOPEN" />
+                      <button
+                        type="button"
+                        data-confirm
+                        data-form="form-reopen"
+                        data-title="Reabrir planilla"
+                        data-body="¿Reabrir esta planilla? Volverá al estado Generada y los acumulados registrados serán eliminados para poder recalcularse al volver a cerrarla."
+                        data-confirm-label="Reabrir"
+                        data-confirm-style="primary"
+                        data-show-loading="true"
+                        class="acciones-menu-item w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium">Reabrir planilla</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Vuelve al estado Generada.</span>
+                        </span>
+                      </button>
+                    </form>
+                  </li>
+                )}
+                {isCreated && (
+                  <li role="none" class="acciones-menu-divider">
+                    <form id="form-delete" method="POST" action={`/api/payroll/${id}`}>
+                      <input type="hidden" name="_method" value="DELETE" />
+                      <button
+                        type="button"
+                        data-confirm
+                        data-form="form-delete"
+                        data-title="Eliminar planilla"
+                        data-body="¿Eliminar esta planilla? Esta acción es irreversible y no podrá deshacerse."
+                        data-confirm-label="Eliminar"
+                        data-confirm-style="danger"
+                        class="acciones-menu-item acciones-menu-item-danger w-full text-left px-3 py-2 flex items-start gap-2"
+                        role="menuitem"
+                      >
+                        <span class="w-4 h-4 mt-0.5 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                        </span>
+                        <span class="flex-1">
+                          <span class="block font-medium">Eliminar planilla</span>
+                          <span class="acciones-menu-hint block text-xs leading-snug mt-0.5">Acción irreversible. Solo disponible mientras esté en estado Creada.</span>
+                        </span>
+                      </button>
+                    </form>
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+
+          <!-- Botones principales fijos: Regenerar / Revertir / Cerrar -->
           {isGenerated && (
             <form id="form-regenerate" method="POST" action={`/api/payroll/${id}`}>
               <input type="hidden" name="_method" value="REGENERATE" />
@@ -373,43 +499,6 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 Cerrar planilla
-              </button>
-            </form>
-          )}
-          {isClosed && (
-            <form id="form-reopen" method="POST" action={`/api/payroll/${id}`}>
-              <input type="hidden" name="_method" value="REOPEN" />
-              <button
-                type="button"
-                data-confirm
-                data-form="form-reopen"
-                data-title="Reabrir planilla"
-                data-body="¿Reabrir esta planilla? Volverá al estado Generada y los acumulados registrados serán eliminados para poder recalcularse al volver a cerrarla."
-                data-confirm-label="Reabrir"
-                data-confirm-style="primary"
-                data-show-loading="true"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.32"/></svg>
-                Reabrir
-              </button>
-            </form>
-          )}
-          {isCreated && (
-            <form id="form-delete" method="POST" action={`/api/payroll/${id}`}>
-              <input type="hidden" name="_method" value="DELETE" />
-              <button
-                type="button"
-                data-confirm
-                data-form="form-delete"
-                data-title="Eliminar planilla"
-                data-body="¿Eliminar esta planilla? Esta acción es irreversible y no podrá deshacerse."
-                data-confirm-label="Eliminar"
-                data-confirm-style="danger"
-                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                Eliminar
               </button>
             </form>
           )}
@@ -627,6 +716,56 @@ const stepIndex = isClosed ? 2 : isGenerated ? 1 : 0
     0%   { transform: translateX(-100%); width: 40%; }
     50%  { width: 70%; }
     100% { transform: translateX(300%); width: 40%; }
+  }
+
+  /*
+   * Dropdown "Acciones" — usa CSS custom properties del sistema para
+   * heredar el tema activo. Las clases Tailwind por sí solas usan
+   * `bg-white` / `text-gray-700` / `hover:bg-blue-50` que en modo
+   * oscuro quedan luminosas y sin contraste suficiente en el hover.
+   */
+  .acciones-menu {
+    background: var(--ink-2);
+    border-color: var(--rule);
+    color: var(--fore-dim);
+  }
+  .acciones-menu-item {
+    color: var(--fore-dim);
+    transition: background-color 120ms, color 120ms;
+  }
+  .acciones-menu-item:hover,
+  .acciones-menu-item:focus-visible {
+    background: var(--ink-4);
+    color: var(--fore);
+  }
+  .acciones-menu-item:disabled {
+    color: var(--mute);
+    cursor: not-allowed;
+  }
+  .acciones-menu-item .acciones-menu-hint {
+    color: var(--mute);
+  }
+  .acciones-menu-item:hover .acciones-menu-hint,
+  .acciones-menu-item:focus-visible .acciones-menu-hint {
+    color: var(--fore-dim);
+  }
+  .acciones-menu-divider {
+    border-top: 1px solid var(--rule);
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+  .acciones-menu-item-danger {
+    color: #ef4444;
+  }
+  .acciones-menu-item-danger:hover,
+  .acciones-menu-item-danger:focus-visible {
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+  }
+  [data-theme='light'] .acciones-menu-item-danger:hover,
+  [data-theme='light'] .acciones-menu-item-danger:focus-visible {
+    background: #fef2f2;
+    color: #b91c1c;
   }
 </style>
 

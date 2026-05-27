@@ -1,0 +1,110 @@
+---
+/**
+ * Ephemeral toast notifications — auto-dismiss after a few seconds.
+ *
+ * API:
+ *   window.toast.success(msg)
+ *   window.toast.error(msg)
+ *   window.toast.info(msg)
+ *   window.toast.warning(msg)
+ */
+---
+<div id="toast-container" class="toast-container"></div>
+
+<style is:global>
+  .toast-container {
+    position: fixed;
+    top: 72px;
+    right: 16px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+    max-width: 380px;
+  }
+  .toast-item {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: var(--f-sans);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.4;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    animation: toastIn 200ms ease-out;
+    border: 1px solid;
+    cursor: pointer;
+  }
+  .toast-item.removing {
+    animation: toastOut 180ms ease-in forwards;
+  }
+  .toast-success {
+    background: color-mix(in srgb, var(--ok) 12%, var(--ink-2));
+    border-color: var(--ok);
+    color: var(--ok);
+  }
+  .toast-error {
+    background: color-mix(in srgb, var(--err) 12%, var(--ink-2));
+    border-color: var(--err);
+    color: var(--err);
+  }
+  .toast-info {
+    background: color-mix(in srgb, var(--navy) 12%, var(--ink-2));
+    border-color: var(--navy-hi);
+    color: var(--navy-hi);
+  }
+  .toast-warning {
+    background: color-mix(in srgb, var(--warn) 12%, var(--ink-2));
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+  .toast-icon { flex-shrink: 0; width: 16px; height: 16px; }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(20px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @keyframes toastOut {
+    from { opacity: 1; transform: none; }
+    to   { opacity: 0; transform: translateX(20px); }
+  }
+</style>
+
+<script is:inline>
+;(function() {
+  var container = document.getElementById('toast-container');
+  if (!container) return;
+
+  var ICONS = {
+    success: '<svg class="toast-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3.5 8.5 6.5 11.5 12.5 4.5"/></svg>',
+    error:   '<svg class="toast-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3.5M8 11v.5"/></svg>',
+    info:    '<svg class="toast-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 7v4M8 5v.5"/></svg>',
+    warning: '<svg class="toast-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 2L1.5 13h13L8 2z"/><path d="M8 7v3M8 11.5v.5"/></svg>',
+  };
+
+  function show(type, msg, duration) {
+    var el = document.createElement('div');
+    el.className = 'toast-item toast-' + type;
+    el.innerHTML = (ICONS[type] || '') + '<span>' + msg + '</span>';
+    container.appendChild(el);
+
+    var timer = setTimeout(function() { remove(el); }, duration || 4000);
+    el.addEventListener('click', function() { clearTimeout(timer); remove(el); });
+  }
+
+  function remove(el) {
+    el.classList.add('removing');
+    setTimeout(function() { el.remove(); }, 200);
+  }
+
+  window.toast = {
+    success: function(msg, ms) { show('success', msg, ms); },
+    error:   function(msg, ms) { show('error', msg, ms); },
+    info:    function(msg, ms) { show('info', msg, ms); },
+    warning: function(msg, ms) { show('warning', msg, ms); },
+  };
+})();
+</script>

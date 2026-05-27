@@ -8,6 +8,69 @@
       "when": 1775728247262,
       "tag": "0000_worried_spirit",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762128000000,
+      "tag": "0001_payroll_auth_schema",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762128001000,
+      "tag": "0002_permissions_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762128002000,
+      "tag": "0003_super_admin_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1762128003000,
+      "tag": "0004_employee_files_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1762128004000,
+      "tag": "0005_employee_files_approve_permission",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1762128005000,
+      "tag": "0006_system_roles_catalog",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1762128006000,
+      "tag": "0007_facial_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1762128007000,
+      "tag": "0008_treasury_permissions",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1762128008000,
+      "tag": "0009_users_write_permission",
+      "breakpoints": true
     }
   ]
 }

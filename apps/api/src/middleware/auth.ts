@@ -1,5 +1,5 @@
 import { jwt } from '@elysiajs/jwt'
-import type { UserRole } from '@payroll/types'
+import type { PermissionCode, UserRole } from '@payroll/types'
 import { Elysia } from 'elysia'
 import { env } from '../config/env'
 
@@ -8,10 +8,25 @@ import { env } from '../config/env'
 export type AuthUser = {
   userId: string
   tenantId: string
+  tenantSlug?: string
   role: UserRole
   type: 'user' | 'super_admin'
   name?: string
   email?: string
+  /** Effective permission codes pre-computed at login time. */
+  permissions?: PermissionCode[]
+  /** Snapshot of users.permissions_version at login. */
+  permissionsVersion?: number
+  /**
+   * When set, the JWT was minted by the super-admin impersonation flow:
+   * the bearer is acting as a tenant user but the original super-admin
+   * identity is preserved here so audit logs and the UI banner can
+   * surface it.
+   */
+  impersonatedBy?: {
+    superAdminId: string
+    superAdminEmail?: string
+  }
 }
 
 // ─── JWT plugin (singleton, prevents re-registration) ────────────────────────
@@ -64,8 +79,82 @@ export function guardAuth({
 }
 
 /**
+ * Reject any request that is not authenticated as a super admin. The JWT's
+ * `type` field is the source of truth — a tenant user with role=SUPER_ADMIN
+ * (which should never happen) would still be rejected.
+ */
+export function guardSuperAdmin({
+  user,
+  set,
+}: {
+  user: AuthUser | null
+  set: { status: number | string }
+}) {
+  if (!user) {
+    set.status = 401
+    return { success: false, error: 'Unauthorized' }
+  }
+  if (user.type !== 'super_admin') {
+    set.status = 403
+    return { success: false, error: 'Forbidden: super admin only' }
+  }
+}
+
+// ─── Permission helpers ──────────────────────────────────────────────────────
+
+/**
+ * True if the authenticated user holds every requested permission. Super
+ * admins implicitly satisfy any tenant-scope permission check; tenant users
+ * are evaluated against the `permissions` array stamped into their JWT at
+ * login time.
+ */
+export function userHasPermissions(
+  user: AuthUser | null,
+  required: readonly PermissionCode[]
+): boolean {
+  if (!user) return false
+  if (user.type === 'super_admin') return true
+  if (required.length === 0) return true
+  const granted = new Set(user.permissions ?? [])
+  return required.every((p) => granted.has(p))
+}
+
+/**
+ * Returns a `beforeHandle` guard that enforces every supplied permission.
+ * Codes are AND-combined — pass multiple calls or use a wrapper if you need
+ * OR semantics.
+ *
+ *   .post('/employees', handler, { beforeHandle: guardPermission('employees:create') })
+ */
+export function guardPermission(...required: PermissionCode[]) {
+  return ({
+    user,
+    set,
+  }: {
+    user: AuthUser | null
+    set: { status: number | string }
+  }) => {
+    if (!user) {
+      set.status = 401
+      return { success: false, error: 'Unauthorized' }
+    }
+    if (!userHasPermissions(user, required)) {
+      set.status = 403
+      return {
+        success: false,
+        error: 'Forbidden: missing permission',
+        missing: required.filter((p) => !user.permissions?.includes(p)),
+      }
+    }
+  }
+}
+
+/**
  * Returns a `beforeHandle` guard that enforces a minimum role.
  * Role hierarchy: SUPER_ADMIN > ADMIN > HR > ACCOUNTANT > VIEWER
+ *
+ * @deprecated Prefer guardPermission() — roles are kept for backwards
+ * compatibility while existing routes are migrated.
  */
 export function guardRole(...requiredRoles: UserRole[]) {
   const HIERARCHY: Record<string, number> = {

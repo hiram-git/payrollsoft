@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
   activateConceptService,
@@ -33,7 +33,7 @@ const ConceptBody = t.Object({
   isReferenceValue: t.Optional(t.Boolean()),
   useAmountCalc: t.Optional(t.Boolean()),
   allowZero: t.Optional(t.Boolean()),
-  cuentaContableId: t.Optional(t.Nullable(t.String())),
+  chartAccountId: t.Optional(t.Nullable(t.String())),
   links: t.Optional(LinksBody),
 })
 
@@ -50,7 +50,7 @@ const ConceptUpdateBody = t.Object({
   isReferenceValue: t.Optional(t.Boolean()),
   useAmountCalc: t.Optional(t.Boolean()),
   allowZero: t.Optional(t.Boolean()),
-  cuentaContableId: t.Optional(t.Nullable(t.String())),
+  chartAccountId: t.Optional(t.Nullable(t.String())),
   links: t.Optional(LinksBody),
 })
 
@@ -69,7 +69,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       const data = await getConceptConfigService(db)
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')] }
+    { beforeHandle: [guardAuth, guardPermission('concepts:read')] }
   )
 
   .get(
@@ -83,7 +83,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       return { success: true, data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('VIEWER')],
+      beforeHandle: [guardAuth, guardPermission('concepts:read')],
       query: t.Object({ search: t.Optional(t.String()) }),
     }
   )
@@ -102,7 +102,10 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       }
       return { success: true, data: row }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('concepts:read')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   .post(
@@ -130,7 +133,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       set.status = 201
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('HR')], body: ConceptBody }
+    { beforeHandle: [guardAuth, guardPermission('concepts:create')], body: ConceptBody }
   )
 
   .put(
@@ -158,7 +161,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('HR')],
+      beforeHandle: [guardAuth, guardPermission('concepts:update')],
       params: t.Object({ id: t.String() }),
       body: ConceptUpdateBody,
     }
@@ -178,7 +181,10 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('concepts:delete')],
+      params: t.Object({ id: t.String() }),
+    }
   )
 
   // ─── Concept Catalog CRUD ──────────────────────────────────────────────────
@@ -213,7 +219,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:create')],
       params: t.Object({ kind: t.String() }),
       body: t.Object({
         code: t.String({ minLength: 1, maxLength: 50 }),
@@ -250,7 +256,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:update')],
       params: t.Object({ kind: t.String(), id: t.String() }),
       body: t.Object({
         name: t.Optional(t.String({ minLength: 1, maxLength: 100 })),
@@ -286,7 +292,7 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       return { success: true, data: result.data }
     },
     {
-      beforeHandle: [guardAuth, guardRole('ADMIN')],
+      beforeHandle: [guardAuth, guardPermission('catalogs:update')],
       params: t.Object({ kind: t.String(), id: t.String() }),
     }
   )
@@ -305,5 +311,8 @@ export const conceptsRoutes = new Elysia({ prefix: '/concepts' })
       }
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], params: t.Object({ id: t.String() }) }
+    {
+      beforeHandle: [guardAuth, guardPermission('catalogs:delete')],
+      params: t.Object({ id: t.String() }),
+    }
   )

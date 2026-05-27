@@ -1,19 +1,21 @@
 ---
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 type Position = {
   id: string
   code: string
   name: string
   salary: string
-  cargoId: string | null
-  departamentoId: string | null
-  funcionId: string | null
-  partidaId: string | null
+  jobTitleId: string | null
+  departmentId: string | null
+  jobFunctionId: string | null
+  budgetItemId: string | null
   isActive: boolean
   status: 'en_uso' | 'vacante' | string
 }
@@ -27,13 +29,13 @@ let partidas: CatalogItem[] = []
 let error = ''
 
 try {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [pRes, cRes, fRes, dRes, ptRes] = await Promise.all([
     fetch(`${API_URL}/positions`, { headers }),
-    fetch(`${API_URL}/cargos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
-    fetch(`${API_URL}/partidas`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
+    fetch(`${API_URL}/budget-items`, { headers }),
   ])
   if (pRes.status === 401) return Astro.redirect('/login')
   if (pRes.ok) positions = ((await pRes.json()) as { data: Position[] }).data ?? []
@@ -60,9 +62,14 @@ const success = Astro.url.searchParams.get('success') === '1'
         <h1 class="text-2xl font-bold text-gray-900">Estructura</h1>
         <p class="text-sm text-gray-500 mt-0.5">{positions.length} posiciones registradas</p>
       </div>
-      <a href="/config/estructura/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-        + Nueva posición
-      </a>
+      <div class="flex items-center gap-2">
+        <a href="/config/import/estructura" class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+          Importar
+        </a>
+        <a href="/config/estructura/new" class="bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          + Nueva posición
+        </a>
+      </div>
     </div>
 
     {success && (
@@ -104,10 +111,10 @@ const success = Astro.url.searchParams.get('success') === '1'
                 <td class="px-4 py-3 font-mono text-xs text-gray-500">{pos.code}</td>
                 <td class="px-4 py-3 font-medium text-gray-900">{pos.name}</td>
                 <td class="px-4 py-3 text-gray-700">${pos.salary}</td>
-                <td class="px-4 py-3 text-gray-600">{pos.cargoId ? (cargoMap.get(pos.cargoId) ?? '—') : '—'}</td>
-                <td class="px-4 py-3 text-gray-600">{pos.departamentoId ? (deptMap.get(pos.departamentoId) ?? '—') : '—'}</td>
-                <td class="px-4 py-3 text-gray-600">{pos.funcionId ? (funcionMap.get(pos.funcionId) ?? '—') : '—'}</td>
-                <td class="px-4 py-3 text-gray-600 text-xs font-mono">{pos.partidaId ? (partidaMap.get(pos.partidaId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3 text-gray-600">{pos.jobTitleId ? (cargoMap.get(pos.jobTitleId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3 text-gray-600">{pos.departmentId ? (deptMap.get(pos.departmentId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3 text-gray-600">{pos.jobFunctionId ? (funcionMap.get(pos.jobFunctionId) ?? '—') : '—'}</td>
+                <td class="px-4 py-3 text-gray-600 text-xs font-mono">{pos.budgetItemId ? (partidaMap.get(pos.budgetItemId) ?? '—') : '—'}</td>
                 <td class="px-4 py-3">
                   <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${pos.status === 'en_uso' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
                     {pos.status === 'en_uso' ? 'En uso' : 'Vacante'}

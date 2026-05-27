@@ -1,11 +1,12 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
-const TENANT = 'demo'
+const TENANT = resolveTenantSlugFromCookie(authCookie)
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
 
 type RecentPayroll = {
@@ -84,7 +85,8 @@ const typeLabel: Record<string, string> = {
 
 <AppLayout title="Dashboard">
   <style>
-    .dash { padding: 32px 28px; max-width: 1100px; }
+    .dash { width: 100%; max-width: 1280px; margin: 0 auto; padding: 32px 28px; }
+    @media (min-width: 1024px) { .dash { width: 75%; } }
     .dash-header { margin-bottom: 28px; }
     .dash-title {
       font-size: 18px;

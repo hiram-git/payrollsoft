@@ -1,5 +1,5 @@
 import { Elysia, t } from 'elysia'
-import { authPlugin, guardAuth, guardRole } from '../../middleware/auth'
+import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
 import { getCompanyConfigService, saveCompanyConfigService } from './service'
 
@@ -10,7 +10,7 @@ const CompanyConfigBody = t.Object({
   address: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
   phone: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   email: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
-  tipoInstitucion: t.Optional(t.String()),
+  institutionType: t.Optional(t.String()),
   currencyCode: t.Optional(t.String()),
   currencySymbol: t.Optional(t.String()),
   mailHost: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
@@ -21,14 +21,16 @@ const CompanyConfigBody = t.Object({
   mailPassword: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
   mailFromAddress: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
   mailFromName: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
-  elaboradoPor: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
-  cargoElaborador: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
-  jefeRecursosHumanos: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
-  cargoJefeRrhh: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
-  logoEmpresa: t.Optional(t.Nullable(t.String())),
-  logoIzquierdoReportes: t.Optional(t.Nullable(t.String())),
-  logoDerechoReportes: t.Optional(t.Nullable(t.String())),
-  payrollReportMode: t.Optional(t.Union([t.Literal('on_demand'), t.Literal('file_storage')])),
+  preparedBy: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+  preparerTitle: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+  hrDirectorName: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+  hrDirectorTitle: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+  companyLogo: t.Optional(t.Nullable(t.String())),
+  reportLogoLeft: t.Optional(t.Nullable(t.String())),
+  reportLogoRight: t.Optional(t.Nullable(t.String())),
+  payrollReportMode: t.Optional(
+    t.Union([t.Literal('on_demand'), t.Literal('file_storage'), t.Literal('local_storage')])
+  ),
 })
 
 export const companyRoutes = new Elysia({ prefix: '/company' })
@@ -45,7 +47,7 @@ export const companyRoutes = new Elysia({ prefix: '/company' })
       const data = await getCompanyConfigService(db)
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardRole('VIEWER')] }
+    { beforeHandle: [guardAuth, guardPermission('settings:company.read')] }
   )
 
   .put(
@@ -58,5 +60,8 @@ export const companyRoutes = new Elysia({ prefix: '/company' })
       const result = await saveCompanyConfigService(db, body)
       return { success: true, data: result.data }
     },
-    { beforeHandle: [guardAuth, guardRole('ADMIN')], body: CompanyConfigBody }
+    {
+      beforeHandle: [guardAuth, guardPermission('settings:company.update')],
+      body: CompanyConfigBody,
+    }
   )

@@ -3,3 +3,5 @@
 export * from './formulas/index'
 export * from './payroll/index'
 export * from './attendance/index'
+export * from './custom-fields/index'
+export * from './treasury/index'

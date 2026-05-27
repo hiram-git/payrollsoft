@@ -54,11 +54,11 @@ export type PdfPayroll = {
 
 export type PdfCompany = {
   companyName: string | null
-  logoEmpresa: string | null
-  elaboradoPor: string | null
-  cargoElaborador: string | null
-  jefeRecursosHumanos: string | null
-  cargoJefeRrhh: string | null
+  companyLogo: string | null
+  preparedBy: string | null
+  preparerTitle: string | null
+  hrDirectorName: string | null
+  hrDirectorTitle: string | null
   directorGeneral?: string | null
   cargoDirector?: string | null
 }
@@ -480,18 +480,18 @@ export function PayrollPdf({
   })
 
   const companyName = company?.companyName ?? 'Empresa'
-  const logo = company?.logoEmpresa ?? null
+  const logo = company?.companyLogo ?? null
   const typeLabel = TYPE_LABEL[payroll.type] ?? payroll.type.toUpperCase()
   const reportTitle = `PLANILLA ${typeLabel}`
   const periodLine = `Desde ${formatDateISO(payroll.periodStart)} hasta ${formatDateISO(payroll.periodEnd)}`
 
   const elaborador = {
-    name: company?.elaboradoPor ?? '',
-    role: company?.cargoElaborador ?? 'Especialista en Nóminas',
+    name: company?.preparedBy ?? '',
+    role: company?.preparerTitle ?? 'Especialista en Planilla',
   }
   const revisor = {
-    name: company?.jefeRecursosHumanos ?? '',
-    role: company?.cargoJefeRrhh ?? 'Jefe de Recursos Humanos',
+    name: company?.hrDirectorName ?? '',
+    role: company?.hrDirectorTitle ?? 'Jefe de Recursos Humanos',
   }
   const autorizador = {
     name: company?.directorGeneral ?? '',

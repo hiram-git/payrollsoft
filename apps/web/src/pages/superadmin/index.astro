@@ -1,0 +1,146 @@
+---
+import SuperAdminLayout from '../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+type Tenant = {
+  id: string
+  slug: string
+  name: string
+  status: string
+  contactEmail: string | null
+  createdAt: string
+  archivedAt: string | null
+}
+type AuditEntry = {
+  id: number
+  action: string
+  payload: Record<string, unknown>
+  tenantId: string | null
+  createdAt: string
+}
+
+let tenants: Tenant[] = []
+let recent: AuditEntry[] = []
+let error = ''
+
+try {
+  const [tRes, aRes] = await Promise.all([
+    fetch(`${API_URL}/superadmin/tenants`, { headers: { Cookie: `auth=${identity.raw}` } }),
+    fetch(`${API_URL}/superadmin/audit?limit=10`, { headers: { Cookie: `auth=${identity.raw}` } }),
+  ])
+  if (tRes.ok) tenants = ((await tRes.json()) as { data: Tenant[] }).data ?? []
+  if (aRes.ok) recent = ((await aRes.json()) as { data: AuditEntry[] }).data ?? []
+} catch {
+  error = 'No se pudo cargar el panel.'
+}
+
+const counts = {
+  total: tenants.length,
+  active: tenants.filter((t) => t.status === 'ACTIVE').length,
+  provisioning: tenants.filter((t) => t.status === 'PROVISIONING').length,
+  suspended: tenants.filter((t) => t.status === 'SUSPENDED').length,
+  archived: tenants.filter((t) => t.status === 'ARCHIVED').length,
+}
+---
+<SuperAdminLayout title="Panel">
+  <div class="p-8">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Panel Superadmin</h1>
+      <p class="text-sm text-gray-500 mt-0.5">Visión global de todas las empresas registradas en la plataforma.</p>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <!-- KPI grid -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-8">
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">Empresas</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-900 tabular-nums">{counts.total}</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">Activas</div>
+        <div class="mt-1 text-2xl font-semibold text-green-700 tabular-nums">{counts.active}</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">Provisionando</div>
+        <div class="mt-1 text-2xl font-semibold text-amber-700 tabular-nums">{counts.provisioning}</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">Suspendidas</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-700 tabular-nums">{counts.suspended}</div>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-4">
+        <div class="text-xs font-medium text-gray-500 uppercase tracking-wide">Archivadas</div>
+        <div class="mt-1 text-2xl font-semibold text-gray-500 tabular-nums">{counts.archived}</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- Tenants summary -->
+      <div class="lg:col-span-2 bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h2 class="text-sm font-medium text-gray-700">Empresas recientes</h2>
+          <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">Ver todas →</a>
+        </div>
+        {tenants.length === 0 ? (
+          <div class="py-12 text-center text-sm text-gray-400">Aún no hay empresas registradas.</div>
+        ) : (
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200 bg-gray-50">
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Slug</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
+                <th class="text-left px-4 py-2.5 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tenants.slice(0, 8).map((t) => (
+                <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                  <td class="px-4 py-3 font-mono text-xs text-gray-500"><a href={`/superadmin/tenants/${t.slug}`} class="hover:text-gray-900">{t.slug}</a></td>
+                  <td class="px-4 py-3 text-gray-900">{t.name}</td>
+                  <td class="px-4 py-3">
+                    <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      t.status === 'ACTIVE' ? 'bg-green-50 text-green-700' :
+                      t.status === 'PROVISIONING' ? 'bg-amber-50 text-amber-700' :
+                      t.status === 'SUSPENDED' ? 'bg-gray-100 text-gray-700' :
+                      'bg-gray-100 text-gray-500'
+                    }`}>{t.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <!-- Audit -->
+      <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h2 class="text-sm font-medium text-gray-700">Actividad reciente</h2>
+          <a href="/superadmin/audit" class="text-xs text-gray-500 hover:text-gray-900">Ver todo →</a>
+        </div>
+        {recent.length === 0 ? (
+          <div class="py-12 text-center text-sm text-gray-400">Sin eventos.</div>
+        ) : (
+          <ul class="divide-y divide-gray-100">
+            {recent.map((e) => (
+              <li class="px-4 py-3">
+                <div class="text-xs font-mono text-gray-700">{e.action}</div>
+                <div class="text-xs text-gray-400 mt-0.5">{new Date(e.createdAt).toLocaleString('es-PA')}</div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  </div>
+</SuperAdminLayout>

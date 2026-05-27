@@ -5,21 +5,42 @@ import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
+import { consolidationRoutes } from './modules/attendance/consolidation-routes'
+import { attendanceDevicesRoutes } from './modules/attendance/devices-routes'
+import { attendanceImportRoutes } from './modules/attendance/import-routes'
+import { justificationRoutes } from './modules/attendance/justification-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
+import { unifiedPunchRoutes } from './modules/attendance/unified-routes'
+import { auditRoutes } from './modules/audit/routes'
 import { authRoutes } from './modules/auth/routes'
-import { cargosRoutes } from './modules/catalogs/cargos/routes'
+import { calendarRoutes } from './modules/calendar/routes'
+import { budgetItemsRoutes } from './modules/catalogs/budget-items/routes'
+import { chartOfAccountsRoutes } from './modules/catalogs/chart-of-accounts/routes'
 import { conceptsRoutes } from './modules/catalogs/concepts/routes'
-import { cuentasContablesRoutes } from './modules/catalogs/cuentas-contables/routes'
-import { departamentosRoutes } from './modules/catalogs/departamentos/routes'
-import { funcionesRoutes } from './modules/catalogs/funciones/routes'
-import { partidasRoutes } from './modules/catalogs/partidas/routes'
+import { departmentsRoutes } from './modules/catalogs/departments/routes'
+import { jobFunctionsRoutes } from './modules/catalogs/job-functions/routes'
+import { jobTitlesRoutes } from './modules/catalogs/job-titles/routes'
 import { companyRoutes } from './modules/company/routes'
+import { compensatoryTimeRoutes } from './modules/compensatory-time/routes'
 import { creditorRoutes } from './modules/creditors/routes'
+import { customFieldsRoutes } from './modules/custom-fields/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
+import { employeeFilesRoutes } from './modules/employee-files/routes'
+import { dependentsRoutes } from './modules/employees/dependents-routes'
 import { loansRoutes } from './modules/employees/loans/routes'
 import { employeeRoutes } from './modules/employees/routes'
+import { facialRoutes } from './modules/facial/routes'
 import { payrollRoutes } from './modules/payroll/routes'
+import { portalAuthRoutes } from './modules/portal/auth-routes'
+import { portalCredentialsRoutes } from './modules/portal/credentials-routes'
+import { portalDataRoutes } from './modules/portal/data-routes'
 import { positionsRoutes } from './modules/positions/routes'
+import { reportsRoutes } from './modules/reports/routes'
+import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
+import { superadminRoutes } from './modules/superadmin/routes'
+import { treasuryRoutes } from './modules/treasury/routes'
+import { tenantUserRoutes } from './modules/users/routes'
+import { vacationsRoutes } from './modules/vacations/routes'
 
 const app = new Elysia()
   // ── Global middleware (order matters) ──────────────────────────────────────
@@ -42,21 +63,43 @@ const app = new Elysia()
     timestamp: new Date().toISOString(),
   }))
   .use(authRoutes)
+  .use(superadminRoutes)
+  .use(calendarRoutes)
+  .use(roleRoutes)
+  .use(userRoleRoutes)
+  .use(tenantUserRoutes)
   .use(companyRoutes)
   .use(positionsRoutes)
   .use(employeeRoutes)
-  .use(cargosRoutes)
-  .use(funcionesRoutes)
-  .use(departamentosRoutes)
-  .use(partidasRoutes)
-  .use(cuentasContablesRoutes)
+  .use(dependentsRoutes)
+  .use(jobTitlesRoutes)
+  .use(jobFunctionsRoutes)
+  .use(departmentsRoutes)
+  .use(budgetItemsRoutes)
+  .use(chartOfAccountsRoutes)
   .use(conceptsRoutes)
   .use(dashboardRoutes)
   .use(acumuladosRoutes)
+  .use(auditRoutes)
   .use(attendanceRoutes)
+  .use(attendanceDevicesRoutes)
+  .use(attendanceImportRoutes)
+  .use(consolidationRoutes)
+  .use(justificationRoutes)
+  .use(unifiedPunchRoutes)
   .use(loansRoutes)
   .use(creditorRoutes)
+  .use(customFieldsRoutes)
+  .use(employeeFilesRoutes)
+  .use(vacationsRoutes)
+  .use(compensatoryTimeRoutes)
   .use(payrollRoutes)
+  .use(reportsRoutes)
+  .use(facialRoutes)
+  .use(treasuryRoutes)
+  .use(portalAuthRoutes)
+  .use(portalCredentialsRoutes)
+  .use(portalDataRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
   .listen({ port: env.PORT, hostname: env.HOST })

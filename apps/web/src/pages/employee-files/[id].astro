@@ -1,0 +1,438 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canWrite = can(identity, 'employee_files:write')
+const canDelete = can(identity, 'employee_files:delete')
+const canApprove = can(identity, 'employee_files:approve')
+
+const id = Astro.params.id ?? ''
+
+type Attachment = {
+  id: string
+  label: string
+  filePath: string
+  originalName: string
+  mimeType: string
+  fileSize: number
+  createdAt: string
+}
+type FileDetail = {
+  id: string
+  employeeId: string
+  typeId: number
+  subtypeId: number
+  documentDate: string
+  documentNumber: string
+  observations: string | null
+  extraFields: Record<string, unknown>
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  approvedBy: string | null
+  approvedAt: string | null
+  rejectionReason: string | null
+  createdAt: string
+  updatedAt: string
+  attachments: Attachment[]
+}
+type Employee = { id: string; code: string; firstName: string; lastName: string }
+type TypeRow = { id: number; code: string; name: string }
+type SubtypeRow = { id: number; code: string; name: string }
+type FieldDef = {
+  name: string
+  label: string
+  type: string
+}
+
+let detail: FileDetail | null = null
+let employee: Employee | null = null
+let typeRow: TypeRow | null = null
+let subtypeRow: SubtypeRow | null = null
+let fieldDefs: FieldDef[] = []
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/employee-files/${id}`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.status === 404) return Astro.redirect('/employee-files')
+  if (res.ok) detail = ((await res.json()) as { data: FileDetail }).data
+  else error = `No se pudo cargar el expediente (HTTP ${res.status}).`
+
+  if (detail) {
+    const [empRes, fieldsRes] = await Promise.all([
+      fetch(`${API_URL}/employees/${detail.employeeId}`, { headers }),
+      fetch(
+        `${API_URL}/employee-files/fields?typeId=${detail.typeId}&subtypeId=${detail.subtypeId}`,
+        { headers }
+      ),
+    ])
+    if (empRes.ok) employee = ((await empRes.json()) as { data: Employee }).data
+    if (fieldsRes.ok) {
+      const j = (await fieldsRes.json()) as {
+        data: { typeCode: string; subtypeCode: string; fields: FieldDef[] }
+      }
+      fieldDefs = j.data?.fields ?? []
+    }
+    const tRes = await fetch(`${API_URL}/employee-files/types`, { headers })
+    if (tRes.ok) {
+      const types = ((await tRes.json()) as { data: TypeRow[] }).data ?? []
+      typeRow = types.find((t) => t.id === detail?.typeId) ?? null
+    }
+    if (typeRow) {
+      const sRes = await fetch(`${API_URL}/employee-files/types/${detail.typeId}/subtypes`, {
+        headers,
+      })
+      if (sRes.ok) {
+        const subs = ((await sRes.json()) as { data: SubtypeRow[] }).data ?? []
+        subtypeRow = subs.find((s) => s.id === detail?.subtypeId) ?? null
+      }
+    }
+  }
+} catch (err) {
+  error = err instanceof Error ? err.message : 'No se pudo conectar.'
+}
+
+function fmtDate(s: string | null | undefined): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`
+}
+
+function fmtFieldValue(def: FieldDef, raw: unknown): string {
+  if (raw == null || raw === '') return '—'
+  if (def.type === 'select') {
+    return String(raw)
+  }
+  if (def.type === 'date') return fmtDate(String(raw))
+  if (def.type === 'number') return String(raw)
+  return String(raw)
+}
+
+// Map de adjuntos por label para mostrar al lado del campo correspondiente
+const attachmentsByLabel = new Map<string, Attachment>()
+const genericAttachments: Attachment[] = []
+if (detail) {
+  for (const a of detail.attachments) {
+    if (a.label === 'adjunto') genericAttachments.push(a)
+    else attachmentsByLabel.set(a.label, a)
+  }
+}
+
+const scalarFields = fieldDefs.filter((f) => f.type !== 'file')
+const fileFields = fieldDefs.filter((f) => f.type === 'file')
+---
+
+<AppLayout title={detail ? `Expediente ${detail.documentNumber}` : 'Expediente'}>
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    {employee && detail && (
+      <div class="mb-6 flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <a
+            href={`/employee-files?employeeId=${employee.id}`}
+            class="text-xs text-gray-500 hover:text-gray-900"
+          >← Volver a expedientes de {employee.lastName}</a>
+          <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight font-mono">
+            {detail.documentNumber}
+          </h1>
+          <p class="text-sm text-gray-500 mt-0.5">
+            {typeRow?.name ?? '—'} · {subtypeRow?.name ?? '—'}
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          {canWrite && (
+            <a
+              href={`/employee-files/${detail.id}/edit`}
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+            >Editar</a>
+          )}
+          {canDelete && (
+            <form
+              method="POST"
+              action={`/api/employee-files/delete`}
+              data-saconfirm
+              data-sa-title="Eliminar expediente"
+              data-sa-message={`Vas a eliminar el expediente ${detail.documentNumber} y todos sus adjuntos. Esta acción no se puede deshacer.`}
+              data-sa-confirm-label="Eliminar"
+              data-sa-tone="danger"
+              data-sa-loading-title="Eliminando"
+              data-sa-success-title="Expediente eliminado"
+              data-sa-error-title="No se pudo eliminar"
+            >
+              <input type="hidden" name="id" value={detail.id} />
+              <input type="hidden" name="employeeId" value={detail.employeeId} />
+              <button
+                type="submit"
+                class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-red-200 text-red-700 text-sm font-medium hover:bg-red-50 transition-colors"
+              >Eliminar</button>
+            </form>
+          )}
+        </div>
+      </div>
+    )}
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    {detail && (
+      <div class={`mb-5 rounded-lg border px-4 py-3 flex items-center justify-between gap-3 ${
+        detail.approvalStatus === 'pending'
+          ? 'bg-amber-50 border-amber-200'
+          : detail.approvalStatus === 'approved'
+            ? 'bg-green-50 border-green-200'
+            : 'bg-red-50 border-red-200'
+      }`}>
+        <div class="flex items-center gap-3">
+          <span class={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
+            detail.approvalStatus === 'pending'
+              ? 'bg-amber-100 text-amber-800'
+              : detail.approvalStatus === 'approved'
+                ? 'bg-green-100 text-green-700'
+                : 'bg-red-100 text-red-700'
+          }`}>
+            {detail.approvalStatus === 'pending' ? 'Pendiente de aprobación' : detail.approvalStatus === 'approved' ? 'Aprobado' : 'Rechazado'}
+          </span>
+          {detail.approvalStatus !== 'pending' && detail.approvedAt && (
+            <span class="text-xs text-gray-600">
+              {detail.approvalStatus === 'approved' ? 'Aprobado' : 'Rechazado'} el{' '}
+              {new Date(detail.approvedAt).toLocaleString('es-PA')}
+            </span>
+          )}
+          {detail.approvalStatus === 'rejected' && detail.rejectionReason && (
+            <span class="text-xs text-red-700 italic">— {detail.rejectionReason}</span>
+          )}
+        </div>
+        {canApprove && detail.approvalStatus === 'pending' && (
+          <div class="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              id="ef-detail-approve"
+              data-id={detail.id}
+              data-doc={detail.documentNumber}
+              class="px-3.5 py-1.5 rounded-md bg-green-600 text-white text-xs font-medium hover:bg-green-700"
+            >Aprobar</button>
+            <button
+              type="button"
+              id="ef-detail-reject"
+              data-id={detail.id}
+              data-doc={detail.documentNumber}
+              class="px-3.5 py-1.5 rounded-md border border-red-300 text-red-700 bg-white text-xs font-medium hover:bg-red-50"
+            >Rechazar</button>
+          </div>
+        )}
+      </div>
+    )}
+
+    {detail && employee && (
+      <div class="space-y-5">
+        <!-- Identificación -->
+        <section class="bg-white border border-gray-200 rounded-lg p-6">
+          <h2 class="text-sm font-medium text-gray-900 mb-4">Documento</h2>
+          <dl class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <dt class="text-xs uppercase text-gray-400 tracking-wide mb-1">Empleado</dt>
+              <dd class="text-gray-900">
+                {employee.lastName}, {employee.firstName}
+                <span class="ml-2 text-xs text-gray-400 font-mono">{employee.code}</span>
+              </dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase text-gray-400 tracking-wide mb-1">Fecha</dt>
+              <dd class="text-gray-900">{fmtDate(detail.documentDate)}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase text-gray-400 tracking-wide mb-1">Número</dt>
+              <dd class="text-gray-900 font-mono">{detail.documentNumber}</dd>
+            </div>
+            {detail.observations && (
+              <div class="md:col-span-3">
+                <dt class="text-xs uppercase text-gray-400 tracking-wide mb-1">Observaciones</dt>
+                <dd class="text-gray-700 whitespace-pre-wrap">{detail.observations}</dd>
+              </div>
+            )}
+          </dl>
+        </section>
+
+        <!-- Datos específicos -->
+        {scalarFields.length > 0 && (
+          <section class="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 class="text-sm font-medium text-gray-900 mb-4">Datos específicos</h2>
+            <dl class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              {scalarFields.map((f) => (
+                <div>
+                  <dt class="text-xs uppercase text-gray-400 tracking-wide mb-1">{f.label}</dt>
+                  <dd class="text-gray-900 break-words">
+                    {fmtFieldValue(f, detail!.extraFields?.[f.name])}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        )}
+
+        <!-- Adjuntos por campo -->
+        {fileFields.length > 0 && (
+          <section class="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 class="text-sm font-medium text-gray-900 mb-4">Documentos específicos</h2>
+            <ul class="divide-y divide-gray-100">
+              {fileFields.map((f) => {
+                const att = attachmentsByLabel.get(f.name)
+                return (
+                  <li class="py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm text-gray-900">{f.label}</p>
+                      {att ? (
+                        <p class="text-xs text-gray-500 mt-0.5">
+                          {att.originalName} · {fmtBytes(att.fileSize)} ·
+                          <span class="font-mono ml-1">{att.mimeType}</span>
+                        </p>
+                      ) : (
+                        <p class="text-xs text-gray-400 italic mt-0.5">Sin archivo cargado</p>
+                      )}
+                    </div>
+                    {att && (
+                      <div class="flex items-center gap-2 shrink-0">
+                        <a
+                          href={`/api/employee-files/attachment/${att.id}/preview`}
+                          target="_blank"
+                          rel="noopener"
+                          class="text-xs text-blue-600 hover:underline"
+                        >Ver</a>
+                        <a
+                          href={`/api/employee-files/attachment/${att.id}/download`}
+                          class="text-xs text-blue-600 hover:underline"
+                        >Descargar</a>
+                      </div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </section>
+        )}
+
+        <!-- Adjuntos genéricos -->
+        {genericAttachments.length > 0 && (
+          <section class="bg-white border border-gray-200 rounded-lg p-6">
+            <h2 class="text-sm font-medium text-gray-900 mb-4">
+              Otros adjuntos
+              <span class="ml-2 text-xs text-gray-500 font-normal">
+                ({genericAttachments.length} {genericAttachments.length === 1 ? 'archivo' : 'archivos'})
+              </span>
+            </h2>
+            <ul class="divide-y divide-gray-100">
+              {genericAttachments.map((att) => (
+                <li class="py-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm text-gray-900">{att.originalName}</p>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                      {fmtBytes(att.fileSize)} ·
+                      <span class="font-mono ml-1">{att.mimeType}</span> ·
+                      <span class="ml-1">{fmtDate(att.createdAt)}</span>
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <a
+                      href={`/api/employee-files/attachment/${att.id}/preview`}
+                      target="_blank"
+                      rel="noopener"
+                      class="text-xs text-blue-600 hover:underline"
+                    >Ver</a>
+                    <a
+                      href={`/api/employee-files/attachment/${att.id}/download`}
+                      class="text-xs text-blue-600 hover:underline"
+                    >Descargar</a>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        <p class="text-xs text-gray-400 px-1">
+          Creado {fmtDate(detail.createdAt)} · Actualizado {fmtDate(detail.updatedAt)}
+        </p>
+      </div>
+    )}
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const sa = window.saModal
+      const approveBtn = document.getElementById('ef-detail-approve')
+      const rejectBtn = document.getElementById('ef-detail-reject')
+
+      async function approve(id, doc) {
+        if (!sa) return
+        const ok = await sa.confirm({
+          title: 'Aprobar expediente',
+          message: `Vas a aprobar el expediente ${doc}. ¿Continuar?`,
+          confirmLabel: 'Aprobar',
+          tone: 'primary',
+        })
+        if (!ok) return
+        sa.loading({ title: 'Aprobando', message: 'Procesando…' })
+        try {
+          const res = await fetch(`/api/employee-files/approve?id=${id}`, {
+            method: 'POST',
+            headers: { 'X-SA-Modal': '1' },
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            await sa.error({ title: 'No se pudo aprobar', message: json.error || 'HTTP ' + res.status })
+          } else {
+            await sa.success({
+              title: 'Expediente aprobado',
+              redirect: window.location.pathname,
+            })
+          }
+        } catch (err) {
+          await sa.error({ title: 'Error de red', message: String(err) })
+        }
+      }
+      async function reject(id, doc) {
+        if (!sa) return
+        const reason = window.prompt(`Razón del rechazo del expediente ${doc}:`, '')
+        if (reason == null) return
+        if (reason.trim().length < 3) {
+          await sa.error({ title: 'Razón requerida', message: 'Escribe al menos 3 caracteres.' })
+          return
+        }
+        sa.loading({ title: 'Rechazando', message: 'Procesando…' })
+        try {
+          const res = await fetch(`/api/employee-files/reject?id=${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+            body: JSON.stringify({ reason: reason.trim() }),
+          })
+          const json = await res.json().catch(() => ({}))
+          if (!res.ok || json.ok === false) {
+            await sa.error({ title: 'No se pudo rechazar', message: json.error || 'HTTP ' + res.status })
+          } else {
+            await sa.success({
+              title: 'Expediente rechazado',
+              redirect: window.location.pathname,
+            })
+          }
+        } catch (err) {
+          await sa.error({ title: 'Error de red', message: String(err) })
+        }
+      }
+      if (approveBtn) approveBtn.addEventListener('click', () => approve(approveBtn.dataset.id, approveBtn.dataset.doc))
+      if (rejectBtn) rejectBtn.addEventListener('click', () => reject(rejectBtn.dataset.id, rejectBtn.dataset.doc))
+    })()
+  </script>
+</AppLayout>

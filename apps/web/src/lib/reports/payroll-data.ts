@@ -1,4 +1,5 @@
 import type { PdfCompany, PdfGeneratedBy, PdfPayroll, PdfPayrollLine } from '../pdf/payroll-pdf'
+import { resolveTenantSlugFromCookie } from '../tenant-slug'
 
 /**
  * Shape assembled for every payroll report (PDF, XLSX, summary, payslips,
@@ -32,7 +33,6 @@ export type FetchResult =
   | { kind: 'error'; status: number; message: string }
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 // Large enough to hold any real-world payroll in a single call. The API query
 // builder caps the effective LIMIT, so this is a request-side sentinel that
@@ -77,7 +77,10 @@ export async function fetchPayrollReportData(
   authCookie: string,
   filters: PayrollReportFilters = {}
 ): Promise<FetchResult> {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
+  const headers = {
+    Cookie: `auth=${authCookie}`,
+    'X-Tenant': resolveTenantSlugFromCookie(authCookie),
+  }
 
   const params = new URLSearchParams({
     linesPage: '1',

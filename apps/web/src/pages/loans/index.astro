@@ -1,16 +1,18 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 // Mandatory global filter — propagated to the loans API which joins
 // through `employee_payroll_types` to keep results scoped to the active
 // type the topbar is showing.
 const activeTypeId = Astro.cookies.get('payroll.activeTypeId')?.value ?? ''
 
-const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 
 const LIMIT = 50
 

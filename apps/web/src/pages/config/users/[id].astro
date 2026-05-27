@@ -1,0 +1,246 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'users:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const userId = Astro.params.id ?? ''
+
+type UserRow = {
+  id: string
+  email: string
+  name: string
+  role: string
+  isActive: boolean
+  isTenantAdmin: boolean
+  permissionsVersion: number
+  lastLoginAt: string | null
+  createdAt: string
+}
+
+type Role = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  isSystem: boolean
+}
+
+let user: UserRow | null = null
+let allRoles: Role[] = []
+let assignedRoles: Role[] = []
+let error = ''
+
+try {
+  const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+  const [uRes, allRolesRes, userRolesRes] = await Promise.all([
+    fetch(`${API_URL}/tenant-users/${userId}`, { headers }),
+    fetch(`${API_URL}/roles`, { headers }),
+    fetch(`${API_URL}/users/${userId}/roles`, { headers }),
+  ])
+  if (uRes.status === 404) return Astro.redirect('/config/users')
+  if (uRes.ok) user = ((await uRes.json()) as { data: UserRow }).data
+  if (allRolesRes.ok) allRoles = ((await allRolesRes.json()) as { data: Role[] }).data ?? []
+  if (userRolesRes.ok) assignedRoles = ((await userRolesRes.json()) as { data: Role[] }).data ?? []
+  if (!uRes.ok) error = 'No se pudo cargar el usuario.'
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const assignedIds = new Set(assignedRoles.map((r) => r.id))
+const flash = Astro.url.searchParams.get('flash')
+const errorFlag = Astro.url.searchParams.get('error')
+const errorDetail = Astro.url.searchParams.get('detail')
+
+const canManageRoles = can(identity, 'roles:assign')
+const canEditUser = can(identity, 'users:update')
+const canDeactivate = can(identity, 'users:deactivate')
+
+// The single tenant_admin can never deactivate themselves through this form.
+const isCurrent = identity?.userId === user?.id
+const blockDeactivate = !!user?.isTenantAdmin
+---
+
+<AppLayout title={user?.name ?? 'Usuario'}>
+  <div class="p-8 max-w-3xl">
+    <div class="mb-6">
+      <a href="/config/users" class="text-xs text-gray-500 hover:text-gray-900">← Volver a usuarios</a>
+      <div class="mt-2 flex items-center gap-3">
+        <h1 class="text-xl font-semibold text-gray-900 tracking-tight">{user?.name ?? 'Usuario'}</h1>
+        {user?.isTenantAdmin && (
+          <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">Admin del tenant</span>
+        )}
+        {user && !user.isActive && (
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Inactivo</span>
+        )}
+      </div>
+      <p class="text-sm text-gray-500 mt-0.5 font-mono text-xs">{user?.email}</p>
+    </div>
+
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Usuario actualizado.</div>
+    )}
+    {flash === 'roles-updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Roles asignados.</div>
+    )}
+    {flash === 'password-updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Contraseña restablecida.</div>
+    )}
+    {flash === 'deactivated' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Usuario desactivado.</div>
+    )}
+    {flash === 'reactivated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Usuario reactivado.</div>
+    )}
+    {errorFlag && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        No se pudo aplicar la acción.
+        {errorDetail && (
+          <span class="block mt-1 text-xs font-mono opacity-80">{errorDetail}</span>
+        )}
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    {user && (
+      <div class="space-y-6">
+        <!-- Datos básicos -->
+        <form method="POST" action={`/api/tenant-users/${user.id}/update`} class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <h2 class="text-sm font-medium text-gray-700">Datos básicos</h2>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre</label>
+            <input
+              type="text"
+              name="name"
+              required
+              minlength="1"
+              maxlength="255"
+              value={user.name}
+              disabled={!canEditUser}
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+            />
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Correo</label>
+            <input
+              type="email"
+              value={user.email}
+              disabled
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">El correo no se puede cambiar — es el identificador de la cuenta.</p>
+          </div>
+          {canEditUser && (
+            <div>
+              <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Guardar cambios</button>
+            </div>
+          )}
+        </form>
+
+        <!-- Roles -->
+        <form method="POST" action={`/api/users/${user.id}/roles`} class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+          <div>
+            <h2 class="text-sm font-medium text-gray-700">Roles</h2>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Los permisos efectivos del usuario son la unión de los permisos de cada rol asignado y los heredados.
+            </p>
+          </div>
+          <div class="space-y-2">
+            {allRoles.length === 0 ? (
+              <p class="text-sm text-gray-500">No hay roles definidos en esta empresa.</p>
+            ) : (
+              allRoles.map((r) => (
+                <label class="flex items-start gap-3 py-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="roleIds"
+                    value={r.id}
+                    checked={assignedIds.has(r.id)}
+                    disabled={!canManageRoles}
+                    class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                      <span class="text-sm font-medium text-gray-900">{r.name}</span>
+                      <code class="text-xs font-mono text-gray-500">{r.code}</code>
+                      {r.isSystem && (
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">Sistema</span>
+                      )}
+                    </div>
+                    {r.description && <div class="text-xs text-gray-500 mt-0.5">{r.description}</div>}
+                  </div>
+                </label>
+              ))
+            )}
+          </div>
+          {canManageRoles && allRoles.length > 0 && (
+            <div>
+              <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Guardar roles</button>
+            </div>
+          )}
+        </form>
+
+        <!-- Contraseña + estado -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6 space-y-5">
+          <h2 class="text-sm font-medium text-gray-700">Acciones</h2>
+
+          {canEditUser && (
+            <form method="POST" action={`/api/tenant-users/${user.id}/password`} class="space-y-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Restablecer contraseña</label>
+              <div class="flex gap-2">
+                <input
+                  type="password"
+                  name="password"
+                  required
+                  minlength="12"
+                  maxlength="256"
+                  placeholder="Nueva contraseña (mínimo 12 caracteres)"
+                  class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                />
+                <button type="submit" class="px-3 py-2 text-sm rounded-md bg-blue-600 text-white hover:bg-blue-700">Establecer</button>
+              </div>
+              <p class="text-xs text-gray-500">Al cambiarla se invalidan las sesiones activas del usuario.</p>
+            </form>
+          )}
+
+          {canDeactivate && !isCurrent && !blockDeactivate && user.isActive && (
+            <form
+              method="POST"
+              action={`/api/tenant-users/${user.id}/deactivate`}
+              onsubmit="return confirm('¿Desactivar este usuario? No podrá iniciar sesión hasta que lo reactives.');"
+            >
+              <button type="submit" class="px-3 py-2 text-sm rounded-md border border-red-200 text-red-700 hover:bg-red-50">
+                Desactivar usuario
+              </button>
+            </form>
+          )}
+
+          {canDeactivate && !user.isActive && (
+            <form method="POST" action={`/api/tenant-users/${user.id}/reactivate`}>
+              <button type="submit" class="px-3 py-2 text-sm rounded-md bg-green-600 text-white hover:bg-green-700">
+                Reactivar usuario
+              </button>
+            </form>
+          )}
+
+          {blockDeactivate && (
+            <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+              Este es el administrador único del tenant. Para reemplazarlo, usá el flujo "Restablecer contraseña del admin"
+              en el panel del super-admin.
+            </p>
+          )}
+          {isCurrent && user.isActive && (
+            <p class="text-xs text-gray-500">No podés desactivarte a ti mismo.</p>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</AppLayout>

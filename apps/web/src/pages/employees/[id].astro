@@ -1,10 +1,12 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 const { id } = Astro.params
 
@@ -12,23 +14,64 @@ type Employee = {
   id: string
   code: string
   firstName: string
+  secondName: string | null
   lastName: string
+  secondSurname: string | null
+  marriedSurname: string | null
   idNumber: string
+  idPrefix: string | null
+  idProvince: string | null
+  idVolume: string | null
+  idFolio: string | null
   socialSecurityNumber: string | null
+  sex: string | null
+  maritalStatus: string | null
+  nationality: string | null
+  birthDate: string | null
+  birthPlace: string | null
   email: string | null
+  personalEmail: string | null
   phone: string | null
-  cargoId: string | null
-  funcionId: string | null
-  departamentoId: string | null
+  addressProvince: string | null
+  addressDistrict: string | null
+  addressTownship: string | null
+  address: string | null
+  otherAddress: string | null
+  jobTitleId: string | null
+  jobFunctionId: string | null
+  departmentId: string | null
   positionId: string | null
   position: string | null
   department: string | null
   hireDate: string
   baseSalary: string
   payFrequency: string
+  decreeNumber: string | null
+  resolutionNumber: string | null
+  decreeDate: string | null
+  resolutionDate: string | null
+  collaboratorNumber: string | null
+  externalUserRef: string | null
+  contractType: string | null
+  irKey: string | null
+  shiftId: string | null
+  weeklyBaseHours: string | null
+  observations: string | null
+  terminationDate: string | null
+  terminationDecree: string | null
+  terminationResolution: string | null
+  terminationDecreeDate: string | null
+  terminationResolutionDate: string | null
+  terminationReason: string | null
+  siacapPct: string | null
   isActive: boolean
   payrollTypeIds?: string[]
+  bankId?: string | null
+  accountNumber?: string | null
+  accountType?: 'savings' | 'checking' | null
+  paymentMethod?: 'ach' | 'check' | 'cash'
 }
+type Bank = { id: string; name: string; isActive: number }
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 
 type CatalogItem = { id: string; code: string; name: string; isActive: boolean }
@@ -38,9 +81,9 @@ type Position = {
   code: string
   name: string
   salary: string
-  cargoId: string | null
-  departamentoId: string | null
-  funcionId: string | null
+  jobTitleId: string | null
+  departmentId: string | null
+  jobFunctionId: string | null
   isActive: boolean
 }
 type CompanyConfig = { tipoInstitucion?: string | null }
@@ -55,6 +98,38 @@ type Loan = {
   isActive: boolean
   createdAt: string
 }
+type CustomFieldDefinition = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  fieldType: 'text' | 'integer' | 'float' | 'date'
+  isRequired: boolean
+  isActive: boolean
+  defaultValue: unknown
+  sortOrder: number
+  validationRules?: {
+    dependsOn?: Array<{
+      field: string
+      op: string
+      value?: unknown
+      values?: unknown[]
+      effect: 'required' | 'visible' | 'readonly'
+    }>
+    readPermission?: string | null
+    writePermission?: string | null
+  } | null
+}
+type CustomFieldHistoryEntry = {
+  id: string
+  employeeId: string
+  fieldCode: string
+  oldValue: unknown
+  newValue: unknown
+  changedBy: string | null
+  changedAt: string
+}
+type UserRow = { id: string; name: string | null; email: string }
 
 let emp: Employee | null = null
 let cargos: CatalogItem[] = []
@@ -63,15 +138,60 @@ let departamentos: Departamento[] = []
 let positions: Position[] = []
 let loans: Loan[] = []
 let payrollTypes: PayrollType[] = []
+let customFieldDefs: CustomFieldDefinition[] = []
+let cfHistory: CustomFieldHistoryEntry[] = []
+const userNameMap = new Map<string, string>()
 let tipoInstitucion = 'privada'
+let banksCatalog: Bank[] = []
+
+type FileRow = {
+  id: string
+  typeId: number
+  subtypeId: number
+  documentNumber: string
+  documentDate: string
+  observations: string | null
+  approvalStatus: 'pending' | 'approved' | 'rejected'
+  rejectionReason: string | null
+  approvedAt: string | null
+  createdAt: string
+}
+type FileType = { id: number; code: string; name: string }
+type FileSubtype = { id: number; code: string; name: string; typeId: number }
+let efFiles: FileRow[] = []
+let efTypes: FileType[] = []
+const efSubtypes: FileSubtype[] = []
+
+type VacationBalance = {
+  enjoy: { earned: number; used: number; reserved: number; available: number }
+  paid: { earned: number; used: number; reserved: number; available: number }
+  lastAccrualDate: string | null
+}
+type VacationRequest = {
+  id: string
+  requestNumber: string
+  requestType: 'enjoy' | 'pay' | 'mixed'
+  startDate: string | null
+  endDate: string | null
+  enjoyDays: number
+  paidDays: number
+  reason: string | null
+  status: 'pending' | 'approved' | 'rejected' | 'processed' | 'cancelled'
+  rejectionReason: string | null
+  approvedAt: string | null
+  payrollId: string | null
+  createdAt: string
+}
+let vacBalance: VacationBalance | null = null
+let vacRequests: VacationRequest[] = []
 
 try {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [empRes, cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
     fetch(`${API_URL}/employees/${id}`, { headers }),
-    fetch(`${API_URL}/cargos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
     fetch(`${API_URL}/concepts/config`, { headers }),
   ])
@@ -85,7 +205,7 @@ try {
   if (dRes.ok) departamentos = ((await dRes.json()) as { data: Departamento[] }).data ?? []
   if (compRes.ok) {
     const cfg = ((await compRes.json()) as { data: CompanyConfig }).data
-    tipoInstitucion = cfg?.tipoInstitucion ?? 'privada'
+    tipoInstitucion = cfg?.institutionType ?? 'privada'
   }
   if (cfgRes.ok) {
     const cfgData = (await cfgRes.json()) as { data?: { payrollTypes?: PayrollType[] } }
@@ -102,8 +222,102 @@ try {
     const lRes = await fetch(`${API_URL}/loans?employeeId=${emp.id}`, { headers })
     if (lRes.ok) loans = ((await lRes.json()) as { data: Loan[] }).data ?? []
   }
+
+  // Active custom field definitions, ordered by the catalog's sortOrder.
+  // Inactive ones se ocultan del formulario pero no se borran del jsonb,
+  // así que valores históricos quedan disponibles vía CAMPOADICIONAL().
+  const cfRes = await fetch(`${API_URL}/custom-fields`, { headers })
+  if (cfRes.ok) {
+    const cfJson = (await cfRes.json()) as { data: CustomFieldDefinition[] }
+    customFieldDefs = (cfJson.data ?? []).filter((d) => d.isActive)
+  }
+
+  // Historial de cambios de campos adicionales (más reciente primero).
+  if (emp) {
+    const histRes = await fetch(`${API_URL}/employees/${emp.id}/custom-fields/history?limit=200`, {
+      headers,
+    })
+    if (histRes.ok) {
+      cfHistory = ((await histRes.json()) as { data: CustomFieldHistoryEntry[] }).data ?? []
+    }
+    if (cfHistory.length > 0) {
+      const usersRes = await fetch(`${API_URL}/tenant-users`, { headers }).catch(() => null)
+      if (usersRes?.ok) {
+        const users = ((await usersRes.json()) as { data: UserRow[] }).data ?? []
+        for (const u of users) userNameMap.set(u.id, u.name || u.email)
+      }
+    }
+  }
+
+  // Vacaciones — saldo + últimas solicitudes.
+  if (emp) {
+    const [balRes, reqRes] = await Promise.all([
+      fetch(`${API_URL}/vacations/balance/${emp.id}`, { headers }),
+      fetch(`${API_URL}/vacations?employeeId=${emp.id}`, { headers }),
+    ])
+    if (balRes.ok) vacBalance = ((await balRes.json()) as { data: VacationBalance }).data
+    if (reqRes.ok) vacRequests = ((await reqRes.json()) as { data: VacationRequest[] }).data ?? []
+  }
+
+  // Catálogo de bancos (tab Bancario)
+  const banksRes = await fetch(`${API_URL}/banks`, { headers }).catch(() => null)
+  if (banksRes?.ok) {
+    banksCatalog = ((await banksRes.json()) as { data: Bank[] }).data ?? []
+  }
+
+  // Expedientes del empleado — agrupados por tipo en el tab.
+  if (emp) {
+    const [efRes, tRes] = await Promise.all([
+      fetch(`${API_URL}/employee-files?employeeId=${emp.id}`, { headers }),
+      fetch(`${API_URL}/employee-files/types`, { headers }),
+    ])
+    if (efRes.ok) efFiles = ((await efRes.json()) as { data: FileRow[] }).data ?? []
+    if (tRes.ok) efTypes = ((await tRes.json()) as { data: FileType[] }).data ?? []
+    // Subtipos para mapear nombres — solo para los tipos que el empleado tiene.
+    const distinctTypeIds = Array.from(new Set(efFiles.map((f) => f.typeId)))
+    for (const tid of distinctTypeIds) {
+      try {
+        const sres = await fetch(`${API_URL}/employee-files/types/${tid}/subtypes`, { headers })
+        if (sres.ok) {
+          const subs = ((await sres.json()) as { data: FileSubtype[] }).data ?? []
+          efSubtypes.push(...subs.map((s) => ({ ...s, typeId: tid })))
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
 } catch {
   return Astro.redirect('/employees')
+}
+
+const efTypeById = new Map(efTypes.map((t) => [t.id, t]))
+const efSubtypeById = new Map(efSubtypes.map((s) => [s.id, s]))
+const efFilesByType = new Map<number, FileRow[]>()
+for (const f of efFiles) {
+  const arr = efFilesByType.get(f.typeId) ?? []
+  arr.push(f)
+  efFilesByType.set(f.typeId, arr)
+}
+const efTypesWithFiles = Array.from(efFilesByType.keys())
+  .map((tid) => ({ type: efTypeById.get(tid), rows: efFilesByType.get(tid) ?? [] }))
+  .filter((g): g is { type: FileType; rows: FileRow[] } => Boolean(g.type))
+  .sort((a, b) => a.type.name.localeCompare(b.type.name, 'es'))
+
+function fmtFileDate(s: string): string {
+  if (!s) return '—'
+  const [y, m, d] = s.slice(0, 10).split('-')
+  return `${d}-${m}-${y}`
+}
+
+// `customFields` jsonb del empleado — diccionario code→valor.
+const empCustomFields = ((emp as unknown as { customFields?: Record<string, unknown> } | null)
+  ?.customFields ?? {}) as Record<string, unknown>
+function cfValue(code: string): string {
+  const v = empCustomFields[code]
+  if (v == null) return ''
+  if (v instanceof Date) return v.toISOString().slice(0, 10)
+  return String(v)
 }
 
 if (!emp) return Astro.redirect('/employees')
@@ -120,9 +334,9 @@ function buildOptions<T extends CatalogItem>(items: T[], currentId: string | nul
   return active
 }
 
-const cargoOptions = buildOptions(cargos, emp.cargoId)
-const funcionOptions = buildOptions(funciones, emp.funcionId)
-const deptOptions = buildOptions(departamentos, emp.departamentoId)
+const cargoOptions = buildOptions(cargos, emp.jobTitleId)
+const funcionOptions = buildOptions(funciones, emp.jobFunctionId)
+const deptOptions = buildOptions(departamentos, emp.departmentId)
 
 const positionOptions = isPublica ? positions.filter((p) => p.isActive) : []
 
@@ -183,6 +397,9 @@ const freqLabel: Record<string, string> = {
         <button type="button" class="tab-btn" data-tab="laboral" onclick="switchTab('laboral', this)">
           Datos Laborales
         </button>
+        <button type="button" class="tab-btn" data-tab="bancario" onclick="switchTab('bancario', this)">
+          Bancario
+        </button>
         <button type="button" class="tab-btn" data-tab="prestamos" onclick="switchTab('prestamos', this)">
           Préstamos
         </button>
@@ -191,36 +408,155 @@ const freqLabel: Record<string, string> = {
             Tipos de Planilla
           </button>
         )}
+        {customFieldDefs.length > 0 && (
+          <button type="button" class="tab-btn" data-tab="adicionales" onclick="switchTab('adicionales', this)">
+            Campos adicionales
+          </button>
+        )}
+        <button type="button" class="tab-btn" data-tab="expedientes" onclick="switchTab('expedientes', this)">
+          Expedientes{efFiles.length > 0 ? ` (${efFiles.length})` : ''}
+        </button>
+        <button type="button" class="tab-btn" data-tab="saldos" onclick="switchTab('saldos', this)">
+          Saldos
+        </button>
+        <button type="button" class="tab-btn" data-tab="dependientes" onclick="switchTab('dependientes', this)">
+          Dependientes
+        </button>
+        <button type="button" class="tab-btn" data-tab="portal" onclick="switchTab('portal', this)">
+          Portal
+        </button>
       </div>
 
       <!-- TAB: Datos Personales -->
       <div id="tab-personal">
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
-          <h3 class="font-semibold text-gray-800 mb-4">Identificación</h3>
-          <div class="grid grid-cols-2 gap-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Nombres</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Primer nombre *</label>
               <input type="text" name="firstName" class="input" required value={emp.firstName} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Apellido *</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Segundo nombre</label>
+              <input type="text" name="secondName" class="input" value={emp.secondName ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Primer apellido *</label>
               <input type="text" name="lastName" class="input" required value={emp.lastName} />
             </div>
             <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Segundo apellido</label>
+              <input type="text" name="secondSurname" class="input" value={emp.secondSurname ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Apellido de casada</label>
+              <input type="text" name="marriedSurname" class="input" value={emp.marriedSurname ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Identificación</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="col-span-2 md:col-span-1">
               <label class="block text-sm font-medium text-gray-700 mb-1">Cédula *</label>
               <input type="text" name="idNumber" class="input" required value={emp.idNumber} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Seguro Social</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sigla</label>
+              <input type="text" name="idPrefix" class="input" maxlength="5" value={emp.idPrefix ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
+              <input type="text" name="idProvince" class="input" maxlength="5" value={emp.idProvince ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tomo</label>
+              <input type="text" name="idVolume" class="input" maxlength="10" value={emp.idVolume ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Folio</label>
+              <input type="text" name="idFolio" class="input" maxlength="10" value={emp.idFolio ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Seguro social</label>
               <input type="text" name="socialSecurityNumber" class="input" value={emp.socialSecurityNumber ?? ''} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
+              <select name="sex" class="input">
+                <option value="">—</option>
+                <option value="M" selected={emp.sex === 'M'}>Masculino</option>
+                <option value="F" selected={emp.sex === 'F'}>Femenino</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Estado civil</label>
+              <select name="maritalStatus" class="input">
+                <option value="">—</option>
+                <option value="single" selected={emp.maritalStatus === 'single'}>Soltero(a)</option>
+                <option value="married" selected={emp.maritalStatus === 'married'}>Casado(a)</option>
+                <option value="divorced" selected={emp.maritalStatus === 'divorced'}>Divorciado(a)</option>
+                <option value="widowed" selected={emp.maritalStatus === 'widowed'}>Viudo(a)</option>
+                <option value="union" selected={emp.maritalStatus === 'union'}>Unión libre</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad</label>
+              <select name="nationality" class="input">
+                <option value="">—</option>
+                <option value="panamanian" selected={emp.nationality === 'panamanian'}>Panameño(a)</option>
+                <option value="foreign" selected={emp.nationality === 'foreign'}>Extranjero(a)</option>
+                <option value="naturalized" selected={emp.nationality === 'naturalized'}>Nacionalizado(a)</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha de nacimiento</label>
+              <input type="date" name="birthDate" class="input" value={emp.birthDate ?? ''} />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Lugar de nacimiento</label>
+              <input type="text" name="birthPlace" class="input" value={emp.birthPlace ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Contacto y dirección</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email institucional</label>
               <input type="email" name="email" class="input" value={emp.email ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Email personal</label>
+              <input type="email" name="personalEmail" class="input" value={emp.personalEmail ?? ''} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
               <input type="text" name="phone" class="input" value={emp.phone ?? ''} />
+            </div>
+            <div></div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Provincia</label>
+              <input type="text" name="addressProvince" class="input" value={emp.addressProvince ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Distrito</label>
+              <input type="text" name="addressDistrict" class="input" value={emp.addressDistrict ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Corregimiento</label>
+              <input type="text" name="addressTownship" class="input" value={emp.addressTownship ?? ''} />
+            </div>
+            <div></div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+              <input type="text" name="address" class="input" value={emp.address ?? ''} />
+            </div>
+            <div class="col-span-2">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Otra dirección</label>
+              <input type="text" name="otherAddress" class="input" value={emp.otherAddress ?? ''} />
             </div>
           </div>
         </div>
@@ -246,9 +582,9 @@ const freqLabel: Record<string, string> = {
                     <option
                       value={p.id}
                       selected={emp!.positionId === p.id}
-                      data-cargo={p.cargoId ?? ''}
-                      data-depto={p.departamentoId ?? ''}
-                      data-funcion={p.funcionId ?? ''}
+                      data-cargo={p.jobTitleId ?? ''}
+                      data-depto={p.departmentId ?? ''}
+                      data-funcion={p.jobFunctionId ?? ''}
                       data-salary={p.salary}
                     >
                       {p.name} ({p.code}) — ${p.salary}
@@ -257,9 +593,9 @@ const freqLabel: Record<string, string> = {
                 </select>
               </div>
               <!-- Hidden inputs auto-filled by JS, seeded with current employee values -->
-              <input type="hidden" name="cargoId" id="hiddenCargoId" value={emp.cargoId ?? ''} />
-              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" value={emp.departamentoId ?? ''} />
-              <input type="hidden" name="funcionId" id="hiddenFuncionId" value={emp.funcionId ?? ''} />
+              <input type="hidden" name="cargoId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
+              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
+              <input type="hidden" name="funcionId" id="hiddenFuncionId" value={emp.jobFunctionId ?? ''} />
             ) : (
               <!-- Empresa privada: selección directa -->
               <>
@@ -268,7 +604,7 @@ const freqLabel: Record<string, string> = {
                   <select name="departamentoId" class="input">
                     <option value="">— Sin departamento —</option>
                     {deptOptions.map((d) => (
-                      <option value={d.id} selected={emp!.departamentoId === d.id}>
+                      <option value={d.id} selected={emp!.departmentId === d.id}>
                         {d.name} ({d.code})
                       </option>
                     ))}
@@ -279,7 +615,7 @@ const freqLabel: Record<string, string> = {
                   <select name="cargoId" class="input">
                     <option value="">— Sin cargo —</option>
                     {cargoOptions.map((c) => (
-                      <option value={c.id} selected={emp!.cargoId === c.id}>
+                      <option value={c.id} selected={emp!.jobTitleId === c.id}>
                         {c.name} ({c.code})
                       </option>
                     ))}
@@ -290,7 +626,7 @@ const freqLabel: Record<string, string> = {
                   <select name="funcionId" class="input">
                     <option value="">— Sin función —</option>
                     {funcionOptions.map((f) => (
-                      <option value={f.id} selected={emp!.funcionId === f.id}>
+                      <option value={f.id} selected={emp!.jobFunctionId === f.id}>
                         {f.name} ({f.code})
                       </option>
                     ))}
@@ -333,6 +669,151 @@ const freqLabel: Record<string, string> = {
             </div>
           </div>
         </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-4">Datos gubernamentales y contratación</h3>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° Decreto</label>
+              <input type="text" name="decreeNumber" class="input" value={emp.decreeNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Decreto</label>
+              <input type="date" name="decreeDate" class="input" value={emp.decreeDate ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° Resuelto</label>
+              <input type="text" name="resolutionNumber" class="input" value={emp.resolutionNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fecha Resuelto</label>
+              <input type="date" name="resolutionDate" class="input" value={emp.resolutionDate ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° Colaborador</label>
+              <input type="text" name="collaboratorNumber" class="input" value={emp.collaboratorNumber ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Ref. usuario externo</label>
+              <input type="text" name="externalUserRef" class="input" value={emp.externalUserRef ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato</label>
+              <select name="contractType" class="input">
+                <option value="">—</option>
+                <option value="permanent" selected={emp.contractType === 'permanent'}>Permanente</option>
+                <option value="transitory" selected={emp.contractType === 'transitory'}>Contrato transitorio</option>
+                <option value="contingent" selected={emp.contractType === 'contingent'}>Contrato contingente</option>
+                <option value="professional_services" selected={emp.contractType === 'professional_services'}>Servicios profesionales</option>
+                <option value="deputy" selected={emp.contractType === 'deputy'}>Contrato diputado</option>
+                <option value="interim" selected={emp.contractType === 'interim'}>Contrato interino</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Clave I/R</label>
+              <input type="text" name="irKey" class="input" value={emp.irKey ?? ''} />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Horas base semanales</label>
+              <input type="text" name="weeklyBaseHours" class="input" value={emp.weeklyBaseHours ?? ''} />
+            </div>
+            <div class="col-span-2 md:col-span-3">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Observaciones</label>
+              <input type="text" name="observations" class="input" value={emp.observations ?? ''} />
+            </div>
+          </div>
+        </div>
+
+        {!emp.isActive && (
+          <div class="bg-white rounded-xl border border-red-200 p-6 mb-4">
+            <h3 class="font-semibold text-red-700 mb-4">Datos de baja</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Decreto baja</label>
+                <input type="text" name="terminationDecree" class="input" value={emp.terminationDecree ?? ''} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fecha decreto baja</label>
+                <input type="date" name="terminationDecreeDate" class="input" value={emp.terminationDecreeDate ?? ''} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Resuelto baja</label>
+                <input type="text" name="terminationResolution" class="input" value={emp.terminationResolution ?? ''} />
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fecha resuelto baja</label>
+                <input type="date" name="terminationResolutionDate" class="input" value={emp.terminationResolutionDate ?? ''} />
+              </div>
+              <div class="col-span-2 md:col-span-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Causal de baja</label>
+                <input type="text" name="terminationReason" class="input" value={emp.terminationReason ?? ''} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <!-- TAB: Bancario -->
+      <div id="tab-bancario" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Datos bancarios</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Configura cómo el empleado recibe su pago. El campo <strong>método</strong>
+            determina si entra al lote ACH automático o si se le emite cheque manual
+            desde el módulo de Tesorería.
+          </p>
+
+          <div>
+            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago</label>
+            <div class="bank-radio-group">
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} class="bank-radio-input" />
+                <span class="bank-radio-card">Cheque</span>
+              </label>
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="ach" checked={emp.paymentMethod === 'ach'} class="bank-radio-input" />
+                <span class="bank-radio-card">ACH</span>
+              </label>
+              <label class="bank-radio-label">
+                <input type="radio" name="paymentMethod" value="cash" checked={emp.paymentMethod === 'cash'} class="bank-radio-input" />
+                <span class="bank-radio-card">Efectivo</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="bank-fields" class="grid grid-cols-2 gap-4 mt-4" style={emp.paymentMethod === 'cash' ? 'display:none' : ''}>
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">Banco</label>
+              <select name="bankId" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="">— Sin banco —</option>
+                {banksCatalog.filter((b) => b.isActive === 1).map((b) => (
+                  <option value={b.id} selected={emp.bankId === b.id}>{b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">Tipo de cuenta</label>
+              <select name="accountType" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                <option value="" selected={!emp.accountType}>— Sin cuenta —</option>
+                <option value="savings" selected={emp.accountType === 'savings'}>Ahorros (SC)</option>
+                <option value="checking" selected={emp.accountType === 'checking'}>Corriente (DC)</option>
+              </select>
+            </div>
+
+            <div class="col-span-2">
+              <label class="block text-sm text-gray-700 font-medium mb-1">Número de cuenta</label>
+              <input type="text" name="accountNumber" value={emp.accountNumber ?? ''} maxlength="40" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm font-mono" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4 mt-4">
+            <div>
+              <label class="block text-sm text-gray-700 font-medium mb-1">SIACAP %</label>
+              <input type="text" name="siacapPct" value={emp.siacapPct ?? ''} maxlength="10" class="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- TAB: Préstamos -->
@@ -340,9 +821,6 @@ const freqLabel: Record<string, string> = {
         <div class="bg-white rounded-xl border border-gray-200 overflow-hidden mb-4">
           <div class="flex items-center justify-between px-6 py-4 border-b border-gray-100">
             <h3 class="font-semibold text-gray-800">Préstamos</h3>
-            <a href={`/employees/${id}/loans/new`} class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
-              + Nuevo préstamo
-            </a>
           </div>
           {loans.length === 0 ? (
             <div class="p-10 text-center text-gray-400 text-sm">
@@ -428,12 +906,519 @@ const freqLabel: Record<string, string> = {
         </div>
       )}
 
+      <!-- TAB: Campos adicionales (custom_field_definitions) -->
+      {customFieldDefs.length > 0 && (
+        <div id="tab-adicionales" style="display:none">
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-1">Campos adicionales</h3>
+            <p class="text-xs text-gray-500 mb-4">
+              Definidos en <a href="/config/custom-fields" class="text-blue-600 hover:underline">Configuración → Campos
+              adicionales</a>. Los valores numéricos se pueden referenciar en fórmulas con
+              <code class="font-mono">CAMPOADICIONAL("código")</code>.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {customFieldDefs.map((cf) => {
+                const baseClass =
+                  'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent'
+                const inputName = `cf_${cf.code}`
+                const value = cfValue(cf.code)
+                return (
+                  <div data-cf-row={cf.code}>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">
+                      {cf.name}
+                      {cf.isRequired && <span class="text-red-500 ml-0.5">*</span>}
+                    </label>
+                    {cf.fieldType === 'integer' && (
+                      <input
+                        type="number"
+                        step="1"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        class={baseClass}
+                      />
+                    )}
+                    {cf.fieldType === 'float' && (
+                      <input
+                        type="number"
+                        step="0.01"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        class={baseClass}
+                      />
+                    )}
+                    {cf.fieldType === 'date' && (
+                      <input
+                        type="date"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        class={baseClass}
+                      />
+                    )}
+                    {cf.fieldType === 'text' && (
+                      <input
+                        type="text"
+                        name={inputName}
+                        value={value}
+                        required={cf.isRequired}
+                        maxlength="255"
+                        class={baseClass}
+                      />
+                    )}
+                    <p class="mt-1 text-xs text-gray-400 font-mono">
+                      {cf.code}
+                      {cf.description && <span class="text-gray-500"> · {cf.description}</span>}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <!-- TAB: Expedientes -->
+      <div id="tab-expedientes" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Expedientes del empleado</h3>
+              <p class="text-xs text-gray-500">
+                {efFiles.length} {efFiles.length === 1 ? 'registro' : 'registros'} — estudios, permisos, licencias, etc.
+              </p>
+            </div>
+          </div>
+
+          {efFiles.length === 0 ? (
+            <p class="text-sm text-gray-400 py-8 text-center">
+              Sin expedientes para este empleado todavía.{' '}
+              <a href={`/employee-files?employeeId=${id}`} class="text-blue-600 hover:underline">Crear el primero</a>.
+            </p>
+          ) : (
+            <div class="space-y-4">
+              {efTypesWithFiles.map((g) => (
+                <div>
+                  <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                    {g.type.name}
+                    <span class="ml-1.5 text-gray-400 normal-case font-normal">
+                      · {g.rows.length} {g.rows.length === 1 ? 'expediente' : 'expedientes'}
+                    </span>
+                  </h4>
+                  <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                    <table class="w-full text-sm">
+                      <thead>
+                        <tr class="border-b border-gray-200 bg-gray-50">
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Número</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Fecha</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Subtipo</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                          <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Observaciones</th>
+                          <th class="px-3 py-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.rows.map((f) => {
+                          const s = efSubtypeById.get(f.subtypeId)
+                          const status = f.approvalStatus ?? 'approved'
+                          const statusLabel = status === 'pending' ? 'Pendiente' : status === 'approved' ? 'Aprobado' : 'Rechazado'
+                          const statusClass = status === 'pending'
+                            ? 'bg-amber-100 text-amber-800'
+                            : status === 'approved'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-red-100 text-red-700'
+                          return (
+                            <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                              <td class="px-3 py-2 font-mono text-xs text-gray-600 whitespace-nowrap">{f.documentNumber}</td>
+                              <td class="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">{fmtFileDate(f.documentDate)}</td>
+                              <td class="px-3 py-2 text-xs text-gray-700">{s?.name ?? '—'}</td>
+                              <td class="px-3 py-2 whitespace-nowrap">
+                                <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass}`}>{statusLabel}</span>
+                                {status === 'rejected' && f.rejectionReason && (
+                                  <div class="text-[10px] text-gray-500 mt-0.5" title={f.rejectionReason}>
+                                    {f.rejectionReason.length > 40 ? `${f.rejectionReason.slice(0, 40)}…` : f.rejectionReason}
+                                  </div>
+                                )}
+                              </td>
+                              <td class="px-3 py-2 text-xs text-gray-500 truncate max-w-xs" title={f.observations ?? ''}>
+                                {f.observations ?? '—'}
+                              </td>
+                              <td class="px-3 py-2 text-right whitespace-nowrap">
+                                <a href={`/employee-files/${f.id}`} class="text-xs text-gray-500 hover:text-gray-900">Ver</a>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- TAB: Saldos (vacaciones + compensatorios + incapacidades) -->
+      <div id="tab-saldos" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Saldo de vacaciones</h3>
+              <p class="text-xs text-gray-500">
+                30 días de cada tipo se acreditan al cumplir cada año desde la contratación.
+                {vacBalance?.lastAccrualDate ? ` Último acreditado: ${vacBalance.lastAccrualDate}.` : ''}
+              </p>
+            </div>
+          </div>
+
+          {vacBalance ? (
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+              <div class="vac-balance-card vac-balance-enjoy">
+                <div class="vac-balance-header">Disfrute</div>
+                <div class="flex items-baseline gap-2 mb-3">
+                  <span class="vac-balance-number">{vacBalance.enjoy.available}</span>
+                  <span class="vac-balance-total">/ {vacBalance.enjoy.earned} días disponibles</span>
+                </div>
+                <div class="vac-balance-detail">
+                  <div>Acumulado: <strong>{vacBalance.enjoy.earned}</strong></div>
+                  <div>Tomado: <strong>{vacBalance.enjoy.used}</strong></div>
+                  <div>Reservado (pendientes): <strong>{vacBalance.enjoy.reserved}</strong></div>
+                </div>
+              </div>
+              <div class="vac-balance-card vac-balance-paid">
+                <div class="vac-balance-header vac-balance-header-paid">Pagado</div>
+                <div class="flex items-baseline gap-2 mb-3">
+                  <span class="vac-balance-number">{vacBalance.paid.available}</span>
+                  <span class="vac-balance-total">/ {vacBalance.paid.earned} días disponibles</span>
+                </div>
+                <div class="vac-balance-detail">
+                  <div>Acumulado: <strong>{vacBalance.paid.earned}</strong></div>
+                  <div>Pagado: <strong>{vacBalance.paid.used}</strong></div>
+                  <div>Reservado (pendientes): <strong>{vacBalance.paid.reserved}</strong></div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p class="text-sm text-gray-400 py-4">Saldo no disponible.</p>
+          )}
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <div class="flex items-end justify-between mb-3">
+            <h3 class="font-semibold text-gray-800">Historial de solicitudes</h3>
+            <span class="text-xs text-gray-500">{vacRequests.length} {vacRequests.length === 1 ? 'solicitud' : 'solicitudes'}</span>
+          </div>
+          {vacRequests.length === 0 ? (
+            <p class="text-sm text-gray-400 py-6 text-center">Sin solicitudes registradas.</p>
+          ) : (
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-gray-200 bg-gray-50">
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Número</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Período</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Disfrute</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Pago</th>
+                    <th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
+                    <th class="px-3 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vacRequests.map((r) => {
+                    const statusLabel =
+                      r.status === 'pending' ? 'Pendiente' :
+                      r.status === 'approved' ? 'Aprobada' :
+                      r.status === 'rejected' ? 'Rechazada' :
+                      r.status === 'processed' ? 'Procesada' :
+                      'Cancelada'
+                    const statusClass =
+                      r.status === 'pending' ? 'bg-amber-100 text-amber-800' :
+                      r.status === 'approved' || r.status === 'processed' ? 'bg-green-100 text-green-700' :
+                      r.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                      'bg-gray-100 text-gray-600'
+                    const typeLabel = r.requestType === 'enjoy' ? 'Disfrute' : r.requestType === 'pay' ? 'Pago' : 'Mixto'
+                    return (
+                      <tr class="border-b border-gray-100 last:border-0 hover:bg-gray-50">
+                        <td class="px-3 py-2 font-mono text-xs text-gray-700">{r.requestNumber}</td>
+                        <td class="px-3 py-2 text-xs text-gray-700">{typeLabel}</td>
+                        <td class="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
+                          {r.startDate && r.endDate ? `${r.startDate} → ${r.endDate}` : '—'}
+                        </td>
+                        <td class="px-3 py-2 text-xs text-gray-700">{r.enjoyDays || '—'}</td>
+                        <td class="px-3 py-2 text-xs text-gray-700">{r.paidDays || '—'}</td>
+                        <td class="px-3 py-2">
+                          <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${statusClass}`}>{statusLabel}</span>
+                          {r.status === 'rejected' && r.rejectionReason && (
+                            <div class="text-[10px] text-gray-500 mt-0.5" title={r.rejectionReason}>{r.rejectionReason.slice(0, 40)}</div>
+                          )}
+                        </td>
+                        <td class="px-3 py-2 text-right whitespace-nowrap">
+                          {r.status === 'pending' && (
+                            <button type="button" class="text-[11px] text-red-600 hover:underline" data-cancel-vac={r.id} data-num={r.requestNumber}>Cancelar</button>
+                          )}
+                          {r.payrollId && (
+                            <a href={`/payroll/${r.payrollId}`} class="text-[11px] text-blue-600 hover:underline" title="Ver planilla generada">
+                              Planilla →
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <!-- Modal: solicitar vacaciones -->
+        <div id="vac-modal" class="fixed inset-0 bg-black/40 z-50 hidden items-center justify-center p-4">
+          <div class="bg-white rounded-xl shadow-xl w-full max-w-lg border border-gray-200">
+            <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+              <h3 class="font-semibold text-gray-900">Solicitar vacaciones</h3>
+              <button type="button" id="vac-modal-close" class="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+            <form id="vac-form" class="p-5 space-y-3">
+              <input type="hidden" name="employeeId" value={id} />
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo de solicitud *</label>
+                <div class="flex gap-2">
+                  <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input type="radio" name="requestType" value="enjoy" required checked />
+                    <span>Disfrute</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input type="radio" name="requestType" value="pay" />
+                    <span>Pago</span>
+                  </label>
+                  <label class="flex items-center gap-1.5 text-sm border border-gray-300 rounded-md px-3 py-2 cursor-pointer hover:bg-gray-50 flex-1 justify-center has-[:checked]:bg-blue-50 has-[:checked]:border-blue-500">
+                    <input type="radio" name="requestType" value="mixed" />
+                    <span>Mixto</span>
+                  </label>
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div data-show-when="enjoy mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha inicio</label>
+                  <input type="date" name="startDate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+                <div data-show-when="enjoy mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha fin</label>
+                  <input type="date" name="endDate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div data-show-when="enjoy mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                    Días de disfrute
+                    <span class="text-gray-400 ml-1">(máx. {vacBalance?.enjoy.available ?? 0})</span>
+                  </label>
+                  <input type="number" name="enjoyDays" min="0" max={vacBalance?.enjoy.available ?? 0} value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+                <div data-show-when="pay mixed">
+                  <label class="block text-xs font-medium text-gray-600 mb-1.5">
+                    Días a pagar
+                    <span class="text-gray-400 ml-1">(máx. {vacBalance?.paid.available ?? 0})</span>
+                  </label>
+                  <input type="number" name="paidDays" min="0" max={vacBalance?.paid.available ?? 0} value="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1.5">Motivo (opcional)</label>
+                <textarea name="reason" rows="2" maxlength="1000" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md"></textarea>
+              </div>
+              <div id="vac-form-error" class="hidden text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2"></div>
+              <div class="flex justify-end gap-2 pt-2">
+                <button type="button" id="vac-modal-cancel" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 font-medium">Enviar solicitud</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4 mt-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
+          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas por pool.</p>
+          <div id="comp-time-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div class="text-center py-6 text-sm text-gray-400">Cargando...</div>
+          </div>
+          <div id="comp-time-movements">
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movimientos recientes</h4>
+            <div id="comp-time-mov-body" class="text-center py-4 text-sm text-gray-400">Cargando...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Dependientes -->
+      <div id="tab-dependientes" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="flex items-end justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Dependientes</h3>
+              <p class="text-xs text-gray-500">Carga familiar del empleado.</p>
+            </div>
+            <button type="button" id="dep-add-btn" class="px-3 py-1.5 text-xs font-medium text-white rounded-md" style="background:var(--navy)">
+              + Agregar
+            </button>
+          </div>
+
+          <div id="dep-form" class="hidden mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Nombre *</label>
+                <input type="text" id="dep-firstName" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Apellido *</label>
+                <input type="text" id="dep-lastName" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Cédula</label>
+                <input type="text" id="dep-idNumber" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Parentesco *</label>
+                <select id="dep-relationship" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                  <option value="spouse">Cónyuge</option>
+                  <option value="child">Hijo(a)</option>
+                  <option value="parent">Padre/Madre</option>
+                  <option value="sibling">Hermano(a)</option>
+                  <option value="other">Otro</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Fecha nacimiento</label>
+                <input type="date" id="dep-birthDate" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">Sexo</label>
+                <select id="dep-sex" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                  <option value="">—</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+              </div>
+              <div class="col-span-2 flex items-center gap-3 pt-4">
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input type="checkbox" id="dep-hasDisability" class="rounded" />
+                  Con discapacidad
+                </label>
+              </div>
+            </div>
+            <div id="dep-disability-row" class="hidden mb-3">
+              <label class="block text-xs font-medium text-gray-600 mb-1">Descripción de discapacidad</label>
+              <input type="text" id="dep-disabilityDesc" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+            <div class="flex justify-end gap-2">
+              <button type="button" id="dep-cancel-btn" class="px-3 py-1.5 text-sm text-gray-600">Cancelar</button>
+              <button type="button" id="dep-save-btn" class="px-4 py-1.5 text-sm text-white rounded-md font-medium" style="background:var(--ok)">Guardar</button>
+            </div>
+          </div>
+
+          <div id="dep-list">
+            <div class="py-8 text-center text-sm text-gray-400">Cargando...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Portal de colaboradores -->
+      <div id="tab-portal" style="display:none">
+        <div class="bg-white rounded-xl border border-gray-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-800">Portal de colaboradores</h3>
+              <p class="text-xs text-gray-500 mt-0.5">Gestión de acceso al portal de autoservicio.</p>
+            </div>
+            <span id="portal-status-badge" class="text-xs font-medium px-2.5 py-0.5 rounded bg-gray-100 text-gray-500">Cargando...</span>
+          </div>
+
+          <div id="portal-controls" class="space-y-1">
+            <div class="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <div class="text-sm font-medium text-gray-800">Acceso al portal</div>
+                <div class="text-xs text-gray-500">El empleado podrá ingresar con su cédula y contraseña.</div>
+              </div>
+              <button type="button" class="toggle-btn" onclick="togglePortalCb('portal-enabled')">
+                <span class="toggle-track toggle-off" id="portal-enabled-track"><span class="toggle-knob knob-off" id="portal-enabled-knob"></span></span>
+              </button>
+              <input type="checkbox" id="portal-enabled" class="hidden" />
+            </div>
+
+            <div class="flex items-center justify-between py-3 border-b border-gray-100">
+              <div>
+                <div class="text-sm font-medium text-gray-800">Aprobador de departamento</div>
+                <div class="text-xs text-gray-500">Puede aprobar/rechazar solicitudes de su departamento.</div>
+              </div>
+              <button type="button" class="toggle-btn" onclick="togglePortalCb('portal-approver')">
+                <span class="toggle-track toggle-off" id="portal-approver-track"><span class="toggle-knob knob-off" id="portal-approver-knob"></span></span>
+              </button>
+              <input type="checkbox" id="portal-approver" class="hidden" />
+            </div>
+
+            <div class="py-3 border-b border-gray-100">
+              <div class="text-sm font-medium text-gray-800 mb-3">Módulos habilitados</div>
+              <div class="grid grid-cols-2 gap-3">
+                <label class="adv-check-item portal-mod-label">
+                  <span class="adv-check-box">
+                    <input type="checkbox" id="mod-requests" class="peer sr-only portal-mod" data-module="requests" />
+                    <span class="adv-check-mark"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2.5 6 5 8.5 9.5 3.5"/></svg></span>
+                  </span>
+                  <span class="adv-check-label"><span class="text-sm">Solicitudes</span><br/><span class="text-xs" style="color:var(--mute)">Crear y ver expedientes</span></span>
+                </label>
+                <label class="adv-check-item portal-mod-label">
+                  <span class="adv-check-box">
+                    <input type="checkbox" id="mod-attendance" class="peer sr-only portal-mod" data-module="attendance" />
+                    <span class="adv-check-mark"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2.5 6 5 8.5 9.5 3.5"/></svg></span>
+                  </span>
+                  <span class="adv-check-label"><span class="text-sm">Marcaciones</span><br/><span class="text-xs" style="color:var(--mute)">Ver registros de asistencia</span></span>
+                </label>
+                <label class="adv-check-item portal-mod-label">
+                  <span class="adv-check-box">
+                    <input type="checkbox" id="mod-vacations" class="peer sr-only portal-mod" data-module="vacations" />
+                    <span class="adv-check-mark"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2.5 6 5 8.5 9.5 3.5"/></svg></span>
+                  </span>
+                  <span class="adv-check-label"><span class="text-sm">Vacaciones</span><br/><span class="text-xs" style="color:var(--mute)">Solicitar y ver saldo</span></span>
+                </label>
+                <label class="adv-check-item portal-mod-label">
+                  <span class="adv-check-box">
+                    <input type="checkbox" id="mod-approvals" class="peer sr-only portal-mod" data-module="approvals" />
+                    <span class="adv-check-mark"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2.5 6 5 8.5 9.5 3.5"/></svg></span>
+                  </span>
+                  <span class="adv-check-label"><span class="text-sm">Aprobaciones</span><br/><span class="text-xs" style="color:var(--mute)">Bandeja de aprobación</span></span>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between py-3">
+              <div>
+                <div class="text-sm font-medium text-gray-800">Contraseña del portal</div>
+                <div class="text-xs text-gray-500" id="portal-pw-hint">Resetear a la contraseña por defecto (172839).</div>
+              </div>
+              <button type="button" id="portal-reset-pw" class="px-3 py-1.5 text-xs font-medium rounded-md border transition-colors" style="color:var(--warn);border-color:var(--warn);background:rgba(227,178,90,0.08);">
+                Resetear contraseña
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-gray-200 flex justify-end">
+            <button type="button" id="portal-save" class="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors" style="background:var(--navy);">
+              Guardar configuración del portal
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Actions -->
       <div class="flex justify-between mt-2">
         <!-- Deactivate -->
         {emp.isActive && (
           <form method="POST" action={`/api/employees/${id}`}
-            onsubmit="return confirm('¿Dar de baja a este empleado? Esta acción no se puede deshacer.')"
+            data-saconfirm="¿Dar de baja a este empleado? Esta acción no se puede deshacer."
+            data-satone="danger"
+            data-saconfirmlabel="Dar de baja"
           >
             <input type="hidden" name="_method" value="DELETE" />
             <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
@@ -474,7 +1459,153 @@ const freqLabel: Record<string, string> = {
     border-bottom-color: #2563eb;
     font-weight: 600;
   }
+
+  /* ── Toggle slider (same as Conceptos → Configuraciones Avanzadas) ── */
+  .toggle-btn   { display:flex; align-items:center; gap:.625rem; background:none; border:none; cursor:pointer; padding:0; }
+  .toggle-track { position:relative; display:inline-flex; width:2.25rem; height:1.25rem; border-radius:9999px; flex-shrink:0; transition:background .2s; }
+  .toggle-on    { background:var(--ok); }
+  .toggle-off   { background:var(--ink-4); border:1px solid var(--rule); }
+  .toggle-knob  { position:absolute; top:.125rem; width:1rem; height:1rem; border-radius:50%; background:#fff; transition:transform .2s; }
+  .knob-on      { transform:translateX(1.125rem); }
+  .knob-off     { transform:translateX(.125rem); }
+
+  /* ── Portal module checkboxes (matches adv-check from Conceptos) ── */
+  .portal-mod-label { padding:.625rem; border-radius:.5rem; border:1px solid var(--rule,#e5e7eb); cursor:pointer; transition:border-color 140ms; }
+  .portal-mod-label:hover { border-color:var(--rule-hi,#d1d5db); }
+  .adv-check-item { display:flex; align-items:flex-start; gap:.625rem; font-size:.8125rem; color:var(--fore-dim,#4b5563); }
+  .adv-check-item:hover { color:var(--fore,#1f2937); }
+  .adv-check-box { position:relative; flex-shrink:0; margin-top:1px; width:1rem; height:1rem; display:inline-grid; place-items:center; }
+  .adv-check-mark { position:absolute; inset:0; border:1.5px solid var(--rule-hi,#d1d5db); border-radius:4px; background:var(--ink-3,#fff); display:grid; place-items:center; color:transparent; transition:background 140ms,border-color 140ms,color 140ms; box-sizing:border-box; }
+  .adv-check-mark svg { width:11px; height:11px; }
+  .adv-check-item:hover .adv-check-mark { border-color:var(--mute-2,#9ca3af); }
+  .peer:checked + .adv-check-mark { background:var(--navy,#2563eb); border-color:var(--navy,#2563eb); color:#fff; }
+  .peer:focus-visible + .adv-check-mark { box-shadow:0 0 0 2px var(--navy-soft,rgba(37,99,235,0.2)); border-color:var(--navy-hi,#1d4ed8); }
+  .adv-check-label { line-height:1.3; }
+
+  /* ── Vacation balance cards (dark mode compatible) ── */
+  .vac-balance-card { border:1px solid var(--rule,#e5e7eb); border-radius:.5rem; padding:1rem; background:var(--ink-2,#fff); }
+  .vac-balance-enjoy { border-left:3px solid var(--navy,#2563eb); }
+  .vac-balance-paid { border-left:3px solid var(--ok,#6fb58c); }
+  .vac-balance-header { font-size:.6875rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; margin-bottom:.5rem; color:var(--navy-hi,#1d4ed8); }
+  .vac-balance-header-paid { color:var(--ok,#16a34a); }
+  .vac-balance-number { font-size:1.875rem; font-weight:700; color:var(--fore,#111827); }
+  .vac-balance-total { font-size:.875rem; color:var(--mute,#6b7280); }
+  .vac-balance-detail { font-size:.75rem; color:var(--mute-2,#6b7280); }
+  .vac-balance-detail strong { color:var(--fore-dim,#374151); font-weight:600; }
+  .vac-balance-detail div + div { margin-top:2px; }
+
+  /* ── Bancario radio group ── */
+  .bank-radio-group { display:flex; gap:.375rem; }
+  .bank-radio-label { cursor:pointer; }
+  .bank-radio-input { position:absolute; opacity:0; pointer-events:none; }
+  .bank-radio-card {
+    display:inline-flex; align-items:center; padding:.5rem .875rem;
+    border:1.5px solid var(--rule,#d1d5db); border-radius:6px;
+    font-size:.8125rem; font-weight:500; color:var(--fore-dim,#6b7280);
+    transition:border-color 140ms, background 140ms, color 140ms;
+  }
+  .bank-radio-card:hover { border-color:var(--rule-hi,#9ca3af); }
+  .bank-radio-input:checked + .bank-radio-card {
+    border-color:var(--navy,#2563eb); background:var(--navy-soft,rgba(37,99,235,0.1));
+    color:var(--fore,#111827);
+  }
 </style>
+
+<script type="application/json" id="cfDefs" set:html={JSON.stringify(customFieldDefs)}></script>
+
+<script is:inline>
+  ;(function () {
+    const defsEl = document.getElementById('cfDefs')
+    if (!defsEl) return
+    let defs
+    try {
+      defs = JSON.parse(defsEl.textContent || '[]')
+    } catch {
+      return
+    }
+    if (!Array.isArray(defs) || defs.length === 0) return
+
+    function readDeps(def) {
+      const rules = def.validationRules && Array.isArray(def.validationRules.dependsOn)
+        ? def.validationRules.dependsOn
+        : []
+      return rules.filter((r) => r && typeof r === 'object' && r.field && r.op && r.effect)
+    }
+    function isEmpty(v) {
+      if (v == null) return true
+      if (typeof v === 'string') return v.trim() === ''
+      return false
+    }
+    function toNum(v) {
+      if (v == null || v === '') return null
+      const n = Number(v)
+      return Number.isFinite(n) ? n : null
+    }
+    function evalRule(r, values) {
+      const v = values[r.field]
+      switch (r.op) {
+        case 'eq': return String(v ?? '') === String(r.value ?? '')
+        case 'ne': return String(v ?? '') !== String(r.value ?? '')
+        case 'gt': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a > b }
+        case 'lt': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a < b }
+        case 'gte': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a >= b }
+        case 'lte': { const a = toNum(v), b = toNum(r.value); return a != null && b != null && a <= b }
+        case 'in': return Array.isArray(r.values) && r.values.some((x) => String(x) === String(v ?? ''))
+        case 'empty': return isEmpty(v)
+        case 'notEmpty': return !isEmpty(v)
+        default: return false
+      }
+    }
+    function readValues() {
+      const out = {}
+      for (const def of defs) {
+        const el = document.querySelector('[name="cf_' + def.code + '"]')
+        out[def.code] = el ? el.value : ''
+      }
+      return out
+    }
+    function applyState() {
+      const values = readValues()
+      for (const def of defs) {
+        const rules = readDeps(def)
+        const row = document.querySelector('[data-cf-row="' + def.code + '"]')
+        const input = document.querySelector('[name="cf_' + def.code + '"]')
+        if (!row || !input) continue
+        const visRules = rules.filter((r) => r.effect === 'visible')
+        const reqRules = rules.filter((r) => r.effect === 'required')
+        const roRules = rules.filter((r) => r.effect === 'readonly')
+        const visible = visRules.length === 0 ? true : visRules.every((r) => evalRule(r, values))
+        const required = !!def.isRequired || (reqRules.length > 0 && reqRules.every((r) => evalRule(r, values)))
+        const readonly = roRules.length > 0 && roRules.every((r) => evalRule(r, values))
+        row.style.display = visible ? '' : 'none'
+        if (required && visible) input.setAttribute('required', 'required')
+        else input.removeAttribute('required')
+        if (readonly) input.setAttribute('readonly', 'readonly')
+        else input.removeAttribute('readonly')
+        if (!visible) input.value = ''
+        // Toggle the asterisk on the label so the user sees state changes.
+        const lbl = row.querySelector('label')
+        if (lbl) {
+          const star = lbl.querySelector('.cf-required-star')
+          if (required && !star) {
+            const sp = document.createElement('span')
+            sp.className = 'cf-required-star text-red-500 ml-0.5'
+            sp.textContent = '*'
+            lbl.appendChild(sp)
+          } else if (!required && star) {
+            star.remove()
+          }
+        }
+      }
+    }
+    for (const def of defs) {
+      const el = document.querySelector('[name="cf_' + def.code + '"]')
+      if (el) el.addEventListener('input', applyState)
+      if (el) el.addEventListener('change', applyState)
+    }
+    applyState()
+  })()
+</script>
 
 <script is:inline>
   function switchTab(tab, btn) {
@@ -483,6 +1614,122 @@ const freqLabel: Record<string, string> = {
     document.getElementById('tab-' + tab).style.display = ''
     btn.classList.add('active')
   }
+
+  // ─── Bancario: ocultar campos cuando es Efectivo ───────────────────────
+  ;(function() {
+    var bankFields = document.getElementById('bank-fields');
+    var radios = document.querySelectorAll('input[name="paymentMethod"]');
+    if (!bankFields || !radios.length) return;
+    radios.forEach(function(r) {
+      r.addEventListener('change', function() { bankFields.style.display = this.value === 'cash' ? 'none' : ''; });
+    });
+  })();
+
+  // ─── Vacaciones: modal de solicitud + cancelación ──────────────────────
+  ;(function () {
+    const modal = document.getElementById('vac-modal')
+    const openBtn = document.getElementById('vac-request-btn')
+    const closeBtn = document.getElementById('vac-modal-close')
+    const cancelBtn = document.getElementById('vac-modal-cancel')
+    const form = document.getElementById('vac-form')
+    const errBox = document.getElementById('vac-form-error')
+
+    function openModal() {
+      if (!modal) return
+      modal.classList.remove('hidden')
+      modal.classList.add('flex')
+      errBox.classList.add('hidden')
+      applyTypeVisibility()
+    }
+    function closeModal() {
+      if (!modal) return
+      modal.classList.add('hidden')
+      modal.classList.remove('flex')
+      form.reset()
+    }
+    function applyTypeVisibility() {
+      const selectedType = form.querySelector('input[name="requestType"]:checked')?.value || 'enjoy'
+      form.querySelectorAll('[data-show-when]').forEach((el) => {
+        const allowed = (el.getAttribute('data-show-when') || '').split(' ')
+        el.style.display = allowed.includes(selectedType) ? '' : 'none'
+      })
+    }
+
+    openBtn?.addEventListener('click', openModal)
+    closeBtn?.addEventListener('click', closeModal)
+    cancelBtn?.addEventListener('click', closeModal)
+    modal?.addEventListener('click', (e) => { if (e.target === modal) closeModal() })
+    form?.querySelectorAll('input[name="requestType"]').forEach((r) => r.addEventListener('change', applyTypeVisibility))
+
+    form?.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      errBox.classList.add('hidden')
+      const fd = new FormData(form)
+      const payload = {
+        employeeId: fd.get('employeeId'),
+        requestType: fd.get('requestType'),
+        startDate: fd.get('startDate') || null,
+        endDate: fd.get('endDate') || null,
+        enjoyDays: parseInt(fd.get('enjoyDays') || '0', 10),
+        paidDays: parseInt(fd.get('paidDays') || '0', 10),
+        reason: fd.get('reason') || null,
+      }
+      try {
+        const res = await fetch('/api/vacations/action?op=create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+          body: JSON.stringify(payload),
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!json.ok) {
+          errBox.textContent = json.error || ('HTTP ' + res.status)
+          errBox.classList.remove('hidden')
+          return
+        }
+        const sa = window.saModal
+        if (sa) {
+          await sa.success({
+            title: 'Solicitud enviada',
+            message: `Solicitud ${json.data?.requestNumber || ''} creada. El saldo quedó reservado hasta la aprobación.`,
+            redirect: window.location.pathname,
+          })
+        } else {
+          window.location.reload()
+        }
+      } catch (err) {
+        errBox.textContent = 'Error de red: ' + String(err)
+        errBox.classList.remove('hidden')
+      }
+    })
+
+    // Cancelar solicitud pendiente
+    document.querySelectorAll('[data-cancel-vac]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const id = btn.getAttribute('data-cancel-vac')
+        const num = btn.getAttribute('data-num')
+        const sa = window.saModal
+        if (!sa) return
+        const ok = await sa.confirm({
+          title: 'Cancelar solicitud',
+          message: `Vas a cancelar la solicitud ${num}. Los días reservados se devolverán al saldo.`,
+          confirmLabel: 'Cancelar solicitud',
+          tone: 'danger',
+        })
+        if (!ok) return
+        sa.loading({ title: 'Cancelando', message: 'Procesando…' })
+        const res = await fetch('/api/vacations/action?op=cancel&id=' + id, {
+          method: 'POST',
+          headers: { 'X-SA-Modal': '1' },
+        })
+        const json = await res.json().catch(() => ({}))
+        if (!json.ok) {
+          await sa.error({ title: 'No se pudo cancelar', message: json.error })
+        } else {
+          await sa.success({ title: 'Solicitud cancelada', redirect: window.location.pathname })
+        }
+      })
+    })
+  })()
 
   // Auto-fill cargo/depto/funcion/salary from selected position (empresa pública)
   const posSelect = document.getElementById('positionSelect')
@@ -495,4 +1742,289 @@ const freqLabel: Record<string, string> = {
       document.getElementById('baseSalaryInput').value = opt.dataset.salary || ''
     })
   }
+</script>
+
+<script is:inline>
+function togglePortalCb(id) {
+  var cb = document.getElementById(id);
+  if (!cb) return;
+  cb.checked = !cb.checked;
+  syncToggleUI(id, cb.checked);
+}
+function syncToggleUI(id, val) {
+  var cb = document.getElementById(id);
+  var track = document.getElementById(id + '-track');
+  var knob = document.getElementById(id + '-knob');
+  if (cb) cb.checked = val;
+  if (track) {
+    track.classList.remove('toggle-on', 'toggle-off');
+    track.classList.add(val ? 'toggle-on' : 'toggle-off');
+  }
+  if (knob) {
+    knob.classList.remove('knob-on', 'knob-off');
+    knob.classList.add(val ? 'knob-on' : 'knob-off');
+  }
+}
+
+;(function() {
+  var empId = window.location.pathname.split('/employees/')[1]?.split('/')[0] || '';
+  if (!empId) return;
+  var badge = document.getElementById('portal-status-badge');
+  var enabledCb = document.getElementById('portal-enabled');
+  var approverCb = document.getElementById('portal-approver');
+  var modChecks = document.querySelectorAll('.portal-mod');
+  var saveBtn = document.getElementById('portal-save');
+  var resetBtn = document.getElementById('portal-reset-pw');
+  var pwHint = document.getElementById('portal-pw-hint');
+  var sa = window.saModal;
+  if (!badge || !enabledCb || !saveBtn) return;
+
+  function loadPortalData() {
+    fetch('/api/employees/' + empId + '/portal')
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (!res.success) { badge.textContent = 'Error'; return; }
+        var d = res.data;
+        var isOn = false;
+        if (!d.hasCredentials) {
+          badge.textContent = 'Sin acceso';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-gray-100 text-gray-500';
+        } else if (d.credentials.isLocked) {
+          badge.textContent = 'Bloqueado';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-red-100 text-red-700';
+          isOn = d.credentials.isActive;
+        } else if (!d.credentials.isActive) {
+          badge.textContent = 'Desactivado';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-amber-100 text-amber-700';
+        } else {
+          badge.textContent = 'Activo';
+          badge.className = 'text-xs font-medium px-2.5 py-0.5 rounded bg-green-100 text-green-700';
+          isOn = true;
+        }
+        syncToggleUI('portal-enabled', isOn);
+        syncToggleUI('portal-approver', d.credentials?.isApprover || false);
+        var mods = {};
+        (d.modules || []).forEach(function(m) { mods[m.module] = m.isEnabled; });
+        modChecks.forEach(function(cb) { cb.checked = mods[cb.dataset.module] !== false; });
+        if (d.credentials?.lastLoginAt) {
+          pwHint.textContent = 'Último acceso: ' + new Date(d.credentials.lastLoginAt).toLocaleDateString('es-PA');
+        }
+      })
+      .catch(function() { badge.textContent = 'Error de conexión'; });
+  }
+
+  saveBtn.addEventListener('click', function() {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Guardando...';
+    var modules = [];
+    modChecks.forEach(function(cb) { modules.push({ module: cb.dataset.module, isEnabled: cb.checked }); });
+    fetch('/api/employees/' + empId + '/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portalEnabled: enabledCb.checked, isApprover: approverCb.checked, modules: modules })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Guardar configuración del portal';
+      if (res.success) {
+        loadPortalData();
+        if (sa) sa.success({ title: 'Guardado', message: 'Configuración del portal actualizada.' });
+      } else {
+        if (sa) sa.error({ title: 'Error', message: res.error || 'No se pudo guardar.' });
+      }
+    })
+    .catch(function() {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Guardar configuración del portal';
+      if (sa) sa.error({ title: 'Error', message: 'Error de conexión.' });
+    });
+  });
+
+  resetBtn.addEventListener('click', async function() {
+    if (!sa) return;
+    var ok = await sa.confirm({
+      title: 'Resetear contraseña',
+      message: 'La contraseña se reseteará a 172839. El empleado deberá cambiarla en su próximo acceso.',
+      confirmLabel: 'Resetear',
+      tone: 'warning',
+    });
+    if (!ok) return;
+    sa.loading({ title: 'Reseteando', message: 'Procesando…' });
+    fetch('/api/employees/' + empId + '/portal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resetPassword: true })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res.success) sa.success({ title: 'Listo', message: 'Contraseña reseteada a 172839.' });
+      else sa.error({ title: 'Error', message: res.error || 'No se pudo resetear.' });
+    })
+    .catch(function() { sa.error({ title: 'Error', message: 'Error de conexión.' }); });
+  });
+
+  loadPortalData();
+})();
+</script>
+
+<script is:inline>
+;(function() {
+  var empId = window.location.pathname.split('/employees/')[1]?.split('/')[0] || '';
+  if (!empId) return;
+  var listEl = document.getElementById('dep-list');
+  var formEl = document.getElementById('dep-form');
+  var addBtn = document.getElementById('dep-add-btn');
+  var cancelBtn = document.getElementById('dep-cancel-btn');
+  var saveBtn = document.getElementById('dep-save-btn');
+  var hasDis = document.getElementById('dep-hasDisability');
+  var disRow = document.getElementById('dep-disability-row');
+  if (!listEl || !formEl || !addBtn) return;
+
+  var REL_LABELS = { spouse:'Cónyuge', child:'Hijo(a)', parent:'Padre/Madre', sibling:'Hermano(a)', other:'Otro' };
+  var editingId = null;
+
+  hasDis?.addEventListener('change', function() {
+    disRow.style.display = hasDis.checked ? '' : 'none';
+  });
+  addBtn.addEventListener('click', function() { editingId = null; clearForm(); formEl.classList.remove('hidden'); });
+  cancelBtn?.addEventListener('click', function() { formEl.classList.add('hidden'); });
+
+  function clearForm() {
+    ['dep-firstName','dep-lastName','dep-idNumber','dep-birthDate','dep-disabilityDesc'].forEach(function(id) {
+      var el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('dep-relationship').value = 'spouse';
+    document.getElementById('dep-sex').value = '';
+    hasDis.checked = false; disRow.style.display = 'none';
+  }
+
+  function loadDeps() {
+    fetch('/api/employees/' + empId + '/dependents')
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        var deps = (res.data || []).filter(function(d) { return d.isActive !== false; });
+        if (deps.length === 0) { listEl.innerHTML = '<div class="py-8 text-center text-sm text-gray-400">Sin dependientes registrados.</div>'; return; }
+        var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 bg-gray-50">' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Nombre</th>' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Cédula</th>' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Parentesco</th>' +
+          '<th class="text-left px-3 py-2 text-xs font-medium text-gray-500 uppercase">Discapacidad</th>' +
+          '<th class="px-3 py-2"></th></tr></thead><tbody>';
+        deps.forEach(function(d) {
+          html += '<tr class="border-b border-gray-100">' +
+            '<td class="px-3 py-2.5 font-medium text-gray-900">' + d.firstName + ' ' + d.lastName + '</td>' +
+            '<td class="px-3 py-2.5 text-gray-600 font-mono text-xs">' + (d.idNumber || '—') + '</td>' +
+            '<td class="px-3 py-2.5 text-gray-600 text-xs">' + (REL_LABELS[d.relationship] || d.relationship) + '</td>' +
+            '<td class="px-3 py-2.5">' + (d.hasDisability ? '<span class="text-xs font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Sí</span>' : '<span class="text-xs text-gray-400">No</span>') + '</td>' +
+            '<td class="px-3 py-2.5 text-right"><button class="text-xs text-red-500 hover:underline" onclick="window.__depDel(\'' + d.id + '\')">Eliminar</button></td></tr>';
+        });
+        html += '</tbody></table>';
+        listEl.innerHTML = html;
+      })
+      .catch(function() { listEl.innerHTML = '<div class="py-8 text-center text-sm text-red-400">Error al cargar.</div>'; });
+  }
+
+  saveBtn?.addEventListener('click', function() {
+    var fn = document.getElementById('dep-firstName').value.trim();
+    var ln = document.getElementById('dep-lastName').value.trim();
+    if (!fn || !ln) return;
+    var body = {
+      firstName: fn, lastName: ln,
+      idNumber: document.getElementById('dep-idNumber').value.trim() || null,
+      relationship: document.getElementById('dep-relationship').value,
+      birthDate: document.getElementById('dep-birthDate').value || null,
+      sex: document.getElementById('dep-sex').value || null,
+      hasDisability: hasDis.checked,
+      disabilityDescription: document.getElementById('dep-disabilityDesc').value.trim() || null,
+    };
+    if (editingId) body._id = editingId;
+    saveBtn.disabled = true;
+    fetch('/api/employees/' + empId + '/dependents', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      saveBtn.disabled = false;
+      if (res.success) { formEl.classList.add('hidden'); loadDeps(); }
+    })
+    .catch(function() { saveBtn.disabled = false; });
+  });
+
+  window.__depDel = function(depId) {
+    if (!confirm('¿Eliminar este dependiente?')) return;
+    fetch('/api/employees/' + empId + '/dependents', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dependentId: depId }),
+    }).then(function() { loadDeps(); });
+  };
+
+  loadDeps();
+})();
+</script>
+
+<script is:inline define:vars={{ empId: emp?.id ?? '' }}>
+(function() {
+  if (!empId) return;
+  var cardsEl = document.getElementById('comp-time-cards');
+  var movEl = document.getElementById('comp-time-mov-body');
+  var POOL_LABELS = { compensatory: 'Tiempo Compensatorio', disability: 'Incapacidad', family_disability: 'Familiar con Discapacidad' };
+
+  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('balance/' + empId))
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      var balances = (res && res.data) || [];
+      if (balances.length === 0) {
+        cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Sin saldos de tiempo compensatorio para este año.</div>';
+        return;
+      }
+      var html = '';
+      for (var i = 0; i < balances.length; i++) {
+        var b = balances[i];
+        var label = POOL_LABELS[b.pool] || b.pool;
+        html += '<div class="border border-gray-200 rounded-lg p-4">' +
+          '<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">' + label + '</h4>' +
+          '<div class="text-2xl font-light text-gray-900 mb-2">' + b.available.toFixed(1) + ' <span class="text-sm text-gray-500">hrs</span></div>' +
+          '<div class="flex gap-4 text-xs text-gray-500">' +
+            '<span>Ganadas: <b class="text-gray-700">' + b.earned.toFixed(1) + '</b></span>' +
+            '<span>Usadas: <b class="text-gray-700">' + b.used.toFixed(1) + '</b></span>' +
+            '<span>Reservadas: <b class="text-gray-700">' + b.reserved.toFixed(1) + '</b></span>' +
+          '</div></div>';
+      }
+      cardsEl.innerHTML = html;
+    })
+    .catch(function() {
+      cardsEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar saldos.</div>';
+    });
+
+  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('movements/' + empId + '?limit=10'))
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      var movs = (res && res.data) || [];
+      if (movs.length === 0) {
+        movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Sin movimientos registrados.</div>';
+        return;
+      }
+      var MOV_LABELS = { initialization: 'Inicialización', overtime: 'Horas extra', absence: 'Ausencia', lateness: 'Tardanza', permission: 'Permiso', birthday: 'Cumpleaños', adjustment: 'Ajuste', ausencias: 'Ausencia', tardanzas: 'Tardanza', permisos: 'Permiso', horas_extra: 'Horas extra' };
+      var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">' +
+        '<th class="text-left py-2 px-2">Fecha</th><th class="text-left py-2 px-2">Pool</th><th class="text-left py-2 px-2">Tipo</th><th class="text-right py-2 px-2">Horas</th><th class="text-left py-2 px-2">Notas</th></tr></thead><tbody>';
+      for (var j = 0; j < movs.length; j++) {
+        var m = movs[j];
+        var hrs = Number(m.hours);
+        var color = hrs >= 0 ? 'text-green-600' : 'text-red-600';
+        var poolLabel = (POOL_LABELS[m.pool] || m.pool).substring(0, 15);
+        var typeLabel = MOV_LABELS[m.movementType] || m.movementType;
+        html += '<tr class="border-b border-gray-100">' +
+          '<td class="py-2 px-2 text-gray-600">' + (m.createdAt ? m.createdAt.substring(0, 10) : '—') + '</td>' +
+          '<td class="py-2 px-2 text-gray-500 text-xs">' + poolLabel + '</td>' +
+          '<td class="py-2 px-2">' + typeLabel + '</td>' +
+          '<td class="py-2 px-2 text-right font-medium ' + color + '">' + (hrs >= 0 ? '+' : '') + hrs.toFixed(1) + '</td>' +
+          '<td class="py-2 px-2 text-gray-400 text-xs truncate max-w-[200px]">' + (m.notes || '—') + '</td></tr>';
+      }
+      html += '</tbody></table>';
+      movEl.innerHTML = html;
+    })
+    .catch(function() {
+      movEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar movimientos.</div>';
+    });
+})();
 </script>

@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 export const POST: APIRoute = async ({ request, cookies, params, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const { id } = params
   const form = await request.formData()
@@ -46,7 +47,16 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     lunchEndToleranceAfter: gInt('lunchEndToleranceAfter'),
     exitToleranceBefore: gInt('exitToleranceBefore'),
     exitToleranceAfter: gInt('exitToleranceAfter'),
+    weekdays: form
+      .getAll('weekdays')
+      .map((v) => Number.parseInt(String(v), 10))
+      .filter((n) => Number.isInteger(n) && n >= 1 && n <= 7),
     isDefault: g('isDefault') === 'on' || g('isDefault') === 'true',
+  }
+  if (body.weekdays.length === 0) {
+    return redirect(
+      `/attendance/shifts/${id}?error=${encodeURIComponent('Selecciona al menos un día de la semana')}`
+    )
   }
 
   let res: Response

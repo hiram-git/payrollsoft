@@ -24,6 +24,7 @@ import {
   getAllActiveEmployees,
   getAttendanceSummaryForPeriod,
   getCompanyConfig,
+  getConceptById,
   getConceptCatalogs,
   getEmployee,
   getPayroll,
@@ -39,11 +40,13 @@ import {
   loadAccumulated,
   loadAccumulatedByDateRange,
   loadInstallmentsByCreditor,
+  payrollLines,
   revertPayrollInstallments,
   updateLoan,
   updatePayroll,
   upsertPayrollLine,
 } from '@payroll/db'
+import { eq } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -258,12 +261,12 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
         success: false as const,
         error: 'no_employees',
         message: payroll.payrollTypeId
-          ? 'No hay empleados asignados al tipo de nómina seleccionado'
+          ? 'No hay empleados asignados al tipo de planilla seleccionado'
           : 'No hay empleados activos para generar la planilla',
       }
     }
 
-    const isPublicInstitution = companyConfig?.tipoInstitucion === 'publica'
+    const isPublicInstitution = companyConfig?.institutionType === 'publica'
 
     const creditorIdsWithConcepts = new Set(
       allCreditors.filter((c) => c.conceptId).map((c) => c.id)
@@ -683,7 +686,7 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
 
   // Resolve base salary for public institutions
   let effectiveBaseSalaryForRegen = Number(emp.baseSalary)
-  if (companyConfigSingle?.tipoInstitucion === 'publica' && emp.positionId) {
+  if (companyConfigSingle?.institutionType === 'publica' && emp.positionId) {
     const pos = await getPosition(db, emp.positionId)
     if (pos) effectiveBaseSalaryForRegen = Number(pos.salary)
   }
@@ -854,3 +857,213 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
 
 /** @deprecated use generatePayrollService */
 export const processPayrollService = generatePayrollService
+
+// ── Conceptos manuales en una línea de planilla ────────────────────────────
+
+/**
+ * Recalcula los totales de la planilla a partir de las filas actuales.
+ * Reusable después de modificar una línea (alta de concepto manual,
+ * eliminación, etc).
+ */
+async function recomputePayrollTotals(db: AnyDb, payrollId: string) {
+  const allLines = await getPayrollLines(db, payrollId)
+  let totalGross = 0
+  let totalDeductions = 0
+  for (const l of allLines) {
+    totalGross += Number(l.line.grossAmount)
+    totalDeductions += Number(l.line.deductions)
+  }
+  const totalNet = round2(totalGross - totalDeductions)
+  await updatePayroll(db, payrollId, {
+    totalGross: String(round2(totalGross)),
+    totalDeductions: String(round2(totalDeductions)),
+    totalNet: String(totalNet),
+  })
+}
+
+export type AddManualConceptInput = {
+  conceptId: string
+  amount: number
+}
+
+/**
+ * Agrega un concepto manual a la línea de planilla. El `conceptId`
+ * debe existir en el catálogo `concepts` y tener type ∈ {income,
+ * deduction}. La entrada se marca con `manual: true` para distinguirla
+ * de los conceptos producidos por las fórmulas, y la línea + los
+ * totales del header se recalculan en consecuencia.
+ *
+ * Solo permitido cuando la planilla está en estado regenerable
+ * (mismo conjunto que regenerateEmployee).
+ */
+export async function addManualConceptToLineService(
+  db: AnyDb,
+  payrollId: string,
+  lineId: string,
+  input: AddManualConceptInput
+) {
+  const payroll = await getPayroll(db, payrollId)
+  if (!payroll) {
+    return { success: false as const, error: 'not_found', message: 'Planilla no encontrada' }
+  }
+  if (!ALLOWED_FOR_REGENERATE.has(payroll.status)) {
+    return {
+      success: false as const,
+      error: 'invalid_status',
+      message:
+        "Solo se pueden agregar conceptos manuales cuando la planilla está en estado 'generated'.",
+    }
+  }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return {
+      success: false as const,
+      error: 'invalid_amount',
+      message: 'El monto debe ser un número mayor a cero.',
+    }
+  }
+
+  const lineData = await getPayrollLineById(db, lineId)
+  if (!lineData || lineData.line.payrollId !== payrollId) {
+    return { success: false as const, error: 'not_found', message: 'Línea no encontrada' }
+  }
+
+  const concept = await getConceptById(db, input.conceptId)
+  if (!concept) {
+    return { success: false as const, error: 'concept_not_found', message: 'Concepto inválido' }
+  }
+  if (concept.type !== 'income' && concept.type !== 'deduction') {
+    return {
+      success: false as const,
+      error: 'invalid_concept_type',
+      message: `Los conceptos tipo "${concept.type}" no se pueden agregar manualmente.`,
+    }
+  }
+
+  const existingConcepts = (lineData.line.concepts ?? []) as LineConceptEntry[]
+  if (existingConcepts.some((c) => c.code === concept.code)) {
+    return {
+      success: false as const,
+      error: 'concept_already_present',
+      message: `El concepto "${concept.code}" ya está en la línea. Elimínalo antes de agregarlo de nuevo.`,
+    }
+  }
+
+  const newEntry: LineConceptEntry & { manual?: boolean } = {
+    code: concept.code,
+    name: concept.name,
+    type: concept.type,
+    amount: round2(input.amount),
+    manual: true,
+  }
+  const nextConcepts = [...existingConcepts, newEntry]
+
+  // Recalcular totales de la línea sumando ingresos y deducciones.
+  let grossAmount = 0
+  let deductions = 0
+  for (const c of nextConcepts) {
+    if (c.type === 'income') grossAmount += Number(c.amount)
+    else if (c.type === 'deduction') deductions += Number(c.amount)
+  }
+  const netAmount = round2(grossAmount - deductions)
+
+  await db
+    .update(payrollLines)
+    .set({
+      concepts: nextConcepts,
+      grossAmount: String(round2(grossAmount)),
+      deductions: String(round2(deductions)),
+      netAmount: String(netAmount),
+    })
+    .where(eq(payrollLines.id, lineId))
+
+  await recomputePayrollTotals(db, payrollId)
+
+  return {
+    success: true as const,
+    data: {
+      lineId,
+      concept: {
+        code: concept.code,
+        name: concept.name,
+        type: concept.type,
+        amount: newEntry.amount,
+      },
+      grossAmount: round2(grossAmount),
+      deductions: round2(deductions),
+      netAmount,
+    },
+  }
+}
+
+/**
+ * Elimina un concepto manual previamente agregado por código. Solo
+ * remueve entradas cuyo flag `manual` es `true` — los conceptos
+ * generados por fórmulas no se tocan (regenerar la línea es la vía).
+ */
+export async function removeManualConceptFromLineService(
+  db: AnyDb,
+  payrollId: string,
+  lineId: string,
+  conceptCode: string
+) {
+  const payroll = await getPayroll(db, payrollId)
+  if (!payroll) {
+    return { success: false as const, error: 'not_found', message: 'Planilla no encontrada' }
+  }
+  if (!ALLOWED_FOR_REGENERATE.has(payroll.status)) {
+    return {
+      success: false as const,
+      error: 'invalid_status',
+      message:
+        "Solo se pueden quitar conceptos manuales cuando la planilla está en estado 'generated'.",
+    }
+  }
+  const lineData = await getPayrollLineById(db, lineId)
+  if (!lineData || lineData.line.payrollId !== payrollId) {
+    return { success: false as const, error: 'not_found', message: 'Línea no encontrada' }
+  }
+
+  const existingConcepts = (lineData.line.concepts ?? []) as Array<
+    LineConceptEntry & { manual?: boolean }
+  >
+  const target = existingConcepts.find((c) => c.code === conceptCode && c.manual)
+  if (!target) {
+    return {
+      success: false as const,
+      error: 'not_found',
+      message: 'Solo se pueden eliminar conceptos manuales agregados desde aquí.',
+    }
+  }
+
+  const nextConcepts = existingConcepts.filter((c) => !(c.code === conceptCode && c.manual))
+  let grossAmount = 0
+  let deductions = 0
+  for (const c of nextConcepts) {
+    if (c.type === 'income') grossAmount += Number(c.amount)
+    else if (c.type === 'deduction') deductions += Number(c.amount)
+  }
+  const netAmount = round2(grossAmount - deductions)
+
+  await db
+    .update(payrollLines)
+    .set({
+      concepts: nextConcepts,
+      grossAmount: String(round2(grossAmount)),
+      deductions: String(round2(deductions)),
+      netAmount: String(netAmount),
+    })
+    .where(eq(payrollLines.id, lineId))
+
+  await recomputePayrollTotals(db, payrollId)
+
+  return {
+    success: true as const,
+    data: {
+      lineId,
+      conceptCode,
+      grossAmount: round2(grossAmount),
+      deductions: round2(deductions),
+      netAmount,
+    },
+  }
+}

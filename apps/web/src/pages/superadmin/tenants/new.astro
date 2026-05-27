@@ -1,0 +1,689 @@
+---
+import SuperAdminLayout from '../../../layouts/SuperAdminLayout.astro'
+import { getIdentity } from '../../../lib/auth'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity || identity.type !== 'super_admin') {
+  return Astro.redirect('/superadmin/login')
+}
+
+const prefillSlug = Astro.url.searchParams.get('slug') ?? ''
+const prefillName = Astro.url.searchParams.get('name') ?? ''
+---
+
+<SuperAdminLayout title="Nueva empresa">
+  <div class="p-8">
+    <div class="wizard-container">
+      <div class="mb-6">
+        <a href="/superadmin/tenants" class="text-xs text-gray-500 hover:text-gray-900">← Volver a empresas</a>
+        <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nueva empresa</h1>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Completa los tres pasos para registrar la empresa. Al finalizar se crea el esquema
+          <span class="font-mono">tenant_&lt;identificador&gt;</span>, se aplican las migraciones
+          y se registra al administrador inicial.
+        </p>
+      </div>
+
+      <!-- Stepper -->
+      <ol class="wizard-steps mb-6">
+        <li class="wizard-step is-active" data-step-indicator="1">
+          <span class="wizard-step-num">1</span>
+          <span class="wizard-step-label">Empresa</span>
+        </li>
+        <li class="wizard-step" data-step-indicator="2">
+          <span class="wizard-step-num">2</span>
+          <span class="wizard-step-label">Administrador</span>
+        </li>
+        <li class="wizard-step" data-step-indicator="3">
+          <span class="wizard-step-num">3</span>
+          <span class="wizard-step-label">Confirmación</span>
+        </li>
+      </ol>
+
+      <form
+        id="tenant-wizard"
+        method="POST"
+        action="/api/superadmin/tenants/create"
+        class="space-y-5 bg-white border border-gray-200 rounded-lg p-6"
+        novalidate
+        data-saconfirm
+        data-sa-title="Confirmar creación de empresa"
+        data-sa-message="Vamos a crear el esquema, aplicar las migraciones y registrar al administrador inicial. Esta acción no se puede deshacer fácilmente."
+        data-sa-confirm-label="Crear empresa"
+        data-sa-tone="primary"
+        data-sa-loading-title="Aprovisionando empresa"
+        data-sa-loading-message="Estamos creando el esquema y aplicando migraciones. Puede tardar unos segundos."
+        data-sa-success-title="Empresa creada"
+        data-sa-success-message="La empresa fue aprovisionada correctamente."
+        data-sa-error-title="No se pudo crear la empresa"
+      >
+        <!-- ── Paso 1: Empresa ─────────────────────────────────────────── -->
+        <fieldset class="wizard-fieldset" data-step="1">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre comercial</label>
+            <input
+              id="f-name"
+              type="text"
+              name="name"
+              required
+              minlength="1"
+              maxlength="255"
+              value={prefillName}
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Ej. Acme Panamá, S.A."
+              autocomplete="off"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">El identificador se sugiere automáticamente a partir de este nombre. Puedes ajustarlo abajo.</p>
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Identificador (slug)</label>
+            <input
+              id="f-slug"
+              type="text"
+              name="slug"
+              required
+              minlength="3"
+              maxlength="50"
+              value={prefillSlug}
+              pattern="[a-z0-9][-a-z0-9_]{2,49}"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="acme"
+              autocomplete="off"
+            />
+            <p id="slug-feedback" class="mt-1.5 text-xs text-gray-500">
+              Solo letras minúsculas, números, guion y guion bajo. No se puede cambiar después.
+            </p>
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">
+              Correo de contacto <span class="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              id="f-contactEmail"
+              type="email"
+              name="contactEmail"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="contacto@empresa.com"
+            />
+          </div>
+        </fieldset>
+
+        <!-- ── Paso 2: Administrador ───────────────────────────────────── -->
+        <fieldset class="wizard-fieldset" data-step="2" hidden>
+          <div>
+            <h2 class="text-sm font-medium text-gray-700">Administrador inicial</h2>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Recibe el rol <span class="font-mono">tenant_admin</span> y queda marcado como
+              administrador único de la empresa.
+            </p>
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre completo</label>
+            <input
+              id="f-adminName"
+              type="text"
+              name="adminName"
+              required
+              minlength="1"
+              maxlength="255"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            />
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Correo</label>
+            <input
+              id="f-adminEmail"
+              type="email"
+              name="adminEmail"
+              required
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            />
+          </div>
+
+          <div class="mt-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Contraseña inicial</label>
+            <input
+              id="f-adminPassword"
+              type="password"
+              name="adminPassword"
+              required
+              minlength="12"
+              maxlength="256"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Mínimo 12 caracteres"
+            />
+            <div class="mt-2">
+              <div class="strength-track">
+                <div class="strength-fill" id="strength-fill"></div>
+              </div>
+              <p id="strength-label" class="mt-1.5 text-xs text-gray-500">
+                Comparte esta contraseña con el administrador por un canal seguro.
+              </p>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- ── Paso 3: Confirmación ────────────────────────────────────── -->
+        <fieldset class="wizard-fieldset" data-step="3" hidden>
+          <div class="space-y-4">
+            <div>
+              <h2 class="text-sm font-medium text-gray-700">Confirma los datos</h2>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Al crear la empresa se ejecutan las migraciones y se registra al administrador de
+                forma transaccional. Si algo falla, el sistema realiza un rollback automático del
+                esquema y el identificador queda libre para reintentar.
+              </p>
+            </div>
+
+            <div
+              id="validation-banner"
+              class="hidden rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800"
+              role="alert"
+            >
+              <p class="font-medium mb-1">Faltan datos por completar</p>
+              <ul id="validation-list" class="list-disc pl-5 text-xs space-y-0.5"></ul>
+            </div>
+
+            <dl class="rounded-md border border-gray-200 divide-y divide-gray-100 text-sm">
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Empresa</dt>
+                <dd class="text-gray-900 font-medium" id="sum-name">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Identificador</dt>
+                <dd class="text-gray-900 font-mono" id="sum-slug">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Esquema destino</dt>
+                <dd class="text-gray-900 font-mono" id="sum-schema">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Contacto</dt>
+                <dd class="text-gray-900" id="sum-contact">—</dd>
+              </div>
+              <div class="flex justify-between px-4 py-2.5">
+                <dt class="text-gray-500">Administrador</dt>
+                <dd class="text-gray-900 text-right">
+                  <div id="sum-admin-name">—</div>
+                  <div class="text-xs text-gray-500 font-mono" id="sum-admin-email">—</div>
+                </dd>
+              </div>
+            </dl>
+
+            <!-- ── Seeds opcionales ──────────────────────────────────────────── -->
+            <div class="mt-6 rounded-lg border border-gray-200 bg-gray-50/50 p-5">
+              <p class="text-sm font-medium text-gray-800 mb-1">Datos de prueba (opcional)</p>
+              <p class="text-xs text-gray-500 mb-4">
+                Marca los seeds que quieras inicializar con la empresa. Se aplican una sola
+                vez por empresa — el sistema bloquea reaplicaciones desde la interfaz; revertir
+                requiere ejecutar SQL directo en la base.
+              </p>
+
+              <div class="space-y-3">
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" name="seedEmployees" id="seed-employees" value="1" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                  <div class="flex-1">
+                    <span class="block text-sm font-medium text-gray-800">Empleados</span>
+                    <span class="block text-xs text-gray-500 mt-0.5">
+                      Genera empleados de prueba con cargos, funciones, departamentos y enganchados al tipo de planilla por defecto.
+                    </span>
+                    <div id="seed-employees-total-wrap" hidden class="mt-2 flex items-center gap-2">
+                      <label class="text-xs text-gray-600">Cantidad:</label>
+                      <input
+                        type="number"
+                        name="seedEmployeesTotal"
+                        id="seed-employees-total"
+                        min="1"
+                        max="10000"
+                        value="200"
+                        class="w-24 px-2 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                      />
+                      <span class="text-xs text-gray-500">(1–10 000)</span>
+                    </div>
+                  </div>
+                </label>
+
+                <label class="flex items-start gap-3 cursor-pointer">
+                  <input type="checkbox" name="seedLoans" id="seed-loans" value="1" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" disabled />
+                  <div class="flex-1">
+                    <span class="block text-sm font-medium text-gray-800">Préstamos</span>
+                    <span class="block text-xs text-gray-500 mt-0.5">
+                      10 acreedores (3 bancos + 7 financieras) y 1–4 préstamos quincenales por empleado activo.
+                      <span class="text-gray-400">Requiere el seed de Empleados.</span>
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <p class="mt-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                ⚠️ El sembrado puede tardar varios segundos según el volumen seleccionado.
+              </p>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Wizard nav -->
+        <div class="flex items-center justify-between pt-4 border-t border-gray-200">
+          <button
+            type="button"
+            id="btn-prev"
+            class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed"
+            disabled
+          >
+            ← Anterior
+          </button>
+
+          <div class="flex items-center gap-2">
+            <a href="/superadmin/tenants" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+            <button
+              type="button"
+              id="btn-primary"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+              disabled
+            >
+              Siguiente →
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <style>
+    /* Wizard sits inside a full-bleed page; the form itself stays
+       comfortable on wide screens. */
+    .wizard-container {
+      width: 100%;
+      max-width: 720px;
+    }
+
+    /* Stepper */
+    .wizard-steps {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .wizard-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: var(--ink-3);
+      color: var(--mute-2);
+      font-size: 13px;
+    }
+    .wizard-step-num {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--ink-4);
+      color: var(--fore-dim);
+      font-family: var(--f-mono);
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .wizard-step.is-active {
+      border-color: var(--navy-hi);
+      background: var(--navy-soft);
+      color: var(--fore);
+    }
+    .wizard-step.is-active .wizard-step-num {
+      background: var(--navy);
+      color: #fff;
+    }
+    .wizard-step.is-done {
+      border-color: var(--rule-hi);
+      background: var(--ink-2);
+      color: var(--fore-dim);
+    }
+    .wizard-step.is-done .wizard-step-num {
+      background: var(--ok);
+      color: var(--ink);
+    }
+    [data-theme='light'] .wizard-step.is-done .wizard-step-num { color: #fff; }
+
+    /* Password strength meter */
+    .strength-track {
+      height: 4px;
+      background: var(--rule);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+    .strength-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--err);
+      transition: width 200ms ease, background 200ms ease;
+    }
+    .strength-fill[data-level='2'] { background: var(--warn); }
+    .strength-fill[data-level='3'] { background: var(--ok); }
+    .strength-fill[data-level='4'] { background: var(--ok); }
+
+    /* Slug feedback states */
+    #slug-feedback.is-ok    { color: var(--ok); }
+    #slug-feedback.is-error { color: var(--err); }
+    #slug-feedback.is-busy  { color: var(--mute-2); }
+  </style>
+
+  <script is:inline>
+    (function () {
+      const form = document.getElementById('tenant-wizard');
+      if (!form) return;
+
+      const steps = Array.from(form.querySelectorAll('[data-step]'));
+      const indicators = Array.from(document.querySelectorAll('[data-step-indicator]'));
+      const btnPrev    = document.getElementById('btn-prev');
+      const btnPrimary = document.getElementById('btn-primary');
+
+      const fName         = document.getElementById('f-name');
+      const fSlug         = document.getElementById('f-slug');
+      const fContactEmail = document.getElementById('f-contactEmail');
+      const fAdminName    = document.getElementById('f-adminName');
+      const fAdminEmail   = document.getElementById('f-adminEmail');
+      const fAdminPwd     = document.getElementById('f-adminPassword');
+
+      const slugFeedback  = document.getElementById('slug-feedback');
+      const strengthFill  = document.getElementById('strength-fill');
+      const strengthLabel = document.getElementById('strength-label');
+      const validationBanner = document.getElementById('validation-banner');
+      const validationList   = document.getElementById('validation-list');
+
+      let current = 1;
+      let slugTouched = !!fSlug.value;
+      let slugAvailable = false;
+      let lastCheckedSlug = '';
+
+      // ── Step navigation ──────────────────────────────────────────────────
+      function showStep(n) {
+        current = n;
+        steps.forEach((el) => {
+          el.hidden = String(el.dataset.step) !== String(n);
+        });
+        indicators.forEach((el) => {
+          const idx = Number(el.dataset.stepIndicator);
+          el.classList.toggle('is-active', idx === n);
+          el.classList.toggle('is-done',   idx <  n);
+        });
+        btnPrev.disabled = n === 1;
+        if (n === 3) renderSummary();
+        refreshPrimary();
+      }
+
+      // Per-step validation only — fires `reportValidity` so the user sees
+      // native browser hints when they hit "Siguiente" with empty/invalid
+      // fields. Used as the gate for advancing one step.
+      function validateStep(n) {
+        const inputs = steps.find((el) => Number(el.dataset.step) === n)
+          .querySelectorAll('input[required], input[pattern]');
+        let firstInvalid = null;
+        for (const input of inputs) {
+          if (!input.checkValidity()) {
+            input.reportValidity();
+            firstInvalid = firstInvalid ?? input;
+          }
+        }
+        if (firstInvalid) return false;
+        if (n === 1 && !slugAvailable) {
+          slugFeedback.textContent = 'Verifica que el identificador esté disponible antes de continuar.';
+          slugFeedback.className = 'mt-1.5 text-xs is-error';
+          fSlug.focus();
+          return false;
+        }
+        return true;
+      }
+
+      // Silent step validity — same checks as `validateStep` minus the
+      // `reportValidity` side effect. Drives the disabled state of the
+      // primary button so we don't pop a tooltip on every keystroke.
+      function isStepValid(n) {
+        if (n === 1) {
+          if (!fName.checkValidity() || fName.value.trim().length === 0) return false;
+          if (!fSlug.checkValidity() || fSlug.value.trim().length === 0) return false;
+          if (!slugAvailable) return false;
+          if (fContactEmail.value && !fContactEmail.checkValidity()) return false;
+          return true;
+        }
+        if (n === 2) {
+          if (!fAdminName.checkValidity() || fAdminName.value.trim().length === 0) return false;
+          if (!fAdminEmail.checkValidity() || fAdminEmail.value.trim().length === 0) return false;
+          if (fAdminPwd.value.length < 12) return false;
+          return true;
+        }
+        return listAllProblems().length === 0;
+      }
+
+      // Cross-step validity used by step 3 to drive the validation banner.
+      function listAllProblems() {
+        const problems = [];
+        if (!fName.checkValidity() || fName.value.trim().length === 0) {
+          problems.push('Ingresa el nombre comercial.');
+        }
+        if (!fSlug.checkValidity()) {
+          problems.push('El identificador no cumple el formato requerido.');
+        } else if (!slugAvailable) {
+          problems.push('El identificador no está confirmado como disponible.');
+        }
+        if (fContactEmail.value && !fContactEmail.checkValidity()) {
+          problems.push('El correo de contacto no es válido.');
+        }
+        if (!fAdminName.checkValidity() || fAdminName.value.trim().length === 0) {
+          problems.push('Ingresa el nombre del administrador.');
+        }
+        if (!fAdminEmail.checkValidity() || fAdminEmail.value.trim().length === 0) {
+          problems.push('Ingresa un correo válido para el administrador.');
+        }
+        if (fAdminPwd.value.length < 12) {
+          problems.push('La contraseña inicial debe tener al menos 12 caracteres.');
+        }
+        return problems;
+      }
+
+      // Refreshes the single primary button: relabels it depending on the
+      // current step, switches between type=button and type=submit, and
+      // disables it whenever the step's fields are not yet valid. The
+      // step-3 validation banner is also driven from here so it only
+      // appears when sitting on the final step with pending issues.
+      function refreshPrimary() {
+        const valid = isStepValid(current);
+        btnPrimary.disabled = !valid;
+        if (current === 3) {
+          btnPrimary.textContent = 'Crear empresa';
+          btnPrimary.type = 'submit';
+          if (!valid && validationBanner && validationList) {
+            const problems = listAllProblems();
+            validationList.innerHTML = problems
+              .map((p) => `<li>${p.replace(/</g, '&lt;')}</li>`)
+              .join('');
+            validationBanner.classList.remove('hidden');
+          } else if (validationBanner) {
+            validationBanner.classList.add('hidden');
+          }
+        } else {
+          btnPrimary.textContent = 'Siguiente →';
+          btnPrimary.type = 'button';
+          if (validationBanner) validationBanner.classList.add('hidden');
+        }
+      }
+
+      btnPrimary.addEventListener('click', (e) => {
+        // On step 3 the button is type=submit; let the native submit fire
+        // (which the modal helper intercepts via data-saconfirm).
+        if (current === 3) return;
+        e.preventDefault();
+        if (!validateStep(current)) return;
+        showStep(Math.min(current + 1, 3));
+      });
+      btnPrev.addEventListener('click', () => {
+        showStep(Math.max(current - 1, 1));
+      });
+
+      // Block "Enter" from submitting in steps 1 and 2 — advance instead.
+      form.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && current !== 3 && e.target.tagName === 'INPUT') {
+          e.preventDefault();
+          if (!btnPrimary.disabled) btnPrimary.click();
+        }
+      });
+
+      // Live re-evaluation: every keystroke or change updates the primary
+      // button state so it enables itself the moment the step is complete.
+      form.addEventListener('input',  refreshPrimary);
+      form.addEventListener('change', refreshPrimary);
+
+      // ── Slug derivation + availability check ─────────────────────────────
+      function deriveSlug(name) {
+        return name
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')        // strip diacritics
+          .replace(/[^a-z0-9]+/g, '-')             // non-alnum -> dash
+          .replace(/^-+|-+$/g, '')                 // trim dashes
+          .slice(0, 50);
+      }
+
+      fName.addEventListener('input', () => {
+        if (slugTouched) return;
+        const next = deriveSlug(fName.value);
+        fSlug.value = next;
+        scheduleSlugCheck();
+      });
+      fSlug.addEventListener('input', () => {
+        slugTouched = fSlug.value.length > 0;
+        scheduleSlugCheck();
+      });
+
+      let slugTimer = null;
+      function scheduleSlugCheck() {
+        if (slugTimer) clearTimeout(slugTimer);
+        slugAvailable = false;
+        slugFeedback.textContent = 'Verificando…';
+        slugFeedback.className = 'mt-1.5 text-xs is-busy';
+        slugTimer = setTimeout(checkSlug, 350);
+        refreshPrimary();
+      }
+
+      async function checkSlug() {
+        const slug = fSlug.value.trim().toLowerCase();
+        if (!slug) {
+          slugFeedback.textContent = 'Solo letras minúsculas, números, guion y guion bajo.';
+          slugFeedback.className = 'mt-1.5 text-xs text-gray-500';
+          refreshPrimary();
+          return;
+        }
+        lastCheckedSlug = slug;
+        try {
+          // Hit the same-origin proxy (apps/web) so the auth cookie is
+          // forwarded server-to-server. Calling the API directly fails
+          // cross-origin in production where the cookie lives on the
+          // web's host, not the API's.
+          const res = await fetch(`/api/superadmin/tenants/check-slug/${encodeURIComponent(slug)}`, {
+            credentials: 'same-origin',
+          });
+          if (!res.ok) throw new Error('check failed');
+          const json = await res.json();
+          // Ignore stale responses if the user kept typing.
+          if (lastCheckedSlug !== slug) return;
+          if (json.data && json.data.available) {
+            slugAvailable = true;
+            slugFeedback.textContent = `Disponible — el esquema será tenant_${slug}.`;
+            slugFeedback.className = 'mt-1.5 text-xs is-ok';
+          } else {
+            slugAvailable = false;
+            slugFeedback.textContent = json.data && json.data.message
+              ? json.data.message
+              : 'Este identificador no está disponible.';
+            slugFeedback.className = 'mt-1.5 text-xs is-error';
+          }
+        } catch {
+          slugAvailable = false;
+          slugFeedback.textContent = 'No se pudo verificar el identificador. Intenta de nuevo en unos segundos.';
+          slugFeedback.className = 'mt-1.5 text-xs is-error';
+        } finally {
+          refreshPrimary();
+        }
+      }
+
+      // Run an initial check if the slug was prefilled (form re-entered after
+      // a server-side error).
+      if (fSlug.value) scheduleSlugCheck();
+
+      // ── Password strength ───────────────────────────────────────────────
+      function scorePassword(pwd) {
+        let score = 0;
+        if (pwd.length >= 12) score++;
+        if (pwd.length >= 16) score++;
+        if (/[a-z]/.test(pwd) && /[A-Z]/.test(pwd)) score++;
+        if (/\d/.test(pwd) && /[^A-Za-z0-9]/.test(pwd)) score++;
+        return score; // 0..4
+      }
+      fAdminPwd.addEventListener('input', () => {
+        const score = scorePassword(fAdminPwd.value);
+        strengthFill.style.width = `${(score / 4) * 100}%`;
+        strengthFill.dataset.level = String(score);
+        const labels = [
+          'Comparte esta contraseña por un canal seguro.',
+          'Demasiado débil — usa al menos 12 caracteres.',
+          'Aceptable — agrega símbolos o más longitud.',
+          'Buena fortaleza.',
+          'Excelente — fortaleza alta.',
+        ];
+        strengthLabel.textContent = labels[score];
+      });
+
+      // ── Confirmation summary ────────────────────────────────────────────
+      function renderSummary() {
+        const slug = fSlug.value.trim().toLowerCase();
+        document.getElementById('sum-name').textContent       = fName.value.trim() || '—';
+        document.getElementById('sum-slug').textContent       = slug || '—';
+        document.getElementById('sum-schema').textContent     = slug ? `tenant_${slug}` : '—';
+        document.getElementById('sum-contact').textContent    = fContactEmail.value.trim() || '—';
+        document.getElementById('sum-admin-name').textContent  = fAdminName.value.trim() || '—';
+        document.getElementById('sum-admin-email').textContent = fAdminEmail.value.trim() || '—';
+      }
+
+      // Block accidental submits before step 3 and re-validate on the
+      // final step. The modal helper takes over visual feedback once the
+      // form actually fires (data-saconfirm), so we don't tweak the
+      // button label here — the loading modal communicates progress.
+      form.addEventListener('submit', (e) => {
+        if (current !== 3 || listAllProblems().length > 0) {
+          e.preventDefault();
+          refreshPrimary();
+        }
+      });
+
+      // ── Seeds wiring ──────────────────────────────────────────────
+      // Loans depende de empleados (no se puede prestar sin empleados).
+      // El input numérico solo se muestra cuando employees está marcado.
+      const seedEmpCheck = document.getElementById('seed-employees');
+      const seedEmpTotalWrap = document.getElementById('seed-employees-total-wrap');
+      const seedLoansCheck = document.getElementById('seed-loans');
+      function refreshSeedsUi() {
+        if (!seedEmpCheck) return;
+        const empOn = seedEmpCheck.checked;
+        if (seedEmpTotalWrap) seedEmpTotalWrap.hidden = !empOn;
+        if (seedLoansCheck) {
+          seedLoansCheck.disabled = !empOn;
+          if (!empOn) seedLoansCheck.checked = false;
+        }
+      }
+      seedEmpCheck?.addEventListener('change', refreshSeedsUi);
+      refreshSeedsUi();
+
+      // Init
+      showStep(1);
+    })();
+  </script>
+</SuperAdminLayout>

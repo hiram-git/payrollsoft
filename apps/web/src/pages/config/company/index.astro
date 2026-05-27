@@ -1,11 +1,13 @@
 ---
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
-const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 
 type CompanyConfig = {
   id: string
@@ -15,7 +17,7 @@ type CompanyConfig = {
   address: string | null
   phone: string | null
   email: string | null
-  tipoInstitucion: string
+  institutionType: string
   currencyCode: string
   currencySymbol: string
   mailHost: string | null
@@ -25,14 +27,14 @@ type CompanyConfig = {
   mailPassword: string | null
   mailFromAddress: string | null
   mailFromName: string | null
-  elaboradoPor: string | null
-  cargoElaborador: string | null
-  jefeRecursosHumanos: string | null
-  cargoJefeRrhh: string | null
-  logoEmpresa: string | null
-  logoIzquierdoReportes: string | null
-  logoDerechoReportes: string | null
-  payrollReportMode: 'on_demand' | 'file_storage' | string
+  preparedBy: string | null
+  preparerTitle: string | null
+  hrDirectorName: string | null
+  hrDirectorTitle: string | null
+  companyLogo: string | null
+  reportLogoLeft: string | null
+  reportLogoRight: string | null
+  payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' | string
   updatedAt: string
 }
 
@@ -62,7 +64,7 @@ const trackedFields: StatField[] = [
   { key: 'phone', label: 'Teléfono' },
   { key: 'email', label: 'Correo' },
   { key: 'legalRepresentative', label: 'Representante legal' },
-  { key: 'logoEmpresa', label: 'Logo principal' },
+  { key: 'companyLogo', label: 'Logo principal' },
   { key: 'mailHost', label: 'Servidor SMTP' },
 ]
 const missingFields = company
@@ -222,10 +224,10 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Empresa *</label>
               <select name="tipoInstitucion" class="input" id="tipoInstitucion">
-                <option value="privada" selected={v('tipoInstitucion', 'privada') === 'privada'}>
+                <option value="privada" selected={v('institutionType', 'privada') === 'privada'}>
                   Empresa sin posiciones
                 </option>
-                <option value="publica" selected={v('tipoInstitucion', 'privada') === 'publica'}>
+                <option value="publica" selected={v('institutionType', 'privada') === 'publica'}>
                   Empresa con posiciones
                 </option>
               </select>
@@ -274,24 +276,24 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Elaborado por</label>
               <input type="text" name="elaboradoPor" class="input" maxlength="255"
-                placeholder="Nombre completo" value={v('elaboradoPor')} />
+                placeholder="Nombre completo" value={v('preparedBy')} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Cargo del elaborador</label>
               <input type="text" name="cargoElaborador" class="input" maxlength="255"
                 placeholder="Especialista en Planillas"
-                value={v('cargoElaborador', 'Especialista en Planillas')} />
+                value={v('preparerTitle', 'Especialista en Planillas')} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Jefe de Recursos Humanos</label>
               <input type="text" name="jefeRecursosHumanos" class="input" maxlength="255"
-                placeholder="Nombre completo" value={v('jefeRecursosHumanos')} />
+                placeholder="Nombre completo" value={v('hrDirectorName')} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Cargo del jefe de RRHH</label>
               <input type="text" name="cargoJefeRrhh" class="input" maxlength="255"
                 placeholder="Jefe de Recursos Humanos"
-                value={v('cargoJefeRrhh', 'Jefe de Recursos Humanos')} />
+                value={v('hrDirectorTitle', 'Jefe de Recursos Humanos')} />
             </div>
           </div>
         </div>
@@ -315,8 +317,11 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
                 <option value="on_demand" selected={v('payrollReportMode', 'on_demand') === 'on_demand'}>
                   Bajo demanda — el PDF se renderiza cada vez (sin almacenamiento)
                 </option>
+                <option value="local_storage" selected={v('payrollReportMode', 'on_demand') === 'local_storage'}>
+                  Almacenamiento local — se guarda en disco del servidor (STORAGE_DIR)
+                </option>
                 <option value="file_storage" selected={v('payrollReportMode', 'on_demand') === 'file_storage'}>
-                  Almacenamiento en archivo — se genera una sola vez y se guarda en R2 (descargas instantáneas)
+                  Nube (S3 / R2) — se sube a un bucket S3-compatible (descargas instantáneas)
                 </option>
               </select>
               <p class="text-xs text-gray-500 mt-2 leading-relaxed">
@@ -324,9 +329,14 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
                 y no requiere infraestructura — recomendado para empresas chicas
                 o cuando los datos cambian seguido.
                 <br />
-                <span class="font-semibold">Almacenamiento en archivo</span>
-                renderiza el PDF la primera vez, lo sube a Cloudflare R2 y las
-                descargas siguientes son inmediatas. Requiere las variables
+                <span class="font-semibold">Almacenamiento local</span> guarda
+                el PDF en el directorio <code class="font-mono text-[11px]">STORAGE_DIR</code>
+                del servidor (por defecto <code class="font-mono text-[11px]">/tmp/payrollsoft-storage</code>).
+                Indicado para instalaciones on-prem o entornos sin object storage remoto.
+                <br />
+                <span class="font-semibold">Nube</span> renderiza el PDF la
+                primera vez, lo sube a Cloudflare R2 / S3 y las descargas
+                siguientes son inmediatas. Requiere las variables
                 <code class="font-mono text-[11px]">R2_ENDPOINT</code>,
                 <code class="font-mono text-[11px]">R2_ACCESS_KEY_ID</code>,
                 <code class="font-mono text-[11px]">R2_SECRET_ACCESS_KEY</code> y
@@ -347,9 +357,9 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
 
           <div class="grid grid-cols-3 gap-6">
             {([
-              { field: 'logoEmpresa', label: 'Logo Principal', hint: 'Interfaz general del sistema' },
-              { field: 'logoIzquierdoReportes', label: 'Logo Izquierdo (Reportes)', hint: 'Esquina superior izquierda de PDFs' },
-              { field: 'logoDerechoReportes', label: 'Logo Derecho (Reportes)', hint: 'Esquina superior derecha de PDFs' },
+              { field: 'companyLogo', label: 'Logo Principal', hint: 'Interfaz general del sistema' },
+              { field: 'reportLogoLeft', label: 'Logo Izquierdo (Reportes)', hint: 'Esquina superior izquierda de PDFs' },
+              { field: 'reportLogoRight', label: 'Logo Derecho (Reportes)', hint: 'Esquina superior derecha de PDFs' },
             ] as const).map(({ field, label, hint }) => (
               <div class="space-y-2">
                 <label class="block text-sm font-medium text-gray-700">{label}</label>
@@ -361,22 +371,31 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
 
                 <!-- Drop / click zone -->
                 <label for={`file_${field}`}
-                  class="logo-zone group block cursor-pointer rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-colors p-4 text-center"
+                  class="logo-zone group flex flex-col items-center justify-center cursor-pointer rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 transition-colors p-4 text-center"
+                  style="height: 132px;"
                   id={`zone_${field}`}>
                   <input type="file" id={`file_${field}`} accept="image/png,image/jpeg,image/svg+xml,image/webp"
                     class="sr-only" data-field={field} />
-                  <div id={`placeholder_${field}`} class={v(field as keyof typeof company) ? 'hidden' : ''}>
+                  <div id={`placeholder_${field}`} class={v(field as keyof typeof company) ? 'hidden' : 'flex flex-col items-center'}>
                     <svg class="mx-auto w-8 h-8 text-gray-300 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
                     </svg>
                     <p class="text-xs text-gray-400">Clic o arrastra imagen</p>
                     <p class="text-xs text-gray-300">PNG, JPG, SVG — máx 2 MB</p>
                   </div>
-                  <div id={`preview_${field}`} class={v(field as keyof typeof company) ? '' : 'hidden'}>
+                  <!-- Preview frame: alto fijo, imagen restringida tanto en
+                       alto como en ancho para que un logo grande no inflate
+                       la página. object-fit: contain mantiene el aspecto. -->
+                  <div
+                    id={`preview_${field}`}
+                    class={v(field as keyof typeof company) ? 'flex items-center justify-center w-full' : 'hidden'}
+                    style="height: 96px;"
+                  >
                     <img id={`img_${field}`}
                       src={v(field as keyof typeof company) || undefined}
                       alt={label}
-                      class="mx-auto max-h-20 max-w-full object-contain rounded" />
+                      style="max-height: 96px; max-width: 100%; width: auto; height: auto; object-fit: contain;"
+                      class="rounded" />
                   </div>
                 </label>
 

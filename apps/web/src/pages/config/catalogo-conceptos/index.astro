@@ -1,9 +1,11 @@
 ---
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 type CatalogItem = { id: string; code: string; name: string; sortOrder: number }
 type Catalogs = {
@@ -19,10 +21,10 @@ let cuentasContables: CuentaContable[] = []
 let loadError = ''
 
 try {
-  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [configRes, cuentasRes] = await Promise.all([
     fetch(`${API_URL}/concepts/config`, { headers }),
-    fetch(`${API_URL}/cuentas-contables`, { headers }),
+    fetch(`${API_URL}/chart-of-accounts`, { headers }),
   ])
   if (configRes.status === 401) return Astro.redirect('/login')
   if (configRes.ok) catalogs = ((await configRes.json()) as { data: Catalogs }).data
@@ -68,8 +70,6 @@ const isCuentasTab = activeTab === 'cuentas'
     </div>
 
     {loadError && <div class="alert alert-err">{loadError}</div>}
-    {success && <div class="alert alert-ok">Guardado correctamente.</div>}
-    {error && <div class="alert alert-err">{errorMessages[error] ?? 'Ocurrió un error inesperado.'}</div>}
 
     <!-- Tab Navigation -->
     <div class="tabs-bar">
@@ -102,7 +102,7 @@ const isCuentasTab = activeTab === 'cuentas'
         <>
           <!-- New cuenta contable form -->
           <div id="newItemForm" class="new-form hidden">
-            <form method="POST" action="/api/config/cuentas-contables" class="new-form-row">
+            <form method="POST" action="/api/config/chart-of-accounts" class="new-form-row">
               <div class="field">
                 <label class="label">Código *</label>
                 <input type="text" name="code" class="inp" required maxlength="20" placeholder="ej: 1001" />
@@ -148,7 +148,7 @@ const isCuentasTab = activeTab === 'cuentas'
                       <form
                         id={`edit-form-${item.id}`}
                         method="POST"
-                        action={`/api/config/cuentas-contables/${item.id}`}
+                        action={`/api/config/chart-of-accounts/${item.id}`}
                         class="edit-mode hidden"
                       >
                         <input type="hidden" name="_method" value="PUT" />
@@ -182,7 +182,7 @@ const isCuentasTab = activeTab === 'cuentas'
                         </span>
                         <form
                           method="POST"
-                          action={`/api/config/cuentas-contables/${item.id}`}
+                          action={`/api/config/chart-of-accounts/${item.id}`}
                           onsubmit="return confirm('¿Dar de baja esta cuenta contable?')"
                           class="tooltip-wrap"
                         >
@@ -556,4 +556,28 @@ const isCuentasTab = activeTab === 'cuentas'
       if (rowC) closeEdit(rowC)
     }
   })
+
+  // Toast feedback from query params
+  ;(function() {
+    var params = new URLSearchParams(window.location.search);
+    var ERR_MSGS = {
+      code_taken: 'El código ya está en uso.',
+      has_links: 'No se puede eliminar: está siendo usado por conceptos.',
+      'server-error': 'Error del servidor.',
+      'missing-fields': 'Completa todos los campos.',
+    };
+    if (params.get('success') === '1' && window.toast) {
+      window.toast.success('Guardado correctamente.');
+    }
+    var err = params.get('error');
+    if (err && window.toast) {
+      window.toast.error(ERR_MSGS[err] || 'Ocurrió un error inesperado.');
+    }
+    if (params.has('success') || params.has('error')) {
+      var url = new URL(window.location);
+      url.searchParams.delete('success');
+      url.searchParams.delete('error');
+      history.replaceState(null, '', url.pathname + url.search);
+    }
+  })();
 </script>

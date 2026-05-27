@@ -1,0 +1,177 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'settings:company.update')) return Astro.redirect('/config/custom-fields')
+
+const errorFlag = Astro.url.searchParams.get('error') ?? ''
+const errorDetail = Astro.url.searchParams.get('detail') ?? ''
+const errorMessages: Record<string, string> = {
+  'missing-fields': 'Completa los campos obligatorios.',
+  'invalid-code':
+    'El código solo admite minúsculas, números y guion bajo, comenzando por una letra.',
+  'code-taken': 'Ya existe un campo con ese código.',
+  'server-error': 'No se pudo crear el campo.',
+}
+const errorMessage = errorFlag ? errorMessages[errorFlag] : ''
+
+const prefillCode = Astro.url.searchParams.get('code') ?? ''
+const prefillName = Astro.url.searchParams.get('name') ?? ''
+const prefillType = Astro.url.searchParams.get('fieldType') ?? 'text'
+---
+
+<AppLayout title="Nuevo campo adicional">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <a href="/config/custom-fields" class="text-xs text-gray-500 hover:text-gray-900">← Volver al catálogo</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nuevo campo adicional</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Agrega un campo al formulario de empleados. El código (slug) lo verás luego en las fórmulas con
+        <code class="font-mono">CAMPOADICIONAL("código")</code> cuando se libere la integración con el motor de cálculo.
+      </p>
+    </div>
+
+    {errorMessage && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        <div class="font-medium">{errorMessage}</div>
+        {errorDetail && (
+          <pre class="mt-2 whitespace-pre-wrap break-words text-xs font-mono opacity-80">{errorDetail}</pre>
+        )}
+      </div>
+    )}
+
+    <form method="POST" action="/api/config/custom-fields/create" class="space-y-5">
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <h2 class="text-sm font-medium text-gray-900">Identificación</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre</label>
+            <input
+              id="f-name"
+              type="text"
+              name="name"
+              required
+              minlength="1"
+              maxlength="255"
+              value={prefillName}
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Ej. Talla de camisa"
+              autocomplete="off"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">Lo verán los usuarios al editar el empleado.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Código</label>
+            <input
+              id="f-code"
+              type="text"
+              name="code"
+              required
+              minlength="1"
+              maxlength="50"
+              value={prefillCode}
+              pattern="[a-z][a-z0-9_]*"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="talla_camisa"
+              autocomplete="off"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">Identificador interno; minúsculas, números y guion bajo.</p>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Descripción</label>
+            <textarea
+              name="description"
+              maxlength="2000"
+              rows="2"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Aclaración para el equipo (opcional)."
+            ></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <h2 class="text-sm font-medium text-gray-900">Tipo y validación</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo de dato</label>
+            <select
+              name="fieldType"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            >
+              <option value="text" selected={prefillType === 'text'}>Texto</option>
+              <option value="integer" selected={prefillType === 'integer'}>Número entero</option>
+              <option value="float" selected={prefillType === 'float'}>Número decimal</option>
+              <option value="date" selected={prefillType === 'date'}>Fecha</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Orden</label>
+            <input
+              type="number"
+              name="sortOrder"
+              min="0"
+              max="9999"
+              value="0"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">Posición en el formulario (menor primero).</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Valor por defecto</label>
+            <input
+              type="text"
+              name="defaultValue"
+              maxlength="255"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              placeholder="Opcional"
+            />
+            <p class="mt-1.5 text-xs text-gray-500">Se aplica al crear empleados sin valor explícito.</p>
+          </div>
+        </div>
+        <label class="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" name="isRequired" value="1" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          Obligatorio
+        </label>
+      </section>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+        <a href="/config/custom-fields" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+        <button
+          type="submit"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          Crear campo
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const fName = document.getElementById('f-name')
+      const fCode = document.getElementById('f-code')
+      if (!fName || !fCode) return
+      let codeTouched = !!fCode.value
+      function slugify(value) {
+        return value
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          .replace(/^([0-9])/, '_$1')
+          .slice(0, 50)
+      }
+      fName.addEventListener('input', () => {
+        if (codeTouched) return
+        fCode.value = slugify(fName.value)
+      })
+      fCode.addEventListener('input', () => {
+        codeTouched = fCode.value.length > 0
+      })
+    })()
+  </script>
+</AppLayout>

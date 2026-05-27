@@ -11,9 +11,11 @@
     "db:migrate:public": "bun --env-file=../../.env src/migrate.ts --public",
     "db:migrate:tenant": "bun --env-file=../../.env src/migrate.ts --tenant=demo",
     "db:migrate:all-tenants": "bun --env-file=../../.env src/migrate.ts --all-tenants",
+    "db:migrate:all": "bun --env-file=../../.env src/migrate.ts --public && bun --env-file=../../.env src/migrate.ts --all-tenants",
     "migrate:prod:public": "bun src/migrate.ts --public",
     "migrate:prod:tenant": "bun src/migrate.ts --tenant=demo",
-    "migrate:prod": "bun src/migrate.ts --public && bun src/migrate.ts --tenant=demo",
+    "migrate:prod:all-tenants": "bun src/migrate.ts --all-tenants",
+    "migrate:prod": "bun src/migrate.ts --public && bun src/migrate.ts --all-tenants",
     "db:seed": "bun --env-file=../../.env src/seed.ts",
     "seed:prod": "bun src/seed.ts",
     "db:seed-stress": "bun --env-file=../../.env src/seed-stress.ts",
@@ -24,6 +26,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@payroll/types": "workspace:*",
+    "@payroll/utils": "workspace:*",
     "drizzle-orm": "^0.38.3",
     "postgres": "^3.4.5",
     "zod": "^3.24.1"

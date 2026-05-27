@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) return redirect('/login')
+  const TENANT = resolveTenantSlugFromCookie(authCookie)
 
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
@@ -15,10 +16,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     code: g('code'),
     name: g('name'),
     salary: g('salary'),
-    cargoId: g('cargoId') || null,
-    departamentoId: g('departamentoId') || null,
-    funcionId: g('funcionId') || null,
-    partidaId: g('partidaId') || null,
+    jobTitleId: g('jobTitleId') || null,
+    departmentId: g('departmentId') || null,
+    jobFunctionId: g('jobFunctionId') || null,
+    budgetItemId: g('budgetItemId') || null,
     status: status === 'en_uso' || status === 'vacante' ? status : 'vacante',
   }
 

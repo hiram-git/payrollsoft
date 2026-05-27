@@ -1,11 +1,12 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
 
-const TENANT = 'demo'
+const TENANT = resolveTenantSlugFromCookie(authCookie)
 const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT }
 
 // ─── Filter params from URL ────────────────────────────────────────────────────
@@ -65,9 +66,16 @@ let detailPages = 1
 let employees: Employee[] = []
 let fetchError = ''
 
+// `employeeSearch` is the display label rendered by the combobox
+// (e.g. "Gonzalez, Hiram José (E003)"). When the user picks an entry
+// the page also sets `employeeId` — that's the authoritative filter.
+// Forwarding both AND-combines the conditions, and the literal
+// "(E003)" in the search string never matches any column, so the
+// query returns nothing. Drop the search payload whenever an
+// employeeId is present.
 const filterQs = new URLSearchParams({
   ...(filterEmployeeId && { employeeId: filterEmployeeId }),
-  ...(filterEmployeeSearch && { employeeSearch: filterEmployeeSearch }),
+  ...(!filterEmployeeId && filterEmployeeSearch && { employeeSearch: filterEmployeeSearch }),
   ...(filterConcept && { conceptCode: filterConcept }),
   ...(filterType && { conceptType: filterType }),
   ...(filterFrom && { from: filterFrom }),
@@ -77,7 +85,7 @@ const filterQs = new URLSearchParams({
 
 try {
   const [empRes, dataRes] = await Promise.all([
-    fetch(`${API_URL}/employees?limit=500`, { headers }),
+    fetch(`${API_URL}/employees?limit=5000`, { headers }),
     filterView === 'summary'
       ? fetch(`${API_URL}/acumulados/summary?${filterQs}`, { headers })
       : fetch(`${API_URL}/acumulados?${filterQs}&page=${page}&limit=100`, { headers }),
@@ -101,9 +109,22 @@ try {
       detailPages = j.meta?.pages ?? 1
     }
   } else {
-    fetchError = 'Error al cargar los acumulados'
+    // Surface the API's actual error so the operator can act on it
+    // instead of seeing the generic banner. Common causes here are
+    // missing reports:payroll.view permission or an unexpected 500
+    // from the SQL builder.
+    let detail = `${dataRes.status} ${dataRes.statusText}`
+    try {
+      const body = (await dataRes.json()) as { error?: string; message?: string }
+      detail = body.message ?? body.error ?? detail
+    } catch {
+      // ignore — fall back to status text
+    }
+    console.error('[acumulados] API error:', detail)
+    fetchError = `Error al cargar los acumulados: ${detail}`
   }
-} catch {
+} catch (err) {
+  console.error('[acumulados] fetch failed:', err)
   fetchError = 'No se pudo conectar con el servidor'
 }
 
@@ -156,7 +177,7 @@ function buildUrl(extra: Record<string, string>) {
 ---
 
 <AppLayout title="Acumulados">
-  <div class="px-6 py-8 max-w-6xl mx-auto">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
 
     <!-- Header -->
     <div class="mb-6">
@@ -232,13 +253,13 @@ function buildUrl(extra: Record<string, string>) {
         <div class="flex flex-col justify-end gap-2">
           <button
             type="submit"
-            class="px-3 py-2 rounded-md bg-gray-900 text-white text-xs font-medium hover:bg-gray-700 transition-colors"
+            class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
           >
             Filtrar
           </button>
           <a
             href="/acumulados"
-            class="px-3 py-2 rounded-md border border-gray-300 text-gray-600 text-xs text-center hover:bg-gray-50 transition-colors"
+            class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium text-center hover:bg-gray-50 transition-colors"
           >
             Limpiar
           </a>
@@ -262,13 +283,13 @@ function buildUrl(extra: Record<string, string>) {
     <div class="flex items-center gap-2 mb-4">
       <a
         href={buildUrl({ view: 'summary', page: '1' })}
-        class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filterView === 'summary' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+        class={`px-3.5 py-2 rounded-md text-sm font-medium transition-colors ${filterView === 'summary' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
       >
         Resumen
       </a>
       <a
         href={buildUrl({ view: 'detail', page: '1' })}
-        class={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${filterView === 'detail' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'}`}
+        class={`px-3.5 py-2 rounded-md text-sm font-medium transition-colors ${filterView === 'detail' ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}`}
       >
         Detalle
       </a>
@@ -306,7 +327,7 @@ function buildUrl(extra: Record<string, string>) {
           </div>
         )}
 
-        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="acu-card border rounded-lg overflow-hidden">
           {summaryRows.length === 0 ? (
             <div class="py-16 text-center">
               <p class="text-sm text-gray-400">No hay acumulados para los filtros seleccionados</p>
@@ -314,9 +335,9 @@ function buildUrl(extra: Record<string, string>) {
             </div>
           ) : (
             <>
-              <table class="w-full text-sm">
+              <table class="acu-table w-full text-sm">
                 <thead>
-                  <tr class="border-b border-gray-200 bg-gray-50">
+                  <tr class="border-b">
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Tipo</th>
@@ -326,7 +347,7 @@ function buildUrl(extra: Record<string, string>) {
                 </thead>
                 <tbody>
                   {pagedSummaryRows.map((r, i) => (
-                    <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                    <tr class={`border-b last:border-0 ${i % 2 !== 0 ? 'acu-row-stripe' : ''}`}>
                       <td class="px-4 py-3">
                         <a
                           href={buildUrl({ view: 'detail', employeeId: r.employeeId, page: '1' })}
@@ -359,12 +380,12 @@ function buildUrl(extra: Record<string, string>) {
                   <p class="text-xs text-gray-500">{summaryTotal} conceptos · página {page} de {summaryTotalPages}</p>
                   <div class="flex gap-2">
                     {page > 1 && (
-                      <a href={buildUrl({ page: String(page - 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ page: String(page - 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         ← Anterior
                       </a>
                     )}
                     {page < summaryTotalPages && (
-                      <a href={buildUrl({ page: String(page + 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ page: String(page + 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         Siguiente →
                       </a>
                     )}
@@ -380,16 +401,16 @@ function buildUrl(extra: Record<string, string>) {
     <!-- ── DETAIL VIEW ──────────────────────────────────────────────────────── -->
     {filterView === 'detail' && (
       <>
-        <div class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div class="acu-card border rounded-lg overflow-hidden">
           {detailRows.length === 0 ? (
             <div class="py-16 text-center">
               <p class="text-sm text-gray-400">No hay registros para los filtros seleccionados</p>
             </div>
           ) : (
             <>
-              <table class="w-full text-sm">
+              <table class="acu-table w-full text-sm">
                 <thead>
-                  <tr class="border-b border-gray-200 bg-gray-50">
+                  <tr class="border-b">
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Empleado</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Concepto</th>
                     <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Planilla</th>
@@ -399,7 +420,7 @@ function buildUrl(extra: Record<string, string>) {
                 </thead>
                 <tbody>
                   {detailRows.map((r, i) => (
-                    <tr class={`border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors ${i % 2 !== 0 ? 'bg-gray-50/50' : ''}`}>
+                    <tr class={`border-b last:border-0 ${i % 2 !== 0 ? 'acu-row-stripe' : ''}`}>
                       <td class="px-4 py-3">
                         <span class="font-medium text-gray-900">{r.lastName ?? '—'}, {r.firstName ?? '—'}</span>
                         <p class="text-xs text-gray-400 font-mono">{r.employeeCode ?? '—'}</p>
@@ -437,12 +458,12 @@ function buildUrl(extra: Record<string, string>) {
                   <p class="text-xs text-gray-500">{detailTotal} registros · página {page} de {detailPages}</p>
                   <div class="flex gap-2">
                     {page > 1 && (
-                      <a href={buildUrl({ view: 'detail', page: String(page - 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ view: 'detail', page: String(page - 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         ← Anterior
                       </a>
                     )}
                     {page < detailPages && (
-                      <a href={buildUrl({ view: 'detail', page: String(page + 1) })} class="px-3 py-1.5 rounded border border-gray-300 text-xs text-gray-600 hover:bg-gray-50">
+                      <a href={buildUrl({ view: 'detail', page: String(page + 1) })} class="px-3.5 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
                         Siguiente →
                       </a>
                     )}
@@ -540,6 +561,39 @@ function buildUrl(extra: Record<string, string>) {
 
 <style>
   .filter-input {
-    @apply w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white;
+    @apply w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent;
+  }
+
+  /*
+   * Tablas de acumulados — usa las CSS custom properties del sistema
+   * para que el striping de filas impares no resalte tanto en modo
+   * oscuro (la combinación tailwind `bg-gray-50/50` sobre `bg-white`
+   * fija dejaba el contraste demasiado alto en dark theme).
+   */
+  .acu-card {
+    background: var(--ink-2);
+    border-color: var(--rule);
+    color: var(--fore-dim);
+  }
+  .acu-table thead tr {
+    background: var(--ink-3);
+    border-color: var(--rule);
+    color: var(--mute-2);
+  }
+  .acu-table tbody tr {
+    border-color: var(--rule);
+    background: var(--ink-2);
+    transition: background-color 120ms;
+  }
+  .acu-table tbody tr.acu-row-stripe {
+    /* Tint sutil: en oscuro va a `--ink-3`, en claro a `--ink-4`. */
+    background: var(--ink-3);
+  }
+  [data-theme='light'] .acu-table tbody tr.acu-row-stripe {
+    background: #f9fafb;
+  }
+  .acu-table tbody tr:hover {
+    background: var(--ink-4);
+    color: var(--fore);
   }
 </style>

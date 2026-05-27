@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro'
+import { resolveTenantSlugFromCookie } from '../../../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const TENANT = 'demo'
 
 /**
  * Thin proxy for the position-code availability check that powers the
@@ -10,6 +10,7 @@ const TENANT = 'demo'
  * hit a same-origin endpoint and inherit the auth cookie automatically.
  */
 export const GET: APIRoute = async ({ request, cookies }) => {
+  const TENANT = resolveTenantSlugFromCookie(cookies.get('auth')?.value)
   const authCookie = cookies.get('auth')?.value
   if (!authCookie) {
     return new Response(JSON.stringify({ available: false, reason: 'unauthorized' }), {

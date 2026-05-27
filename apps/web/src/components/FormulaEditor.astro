@@ -128,49 +128,128 @@ const { name = 'formula', value = '', rows = 5 } = Astro.props
 </script>
 
 <style>
+  /*
+   * Editor de fórmulas — usa las CSS custom properties del sistema
+   * para integrarse al tema activo. Antes las clases tailwind fijas
+   * (`bg-gray-50`, `bg-white`, `hover:bg-blue-50`) dejaban el panel
+   * casi blanco sobre el fondo oscuro, sin contraste razonable.
+   */
   .formula-editor-wrap {
-    @apply rounded-lg border border-gray-300 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent;
+    border-radius: 0.5rem;
+    border: 1px solid var(--rule);
+    overflow: hidden;
+    background: var(--ink-2);
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .formula-editor-wrap:focus-within {
+    border-color: transparent;
+    box-shadow: 0 0 0 2px var(--navy, #2563eb);
   }
 
   .fe-toolbar {
-    @apply flex flex-wrap gap-1 px-3 py-2 bg-gray-50 border-b border-gray-200;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--ink-3);
+    border-bottom: 1px solid var(--rule);
   }
 
   .fe-op {
-    @apply px-2.5 py-1 rounded text-xs font-mono font-semibold bg-white border border-gray-300 text-gray-700
-           hover:bg-gray-100 hover:border-gray-400 transition-colors cursor-pointer select-none;
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.25rem;
+    font-family: var(--f-mono, ui-monospace, monospace);
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: var(--ink-2);
+    border: 1px solid var(--rule);
+    color: var(--fore-dim);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+  }
+  .fe-op:hover,
+  .fe-op:focus-visible {
+    background: var(--ink-4);
+    border-color: var(--rule-hi);
+    color: var(--fore);
   }
 
   .fe-textarea {
-    @apply w-full px-3 py-3 font-mono text-xs text-gray-900 bg-white resize-none
-           focus:outline-none;
-    /* Remove default browser focus ring — wrap handles it */
-    border: none;
+    width: 100%;
+    padding: 0.75rem;
+    font-family: var(--f-mono, ui-monospace, monospace);
+    font-size: 0.75rem;
     line-height: 1.6;
+    color: var(--fore);
+    background: var(--ink-2);
+    resize: none;
+    border: none;
+    outline: none;
+  }
+  .fe-textarea::placeholder {
+    color: var(--mute);
   }
 
   .fe-vars-panel {
-    @apply border-t border-gray-200 bg-gray-50 px-3 py-3;
+    border-top: 1px solid var(--rule);
+    background: var(--ink-3);
+    padding: 0.75rem;
   }
 
   .fe-vars-title {
-    @apply text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--mute-2);
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 
   .fe-vars-grid {
-    @apply flex flex-wrap gap-1.5;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
   }
 
   .fe-var {
-    @apply flex flex-col items-start px-2.5 py-1.5 rounded-md border border-gray-200 bg-white
-           hover:border-blue-400 hover:bg-blue-50 transition-colors cursor-pointer text-left select-none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.25rem 0.6rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--rule);
+    background: var(--ink-2);
+    color: var(--fore-dim);
+    cursor: pointer;
+    user-select: none;
+    text-align: left;
+    transition: background-color 120ms, border-color 120ms, color 120ms;
+  }
+  .fe-var:hover,
+  .fe-var:focus-visible {
+    background: var(--ink-4);
+    border-color: var(--navy, #2563eb);
+    color: var(--fore);
   }
 
   .fe-var-name {
-    @apply text-xs font-mono font-semibold text-blue-700 leading-none;
+    font-family: var(--f-mono, ui-monospace, monospace);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--navy-hi, #60a5fa);
+    line-height: 1;
+  }
+  [data-theme='light'] .fe-var-name {
+    color: #1d4ed8;
   }
 
   .fe-var-desc {
-    @apply text-[10px] text-gray-400 leading-tight mt-0.5;
+    font-size: 0.625rem;
+    color: var(--mute);
+    line-height: 1.2;
+    margin-top: 0.125rem;
   }
 </style>

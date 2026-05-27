@@ -1,0 +1,470 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'roles:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const roleId = Astro.params.id ?? ''
+
+type RoleDetail = {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  isSystem: boolean
+  permissions: string[]
+  parentRoleIds: string[]
+  childRoleIds: string[]
+  userCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+type CatalogEntry = {
+  code: string
+  module: string
+  action: string
+  scope: 'tenant' | 'global'
+  description: string
+  isDangerous: boolean
+}
+
+let role: RoleDetail | null = null
+let catalog: CatalogEntry[] = []
+let error = ''
+
+try {
+  const [roleRes, catRes] = await Promise.all([
+    fetch(`${API_URL}/roles/${roleId}`, {
+      headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug },
+    }),
+    fetch(`${API_URL}/roles/permissions/catalog`, {
+      headers: { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug },
+    }),
+  ])
+  if (roleRes.ok) {
+    const json = (await roleRes.json()) as { data: RoleDetail }
+    role = json.data
+  } else if (roleRes.status === 404) {
+    return Astro.redirect('/config/roles')
+  }
+  if (catRes.ok) {
+    const json = (await catRes.json()) as { data: CatalogEntry[] }
+    catalog = json.data ?? []
+  }
+} catch {
+  error = 'No se pudo cargar el rol.'
+}
+
+const editable = role && !role.isSystem && can(identity, 'roles:update')
+const granted = new Set(role?.permissions ?? [])
+
+// Group catalog by module for the tree view, ignoring global permissions
+// since this page is tenant-scoped.
+const grouped = new Map<string, CatalogEntry[]>()
+for (const entry of catalog) {
+  if (entry.scope !== 'tenant') continue
+  if (!grouped.has(entry.module)) grouped.set(entry.module, [])
+  grouped.get(entry.module)?.push(entry)
+}
+const moduleLabels: Record<string, string> = {
+  employees: 'Empleados',
+  positions: 'Posiciones',
+  shifts: 'Turnos',
+  attendance: 'Asistencia',
+  vacations: 'Vacaciones',
+  loans: 'Préstamos',
+  advances: 'Anticipos',
+  creditors: 'Acreedores',
+  payroll: 'Planilla',
+  concepts: 'Conceptos',
+  catalogs: 'Catálogos',
+  payslip: 'Comprobantes',
+  reports: 'Reportes',
+  users: 'Usuarios',
+  roles: 'Roles',
+  settings: 'Ajustes',
+  audit: 'Auditoría',
+}
+const moduleEntries = Array.from(grouped.entries()).sort((a, b) =>
+  (moduleLabels[a[0]] ?? a[0]).localeCompare(moduleLabels[b[0]] ?? b[0], 'es')
+)
+
+const flash = Astro.url.searchParams.get('flash')
+---
+
+<AppLayout title={role?.name ?? 'Rol'}>
+  <div class="p-8">
+    <div class="mb-6">
+      <a href="/config/roles" class="text-xs text-gray-500 hover:text-gray-900">← Volver a roles</a>
+      <div class="mt-2 flex items-center justify-between">
+        <div>
+          <h1 class="text-xl font-semibold text-gray-900 tracking-tight">{role?.name ?? 'Rol'}</h1>
+          <p class="text-sm text-gray-500 mt-0.5">
+            Código: <span class="font-mono">{role?.code}</span>
+            {role?.isSystem && (
+              <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">Rol del sistema</span>
+            )}
+            <span class="ml-2 text-gray-400">· {role?.userCount ?? 0} {role?.userCount === 1 ? 'usuario' : 'usuarios'}</span>
+          </p>
+          {role?.description && <p class="text-sm text-gray-600 mt-2">{role.description}</p>}
+        </div>
+      </div>
+    </div>
+
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Rol creado correctamente.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Permisos actualizados.</div>
+    )}
+    {Astro.url.searchParams.get('error') === 'perms-not-saved' && (
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+        El rol fue creado pero no se pudieron guardar los permisos iniciales. Vuelve a intentarlo desde aquí.
+      </div>
+    )}
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    {role && (
+      <form id="perm-form" method="POST" action={`/api/roles/${role.id}/permissions`} class="space-y-4">
+        {role.isSystem && (
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+            Este es un rol del sistema. Sus permisos están definidos por la plantilla y no pueden editarse.
+          </div>
+        )}
+
+        {moduleEntries.length === 0 ? (
+          <div class="border border-gray-200 rounded-lg bg-white p-6 text-sm text-gray-500">
+            No se pudo cargar el catálogo de permisos. Recarga la página o contacta a soporte.
+          </div>
+        ) : (
+          <div class="perm-grid">
+            {moduleEntries.map(([module, entries]) => {
+              const grantedInModule = entries.filter((e) => granted.has(e.code)).length
+              return (
+                <details class="perm-card" open={grantedInModule > 0} data-module={module}>
+                  <summary class="perm-card-head">
+                    <div class="perm-card-title">
+                      <span class="perm-card-name">{moduleLabels[module] ?? module}</span>
+                      <span class="perm-card-count" data-count>
+                        <span data-granted>{grantedInModule}</span> / {entries.length}
+                      </span>
+                    </div>
+                    <div class="perm-card-actions">
+                      {editable && (
+                        <>
+                          <button type="button" class="perm-link" data-bulk="all" data-module={module}>
+                            Todos
+                          </button>
+                          <span class="perm-sep">·</span>
+                          <button type="button" class="perm-link" data-bulk="none" data-module={module}>
+                            Ninguno
+                          </button>
+                        </>
+                      )}
+                      <span class="perm-card-mono">{module}</span>
+                      <svg class="perm-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 4.5l3 3 3-3"/>
+                      </svg>
+                    </div>
+                  </summary>
+                  <div class="perm-card-body">
+                    {entries.map((p) => (
+                      <label class={`perm-row${editable ? '' : ' is-disabled'}`} data-granted={granted.has(p.code)}>
+                        <input
+                          type="checkbox"
+                          name="permissions"
+                          value={p.code}
+                          checked={granted.has(p.code)}
+                          disabled={!editable}
+                          class="perm-row-input"
+                          data-module={module}
+                        />
+                        <span class="perm-row-check" aria-hidden="true">
+                          <svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="2 5.8 4.5 8.2 9 3.4"/>
+                          </svg>
+                        </span>
+                        <span class="perm-row-meta">
+                          <span class="perm-row-line">
+                            <code class="perm-row-code">{p.code}</code>
+                            {p.isDangerous && <span class="perm-tag perm-tag-danger">Sensible</span>}
+                          </span>
+                          <span class="perm-row-desc">{p.description}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </details>
+              )
+            })}
+          </div>
+        )}
+
+        {editable && (
+          <div class="flex items-center gap-2 pt-2">
+            <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">Guardar permisos</button>
+            <a href="/config/roles" class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+          </div>
+        )}
+      </form>
+    )}
+  </div>
+
+  <style>
+    /* ── Module-card grid ─────────────────────────────────────────────
+       Auto-fitting cards so the page uses the full layout width. Cards
+       keep their own readable width but the page no longer collapses
+       to a fixed max. */
+    .perm-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+      gap: 12px;
+    }
+
+    .perm-card {
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      background: var(--ink-2);
+      overflow: hidden;
+    }
+    .perm-card[open] { border-color: var(--rule-hi); }
+
+    .perm-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      cursor: pointer;
+      list-style: none;
+      gap: 12px;
+      background: var(--ink-2);
+      transition: background 140ms ease;
+    }
+    .perm-card-head::-webkit-details-marker { display: none; }
+    .perm-card-head:hover { background: var(--ink-3); }
+
+    .perm-card-title {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+    }
+    .perm-card-name {
+      font-family: var(--f-sans);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--fore);
+    }
+    .perm-card-count {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.04em;
+    }
+
+    .perm-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--mute);
+      font-size: 12px;
+    }
+    .perm-link {
+      background: transparent;
+      border: none;
+      padding: 0;
+      font-family: var(--f-sans);
+      font-size: 12px;
+      color: var(--navy-hi);
+      cursor: pointer;
+      transition: color 140ms ease;
+    }
+    .perm-link:hover { color: var(--fore); text-decoration: underline; }
+    .perm-sep { color: var(--rule-hi); }
+    .perm-card-mono {
+      font-family: var(--f-mono);
+      font-size: 11px;
+      color: var(--mute);
+      letter-spacing: 0.04em;
+    }
+    .perm-chevron {
+      color: var(--mute);
+      transition: transform 200ms ease;
+    }
+    details[open] .perm-chevron { transform: rotate(180deg); }
+
+    .perm-card-body {
+      border-top: 1px solid var(--rule);
+      padding: 8px;
+      display: grid;
+      gap: 4px;
+    }
+
+    /* ── Row toggle ──────────────────────────────────────────────────
+       Replaces the native checkbox with a design-system tile that
+       responds to focus/hover/active and works in both themes. */
+    .perm-row {
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      align-items: start;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      background: transparent;
+      cursor: pointer;
+      transition: background 140ms ease, border-color 140ms ease;
+    }
+    .perm-row:hover:not(.is-disabled) {
+      background: var(--ink-3);
+      border-color: var(--rule);
+    }
+    .perm-row.is-disabled { cursor: not-allowed; opacity: 0.65; }
+
+    .perm-row-input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .perm-row-check {
+      width: 18px;
+      height: 18px;
+      margin-top: 1px;
+      border: 1.5px solid var(--rule-hi);
+      border-radius: 4px;
+      background: var(--ink-3);
+      display: grid;
+      place-items: center;
+      color: transparent;
+      transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+    }
+    .perm-row:hover:not(.is-disabled) .perm-row-check {
+      border-color: var(--mute-2);
+    }
+    .perm-row-input:focus-visible + .perm-row-check {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--navy-soft);
+      border-color: var(--navy-hi);
+    }
+    .perm-row-input:checked + .perm-row-check {
+      background: var(--navy);
+      border-color: var(--navy);
+      color: #fff;
+    }
+    .perm-row[data-granted='true'] {
+      background: var(--navy-soft);
+      border-color: var(--navy-hi);
+    }
+    .perm-row[data-granted='true'] .perm-row-code { color: var(--fore); }
+
+    .perm-row-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .perm-row-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .perm-row-code {
+      font-family: var(--f-mono);
+      font-size: 12px;
+      color: var(--fore-dim);
+      letter-spacing: 0.02em;
+    }
+    .perm-row-desc {
+      font-family: var(--f-sans);
+      font-size: 12.5px;
+      color: var(--mute-2);
+      line-height: 1.4;
+    }
+
+    .perm-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-family: var(--f-mono);
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      border: 1px solid transparent;
+    }
+    .perm-tag-danger {
+      background: rgba(224, 107, 92, 0.12);
+      color: var(--err);
+      border-color: rgba(224, 107, 92, 0.35);
+    }
+    [data-theme='light'] .perm-tag-danger {
+      background: rgba(181, 58, 43, 0.10);
+      color: var(--err);
+      border-color: rgba(181, 58, 43, 0.30);
+    }
+  </style>
+
+  <script is:inline>
+    (function () {
+      const form = document.getElementById('perm-form')
+      if (!form) return
+
+      // Sync the [data-granted] hint on the row whenever the underlying
+      // checkbox toggles, so the styled chip and the native state stay in
+      // lockstep without re-rendering.
+      function syncRow(input) {
+        const row = input.closest('.perm-row')
+        if (row) row.dataset.granted = input.checked ? 'true' : 'false'
+      }
+
+      function refreshCount(module) {
+        const card = form.querySelector(`details[data-module="${module}"]`)
+        if (!card) return
+        const total = card.querySelectorAll('.perm-row-input').length
+        const granted = card.querySelectorAll('.perm-row-input:checked').length
+        const counter = card.querySelector('[data-granted]')
+        if (counter) counter.textContent = String(granted)
+        const wrapper = card.querySelector('[data-count]')
+        if (wrapper) wrapper.firstElementChild.textContent = String(granted)
+      }
+
+      form.addEventListener('change', (e) => {
+        const target = e.target
+        if (target instanceof HTMLInputElement && target.classList.contains('perm-row-input')) {
+          syncRow(target)
+          refreshCount(target.dataset.module)
+        }
+      })
+
+      // Bulk toggles: per-module "Todos" / "Ninguno" links.
+      form.querySelectorAll('[data-bulk]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          const module = btn.dataset.module
+          const target = btn.dataset.bulk === 'all'
+          form
+            .querySelectorAll(`.perm-row-input[data-module="${module}"]`)
+            .forEach((input) => {
+              if (input.disabled) return
+              if (input.checked !== target) {
+                input.checked = target
+                syncRow(input)
+              }
+            })
+          refreshCount(module)
+        })
+      })
+    })()
+  </script>
+</AppLayout>

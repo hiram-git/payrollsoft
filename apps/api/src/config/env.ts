@@ -7,6 +7,15 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
   WEB_URL: z.string().url().default('http://localhost:4321'),
+  // Absolute path to packages/db/drizzle/tenant. Required in bundled
+  // deploys (Bun build rewrites import.meta.url so the in-package
+  // default resolves to the wrong directory). In dev the source-tree
+  // default works without this var.
+  TENANT_MIGRATIONS_DIR: z.string().optional(),
+  // Raíz de archivos persistidos en disco (reportes PDF en modo
+  // `local_storage`, adjuntos de expedientes). Default `/tmp/...` para
+  // que un clon recién bajado funcione sin setup.
+  STORAGE_DIR: z.string().optional(),
 })
 
 const parsed = envSchema.safeParse(process.env)

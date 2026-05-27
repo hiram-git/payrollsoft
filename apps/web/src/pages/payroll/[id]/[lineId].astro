@@ -1,18 +1,29 @@
 ---
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
 
 const { id, lineId } = Astro.params
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
-const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': 'demo' }
+const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 type LineConceptEntry = {
   code: string
   name: string
   type: string
   amount: number
   formulaError?: string
+  manual?: boolean
+}
+type CatalogConcept = {
+  id: string
+  code: string
+  name: string
+  type: 'income' | 'deduction' | 'patronal'
+  unit?: string | null
+  isActive?: boolean
 }
 type PayrollLine = {
   line: {
@@ -67,6 +78,26 @@ try {
 if (!payroll || !currentLine) return Astro.redirect(`/payroll/${id}`)
 
 const isGenerated = payroll.status === 'generated' || payroll.status === 'processed'
+const canEditManualConcepts =
+  payroll.status === 'generated' ||
+  payroll.status === 'processed' ||
+  payroll.status === 'processing'
+
+// Catálogo para el combobox: solo conceptos activos tipo income/deduction.
+let manualCatalog: CatalogConcept[] = []
+if (canEditManualConcepts) {
+  try {
+    const cRes = await fetch(`${API_URL}/concepts`, { headers })
+    if (cRes.ok) {
+      const cJson = (await cRes.json()) as { data: CatalogConcept[] }
+      manualCatalog = (cJson.data ?? []).filter(
+        (c) => (c.isActive ?? true) && (c.type === 'income' || c.type === 'deduction')
+      )
+    }
+  } catch {
+    /* fallback: combobox sin opciones */
+  }
+}
 const msgSuccess = Astro.url.searchParams.get('success') ?? ''
 const msgError = Astro.url.searchParams.get('error') ?? ''
 
@@ -105,18 +136,35 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
         </p>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0">
+        {canEditManualConcepts && (
+          <button
+            type="button"
+            id="btn-open-manual-concept"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+            title="Agregar un concepto del catálogo a esta línea"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Concepto
+          </button>
+        )}
         {isGenerated && (
-          <form id="form-regenerate" method="POST" action={`/api/payroll/${id}/line/${lineId}`}>
+          <form
+            method="POST"
+            action={`/api/payroll/${id}/line/${lineId}`}
+            data-saconfirm
+            data-sa-title="Regenerar empleado"
+            data-sa-message={`¿Recalcular los conceptos de ${employeeName}? Los valores actuales serán reemplazados.`}
+            data-sa-confirm-label="Regenerar"
+            data-sa-tone="warning"
+            data-sa-loading-title="Regenerando línea"
+            data-sa-loading-message="Recalculando conceptos del empleado…"
+            data-sa-success-title="Línea regenerada"
+            data-sa-success-message="Los conceptos se recalcularon correctamente."
+            data-sa-error-title="No se pudo regenerar"
+          >
             <input type="hidden" name="_method" value="REGENERATE" />
             <button
-              type="button"
-              data-confirm
-              data-form="form-regenerate"
-              data-title="Regenerar empleado"
-              data-body={`¿Recalcular los conceptos de ${employeeName}? Los valores actuales serán reemplazados.`}
-              data-confirm-label="Regenerar"
-              data-confirm-style="warning"
-              data-show-loading="true"
+              type="submit"
               class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -193,9 +241,32 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
                 <td class="px-4 py-2.5 font-mono text-xs text-gray-500">{c.code}</td>
                 <td class="px-4 py-2.5 text-gray-800">
                   {c.name}
+                  {c.manual && <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">Manual</span>}
                   {c.formulaError && <span class="ml-1 text-red-500 text-xs" title={c.formulaError}>⚠</span>}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums text-gray-900 font-medium">{fmt(c.amount)}</td>
+                <td class="px-4 py-2.5 text-right tabular-nums text-gray-900 font-medium">
+                  <div class="flex items-center justify-end gap-2">
+                    <span>{fmt(c.amount)}</span>
+                    {c.manual && canEditManualConcepts && (
+                      <form
+                        method="POST"
+                        action={`/api/payroll/${id}/line/${lineId}`}
+                        data-saconfirm
+                        data-sa-title="Quitar concepto manual"
+                        data-sa-message={`Vas a eliminar el concepto "${c.code}" de esta línea. Los totales se recalcularán.`}
+                        data-sa-confirm-label="Quitar"
+                        data-sa-tone="warning"
+                        data-sa-loading-title="Eliminando concepto"
+                        data-sa-success-title="Concepto eliminado"
+                        data-sa-error-title="No se pudo eliminar el concepto"
+                      >
+                        <input type="hidden" name="_method" value="DELETE_MANUAL" />
+                        <input type="hidden" name="code" value={c.code} />
+                        <button type="submit" class="text-red-500 hover:text-red-700 text-xs leading-none" title="Quitar concepto">✕</button>
+                      </form>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             <tr class="bg-gray-50 border-t border-gray-100">
@@ -229,9 +300,32 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
                 <td class="px-4 py-2.5 font-mono text-xs text-gray-500">{c.code}</td>
                 <td class="px-4 py-2.5 text-gray-800">
                   {c.name}
+                  {c.manual && <span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200">Manual</span>}
                   {c.formulaError && <span class="ml-1 text-red-500 text-xs" title={c.formulaError}>⚠</span>}
                 </td>
-                <td class="px-4 py-2.5 text-right tabular-nums text-red-600">{fmt(c.amount)}</td>
+                <td class="px-4 py-2.5 text-right tabular-nums text-red-600">
+                  <div class="flex items-center justify-end gap-2">
+                    <span>{fmt(c.amount)}</span>
+                    {c.manual && canEditManualConcepts && (
+                      <form
+                        method="POST"
+                        action={`/api/payroll/${id}/line/${lineId}`}
+                        data-saconfirm
+                        data-sa-title="Quitar concepto manual"
+                        data-sa-message={`Vas a eliminar el concepto "${c.code}" de esta línea. Los totales se recalcularán.`}
+                        data-sa-confirm-label="Quitar"
+                        data-sa-tone="warning"
+                        data-sa-loading-title="Eliminando concepto"
+                        data-sa-success-title="Concepto eliminado"
+                        data-sa-error-title="No se pudo eliminar el concepto"
+                      >
+                        <input type="hidden" name="_method" value="DELETE_MANUAL" />
+                        <input type="hidden" name="code" value={c.code} />
+                        <button type="submit" class="text-red-500 hover:text-red-700 text-xs leading-none" title="Quitar concepto">✕</button>
+                      </form>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
             <tr class="bg-gray-50 border-t border-gray-100">
@@ -305,6 +399,286 @@ const employeeName = `${currentLine.employee.firstName} ${currentLine.employee.l
       </div>
     </div>
   </div>
+
+  <!-- ── Modal "Agregar concepto manual" ──────────────────────────────────────
+       El contenido del card es idéntico al panel inline anterior. Vive
+       en un <dialog> para no contaminar el layout principal y se abre
+       desde el botón de la action bar. La form sigue usando
+       data-saconfirm para el flujo confirmación → espera → resultado. -->
+  {canEditManualConcepts && (
+    <dialog
+      id="manual-concept-dialog"
+      class="manual-concept-dialog rounded-lg border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/40 max-w-2xl w-full"
+    >
+      <div class="rounded-lg bg-white border border-gray-200">
+        <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between rounded-t-lg">
+          <h3 class="text-sm font-semibold text-gray-800">Agregar concepto manual</h3>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500 font-mono">{manualCatalog.length} conceptos disponibles</span>
+            <button
+              type="button"
+              id="btn-close-manual-concept"
+              class="text-gray-400 hover:text-gray-600 transition-colors"
+              aria-label="Cerrar"
+              title="Cerrar"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M3 3l10 10M13 3L3 13"/></svg>
+            </button>
+          </div>
+        </div>
+        <form
+          method="POST"
+          action={`/api/payroll/${id}/line/${lineId}`}
+          class="p-4"
+          data-saconfirm
+          data-sa-title="Agregar concepto manual"
+          data-sa-message="Vamos a agregar el concepto seleccionado a esta línea con el monto fijo indicado. Los totales de la planilla se recalcularán."
+          data-sa-confirm-label="Agregar concepto"
+          data-sa-tone="primary"
+          data-sa-loading-title="Agregando concepto"
+          data-sa-success-title="Concepto agregado"
+          data-sa-success-message="La línea fue actualizada con el concepto manual."
+          data-sa-error-title="No se pudo agregar el concepto"
+        >
+          <input type="hidden" name="_method" value="ADD_MANUAL" />
+          <!-- Fila inputs: alineados horizontalmente.
+               Las metas/labels viven en su columna sin empujar el input. -->
+          <div class="grid grid-cols-1 sm:grid-cols-[2fr_1fr_auto] gap-3 items-start">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Concepto</label>
+              <input type="hidden" name="conceptId" id="manual-concept-id" value="" />
+              <div class="relative">
+                <input
+                  type="text"
+                  id="manual-concept-search"
+                  placeholder="Buscar por código o nombre…"
+                  autocomplete="off"
+                  required
+                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+                />
+                <ul
+                  id="manual-concept-dropdown"
+                  class="hidden absolute z-50 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-md shadow-xl max-h-56 overflow-y-auto text-sm"
+                  role="listbox"
+                ></ul>
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+              <input
+                type="number"
+                name="amount"
+                step="0.01"
+                min="0.01"
+                required
+                placeholder="0.00"
+                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-right tabular-nums"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">&nbsp;</label>
+              <button
+                type="submit"
+                class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Agregar
+              </button>
+            </div>
+          </div>
+          <p id="manual-concept-meta" class="mt-2 text-xs text-gray-400 font-mono">Selecciona un concepto del catálogo.</p>
+        </form>
+        <p class="px-4 pb-3 text-xs text-gray-400">
+          Por ahora solo se admite monto fijo y unidad por defecto del catálogo. El tipo (asignación o deducción) lo toma automáticamente del concepto seleccionado.
+        </p>
+      </div>
+    </dialog>
+
+    <style is:global>
+      .manual-concept-dialog {
+        padding: 0;
+        border: none;
+        background: transparent;
+        /* Sin scroll interno: dejamos que el dropdown del combobox
+           se superponga si hace falta. */
+        overflow: visible;
+      }
+      /* Alto fijo del card: ajustado al contenido real (header + form +
+         meta + footer) más el dropdown del combobox (max-h-56 = 14rem)
+         que vive en posición absoluta debajo del input. Suficiente para
+         que la lista quepa sin disparar overflow del dialog. */
+      .manual-concept-dialog > div {
+        min-height: 26rem;
+      }
+      .manual-concept-dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
+    </style>
+
+    <script is:inline>
+      ;(function () {
+        const dialog = document.getElementById('manual-concept-dialog')
+        const open = document.getElementById('btn-open-manual-concept')
+        const close = document.getElementById('btn-close-manual-concept')
+        if (!dialog || !open) return
+
+        function openDialog() {
+          if (typeof dialog.showModal === 'function') {
+            dialog.showModal()
+          } else {
+            dialog.setAttribute('open', '')
+          }
+          // Reset del formulario al abrir para evitar arrastrar valores
+          // de un intento anterior fallido.
+          const form = dialog.querySelector('form')
+          form?.reset()
+          const idInput = document.getElementById('manual-concept-id')
+          const meta = document.getElementById('manual-concept-meta')
+          if (idInput) idInput.value = ''
+          if (meta) {
+            meta.textContent = 'Selecciona un concepto del catálogo.'
+            meta.classList.remove('text-red-600')
+          }
+          setTimeout(() => {
+            const search = document.getElementById('manual-concept-search')
+            if (search) search.focus()
+          }, 50)
+        }
+        function closeDialog() {
+          if (typeof dialog.close === 'function') dialog.close()
+          else dialog.removeAttribute('open')
+        }
+
+        open.addEventListener('click', openDialog)
+        close?.addEventListener('click', closeDialog)
+        // Click en el backdrop cierra el dialog (sólo cuando el target
+        // es el dialog mismo y no un descendiente).
+        dialog.addEventListener('click', (e) => {
+          if (e.target === dialog) closeDialog()
+        })
+
+        // Al disparar submit en el form interno (data-saconfirm), el
+        // helper saModal abre su propio modal de confirmación. Si este
+        // dialog sigue abierto se ven solapados — cerramos el dialog
+        // en fase de captura para que saModal quede limpio en pantalla.
+        const innerForm = dialog.querySelector('form[data-saconfirm]')
+        innerForm?.addEventListener(
+          'submit',
+          () => {
+            closeDialog()
+          },
+          { capture: true }
+        )
+      })()
+    </script>
+  )}
+
+  <!-- Combobox de búsqueda para "Agregar concepto manual" -->
+  <script type="application/json" id="manual-concept-data" is:inline set:html={JSON.stringify(manualCatalog).replace(/</g, '\\u003c')} />
+  <script is:inline>
+    ;(function () {
+      const dataEl = document.getElementById('manual-concept-data')
+      if (!dataEl) return
+      const idInput = document.getElementById('manual-concept-id')
+      const textInput = document.getElementById('manual-concept-search')
+      const dropdown = document.getElementById('manual-concept-dropdown')
+      const meta = document.getElementById('manual-concept-meta')
+      if (!idInput || !textInput || !dropdown || !meta) return
+
+      let conceptList = []
+      try {
+        conceptList = JSON.parse(dataEl.textContent || '[]')
+      } catch {
+        conceptList = []
+      }
+
+      const TYPE_LABEL = { income: 'Asignación', deduction: 'Deducción' }
+
+      function filterConcepts(q) {
+        const lq = q.toLowerCase().trim()
+        if (!lq) return conceptList.slice(0, 50)
+        return conceptList
+          .filter(
+            (c) =>
+              c.code.toLowerCase().includes(lq) ||
+              c.name.toLowerCase().includes(lq)
+          )
+          .slice(0, 50)
+      }
+
+      function renderDropdown(items) {
+        if (items.length === 0) {
+          dropdown.classList.add('hidden')
+          return
+        }
+        dropdown.innerHTML = items
+          .map((c) => {
+            const tone = c.type === 'income' ? 'text-blue-700 bg-blue-50' : 'text-red-700 bg-red-50'
+            return `
+              <li class="px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors flex items-center justify-between gap-2"
+                  role="option"
+                  data-id="${c.id}"
+                  data-code="${c.code}"
+                  data-name="${c.name.replace(/"/g, '&quot;')}"
+                  data-type="${c.type}"
+                  data-unit="${c.unit ?? ''}">
+                <div class="min-w-0">
+                  <div class="font-mono text-xs text-gray-500">${c.code}</div>
+                  <div class="text-sm text-gray-800 truncate">${c.name}</div>
+                </div>
+                <span class="text-[10px] px-1.5 py-0.5 rounded ${tone} font-medium flex-shrink-0">
+                  ${TYPE_LABEL[c.type] || c.type}
+                </span>
+              </li>`
+          })
+          .join('')
+        dropdown.classList.remove('hidden')
+      }
+
+      function pickConcept(li) {
+        idInput.value = li.dataset.id
+        textInput.value = `${li.dataset.code} — ${li.dataset.name}`
+        const typeLabel = TYPE_LABEL[li.dataset.type] || li.dataset.type
+        meta.textContent = `Tipo: ${typeLabel} · Unidad: ${li.dataset.unit || 'monto'}`
+        dropdown.classList.add('hidden')
+      }
+
+      dropdown.addEventListener('mousedown', (e) => e.preventDefault())
+      dropdown.addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-id]')
+        if (li) pickConcept(li)
+      })
+      textInput.addEventListener('input', () => {
+        idInput.value = ''
+        meta.textContent = 'Selecciona un concepto del catálogo.'
+        renderDropdown(filterConcepts(textInput.value))
+      })
+      textInput.addEventListener('focus', () => {
+        renderDropdown(filterConcepts(textInput.value))
+      })
+      textInput.addEventListener('blur', () => {
+        setTimeout(() => dropdown.classList.add('hidden'), 100)
+      })
+
+      // Si el usuario submitea sin haber elegido del dropdown, intentamos
+      // resolver por código exacto (case-insensitive) antes de bloquear.
+      const form = textInput.closest('form')
+      form?.addEventListener('submit', (e) => {
+        if (idInput.value) return
+        const raw = textInput.value.trim().toLowerCase()
+        const codeOnly = raw.split('—')[0].trim()
+        const match = conceptList.find(
+          (c) => c.code.toLowerCase() === codeOnly || c.name.toLowerCase() === raw
+        )
+        if (match) {
+          idInput.value = match.id
+          return
+        }
+        e.preventDefault()
+        e.stopPropagation()
+        textInput.focus()
+        meta.textContent = 'Selecciona un concepto válido del catálogo antes de continuar.'
+        meta.classList.add('text-red-600')
+      })
+    })()
+  </script>
 </AppLayout>
 
 <style>

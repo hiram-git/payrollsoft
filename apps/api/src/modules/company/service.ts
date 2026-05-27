@@ -32,11 +32,11 @@ export type CompanyConfigInput = {
   logoEmpresa?: string | null
   logoIzquierdoReportes?: string | null
   logoDerechoReportes?: string | null
-  /** 'on_demand' | 'file_storage' — see schema for semantics. */
+  /** 'on_demand' | 'file_storage' | 'local_storage' — see schema for semantics. */
   payrollReportMode?: string
 }
 
-const VALID_REPORT_MODES = new Set(['on_demand', 'file_storage'])
+const VALID_REPORT_MODES = new Set(['on_demand', 'file_storage', 'local_storage'])
 
 export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigInput) {
   const existing = await getCompanyConfig(db)
@@ -52,7 +52,7 @@ export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigIn
     address: input.address ?? null,
     phone: input.phone ?? null,
     email: input.email ?? null,
-    tipoInstitucion: input.tipoInstitucion ?? 'privada',
+    institutionType: input.institutionType ?? 'privada',
     currencyCode: input.currencyCode ?? 'USD',
     currencySymbol: input.currencySymbol ?? '$',
     mailHost: input.mailHost ?? null,
@@ -62,13 +62,13 @@ export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigIn
     mailPassword,
     mailFromAddress: input.mailFromAddress ?? null,
     mailFromName: input.mailFromName ?? null,
-    elaboradoPor: input.elaboradoPor ?? null,
-    cargoElaborador: input.cargoElaborador ?? 'Especialista en Nóminas',
-    jefeRecursosHumanos: input.jefeRecursosHumanos ?? null,
-    cargoJefeRrhh: input.cargoJefeRrhh ?? 'Jefe de Recursos Humanos',
-    logoEmpresa: input.logoEmpresa ?? null,
-    logoIzquierdoReportes: input.logoIzquierdoReportes ?? null,
-    logoDerechoReportes: input.logoDerechoReportes ?? null,
+    preparedBy: input.preparedBy ?? null,
+    preparerTitle: input.preparerTitle ?? 'Especialista en Planilla',
+    hrDirectorName: input.hrDirectorName ?? null,
+    hrDirectorTitle: input.hrDirectorTitle ?? 'Jefe de Recursos Humanos',
+    companyLogo: input.companyLogo ?? null,
+    reportLogoLeft: input.reportLogoLeft ?? null,
+    reportLogoRight: input.reportLogoRight ?? null,
     payrollReportMode:
       input.payrollReportMode && VALID_REPORT_MODES.has(input.payrollReportMode)
         ? input.payrollReportMode

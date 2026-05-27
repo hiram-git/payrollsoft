@@ -1,0 +1,107 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+/**
+ * Esqueleto de la vista de Liquidaciones — solo prototipo. Mismo
+ * patrón que /vacations: KPIs + tabla maestra + panel de cálculo.
+ * Los nodos `data-stub` señalan los puntos a cablear cuando se
+ * implemente el módulo (cálculo de prestaciones, generación de PDF,
+ * etc.).
+ */
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'payroll:read')) return Astro.redirect('/dashboard')
+
+const stubKpis = [
+  { label: 'Liquidaciones en curso', value: '—' },
+  { label: 'Cerradas este mes', value: '—' },
+  { label: 'Total pagado (mes)', value: '—' },
+  { label: 'Pendientes de aprobación', value: '—' },
+]
+---
+
+<AppLayout title="Liquidaciones">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="flex items-start justify-between gap-4 mb-6">
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Liquidaciones</h1>
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+            Próximamente
+          </span>
+        </div>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Cálculo de prestaciones (cesantía, vacaciones proporcionales, decimotercer mes, indemnización) al cierre de relación laboral.
+          Esta vista es un prototipo — la lógica de cálculo y los reportes se conectarán en una fase posterior.
+        </p>
+      </div>
+      <button
+        type="button"
+        disabled
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium opacity-50 cursor-not-allowed"
+        title="Disponible al implementar el módulo"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Nueva liquidación
+      </button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6" data-stub="kpis">
+      {stubKpis.map((k) => (
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <div class="text-xs text-gray-500 uppercase tracking-wide">{k.label}</div>
+          <div class="mt-1 text-2xl font-semibold text-gray-900 tabular-nums">{k.value}</div>
+        </div>
+      ))}
+    </div>
+
+    <!-- Tabla principal -->
+    <div class="bg-white border border-gray-200 rounded-lg overflow-hidden" data-stub="liquidations-table">
+      <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+        <h2 class="text-sm font-medium text-gray-900">Liquidaciones recientes</h2>
+        <div class="flex items-center gap-2 text-xs text-gray-500">
+          <input
+            type="search"
+            placeholder="Buscar empleado…"
+            disabled
+            class="px-2.5 py-1.5 border border-gray-300 rounded-md text-xs disabled:bg-gray-50 disabled:cursor-not-allowed"
+          />
+          <select disabled class="px-2.5 py-1.5 border border-gray-300 rounded-md text-xs disabled:bg-gray-50 disabled:cursor-not-allowed">
+            <option>Todos los estados</option>
+            <option>En cálculo</option>
+            <option>Aprobada</option>
+            <option>Pagada</option>
+          </select>
+        </div>
+      </div>
+      <div class="py-16 text-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="mx-auto w-10 h-10 text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6l3 18h12l3-18"/>
+          <path d="M8 6V4a4 4 0 0 1 8 0v2"/>
+          <path d="M12 12v6M9 15h6"/>
+        </svg>
+        <p class="mt-3 text-sm text-gray-500">Aquí se listarán las liquidaciones generadas por empleado.</p>
+        <p class="text-xs text-gray-400 mt-1 font-mono">payroll:read · vista en desarrollo</p>
+      </div>
+    </div>
+
+    <!-- Panel de cálculo + reglas -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-6">
+      <div class="bg-white border border-gray-200 rounded-lg p-5 lg:col-span-2" data-stub="breakdown-card">
+        <h2 class="text-sm font-medium text-gray-900 mb-2">Desglose de cálculo</h2>
+        <p class="text-sm text-gray-500">
+          Aquí se mostrará el detalle por concepto (salarios pendientes, vacaciones proporcionales, decimotercer mes, prima de antigüedad, indemnización) cuando se seleccione una liquidación.
+        </p>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-5" data-stub="rules-card">
+        <h2 class="text-sm font-medium text-gray-900 mb-2">Reglas aplicables</h2>
+        <p class="text-sm text-gray-500">
+          Las fórmulas se basarán en el Código de Trabajo de Panamá y se podrán ajustar desde
+          <code class="font-mono text-xs">/config/company</code>.
+        </p>
+      </div>
+    </div>
+  </div>
+</AppLayout>

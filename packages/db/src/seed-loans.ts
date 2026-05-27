@@ -1,19 +1,19 @@
 /**
- * seed-loans.ts — Seeds 10 acreedores + their concepts + 1-4 loans per active employee.
+ * CLI shim del seed de préstamos.
  *
- * Usage: bun --env-file ../../.env src/seed-loans.ts
+ *   bun src/seed-loans.ts                     # → tenant_demo
+ *   bun src/seed-loans.ts --tenant=acme       # → otro tenant
  *
- * Idempotent: deletes and recreates all loans associated with the seeded creditors.
- * Requires base seed (seed.ts) and employees (seed-stress.ts or manual inserts) to exist first.
- *
- * Creates:
- *   - 3 bancos  : BANISTMO, BAC, CAJAH
- *   - 7 financieras: FICOHSA, CREDIQ, COFISA, AZTEK, MULTIFIN, PRESTAMAS, CREDIFACIL
- *   - 1 concepto por acreedor (tipo deducción, CUOTA_ACREEDOR, print_details + use_amount_calc)
- *   - 1–4 préstamos aleatorios por empleado activo, cada uno con 24–72 cuotas
- *     QUINCENALES (frequency = 'quincenal', 1 cuota cada ~15 días)
+ * La lógica vive en `seeds/loans.ts` y se reusa desde el flujo de
+ * provisioning del super-admin. Este script solo arma la conexión y
+ * llama la función exportada.
  */
 import postgres from 'postgres'
+import { seedLoans } from './seeds/loans'
+
+const args = process.argv.slice(2)
+const tenantFlag = args.find((a) => a.startsWith('--tenant='))
+const TENANT_SLUG = tenantFlag ? tenantFlag.split('=')[1] : (process.env.SEED_TENANT ?? 'demo')
 
 const url = process.env.DATABASE_URL
 if (!url) {
@@ -21,81 +21,13 @@ if (!url) {
   process.exit(1)
 }
 
-const TENANT_SLUG = 'demo'
-const BATCH_SIZE = 500
-
 const sql = postgres(url, {
   prepare: false,
-  connection: { search_path: `tenant_${TENANT_SLUG},public` },
+  connection: { search_path: `tenant_${TENANT_SLUG},payroll_auth,public` },
   max: 10,
 })
 
-// ── Acreedores ────────────────────────────────────────────────────────────────
-
-const BANKS = [
-  { code: 'BANISTMO', name: 'Banistmo S.A.', description: 'Banco Banistmo, S.A.' },
-  { code: 'BAC', name: 'BAC Internacional Bank', description: 'BAC Internacional Bank, Inc.' },
-  { code: 'CAJAH', name: 'Caja de Ahorros', description: 'Caja de Ahorros de Panamá' },
-]
-
-const FINANCIERAS = [
-  { code: 'FICOHSA', name: 'Financiera Ficohsa', description: 'Ficohsa Panamá S.A.' },
-  { code: 'CREDIQ', name: 'CrediQ Panamá', description: 'CrediQ Panamá S.A.' },
-  { code: 'COFISA', name: 'Cofisa Panamá', description: 'Cofisa Panamá S.A.' },
-  { code: 'AZTEK', name: 'Financiera Azteka', description: 'Azteka Financiera S.A.' },
-  { code: 'MULTIFIN', name: 'Multi Financiera', description: 'Multi Financiera S.A.' },
-  { code: 'PRESTAMAS', name: 'PréstaMás', description: 'PréstaMás Panamá S.A.' },
-  { code: 'CREDIFACIL', name: 'CrédiFácil', description: 'CrédiFácil Financiera S.A.' },
-]
-
-const ALL_ACREEDORES = [...BANKS, ...FINANCIERAS]
-
-// ── Utilities ─────────────────────────────────────────────────────────────────
-
-function rand(min: number, max: number): number {
-  return Math.floor(Math.random() * (max - min + 1)) + min
-}
-
-function randFloat(min: number, max: number, decimals = 2): number {
-  const v = min + Math.random() * (max - min)
-  const factor = 10 ** decimals
-  return Math.round(v * factor) / factor
-}
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
-}
-
-function addMonths(date: Date, months: number): Date {
-  const d = new Date(date)
-  d.setMonth(d.getMonth() + months)
-  return d
-}
-
-function addDays(date: Date, days: number): Date {
-  const d = new Date(date)
-  d.setDate(d.getDate() + days)
-  return d
-}
-
-function toDateStr(d: Date): string {
-  return d.toISOString().slice(0, 10)
-}
-
-// Quincena ≈ 15 days. Two payments per month so loan terms double in count
-// and halve in size relative to a monthly cadence.
-const DAYS_PER_QUINCENA = 15
-
-/** Shuffle array in place, return it. */
-function shuffle<T>(arr: T[]): T[] {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[arr[i], arr[j]] = [arr[j], arr[i]]
-  }
-  return arr
-}
-
-// ── Main ──────────────────────────────────────────────────────────────────────
+console.log(`▸ Loans seed → tenant_${TENANT_SLUG}`)
 
 try {
   // ── 1. Create concepts + creditors ──────────────────────────────────────────
@@ -272,12 +204,10 @@ try {
 
   // ── Summary ───────────────────────────────────────────────────────────────────
   console.log('\n✅  Seed de préstamos completo!\n')
-  console.log(
-    `   Acreedores : ${ALL_ACREEDORES.length}  (${BANKS.length} bancos · ${FINANCIERAS.length} financieras)`
-  )
-  console.log(`   Préstamos  : ${totalLoans}`)
-  console.log(`   Cuotas     : ${allInstallments.length}`)
-  console.log(`   Empleados  : ${employees.length}`)
+  console.log(`   Acreedores : ${result.creditorsCreated}`)
+  console.log(`   Préstamos  : ${result.loansCreated}`)
+  console.log(`   Cuotas     : ${result.installmentsCreated}`)
+  console.log(`   Empleados  : ${result.employeesAffected}`)
 } catch (err) {
   console.error('\n✗  Seed falló:', err instanceof Error ? err.message : String(err))
   process.exit(1)
