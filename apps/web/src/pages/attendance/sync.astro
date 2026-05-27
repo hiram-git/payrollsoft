@@ -144,10 +144,10 @@ function fmtDate(s: string | null): string {
                 </div>
               </div>
 
-              {s && (
+              {s?.id && (
                 <div class="px-5 pb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
                   <div><span class="sync-label">Última ingesta:</span><span class="sync-mute ml-1">{fmtDate(s.lastRunAt)}</span></div>
-                  <div><span class="sync-label">Punches ingresados:</span><span class="sync-mute ml-1">{s.punchesIngested.toLocaleString()}</span></div>
+                  <div><span class="sync-label">Punches ingresados:</span><span class="sync-mute ml-1">{(s.punchesIngested ?? 0).toLocaleString()}</span></div>
                   {s.lastError && (
                     <div class="basis-full"><span class="sync-label text-red-400">Error:</span><span class="text-red-400 ml-1">{s.lastError}</span></div>
                   )}
@@ -229,11 +229,11 @@ function fmtDate(s: string | null): string {
         </div>
       </div>
 
-      {consolidationState && (
+      {consolidationState?.id && (
         <div class="px-5 pb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
           <div><span class="sync-label">Última consolidación:</span><span class="sync-mute ml-1">{fmtDate(consolidationState.lastRunAt)}</span></div>
-          <div><span class="sync-label">Días consolidados:</span><span class="sync-mute ml-1">{consolidationState.daysConsolidated.toLocaleString()}</span></div>
-          <div><span class="sync-label">HWM (punch ID):</span><span class="sync-mute ml-1">{consolidationState.highWaterMark.toLocaleString()}</span></div>
+          <div><span class="sync-label">Días consolidados:</span><span class="sync-mute ml-1">{(consolidationState.daysConsolidated ?? 0).toLocaleString()}</span></div>
+          <div><span class="sync-label">HWM (punch ID):</span><span class="sync-mute ml-1">{(consolidationState.highWaterMark ?? 0).toLocaleString()}</span></div>
           {consolidationState.lastError && (
             <div class="basis-full"><span class="sync-label text-red-400">Error:</span><span class="text-red-400 ml-1">{consolidationState.lastError}</span></div>
           )}
