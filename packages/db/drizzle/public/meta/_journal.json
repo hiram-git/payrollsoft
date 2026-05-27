@@ -71,6 +71,13 @@
       "when": 1762128008000,
       "tag": "0009_users_write_permission",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1762128009000,
+      "tag": "0010_attendance_sync_permission",
+      "breakpoints": true
     }
   ]
 }
