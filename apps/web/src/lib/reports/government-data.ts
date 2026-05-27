@@ -147,7 +147,18 @@ export function computeBuckets(concepts: ConceptEntry[]): ConceptBuckets {
   const totalDescuentos = ss + se + siacap + isr + otrasDeduciones
   const neto = devengado - totalDescuentos
 
-  return { sueldo, ingresos, ss, se, siacap, isr, otrasDeduciones, devengado, totalDescuentos, neto }
+  return {
+    sueldo,
+    ingresos,
+    ss,
+    se,
+    siacap,
+    isr,
+    otrasDeduciones,
+    devengado,
+    totalDescuentos,
+    neto,
+  }
 }
 
 // ─── Employer (patrono) contribution rates ─────────────────────────────────
