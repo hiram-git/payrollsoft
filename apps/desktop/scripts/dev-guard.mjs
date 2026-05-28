@@ -52,15 +52,22 @@ if (!enabled) {
 
 // Call the locally-installed `tauri` CLI directly (bun puts node_modules/.bin
 // on PATH when running package scripts, and child processes inherit it). This
-// matches the dev:force/build:force scripts. shell:true is required on Windows
-// so the .cmd shim resolves via PATHEXT — without it Node's spawn fails with
-// ENOENT (errno -4058).
-const child = spawn('tauri', [subcommand, ...passthrough], {
+// matches the dev:force/build:force scripts.
+//
+// Windows: the CLI is a `tauri.cmd` shim, which Node's spawn can only run via
+// the shell. Passing an args array together with shell:true triggers DEP0190,
+// so we hand the shell a single pre-joined command string instead.
+// Unix: spawn the binary directly with an args array — no shell, no warning.
+const isWindows = process.platform === 'win32'
+const args = [subcommand, ...passthrough]
+const spawnOptions = {
   cwd: resolve(__dirname, '..'),
   stdio: 'inherit',
   env: process.env,
-  shell: true,
-})
+}
+const child = isWindows
+  ? spawn(['tauri', ...args].join(' '), { ...spawnOptions, shell: true })
+  : spawn('tauri', args, spawnOptions)
 child.on('error', (err) => {
   console.error(
     `[payroll-desktop] failed to run 'tauri ${subcommand}': ${err.message}\nMake sure dependencies are installed (run 'bun install' at the repo root).`
