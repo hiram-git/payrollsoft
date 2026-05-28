@@ -105,8 +105,15 @@ export async function runIngestionCycle(db: AnyDb, deviceId: string): Promise<In
   if (connMethod === 'api') {
     return runApiIngestion(db, device, state, startedAt, hwmBefore)
   }
+  if (connMethod === 'sdk') {
+    const msg =
+      'SDK ingestion is not yet implemented. This feature requires a concrete manufacturer SDK ' +
+      '(e.g., ZKTeco, Anviz) to be integrated. Configure the device as txt_import or api instead.'
+    await writeIngestionLog(db, deviceId, startedAt, 'error', {}, hwmBefore, hwmBefore, msg)
+    return emptyResult(hwmBefore, msg)
+  }
 
-  const msg = `Unsupported connection method "${connMethod}" for background ingestion.`
+  const msg = `Connection method "${connMethod}" is direct_write and does not use the ingestion worker.`
   await db.insert(attendanceIngestionLog).values({
     deviceId,
     startedAt,

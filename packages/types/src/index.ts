@@ -38,6 +38,58 @@ export type JwtPayload = {
 export const USER_ROLES = ['SUPER_ADMIN', 'ADMIN', 'HR', 'ACCOUNTANT', 'VIEWER'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 
+// ─── Device classification ──────────────────────────────────────────────────
+
+export const CONNECTION_METHODS = [
+  'txt_import',
+  'api',
+  'sdk',
+  'webhook',
+  'manual',
+  'mobile_app',
+] as const
+export type ConnectionMethod = (typeof CONNECTION_METHODS)[number]
+
+/**
+ * Connection methods that require a background ingestion worker.
+ * The system periodically pulls data from these sources.
+ */
+export const BATCH_INGESTION_METHODS: ReadonlySet<ConnectionMethod> = new Set([
+  'txt_import',
+  'api',
+  'sdk',
+])
+
+/**
+ * Connection methods where the device/user pushes data directly.
+ * No worker needed — punches are written via endpoint calls.
+ *
+ * webhook is direct_write even if the sender is a biometric clock:
+ * the device pushes, the system does not pull.
+ */
+export const DIRECT_WRITE_METHODS: ReadonlySet<ConnectionMethod> = new Set([
+  'webhook',
+  'manual',
+  'mobile_app',
+])
+
+export function isBatchIngestion(method: string): boolean {
+  return BATCH_INGESTION_METHODS.has(method as ConnectionMethod)
+}
+
+/**
+ * Maps connectionMethod → punch source value for traceability.
+ * From any punch row you can tell exactly how it entered the system.
+ */
+export const CONNECTION_TO_SOURCE: Record<ConnectionMethod, string> = {
+  txt_import: 'import',
+  api: 'api',
+  sdk: 'sdk',
+  webhook: 'webhook',
+  manual: 'manual',
+  mobile_app: 'mobile_app',
+}
+
 // ─── Permissions catalog (mirror of payroll_auth.permissions_catalog) ────────
 
 /**

@@ -66,9 +66,12 @@ const TYPE_LABELS: Record<string, string> = {
 const CONN_LABELS: Record<string, string> = {
   txt_import: 'Importar TXT',
   api: 'API',
+  sdk: 'SDK',
   webhook: 'Webhook',
   manual: 'Manual',
+  mobile_app: 'App móvil',
 }
+const BATCH_METHODS = new Set(['txt_import', 'api', 'sdk'])
 const STATUS_LABELS: Record<string, string> = {
   active: 'Activo',
   inactive: 'Inactivo',
@@ -229,7 +232,12 @@ function fmtDate(s: string | null): string {
                   <td class="px-5 py-3 text-xs">
                     <span class="dev-type-badge">{TYPE_LABELS[d.deviceType] ?? d.deviceType}</span>
                   </td>
-                  <td class="px-5 py-3 text-xs dev-cell">{CONN_LABELS[d.connectionMethod] ?? d.connectionMethod}</td>
+                  <td class="px-5 py-3 text-xs">
+                    <div class="dev-cell">{CONN_LABELS[d.connectionMethod] ?? d.connectionMethod}</div>
+                    <span class={`dev-cat-badge ${BATCH_METHODS.has(d.connectionMethod) ? 'dev-cat-batch' : 'dev-cat-direct'}`}>
+                      {BATCH_METHODS.has(d.connectionMethod) ? 'ingesta' : 'directa'}
+                    </span>
+                  </td>
                   <td class="px-5 py-3 text-xs">
                     {d.location && <div class="dev-cell">{d.location}</div>}
                     {d.ipAddress && <div class="font-mono dev-mute">{d.ipAddress}</div>}
@@ -316,6 +324,13 @@ function fmtDate(s: string | null): string {
       font-size: 0.6875rem; font-weight: 500;
       background: rgba(96,165,250,0.18); color: #60a5fa;
     }
+    .dev-cat-badge {
+      display: inline-block; padding: 0.0625rem 0.375rem; border-radius: 0.25rem;
+      font-size: 0.5625rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; margin-top: 0.125rem;
+    }
+    .dev-cat-batch  { background: rgba(245,158,11,0.18); color: #fbbf24; }
+    .dev-cat-direct { background: rgba(16,185,129,0.18); color: #34d399; }
     .dev-status-badge {
       display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px;
       font-size: 0.6875rem; font-weight: 500;
@@ -332,5 +347,7 @@ function fmtDate(s: string | null): string {
     [data-theme='light'] .dev-status-active   { background: #d1fae5; color: #065f46; }
     [data-theme='light'] .dev-status-inactive { background: #f3f4f6; color: #6b7280; }
     [data-theme='light'] .dev-status-maint    { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .dev-cat-batch  { background: #fef3c7; color: #92400e; }
+    [data-theme='light'] .dev-cat-direct { background: #d1fae5; color: #065f46; }
   </style>
 </AppLayout>
