@@ -57,19 +57,45 @@ bun --filter @payroll/desktop dev
 Para forzar el arranque ignorando el guard (útil al depurar el guard mismo):
 `bun --filter @payroll/desktop dev:force`.
 
-## Build del instalador (Windows)
+## Distribuir a un equipo (conectado a la nube)
 
-El bundler de `.msi` requiere correr en **Windows** (usa WiX). En Linux/macOS
-se puede compilar el binario para validar el código, pero no producir el
-`.msi`.
+> **Por qué no basta `build` a secas:** el shell lee `DESKTOP_URL`/
+> `DESKTOP_ENABLED` de un `.env` en runtime. En tu monorepo existe, pero en
+> la PC de un compañero el `.msi` instalado **no tiene ningún `.env`** cerca,
+> así que `DESKTOP_ENABLED` quedaría en `false` (no abre) y `DESKTOP_URL` en
+> `localhost` (apunta a su propia máquina). Para distribuir hay que **hornear**
+> la URL de la nube en el binario.
+
+### `build:dist` — hornea la URL y arma el instalador
+
+En una máquina **Windows** (el `.msi` usa WiX), con Rust instalado:
 
 ```bash
-# En una máquina Windows, con DESKTOP_ENABLED=true en el .env:
-bun --filter @payroll/desktop build
+bun --filter @payroll/desktop build:dist -- --url=https://payroll.tu-empresa.com
 ```
 
-El instalador queda en
-`apps/desktop/src-tauri/target/release/bundle/msi/`.
+Esto embebe la URL y `DESKTOP_ENABLED=true` en el ejecutable (vía
+`option_env!` en `src/lib.rs`). El compañero solo **instala el `.msi` y abre** —
+cero configuración, conecta directo a la nube.
+
+El instalador queda en `apps/desktop/src-tauri/target/release/bundle/msi/`.
+
+### Prioridad de configuración (runtime gana sobre horneado)
+
+1. Variable de entorno del proceso (incl. la cargada de un `.env`).
+2. Valor **horneado** al compilar (`build:dist`).
+3. Default (`http://localhost:4321`, deshabilitado).
+
+Esto da el **override sin recompilar** para installs distribuidos: si IT
+necesita repuntar un `.msi` ya instalado a otro servidor, coloca un `.env` en
+`%APPDATA%\PayrollSoft\.env` (o junto al `.exe`) con `DESKTOP_URL=...` y manda.
+
+### Build normal (sin hornear, p. ej. para dev/QA en Windows)
+
+```bash
+# Toma la URL del .env como en dev. Requiere DESKTOP_ENABLED=true en el .env.
+bun --filter @payroll/desktop build
+```
 
 Para validar solo la compilación sin generar instalador (cualquier SO con los
 prerequisitos):
@@ -104,6 +130,13 @@ fuera del entorno de desarrollo. No marcar la app como lista sin cerrarlos:
    El **primer build en Windows es parte de la validación** y puede revelar
    problemas de toolchain (Build Tools faltantes, WebView2 ausente, firma).
    Reservar tiempo para esto antes de prometer una fecha de entrega.
+
+3. **Firma de código (SmartScreen).** El `.msi` sin firmar dispara la
+   advertencia "Windows protegió tu PC" al instalar, y cada usuario debe darle
+   "Más información → Ejecutar de todas formas". Para evitarlo hace falta un
+   certificado de code-signing (OV/EV) y firmar el instalador. No es bloqueante
+   para un equipo interno que conoce el origen, pero sí para una distribución
+   más amplia. Decisión pendiente del proyecto.
 
 ## Notas
 

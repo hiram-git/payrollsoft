@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node scripts/dev-guard.mjs dev",
     "build": "node scripts/dev-guard.mjs build",
+    "build:dist": "node scripts/build-dist.mjs",
     "dev:force": "tauri dev",
     "build:force": "tauri build",
     "tauri": "tauri"
