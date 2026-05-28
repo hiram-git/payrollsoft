@@ -46,6 +46,10 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       path: '/portal/credentials/toggle-approver',
       payload: { employeeId: body.employeeId, isApprover: body.isApprover },
     },
+    'activate-all': {
+      path: '/portal/credentials/activate-all',
+      payload: {},
+    },
   }
 
   const action = actionMap[body.action]
