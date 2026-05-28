@@ -50,9 +50,21 @@ if (!enabled) {
   process.exit(0)
 }
 
-const child = spawn('bunx', ['tauri', subcommand, ...passthrough], {
+// Call the locally-installed `tauri` CLI directly (bun puts node_modules/.bin
+// on PATH when running package scripts, and child processes inherit it). This
+// matches the dev:force/build:force scripts. shell:true is required on Windows
+// so the .cmd shim resolves via PATHEXT — without it Node's spawn fails with
+// ENOENT (errno -4058).
+const child = spawn('tauri', [subcommand, ...passthrough], {
   cwd: resolve(__dirname, '..'),
   stdio: 'inherit',
   env: process.env,
+  shell: true,
+})
+child.on('error', (err) => {
+  console.error(
+    `[payroll-desktop] failed to run 'tauri ${subcommand}': ${err.message}\nMake sure dependencies are installed (run 'bun install' at the repo root).`
+  )
+  process.exit(1)
 })
 child.on('exit', (code) => process.exit(code ?? 0))
