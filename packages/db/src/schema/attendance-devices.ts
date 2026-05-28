@@ -82,5 +82,5 @@ export type DeviceType =
   | 'nfc_reader'
   | 'turnstile'
   | 'other'
-export type ConnectionMethod = 'txt_import' | 'api' | 'webhook' | 'manual'
+export type ConnectionMethod = 'txt_import' | 'api' | 'sdk' | 'webhook' | 'manual' | 'mobile_app'
 export type DeviceStatus = 'active' | 'inactive' | 'maintenance'

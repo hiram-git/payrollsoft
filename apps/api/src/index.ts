@@ -9,6 +9,7 @@ import { consolidationRoutes } from './modules/attendance/consolidation-routes'
 import { attendanceDevicesRoutes } from './modules/attendance/devices-routes'
 import { attendanceImportRoutes } from './modules/attendance/import-routes'
 import { justificationRoutes } from './modules/attendance/justification-routes'
+import { punchRoutes } from './modules/attendance/punch-routes'
 import { attendanceRoutes } from './modules/attendance/routes'
 import { syncRoutes } from './modules/attendance/sync-routes'
 import { bootstrapWorkers } from './modules/attendance/sync-worker'
@@ -89,6 +90,7 @@ const app = new Elysia()
   .use(consolidationRoutes)
   .use(justificationRoutes)
   .use(unifiedPunchRoutes)
+  .use(punchRoutes)
   .use(loansRoutes)
   .use(creditorRoutes)
   .use(customFieldsRoutes)

@@ -94,8 +94,10 @@ export const attendanceDevicesRoutes = new Elysia({ prefix: '/attendance/devices
         connectionMethod: t.Union([
           t.Literal('txt_import'),
           t.Literal('api'),
+          t.Literal('sdk'),
           t.Literal('webhook'),
           t.Literal('manual'),
+          t.Literal('mobile_app'),
         ]),
         location: t.Optional(t.Nullable(t.String({ maxLength: 200 }))),
         ipAddress: t.Optional(t.Nullable(t.String({ maxLength: 45 }))),
@@ -104,6 +106,7 @@ export const attendanceDevicesRoutes = new Elysia({ prefix: '/attendance/devices
         serialNumber: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
         manufacturer: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
         model: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+        syncSourcePath: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
       }),
     }
   )
@@ -134,6 +137,7 @@ export const attendanceDevicesRoutes = new Elysia({ prefix: '/attendance/devices
         serialNumber: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
         manufacturer: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
         model: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+        syncSourcePath: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
         status: t.Optional(
           t.Union([t.Literal('active'), t.Literal('inactive'), t.Literal('maintenance')])
         ),
