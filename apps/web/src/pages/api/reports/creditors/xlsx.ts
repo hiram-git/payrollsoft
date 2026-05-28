@@ -1,6 +1,10 @@
 import type { APIRoute } from 'astro'
 import * as XLSX from 'xlsx'
 import { getIdentity } from '../../../../lib/auth'
+import {
+  formatCustomFieldValue,
+  loadCreditorsExtras,
+} from '../../../../lib/reports/creditors-extra-columns'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
@@ -13,6 +17,7 @@ type DetailRow = {
   payrollName: string
   periodStart: string
   periodEnd: string
+  employeeId: string
   employeeCode: string
   firstName: string
   lastName: string
@@ -101,6 +106,11 @@ export const GET: APIRoute = async ({ request, cookies }) => {
   const data = json.data
   const monthLabel = MONTH_LABELS[data.month - 1] ?? String(data.month)
 
+  // Campos adicionales marcados para el reporte de acreedores. Cada
+  // entrada activa se transforma en una columna extra en la hoja
+  // "Detalle"; la hoja "Resumen" agrega por acreedor y no se ve afectada.
+  const { defs: extraDefs, customFieldsByEmployee } = await loadCreditorsExtras(API_URL, headers)
+
   // ── Hoja "Resumen" ──────────────────────────────────────────────────────
   const summaryRows = data.creditors.map((c) => ({
     Código: c.creditorCode,
@@ -123,42 +133,40 @@ export const GET: APIRoute = async ({ request, cookies }) => {
 
   // ── Hoja "Detalle" ──────────────────────────────────────────────────────
   const detailRows = data.creditors.flatMap((c) =>
-    c.details.map((d) => ({
-      Acreedor: c.creditorName,
-      Código: c.creditorCode,
-      Concepto: d.conceptCode,
-      'Cód. Empleado': d.employeeCode,
-      Empleado: `${d.lastName}, ${d.firstName}`,
-      Planilla: d.payrollName,
-      'Período inicio': d.periodStart,
-      'Período fin': d.periodEnd,
-      Monto: Number(d.amount),
-    }))
+    c.details.map((d) => {
+      const cf = customFieldsByEmployee.get(d.employeeId) ?? {}
+      const extras: Record<string, string | number> = {}
+      for (const def of extraDefs) {
+        extras[def.name] = formatCustomFieldValue(def, cf[def.code])
+      }
+      return {
+        Acreedor: c.creditorName,
+        Código: c.creditorCode,
+        Concepto: d.conceptCode,
+        'Cód. Empleado': d.employeeCode,
+        Empleado: `${d.lastName}, ${d.firstName}`,
+        Planilla: d.payrollName,
+        'Período inicio': d.periodStart,
+        'Período fin': d.periodEnd,
+        ...extras,
+        Monto: Number(d.amount),
+      }
+    })
   )
-  const detailSheet = XLSX.utils.json_to_sheet(detailRows, {
-    header: [
-      'Acreedor',
-      'Código',
-      'Concepto',
-      'Cód. Empleado',
-      'Empleado',
-      'Planilla',
-      'Período inicio',
-      'Período fin',
-      'Monto',
-    ],
-  })
-  detailSheet['!cols'] = [
-    { wch: 32 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 32 },
-    { wch: 22 },
-    { wch: 14 },
-    { wch: 14 },
-    { wch: 12 },
+  const detailHeader = [
+    'Acreedor',
+    'Código',
+    'Concepto',
+    'Cód. Empleado',
+    'Empleado',
+    'Planilla',
+    'Período inicio',
+    'Período fin',
+    ...extraDefs.map((d) => d.name),
+    'Monto',
   ]
+  const detailSheet = XLSX.utils.json_to_sheet(detailRows, { header: detailHeader })
+  detailSheet['!cols'] = detailHeader.map((h) => ({ wch: Math.max(12, h.length + 2) }))
 
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, summarySheet, 'Resumen')

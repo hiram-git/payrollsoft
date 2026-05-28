@@ -75,7 +75,7 @@ async function fetchCreditorReport(
       e.code        AS employee_code,
       e.first_name,
       e.last_name
-    FROM payroll_acumulados pa
+    FROM payroll_accumulators pa
     JOIN payrolls   p  ON p.id = pa.payroll_id
     JOIN concepts   cn ON cn.code = pa.concept_code
     JOIN creditors  c  ON c.concept_id = cn.id
@@ -197,6 +197,255 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
         year: t.String(),
         month: t.String(),
         payrollTypeId: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  // ── GET /reports/employee-files ──────────────────────────────────────────
+  //
+  // Reporte gerencial de movimientos de expedientes. Devuelve la
+  // cantidad total y siete agrupaciones precomputadas para que la UI
+  // las renderice en una sola página (tipo, subtipo, usuario,
+  // empleado, departamento, función, cargo, mes).
+  //
+  // Todas las queries comparten los mismos filtros opcionales
+  // (rango de fechas, tipo, subtipo, empleado, departamento, etc.);
+  // se ejecutan en paralelo via `Promise.all`. Pensado para que un
+  // jefe de RRHH vea la distribución del trabajo en un período sin
+  // exportar nada.
+  .get(
+    '/employee-files',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+
+      const from = (query.from ?? '').trim() || null
+      const to = (query.to ?? '').trim() || null
+      const filters = {
+        typeId: query.typeId ? Number.parseInt(query.typeId, 10) : null,
+        subtypeId: query.subtypeId ? Number.parseInt(query.subtypeId, 10) : null,
+        employeeId: query.employeeId?.trim() || null,
+        departmentId: query.departmentId?.trim() || null,
+        jobFunctionId: query.jobFunctionId?.trim() || null,
+        jobTitleId: query.jobTitleId?.trim() || null,
+        createdBy: query.createdBy?.trim() || null,
+      }
+
+      // Construcción de WHERE compartido. Usamos parámetros de Drizzle
+      // (`sql.raw` solo para los nombres de columna) y `sql.empty()`
+      // como no-op cuando el filtro no aplica.
+      const where = (alias = 'ef') => {
+        const parts = [sql.raw('1=1')]
+        if (from) parts.push(sql`${sql.raw(alias)}.document_date >= ${from}::date`)
+        if (to) parts.push(sql`${sql.raw(alias)}.document_date <= ${to}::date`)
+        if (filters.typeId) parts.push(sql`${sql.raw(alias)}.type_id = ${filters.typeId}`)
+        if (filters.subtypeId) parts.push(sql`${sql.raw(alias)}.subtype_id = ${filters.subtypeId}`)
+        if (filters.employeeId)
+          parts.push(sql`${sql.raw(alias)}.employee_id = ${filters.employeeId}::uuid`)
+        if (filters.createdBy)
+          parts.push(sql`${sql.raw(alias)}.created_by = ${filters.createdBy}::uuid`)
+        return sql.join(parts, sql` AND `)
+      }
+      const empJoinFilters = sql.join(
+        [
+          filters.departmentId
+            ? sql`e.department_id = ${filters.departmentId}::uuid`
+            : sql.raw('1=1'),
+          filters.jobFunctionId
+            ? sql`e.job_function_id = ${filters.jobFunctionId}::uuid`
+            : sql.raw('1=1'),
+          filters.jobTitleId ? sql`e.job_title_id = ${filters.jobTitleId}::uuid` : sql.raw('1=1'),
+        ],
+        sql` AND `
+      )
+
+      const [
+        totalRows,
+        byTypeRows,
+        bySubtypeRows,
+        byUserRows,
+        byEmployeeRows,
+        byDeptRows,
+        byFuncionRows,
+        byCargoRows,
+        byMonthRows,
+      ] = await Promise.all([
+        db.execute(sql`
+          SELECT COUNT(*)::int AS total
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          WHERE ${where()} AND ${empJoinFilters}
+        `),
+        db.execute(sql`
+          SELECT t.id AS type_id, t.name AS type_name, COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          JOIN employee_file_types t ON t.id = ef.type_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY t.id, t.name
+          ORDER BY count DESC, t.name ASC
+        `),
+        db.execute(sql`
+          SELECT t.id AS type_id, t.name AS type_name,
+                 s.id AS subtype_id, s.name AS subtype_name, COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          JOIN employee_file_types t ON t.id = ef.type_id
+          JOIN employee_file_subtypes s ON s.id = ef.subtype_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY t.id, t.name, s.id, s.name
+          ORDER BY count DESC, t.name ASC, s.name ASC
+        `),
+        db.execute(sql`
+          SELECT ef.created_by AS user_id, COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY ef.created_by
+          ORDER BY count DESC
+        `),
+        db.execute(sql`
+          SELECT e.id AS employee_id, e.code AS employee_code,
+                 e.first_name, e.last_name, COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY e.id, e.code, e.first_name, e.last_name
+          ORDER BY count DESC, e.last_name ASC, e.first_name ASC
+        `),
+        db.execute(sql`
+          SELECT e.department_id AS department_id,
+                 COALESCE(d.name, '— Sin departamento') AS departamento_name,
+                 COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          LEFT JOIN departments d ON d.id = e.department_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY e.department_id, d.name
+          ORDER BY count DESC, d.name ASC
+        `),
+        db.execute(sql`
+          SELECT e.job_function_id AS job_function_id,
+                 COALESCE(f.name, '— Sin función') AS funcion_name,
+                 COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          LEFT JOIN job_functions f ON f.id = e.job_function_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY e.job_function_id, f.name
+          ORDER BY count DESC, f.name ASC
+        `),
+        db.execute(sql`
+          SELECT e.job_title_id AS job_title_id,
+                 COALESCE(c.name, '— Sin cargo') AS cargo_name,
+                 COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          LEFT JOIN job_titles c ON c.id = e.job_title_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY e.job_title_id, c.name
+          ORDER BY count DESC, c.name ASC
+        `),
+        db.execute(sql`
+          SELECT TO_CHAR(ef.document_date, 'YYYY-MM') AS ym, COUNT(*)::int AS count
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          WHERE ${where()} AND ${empJoinFilters}
+          GROUP BY ym
+          ORDER BY ym ASC
+        `),
+      ])
+
+      // Resolver nombres de usuarios — los expedientes guardan
+      // created_by como uuid (FK lógica al schema payroll_auth.users
+      // o users del tenant). Hacemos un join "manual" para no
+      // ensuciar las 8 queries de arriba.
+      const userRowsRaw = byUserRows as unknown as Array<{ user_id: string | null; count: number }>
+      const userIds = Array.from(
+        new Set(userRowsRaw.map((r) => r.user_id).filter(Boolean))
+      ) as string[]
+      let userNameMap = new Map<string, string>()
+      if (userIds.length > 0) {
+        try {
+          const userRows = (await db.execute(sql`
+            SELECT id, COALESCE(name, email, '—') AS display
+            FROM payroll_auth.users
+            WHERE id = ANY(${userIds}::uuid[])
+          `)) as unknown as Array<{ id: string; display: string }>
+          userNameMap = new Map(userRows.map((r) => [String(r.id), String(r.display)]))
+        } catch {
+          /* tabla puede no estar accesible desde el tenant; degradamos a uuid */
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          range: { from, to },
+          filters,
+          total: Number((totalRows as Array<{ total: number }>)[0]?.total ?? 0),
+          byType: (byTypeRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            typeId: Number(r.type_id),
+            typeName: String(r.type_name),
+            count: Number(r.count),
+          })),
+          bySubtype: (bySubtypeRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            typeId: Number(r.type_id),
+            typeName: String(r.type_name),
+            subtypeId: Number(r.subtype_id),
+            subtypeName: String(r.subtype_name),
+            count: Number(r.count),
+          })),
+          byUser: userRowsRaw.map((r) => ({
+            userId: r.user_id,
+            userName: r.user_id
+              ? (userNameMap.get(r.user_id) ?? r.user_id.slice(0, 8))
+              : '— Sistema',
+            count: r.count,
+          })),
+          byEmployee: (byEmployeeRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            employeeId: String(r.employee_id),
+            employeeCode: String(r.employee_code),
+            firstName: String(r.first_name),
+            lastName: String(r.last_name),
+            count: Number(r.count),
+          })),
+          byDepartamento: (byDeptRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            departmentId: r.department_id ? String(r.department_id) : null,
+            departamentoName: String(r.departamento_name),
+            count: Number(r.count),
+          })),
+          byFuncion: (byFuncionRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            jobFunctionId: r.job_function_id ? String(r.job_function_id) : null,
+            funcionName: String(r.funcion_name),
+            count: Number(r.count),
+          })),
+          byCargo: (byCargoRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            jobTitleId: r.job_title_id ? String(r.job_title_id) : null,
+            cargoName: String(r.cargo_name),
+            count: Number(r.count),
+          })),
+          byMonth: (byMonthRows as unknown as Array<Record<string, unknown>>).map((r) => ({
+            ym: String(r.ym),
+            count: Number(r.count),
+          })),
+        },
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:read')],
+      query: t.Object({
+        from: t.Optional(t.String()),
+        to: t.Optional(t.String()),
+        typeId: t.Optional(t.String()),
+        subtypeId: t.Optional(t.String()),
+        employeeId: t.Optional(t.String()),
+        departmentId: t.Optional(t.String()),
+        jobFunctionId: t.Optional(t.String()),
+        jobTitleId: t.Optional(t.String()),
+        createdBy: t.Optional(t.String()),
       }),
     }
   )

@@ -17,7 +17,7 @@ type CompanyConfig = {
   address: string | null
   phone: string | null
   email: string | null
-  tipoInstitucion: string
+  institutionType: string
   currencyCode: string
   currencySymbol: string
   mailHost: string | null
@@ -27,13 +27,13 @@ type CompanyConfig = {
   mailPassword: string | null
   mailFromAddress: string | null
   mailFromName: string | null
-  elaboradoPor: string | null
-  cargoElaborador: string | null
-  jefeRecursosHumanos: string | null
-  cargoJefeRrhh: string | null
-  logoEmpresa: string | null
-  logoIzquierdoReportes: string | null
-  logoDerechoReportes: string | null
+  preparedBy: string | null
+  preparerTitle: string | null
+  hrDirectorName: string | null
+  hrDirectorTitle: string | null
+  companyLogo: string | null
+  reportLogoLeft: string | null
+  reportLogoRight: string | null
   payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' | string
   updatedAt: string
 }
@@ -64,7 +64,7 @@ const trackedFields: StatField[] = [
   { key: 'phone', label: 'Teléfono' },
   { key: 'email', label: 'Correo' },
   { key: 'legalRepresentative', label: 'Representante legal' },
-  { key: 'logoEmpresa', label: 'Logo principal' },
+  { key: 'companyLogo', label: 'Logo principal' },
   { key: 'mailHost', label: 'Servidor SMTP' },
 ]
 const missingFields = company
@@ -224,10 +224,10 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de Empresa *</label>
               <select name="tipoInstitucion" class="input" id="tipoInstitucion">
-                <option value="privada" selected={v('tipoInstitucion', 'privada') === 'privada'}>
+                <option value="privada" selected={v('institutionType', 'privada') === 'privada'}>
                   Empresa sin posiciones
                 </option>
-                <option value="publica" selected={v('tipoInstitucion', 'privada') === 'publica'}>
+                <option value="publica" selected={v('institutionType', 'privada') === 'publica'}>
                   Empresa con posiciones
                 </option>
               </select>
@@ -276,24 +276,24 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Elaborado por</label>
               <input type="text" name="elaboradoPor" class="input" maxlength="255"
-                placeholder="Nombre completo" value={v('elaboradoPor')} />
+                placeholder="Nombre completo" value={v('preparedBy')} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Cargo del elaborador</label>
               <input type="text" name="cargoElaborador" class="input" maxlength="255"
                 placeholder="Especialista en Planillas"
-                value={v('cargoElaborador', 'Especialista en Planillas')} />
+                value={v('preparerTitle', 'Especialista en Planillas')} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Jefe de Recursos Humanos</label>
               <input type="text" name="jefeRecursosHumanos" class="input" maxlength="255"
-                placeholder="Nombre completo" value={v('jefeRecursosHumanos')} />
+                placeholder="Nombre completo" value={v('hrDirectorName')} />
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Cargo del jefe de RRHH</label>
               <input type="text" name="cargoJefeRrhh" class="input" maxlength="255"
                 placeholder="Jefe de Recursos Humanos"
-                value={v('cargoJefeRrhh', 'Jefe de Recursos Humanos')} />
+                value={v('hrDirectorTitle', 'Jefe de Recursos Humanos')} />
             </div>
           </div>
         </div>
@@ -357,9 +357,9 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
 
           <div class="grid grid-cols-3 gap-6">
             {([
-              { field: 'logoEmpresa', label: 'Logo Principal', hint: 'Interfaz general del sistema' },
-              { field: 'logoIzquierdoReportes', label: 'Logo Izquierdo (Reportes)', hint: 'Esquina superior izquierda de PDFs' },
-              { field: 'logoDerechoReportes', label: 'Logo Derecho (Reportes)', hint: 'Esquina superior derecha de PDFs' },
+              { field: 'companyLogo', label: 'Logo Principal', hint: 'Interfaz general del sistema' },
+              { field: 'reportLogoLeft', label: 'Logo Izquierdo (Reportes)', hint: 'Esquina superior izquierda de PDFs' },
+              { field: 'reportLogoRight', label: 'Logo Derecho (Reportes)', hint: 'Esquina superior derecha de PDFs' },
             ] as const).map(({ field, label, hint }) => (
               <div class="space-y-2">
                 <label class="block text-sm font-medium text-gray-700">{label}</label>

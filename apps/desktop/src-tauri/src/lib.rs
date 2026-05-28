@@ -7,6 +7,7 @@ use tauri::{
 use url::Url;
 
 const DEFAULT_URL: &str = "http://localhost:4321";
+const KIOSK_PATH: &str = "/kiosk";
 
 fn load_env() {
     // Walk up from the binary's CWD looking for the first .env. The desktop
@@ -39,7 +40,24 @@ fn resolve_target_url() -> Result<Url, String> {
     if raw.is_empty() {
         return Err("DESKTOP_URL is set but empty".into());
     }
-    Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))
+    let mut url = Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))?;
+
+    // When DESKTOP_MODE=kiosk the shell points the WebView at the
+    // facial-recognition kiosk page so the device boots straight into the
+    // marcacion UI. Operators can still navigate elsewhere via the URL
+    // unless they pin the windows to fullscreen + lock down keys.
+    let mode = std::env::var("DESKTOP_MODE").unwrap_or_default();
+    if mode.trim().eq_ignore_ascii_case("kiosk") {
+        url.set_path(KIOSK_PATH);
+    }
+
+    Ok(url)
+}
+
+fn is_kiosk_mode() -> bool {
+    std::env::var("DESKTOP_MODE")
+        .map(|v| v.trim().eq_ignore_ascii_case("kiosk"))
+        .unwrap_or(false)
 }
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -128,6 +146,8 @@ pub fn run() {
 
     let target_str = target.to_string();
     let target_for_menu = target_str.clone();
+
+    let kiosk = is_kiosk_mode();
 
     tauri::Builder::default()
         .setup(move |app| {

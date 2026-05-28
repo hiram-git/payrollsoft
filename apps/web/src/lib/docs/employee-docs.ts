@@ -33,9 +33,15 @@ export type CompanyForDoc = {
   companyName: string | null
   ruc: string | null
   address: string | null
+  phone: string | null
+  email: string | null
+  legalRepresentative: string | null
+  companyLogo: string | null
   city?: string | null
   representativeName?: string | null
   representativeTitle?: string | null
+  preparedBy?: string | null
+  preparerTitle?: string | null
 }
 
 const PAY_FREQ_LABEL: Record<string, string> = {
@@ -128,10 +134,12 @@ export async function buildContrato(
 ): Promise<Buffer> {
   const empName = fullName(employee)
   const companyName = company.companyName ?? '[Empresa]'
-  const repName = company.representativeName ?? '[Representante legal]'
+  const repName =
+    company.representativeName ?? company.legalRepresentative ?? '[Representante legal]'
   const repTitle = company.representativeTitle ?? '[Cargo del representante]'
   const positionText = employee.position ?? '[Posición]'
   const freq = PAY_FREQ_LABEL[employee.payFrequency ?? 'biweekly'] ?? 'quincenal'
+  const contactLine = [company.phone, company.email].filter(Boolean).join(' · ')
 
   const doc = new Document({
     sections: [
@@ -204,8 +212,9 @@ export async function buildCertificacion(
 ): Promise<Buffer> {
   const empName = fullName(employee)
   const companyName = company.companyName ?? '[Empresa]'
-  const repName = company.representativeName ?? '[Representante legal]'
-  const repTitle = company.representativeTitle ?? 'Recursos Humanos'
+  const repName =
+    company.representativeName ?? company.legalRepresentative ?? '[Representante legal]'
+  const repTitle = company.representativeTitle ?? company.preparerTitle ?? 'Recursos Humanos'
 
   const doc = new Document({
     sections: [
@@ -257,8 +266,9 @@ export async function buildCarta(
 ): Promise<Buffer> {
   const empName = fullName(employee)
   const companyName = company.companyName ?? '[Empresa]'
-  const repName = company.representativeName ?? '[Representante legal]'
-  const repTitle = company.representativeTitle ?? 'Recursos Humanos'
+  const repName =
+    company.representativeName ?? company.legalRepresentative ?? '[Representante legal]'
+  const repTitle = company.representativeTitle ?? company.preparerTitle ?? 'Recursos Humanos'
 
   const doc = new Document({
     sections: [

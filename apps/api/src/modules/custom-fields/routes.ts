@@ -69,6 +69,7 @@ const ValidationRules = t.Optional(
     dependsOn: t.Optional(t.Array(DependencyRule)),
     readPermission: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
     writePermission: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
+    includeInCreditorsReport: t.Optional(t.Boolean()),
   })
 )
 

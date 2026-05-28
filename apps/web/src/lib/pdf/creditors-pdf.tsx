@@ -8,9 +8,16 @@ export type PdfCreditorDetail = {
   payrollName: string
   periodStart: string
   periodEnd: string
+  employeeId: string
   employeeCode: string
   firstName: string
   lastName: string
+}
+
+export type PdfCreditorsExtraColumn = {
+  name: string
+  /** valores por empleado (employeeId → string formateado) */
+  valuesByEmployee: Record<string, string>
 }
 
 export type PdfCreditorBucket = {
@@ -36,7 +43,7 @@ export type PdfCreditorsReport = {
 export type PdfCompany = {
   companyName: string | null
   ruc: string | null
-  logoEmpresa: string | null
+  companyLogo: string | null
 }
 
 export type PdfGeneratedBy = {
@@ -256,9 +263,11 @@ export function CreditorsPdf({
   report,
   company,
   generatedBy,
+  extraColumns = [],
 }: {
   report: PdfCreditorsReport
   company: PdfCompany | null
+  extraColumns?: PdfCreditorsExtraColumn[]
   generatedBy?: PdfGeneratedBy | null
 }) {
   const generatedAt = new Date().toLocaleString('es-PA', {
@@ -266,9 +275,28 @@ export function CreditorsPdf({
     timeStyle: 'medium',
   })
   const companyName = company?.companyName ?? 'Empresa'
-  const logo = company?.logoEmpresa ?? null
+  const logo = company?.companyLogo ?? null
   const monthLabel = MONTHS[report.month - 1] ?? String(report.month)
   const reportTitle = `ACREEDORES — ${monthLabel.toUpperCase()} ${report.year}`
+
+  // Anchos de columnas del detalle. Cuando hay columnas extra activas
+  // (campos adicionales marcados con `includeInCreditorsReport=true`),
+  // redistribuimos el espacio horizontal de las columnas base para que
+  // las extras quepan en A4-horizontal sin desbordar.
+  const extraCount = extraColumns.length
+  const extraWidth = extraCount > 0 ? 8 : 0
+  const baseBudget = 100 - extraWidth * extraCount
+  const baseTotal = 100 // anchos originales suman 100%
+  const scale = baseBudget / baseTotal
+  const extraStyles = {
+    emp: { width: `${28 * scale}%` },
+    cedula: { width: `${12 * scale}%` },
+    payroll: { width: `${20 * scale}%` },
+    period: { width: `${20 * scale}%` },
+    concept: { width: `${10 * scale}%` },
+    extra: { width: `${extraWidth}%` },
+    amount: { width: `${10 * scale}%`, textAlign: 'right' as const },
+  }
 
   return (
     <Document
@@ -368,12 +396,17 @@ export function CreditorsPdf({
               <Text style={s.creditorTotal}>B/. {fmtMoney(c.total)}</Text>
             </View>
             <View style={s.tableHeader}>
-              <Text style={[s.th, s.detColEmp]}>Empleado</Text>
-              <Text style={[s.th, s.detColCedula]}>Cód. empleado</Text>
-              <Text style={[s.th, s.detColPayroll]}>Planilla</Text>
-              <Text style={[s.th, s.detColPeriod]}>Período</Text>
-              <Text style={[s.th, s.detColConcept]}>Concepto</Text>
-              <Text style={[s.th, s.detColAmount]}>Monto (B/.)</Text>
+              <Text style={[s.th, extraStyles.emp]}>Empleado</Text>
+              <Text style={[s.th, extraStyles.cedula]}>Cód. empleado</Text>
+              <Text style={[s.th, extraStyles.payroll]}>Planilla</Text>
+              <Text style={[s.th, extraStyles.period]}>Período</Text>
+              <Text style={[s.th, extraStyles.concept]}>Concepto</Text>
+              {extraColumns.map((col) => (
+                <Text key={`th-${col.name}`} style={[s.th, extraStyles.extra]}>
+                  {col.name}
+                </Text>
+              ))}
+              <Text style={[s.th, extraStyles.amount]}>Monto (B/.)</Text>
             </View>
             {c.details.map((d, i) => (
               <View
@@ -381,16 +414,21 @@ export function CreditorsPdf({
                 style={[s.tr, i % 2 === 1 ? s.trAlt : {}]}
                 wrap={false}
               >
-                <Text style={[s.td, s.detColEmp]}>
+                <Text style={[s.td, extraStyles.emp]}>
                   {d.lastName}, {d.firstName}
                 </Text>
-                <Text style={[s.td, s.detColCedula, s.tdMuted]}>{d.employeeCode}</Text>
-                <Text style={[s.td, s.detColPayroll]}>{d.payrollName}</Text>
-                <Text style={[s.td, s.detColPeriod, s.tdMuted]}>
+                <Text style={[s.td, extraStyles.cedula, s.tdMuted]}>{d.employeeCode}</Text>
+                <Text style={[s.td, extraStyles.payroll]}>{d.payrollName}</Text>
+                <Text style={[s.td, extraStyles.period, s.tdMuted]}>
                   {fmtDateISO(d.periodStart)} → {fmtDateISO(d.periodEnd)}
                 </Text>
-                <Text style={[s.td, s.detColConcept, s.tdMuted]}>{d.conceptCode}</Text>
-                <Text style={[s.td, s.detColAmount, { color: C.red600 }]}>
+                <Text style={[s.td, extraStyles.concept, s.tdMuted]}>{d.conceptCode}</Text>
+                {extraColumns.map((col) => (
+                  <Text key={`c-${col.name}-${i}`} style={[s.td, extraStyles.extra, s.tdMuted]}>
+                    {col.valuesByEmployee[d.employeeId] ?? '—'}
+                  </Text>
+                ))}
+                <Text style={[s.td, extraStyles.amount, { color: C.red600 }]}>
                   −{fmtMoney(d.amount)}
                 </Text>
               </View>

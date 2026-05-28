@@ -33,7 +33,7 @@ const ConceptBody = t.Object({
   isReferenceValue: t.Optional(t.Boolean()),
   useAmountCalc: t.Optional(t.Boolean()),
   allowZero: t.Optional(t.Boolean()),
-  cuentaContableId: t.Optional(t.Nullable(t.String())),
+  chartAccountId: t.Optional(t.Nullable(t.String())),
   links: t.Optional(LinksBody),
 })
 
@@ -50,7 +50,7 @@ const ConceptUpdateBody = t.Object({
   isReferenceValue: t.Optional(t.Boolean()),
   useAmountCalc: t.Optional(t.Boolean()),
   allowZero: t.Optional(t.Boolean()),
-  cuentaContableId: t.Optional(t.Nullable(t.String())),
+  chartAccountId: t.Optional(t.Nullable(t.String())),
   links: t.Optional(LinksBody),
 })
 

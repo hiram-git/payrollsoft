@@ -16,10 +16,10 @@ const PositionBody = t.Object({
   code: t.String({ minLength: 1, maxLength: 20 }),
   name: t.String({ minLength: 1, maxLength: 255 }),
   salary: t.String({ minLength: 1 }),
-  cargoId: t.Optional(t.Nullable(t.String())),
-  departamentoId: t.Optional(t.Nullable(t.String())),
-  funcionId: t.Optional(t.Nullable(t.String())),
-  partidaId: t.Optional(t.Nullable(t.String())),
+  jobTitleId: t.Optional(t.Nullable(t.String())),
+  departmentId: t.Optional(t.Nullable(t.String())),
+  jobFunctionId: t.Optional(t.Nullable(t.String())),
+  budgetItemId: t.Optional(t.Nullable(t.String())),
   status: t.Optional(StatusLiteral),
 })
 
@@ -27,10 +27,10 @@ const PositionUpdateBody = t.Object({
   code: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   salary: t.Optional(t.String({ minLength: 1 })),
-  cargoId: t.Optional(t.Nullable(t.String())),
-  departamentoId: t.Optional(t.Nullable(t.String())),
-  funcionId: t.Optional(t.Nullable(t.String())),
-  partidaId: t.Optional(t.Nullable(t.String())),
+  jobTitleId: t.Optional(t.Nullable(t.String())),
+  departmentId: t.Optional(t.Nullable(t.String())),
+  jobFunctionId: t.Optional(t.Nullable(t.String())),
+  budgetItemId: t.Optional(t.Nullable(t.String())),
   status: t.Optional(StatusLiteral),
 })
 

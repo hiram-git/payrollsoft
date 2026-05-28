@@ -10,7 +10,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core'
 
-export const payrollAcumulados = pgTable('payroll_acumulados', {
+export const payrollAccumulators = pgTable('payroll_accumulators', {
   id: uuid('id').defaultRandom().primaryKey(),
   payrollId: uuid('payroll_id').notNull(),
   employeeId: uuid('employee_id').notNull(),
@@ -37,7 +37,7 @@ export const concepts = pgTable('concepts', {
   isReferenceValue: boolean('is_reference_value').notNull().default(false),
   useAmountCalc: boolean('use_amount_calc').notNull().default(false),
   allowZero: boolean('allow_zero').notNull().default(false),
-  cuentaContableId: uuid('cuenta_contable_id'),
+  chartAccountId: uuid('chart_account_id'),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 })
 
@@ -92,6 +92,15 @@ export const creditors = pgTable('creditors', {
   description: text('description'),
   /** UUID of the deduction concept auto-created for this creditor */
   conceptId: uuid('concept_id'),
+  // ── Datos bancarios para tesorería ─────────────────────────────────
+  bankId: uuid('bank_id'),
+  accountNumber: varchar('account_number', { length: 40 }),
+  /** 'savings' | 'checking' */
+  accountType: varchar('account_type', { length: 20 }),
+  /** 'ach' | 'check' | 'cash' */
+  paymentMethod: varchar('payment_method', { length: 10 }).notNull().default('check'),
+  /** Nombre del beneficiario en cheque/ACH si difiere del nombre comercial */
+  beneficiaryName: varchar('beneficiary_name', { length: 255 }),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -135,8 +144,11 @@ export type PayrollReport = typeof payrollReports.$inferSelect
 export type NewPayrollReport = typeof payrollReports.$inferInsert
 export type Loan = typeof loans.$inferSelect
 export type NewLoan = typeof loans.$inferInsert
-export type PayrollAcumulado = typeof payrollAcumulados.$inferSelect
-export type NewPayrollAcumulado = typeof payrollAcumulados.$inferInsert
+export type PayrollAccumulator = typeof payrollAccumulators.$inferSelect
+export type NewPayrollAccumulator = typeof payrollAccumulators.$inferInsert
+
+/** @deprecated Use `payrollAccumulators` */
+export const payrollAcumulados = payrollAccumulators
 export type Creditor = typeof creditors.$inferSelect
 export type NewCreditor = typeof creditors.$inferInsert
 export type LoanInstallment = typeof loanInstallments.$inferSelect

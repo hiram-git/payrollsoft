@@ -1,0 +1,398 @@
+---
+/**
+ * Facial-recognition kiosk page — full-screen mode.
+ *
+ * Wrapped by the Tauri desktop shell (apps/desktop) at /kiosk; can also
+ * be opened directly in a browser for testing. Camera access requires
+ * HTTPS or localhost.
+ *
+ * The page reads three values from query params (also persisted in
+ * localStorage so the kiosk survives reloads):
+ *   ?terminal=<code>       — kiosk code registered in the admin UI
+ *   ?token=<jwt>           — auth JWT (the kiosk acts as a tenant user with facial:mark)
+ *   ?tenant=<slug>         — tenant slug
+ *
+ * Pair-once flow: when query params are present, we save them to
+ * localStorage and strip the URL. Subsequent reloads run silently.
+ *
+ * Model files (face-api ONNX) must be served from /face-models/*.
+ * Download them from https://github.com/vladmandic/face-api/tree/master/model
+ * and place under apps/web/public/face-models/.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+---
+
+<BaseLayout title="Marcación facial">
+  <div id="kiosk-root" class="w-screen h-screen bg-slate-950 text-white flex flex-col">
+
+    <!-- Setup banner (visible until paired) -->
+    <div id="setup-banner" class="hidden bg-amber-500 text-amber-950 px-6 py-3 text-sm font-medium">
+      Terminal no configurada. Visita <code>/kiosk/setup</code> en este equipo o pasa los parámetros <code>?terminal=...&amp;token=...&amp;tenant=...</code> en la URL.
+    </div>
+
+    <!-- Top bar -->
+    <div class="px-6 py-4 flex items-center justify-between border-b border-slate-800">
+      <div class="flex items-center gap-3">
+        <div class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" id="net-dot"></div>
+        <p class="text-sm text-slate-400">
+          <span id="terminal-label">—</span> ·
+          <span id="net-label" class="text-emerald-400">online</span> ·
+          <span id="queue-label">0 pendientes</span>
+        </p>
+      </div>
+      <div class="text-right">
+        <p class="text-3xl font-mono tabular-nums" id="clock">--:--:--</p>
+        <p class="text-xs text-slate-400" id="today-label"></p>
+      </div>
+    </div>
+
+    <!-- Main capture area -->
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6 p-6 min-h-0">
+
+      <!-- Camera -->
+      <div class="relative bg-black rounded-2xl overflow-hidden border border-slate-800">
+        <video id="video" class="w-full h-full object-cover" autoplay muted playsinline></video>
+        <canvas id="overlay" class="absolute inset-0 w-full h-full"></canvas>
+        <div id="state-overlay" class="absolute inset-0 flex items-center justify-center text-center bg-slate-950/60 backdrop-blur-sm">
+          <div>
+            <p class="text-2xl font-semibold mb-2" id="state-title">Cargando modelos…</p>
+            <p class="text-sm text-slate-400" id="state-detail">Esto solo ocurre la primera vez.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side panel: action picker + recent feed -->
+      <div class="w-full lg:w-80 flex flex-col gap-4 min-h-0">
+        <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800">
+          <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">Tipo de marcación</p>
+          <div class="grid grid-cols-2 gap-2" id="kind-picker">
+            <button data-kind="entry" class="kind-btn kind-active bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">Entrada</button>
+            <button data-kind="lunch_start" class="kind-btn bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">Salida almuerzo</button>
+            <button data-kind="lunch_end" class="kind-btn bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">Entrada almuerzo</button>
+            <button data-kind="exit" class="kind-btn bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium px-3 py-2.5 rounded-lg transition-colors">Salida</button>
+          </div>
+        </div>
+
+        <div class="bg-slate-900 rounded-2xl p-4 border border-slate-800 flex-1 min-h-0 flex flex-col">
+          <p class="text-xs uppercase tracking-wider text-slate-500 mb-3">Últimas marcaciones</p>
+          <ul id="feed" class="space-y-2 overflow-y-auto flex-1"></ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation toast -->
+    <div id="toast" class="hidden absolute top-24 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-6 py-4 rounded-2xl shadow-2xl text-lg font-semibold">
+      <p id="toast-msg"></p>
+    </div>
+  </div>
+
+  <script is:inline define:vars={{ API_URL }}>
+    // Configuration persisted across reloads.
+    const STORAGE_KEY = 'payrollsoft:kiosk:cfg'
+    const QUEUE_KEY = 'payrollsoft:kiosk:queue'
+
+    function loadCfg() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') } catch { return {} }
+    }
+    function saveCfg(cfg) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg))
+    }
+
+    // Pair via URL query string and strip.
+    const url = new URL(window.location.href)
+    const qTerminal = url.searchParams.get('terminal')
+    const qToken = url.searchParams.get('token')
+    const qTenant = url.searchParams.get('tenant')
+    if (qTerminal && qToken && qTenant) {
+      saveCfg({ terminal: qTerminal, token: qToken, tenant: qTenant })
+      url.searchParams.delete('terminal')
+      url.searchParams.delete('token')
+      url.searchParams.delete('tenant')
+      window.history.replaceState({}, '', url.toString())
+    }
+
+    const cfg = loadCfg()
+    if (!cfg.terminal || !cfg.token || !cfg.tenant) {
+      document.getElementById('setup-banner').classList.remove('hidden')
+    }
+    document.getElementById('terminal-label').textContent = cfg.terminal ?? 'sin terminal'
+
+    // Clock
+    const clockEl = document.getElementById('clock')
+    const todayEl = document.getElementById('today-label')
+    function tickClock() {
+      const now = new Date()
+      clockEl.textContent = now.toLocaleTimeString('es-PA', { hour12: false })
+      todayEl.textContent = now.toLocaleDateString('es-PA', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })
+    }
+    tickClock(); setInterval(tickClock, 1000)
+
+    // Kind picker
+    let selectedKind = 'entry'
+    document.querySelectorAll('.kind-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.kind-btn').forEach((b) => {
+          b.classList.remove('kind-active', 'bg-emerald-600', 'bg-indigo-600', 'bg-amber-600', 'bg-rose-600')
+          b.classList.add('bg-slate-800')
+        })
+        btn.classList.remove('bg-slate-800')
+        const palette = {
+          entry: 'bg-emerald-600',
+          exit: 'bg-rose-600',
+          lunch_start: 'bg-amber-600',
+          lunch_end: 'bg-indigo-600',
+        }
+        btn.classList.add(palette[btn.dataset.kind] ?? 'bg-emerald-600', 'kind-active')
+        selectedKind = btn.dataset.kind
+      })
+    })
+
+    // ─── Outbox (offline queue) ─────────────────────────────────────────
+    function readQueue() {
+      try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') } catch { return [] }
+    }
+    function writeQueue(q) {
+      localStorage.setItem(QUEUE_KEY, JSON.stringify(q))
+      document.getElementById('queue-label').textContent = `${q.length} pendiente${q.length === 1 ? '' : 's'}`
+    }
+    writeQueue(readQueue())
+
+    function enqueue(item) {
+      const q = readQueue()
+      q.push(item)
+      writeQueue(q)
+    }
+
+    async function flushQueue() {
+      const q = readQueue()
+      if (q.length === 0) return
+      if (!cfg.terminal || !cfg.token) return
+      try {
+        const res = await fetch(`${API_URL}/facial/marcaciones`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant': cfg.tenant,
+            Cookie: `auth=${cfg.token}`,
+          },
+          credentials: 'include',
+          body: JSON.stringify({ items: q }),
+        })
+        if (res.ok) {
+          writeQueue([])
+          setNet(true)
+        }
+      } catch {
+        setNet(false)
+      }
+    }
+
+    function setNet(online) {
+      document.getElementById('net-dot').className = online
+        ? 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse'
+        : 'w-2 h-2 rounded-full bg-rose-400'
+      const lbl = document.getElementById('net-label')
+      lbl.textContent = online ? 'online' : 'offline'
+      lbl.className = online ? 'text-emerald-400' : 'text-rose-400'
+    }
+    window.addEventListener('online', () => { setNet(true); flushQueue() })
+    window.addEventListener('offline', () => setNet(false))
+    setInterval(flushQueue, 20000)
+
+    // ─── face-api + camera ─────────────────────────────────────────────
+    const stateOverlay = document.getElementById('state-overlay')
+    const stateTitle = document.getElementById('state-title')
+    const stateDetail = document.getElementById('state-detail')
+    function setState(visible, title, detail) {
+      if (!visible) { stateOverlay.classList.add('hidden'); return }
+      stateOverlay.classList.remove('hidden')
+      if (title) stateTitle.textContent = title
+      if (detail) stateDetail.textContent = detail
+    }
+
+    function showToast(message, color = 'bg-emerald-600') {
+      const toast = document.getElementById('toast')
+      const msg = document.getElementById('toast-msg')
+      msg.textContent = message
+      toast.className = `absolute top-24 left-1/2 -translate-x-1/2 z-50 ${color} text-white px-6 py-4 rounded-2xl shadow-2xl text-lg font-semibold`
+      toast.classList.remove('hidden')
+      setTimeout(() => toast.classList.add('hidden'), 2500)
+    }
+
+    function pushFeed(text, sub) {
+      const feed = document.getElementById('feed')
+      const li = document.createElement('li')
+      li.className = 'bg-slate-800 rounded-lg px-3 py-2'
+      li.innerHTML = `<p class="text-sm font-medium">${text}</p><p class="text-xs text-slate-400">${sub}</p>`
+      feed.insertBefore(li, feed.firstChild)
+      while (feed.children.length > 8) feed.removeChild(feed.lastChild)
+    }
+
+    // Passive liveness: eye aspect ratio variance over a window of frames.
+    const livenessBuf = []
+    function pushLiveness(landmarks) {
+      // EAR-ish: use distance between top/bottom eye landmarks vs eye width.
+      if (!landmarks) return 0
+      const positions = landmarks.positions ?? []
+      if (positions.length < 68) return 0
+      function ear(idx) {
+        const p1 = positions[idx[0]]
+        const p2 = positions[idx[1]]
+        const p3 = positions[idx[2]]
+        const p4 = positions[idx[3]]
+        const p5 = positions[idx[4]]
+        const p6 = positions[idx[5]]
+        const vert = (Math.hypot(p2.x - p6.x, p2.y - p6.y) + Math.hypot(p3.x - p5.x, p3.y - p5.y)) / 2
+        const horiz = Math.hypot(p1.x - p4.x, p1.y - p4.y)
+        return horiz > 0 ? vert / horiz : 0
+      }
+      const leftEAR = ear([36, 37, 38, 39, 40, 41])
+      const rightEAR = ear([42, 43, 44, 45, 46, 47])
+      const avg = (leftEAR + rightEAR) / 2
+      livenessBuf.push(avg)
+      if (livenessBuf.length > 30) livenessBuf.shift()
+      if (livenessBuf.length < 10) return 0.5
+      const min = Math.min(...livenessBuf)
+      const max = Math.max(...livenessBuf)
+      // A blink causes EAR to drop from ~0.3 to <0.15 — variance > 0.06 ⇒ live.
+      const variance = max - min
+      return Math.min(1, variance / 0.1)
+    }
+
+    async function loadFaceApi() {
+      setState(true, 'Cargando modelos…', 'Inicializando face-api')
+      const faceapi = await import('/face-models/face-api.esm.js')
+      const MODELS = '/face-models'
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS)
+      return faceapi
+    }
+
+    async function startCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 1280, height: 720, facingMode: 'user' },
+        audio: false,
+      })
+      const video = document.getElementById('video')
+      video.srcObject = stream
+      await new Promise((r) => video.addEventListener('loadeddata', r, { once: true }))
+      return video
+    }
+
+    function genIdempotencyKey() {
+      const ts = Date.now()
+      const rand = crypto.randomUUID().split('-')[0]
+      return `${cfg.terminal ?? 'unpaired'}_${ts}_${rand}`
+    }
+
+    async function recordMarcacion(matchResult, livenessScore) {
+      const item = {
+        employeeId: matchResult.employeeId,
+        kind: selectedKind,
+        capturedAt: new Date().toISOString(),
+        confidence: matchResult.confidence,
+        matchDistance: matchResult.distance,
+        livenessScore,
+        matchedEnrollmentId: matchResult.enrollmentId,
+        idempotencyKey: genIdempotencyKey(),
+        terminalCode: cfg.terminal,
+        source: 'kiosk',
+        deviceMeta: {
+          userAgent: navigator.userAgent,
+          screen: `${screen.width}x${screen.height}`,
+        },
+      }
+      // Always enqueue first — flush is best-effort. This guarantees
+      // we never lose a marcacion if the network drops mid-call.
+      enqueue(item)
+      flushQueue().catch(() => {})
+      const employee = matchResult.employee
+      const fullName = employee ? `${employee.firstName} ${employee.lastName}` : 'Empleado'
+      const kindLabels = { entry: 'Entrada', exit: 'Salida', lunch_start: 'Inicio almuerzo', lunch_end: 'Fin almuerzo' }
+      showToast(`${fullName} · ${kindLabels[selectedKind] ?? selectedKind}`)
+      pushFeed(fullName, `${kindLabels[selectedKind] ?? selectedKind} · ${new Date().toLocaleTimeString('es-PA')}`)
+    }
+
+    let cooldownUntil = 0
+    async function matchAndRecord(faceapi, descriptor, livenessScore) {
+      if (Date.now() < cooldownUntil) return
+      if (!cfg.terminal || !cfg.token) return
+      try {
+        const res = await fetch(`${API_URL}/facial/match`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Tenant': cfg.tenant,
+            Cookie: `auth=${cfg.token}`,
+          },
+          credentials: 'include',
+          body: JSON.stringify({ embedding: Array.from(descriptor), terminalCode: cfg.terminal }),
+        })
+        if (!res.ok) return
+        const json = await res.json()
+        if (!json.data?.matched) {
+          showToast('No reconocido', 'bg-rose-600')
+          cooldownUntil = Date.now() + 2000
+          return
+        }
+        cooldownUntil = Date.now() + 6000 // 6s before next mark accepted
+        await recordMarcacion(json.data, livenessScore)
+      } catch {
+        // Match failed (likely offline). We can't mark without a known
+        // employeeId, so surface a soft error.
+        showToast('Sin conexión, vuelve a intentarlo', 'bg-amber-600')
+      }
+    }
+
+    async function main() {
+      try {
+        const faceapi = await loadFaceApi()
+        const video = await startCamera()
+        setState(false)
+
+        const canvas = document.getElementById('overlay')
+        const ctx = canvas.getContext('2d')
+        const opts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 })
+
+        async function tick() {
+          if (video.readyState >= 2) {
+            canvas.width = video.videoWidth
+            canvas.height = video.videoHeight
+            ctx.clearRect(0, 0, canvas.width, canvas.height)
+            const detection = await faceapi
+              .detectSingleFace(video, opts)
+              .withFaceLandmarks()
+              .withFaceDescriptor()
+            if (detection) {
+              const { box } = detection.detection
+              ctx.lineWidth = 3
+              ctx.strokeStyle = '#10b981'
+              ctx.strokeRect(box.x, box.y, box.width, box.height)
+              const liveness = pushLiveness(detection.landmarks)
+              if (liveness >= 0.5 && detection.detection.score > 0.7) {
+                await matchAndRecord(faceapi, detection.descriptor, liveness)
+              }
+            } else {
+              livenessBuf.length = 0
+            }
+          }
+          requestAnimationFrame(tick)
+        }
+        tick()
+      } catch (err) {
+        console.error(err)
+        setState(true, 'Error al iniciar la cámara', err.message ?? 'Revisa los permisos del navegador.')
+      }
+    }
+    main()
+  </script>
+
+  <style>
+    @media (prefers-color-scheme: light) {
+      html { background: #0f172a; }
+    }
+  </style>
+</BaseLayout>

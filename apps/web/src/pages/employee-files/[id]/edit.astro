@@ -1,0 +1,362 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:write')) {
+  return Astro.redirect(`/employee-files/${Astro.params.id}`)
+}
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+const canDelete = can(identity, 'employee_files:delete')
+
+const id = Astro.params.id ?? ''
+
+type Attachment = {
+  id: string
+  label: string
+  originalName: string
+  mimeType: string
+  fileSize: number
+}
+type FileDetail = {
+  id: string
+  employeeId: string
+  typeId: number
+  subtypeId: number
+  documentDate: string
+  documentNumber: string
+  observations: string | null
+  extraFields: Record<string, unknown>
+  attachments: Attachment[]
+}
+type Employee = { id: string; code: string; firstName: string; lastName: string }
+type TypeRow = { id: number; code: string; name: string }
+type SubtypeRow = { id: number; code: string; name: string }
+
+let detail: FileDetail | null = null
+let employee: Employee | null = null
+let types: TypeRow[] = []
+let subtypes: SubtypeRow[] = []
+
+try {
+  const res = await fetch(`${API_URL}/employee-files/${id}`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.status === 404) return Astro.redirect('/employee-files')
+  if (res.ok) detail = ((await res.json()) as { data: FileDetail }).data
+  if (detail) {
+    const [empRes, typesRes, subsRes] = await Promise.all([
+      fetch(`${API_URL}/employees/${detail.employeeId}`, { headers }),
+      fetch(`${API_URL}/employee-files/types`, { headers }),
+      fetch(`${API_URL}/employee-files/types/${detail.typeId}/subtypes`, { headers }),
+    ])
+    if (empRes.ok) employee = ((await empRes.json()) as { data: Employee }).data
+    if (typesRes.ok) types = ((await typesRes.json()) as { data: TypeRow[] }).data ?? []
+    if (subsRes.ok) subtypes = ((await subsRes.json()) as { data: SubtypeRow[] }).data ?? []
+  }
+} catch {
+  return Astro.redirect('/employee-files')
+}
+if (!detail || !employee) return Astro.redirect('/employee-files')
+
+const errorMsg = Astro.url.searchParams.get('error') ?? ''
+const existingByLabel = new Map(
+  detail.attachments.filter((a) => a.label !== 'adjunto').map((a) => [a.label, a])
+)
+const genericAttachments = detail.attachments.filter((a) => a.label === 'adjunto')
+---
+
+<AppLayout title={`Editar expediente ${detail.documentNumber}`}>
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <a href={`/employee-files/${detail.id}`} class="text-xs text-gray-500 hover:text-gray-900">← Volver al detalle</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">
+        Editar expediente <span class="font-mono">{detail.documentNumber}</span>
+      </h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        {employee.lastName}, {employee.firstName}
+        <span class="ml-2 text-gray-400 font-mono text-xs">{employee.code}</span>
+      </p>
+    </div>
+
+    {errorMsg && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{errorMsg}</div>
+    )}
+
+    <form
+      id="ef-form"
+      method="POST"
+      action="/api/employee-files/save"
+      enctype="multipart/form-data"
+      class="space-y-5"
+    >
+      <input type="hidden" name="id" value={detail.id} />
+      <input type="hidden" name="employeeId" value={detail.employeeId} />
+
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <h2 class="text-sm font-medium text-gray-900">Documento</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo</label>
+            <select id="ef-type" name="typeId" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">
+              {types.map((t) => (
+                <option value={t.id} selected={t.id === detail!.typeId}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Subtipo</label>
+            <select id="ef-subtype" name="subtypeId" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">
+              {subtypes.map((s) => (
+                <option value={s.id} selected={s.id === detail!.subtypeId}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha del documento</label>
+            <input type="date" id="ef-date" name="documentDate" required value={detail.documentDate} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Número actual</label>
+          <input type="text" value={detail.documentNumber} disabled class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono bg-gray-50 text-gray-500" />
+          <p class="mt-1 text-xs text-gray-400">El número se regenera solo si cambias tipo, subtipo o año del documento.</p>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Observaciones</label>
+          <textarea name="observations" rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">{detail.observations ?? ''}</textarea>
+        </div>
+      </section>
+
+      <section id="ef-dynamic-section" class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <div>
+          <h2 class="text-sm font-medium text-gray-900">Datos específicos</h2>
+          <p class="text-xs text-gray-500 mt-1">Estos campos cambian según el tipo y subtipo seleccionado.</p>
+        </div>
+        <div id="ef-dynamic-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </section>
+
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
+        <h2 class="text-sm font-medium text-gray-900">Adjuntos existentes</h2>
+        {detail.attachments.length === 0 ? (
+          <p class="text-xs text-gray-400 italic">No hay adjuntos en este expediente.</p>
+        ) : (
+          <ul class="divide-y divide-gray-100">
+            {detail.attachments.map((a) => (
+              <li class="py-2.5 flex items-center justify-between gap-3" id={`att-row-${a.id}`}>
+                <div>
+                  <p class="text-sm text-gray-900">{a.originalName}</p>
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    {a.label === 'adjunto' ? 'Genérico' : a.label} · <span class="font-mono">{a.mimeType}</span>
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <a href={`/api/employee-files/attachment/${a.id}/preview`} target="_blank" rel="noopener" class="text-xs text-blue-600 hover:underline">Ver</a>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      data-delete-attachment
+                      data-attachment-id={a.id}
+                      data-attachment-name={a.originalName}
+                      class="text-xs text-red-600 hover:underline"
+                    >Quitar</button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
+        <h2 class="text-sm font-medium text-gray-900">Agregar más adjuntos</h2>
+        <p class="text-xs text-gray-500 -mt-1">
+          Súmalos al expediente. Los archivos que pidan los campos específicos arriba
+          reemplazan al anterior si subes uno nuevo (el viejo queda hasta que lo elimines manualmente).
+        </p>
+        <input
+          type="file"
+          name="attachments"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/gif"
+          class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+        />
+      </section>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+        <a href={`/employee-files/${detail.id}`} class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Cancelar</a>
+        <button type="submit" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-wait">
+          Guardar cambios
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script type="application/json" id="ef-prefill" set:html={JSON.stringify({
+    typeId: detail.typeId,
+    subtypeId: detail.subtypeId,
+    extraFields: detail.extraFields ?? {},
+    fileLabels: Array.from(existingByLabel.keys()),
+  })}></script>
+
+  <script is:inline>
+    ;(function () {
+      const prefillEl = document.getElementById('ef-prefill')
+      const typeSel = document.getElementById('ef-type')
+      const subtypeSel = document.getElementById('ef-subtype')
+      const dynFields = document.getElementById('ef-dynamic-fields')
+      if (!prefillEl || !typeSel || !subtypeSel || !dynFields) return
+      const prefill = JSON.parse(prefillEl.textContent || '{}')
+      const extra = prefill.extraFields || {}
+      const existingFileLabels = new Set(prefill.fileLabels || [])
+
+      const subtypesCache = new Map()
+      const fieldsCache = new Map()
+
+      async function loadSubtypes(typeId, selected) {
+        if (!subtypesCache.has(typeId)) {
+          const res = await fetch('/api/employee-files/proxy?path=' +
+            encodeURIComponent('types/' + typeId + '/subtypes'))
+          const json = await res.json().catch(() => ({}))
+          subtypesCache.set(typeId, json.data || [])
+        }
+        const subs = subtypesCache.get(typeId)
+        subtypeSel.innerHTML = subs.map((s) =>
+          '<option value="' + s.id + '"' + (String(s.id) === String(selected) ? ' selected' : '') + '>' + s.name + '</option>'
+        ).join('')
+      }
+
+      function renderField(def, prefix) {
+        const id = 'ef-fld-' + def.name
+        const name = prefix + '_' + def.name
+        const req = def.required ? 'required' : ''
+        const ro = def.readonly ? 'readonly' : ''
+        const placeholder = def.placeholder ? 'placeholder="' + def.placeholder + '"' : ''
+        const stored = extra[def.name]
+        const value = stored != null ? String(stored) : (def.default != null ? String(def.default) : '')
+        const wrap = (inner, full) =>
+          '<div' + (full ? ' class="md:col-span-2"' : '') + '>' +
+          '<label class="block text-xs font-medium text-gray-600 mb-1.5" for="' + id + '">' +
+          def.label + (def.required ? ' <span class="text-red-500">*</span>' : '') +
+          '</label>' + inner + '</div>'
+
+        switch (def.type) {
+          case 'textarea':
+            return wrap(
+              '<textarea id="' + id + '" name="' + name + '" rows="2" ' + req + ' ' + ro + ' ' + placeholder +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">' +
+              value + '</textarea>',
+              true
+            )
+          case 'select': {
+            const opts = (def.options || []).map((o) =>
+              '<option value="' + o.value + '"' + (value === o.value ? ' selected' : '') + '>' + o.label + '</option>'
+            ).join('')
+            return wrap(
+              '<select id="' + id + '" name="' + name + '" ' + req + ' ' + ro +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">' +
+              '<option value="">Selecciona…</option>' + opts + '</select>',
+              false
+            )
+          }
+          case 'file': {
+            const alreadyHas = existingFileLabels.has(def.name)
+            const hint = alreadyHas
+              ? '<p class="mt-1 text-[11px] text-gray-500">Ya hay un archivo. Sube uno nuevo para reemplazarlo.</p>'
+              : ''
+            return wrap(
+              '<input id="' + id + '" type="file" name="' + name + '" ' + (req && !alreadyHas ? 'required' : '') +
+              ' accept="' + (def.accept || '') + '"' +
+              ' class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />' +
+              hint,
+              true
+            )
+          }
+          case 'number': {
+            const step = def.step != null ? 'step="' + def.step + '"' : ''
+            return wrap(
+              '<input id="' + id + '" type="number" name="' + name + '" ' + req + ' ' + ro + ' ' + step + ' ' + placeholder +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+          }
+          case 'datetime':
+            return wrap(
+              '<input id="' + id + '" type="datetime-local" name="' + name + '" ' + req + ' ' + ro +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+          case 'date':
+            return wrap(
+              '<input id="' + id + '" type="date" name="' + name + '" ' + req + ' ' + ro +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+          default:
+            return wrap(
+              '<input id="' + id + '" type="text" name="' + name + '" ' + req + ' ' + ro + ' ' + placeholder +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+        }
+      }
+
+      async function loadFields(typeId, subtypeId) {
+        if (!typeId || !subtypeId) return
+        const key = typeId + '/' + subtypeId
+        if (!fieldsCache.has(key)) {
+          const res = await fetch('/api/employee-files/proxy?path=' +
+            encodeURIComponent('fields?typeId=' + typeId + '&subtypeId=' + subtypeId))
+          const json = await res.json().catch(() => ({}))
+          fieldsCache.set(key, json.data?.fields || [])
+        }
+        const fields = fieldsCache.get(key)
+        dynFields.innerHTML = fields
+          .map((f) => renderField(f, f.type === 'file' ? 'file' : 'extra'))
+          .join('')
+      }
+
+      typeSel.addEventListener('change', async () => {
+        await loadSubtypes(typeSel.value)
+        await loadFields(typeSel.value, subtypeSel.value)
+      })
+      subtypeSel.addEventListener('change', async () => {
+        await loadFields(typeSel.value, subtypeSel.value)
+      })
+
+      // Render inicial con los valores guardados.
+      loadFields(typeSel.value, subtypeSel.value)
+
+      // Quitar adjunto individual.
+      document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-delete-attachment]')
+        if (!btn) return
+        const attId = btn.dataset.attachmentId
+        const attName = btn.dataset.attachmentName
+        if (!attId) return
+        if (!confirm('¿Eliminar el adjunto "' + attName + '"?')) return
+        try {
+          const res = await fetch('/api/employee-files/attachment/' + attId + '/delete', {
+            method: 'POST',
+          })
+          if (res.ok) {
+            const row = document.getElementById('att-row-' + attId)
+            if (row) row.remove()
+          } else {
+            alert('No se pudo eliminar el adjunto.')
+          }
+        } catch (err) {
+          alert('Error al eliminar: ' + (err && err.message ? err.message : err))
+        }
+      })
+    })()
+  </script>
+</AppLayout>

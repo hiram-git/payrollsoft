@@ -14,9 +14,9 @@ type Position = {
   code: string
   name: string
   salary: string
-  cargoId: string | null
-  departamentoId: string | null
-  funcionId: string | null
+  jobTitleId: string | null
+  departmentId: string | null
+  jobFunctionId: string | null
   isActive: boolean
 }
 type CompanyConfig = { tipoInstitucion?: string | null }
@@ -32,9 +32,9 @@ let tipoInstitucion = 'privada'
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
   const [cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
-    fetch(`${API_URL}/cargos`, { headers }),
-    fetch(`${API_URL}/funciones`, { headers }),
-    fetch(`${API_URL}/departamentos`, { headers }),
+    fetch(`${API_URL}/job-titles`, { headers }),
+    fetch(`${API_URL}/job-functions`, { headers }),
+    fetch(`${API_URL}/departments`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
     fetch(`${API_URL}/concepts/config`, { headers }),
   ])
@@ -43,7 +43,7 @@ try {
   if (dRes.ok) departamentos = ((await dRes.json()) as { data: Departamento[] }).data ?? []
   if (compRes.ok) {
     const cfg = ((await compRes.json()) as { data: CompanyConfig }).data
-    tipoInstitucion = cfg?.tipoInstitucion ?? 'privada'
+    tipoInstitucion = cfg?.institutionType ?? 'privada'
   }
   if (cfgRes.ok) {
     const cfgData = (await cfgRes.json()) as { data?: { payrollTypes?: PayrollType[] } }
@@ -157,7 +157,7 @@ const errorMessages: Record<string, string> = {
                 <select name="positionId" id="positionSelect" class="input" required>
                   <option value="">— Seleccionar posición —</option>
                   {positions.map((p) => (
-                    <option value={p.id} data-cargo={p.cargoId ?? ''} data-depto={p.departamentoId ?? ''} data-funcion={p.funcionId ?? ''} data-salary={p.salary}>
+                    <option value={p.id} data-cargo={p.jobTitleId ?? ''} data-depto={p.departmentId ?? ''} data-funcion={p.jobFunctionId ?? ''} data-salary={p.salary}>
                       {p.name} ({p.code}) — ${p.salary}
                     </option>
                   ))}

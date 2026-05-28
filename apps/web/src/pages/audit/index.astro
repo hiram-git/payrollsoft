@@ -1,0 +1,188 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'audit:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type AuditEntry = {
+  id: string
+  userId: string | null
+  userName: string | null
+  action: string
+  entity: string
+  entityId: string | null
+  changes: Record<string, unknown>
+  createdAt: string
+}
+
+const from = Astro.url.searchParams.get('from') ?? ''
+const to = Astro.url.searchParams.get('to') ?? ''
+const entity = Astro.url.searchParams.get('entity') ?? ''
+const action = Astro.url.searchParams.get('action') ?? ''
+
+let entries: AuditEntry[] = []
+let total = 0
+let loadError = ''
+
+try {
+  const params = new URLSearchParams({ limit: '200' })
+  if (from) params.set('from', from)
+  if (to) params.set('to', to)
+  if (entity) params.set('entity', entity)
+  if (action) params.set('action', action)
+
+  const res = await fetch(`${API_URL}/audit?${params}`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) {
+    const json = (await res.json()) as { data: AuditEntry[]; total: number }
+    entries = json.data ?? []
+    total = json.total ?? 0
+  }
+} catch {
+  loadError = 'No se pudo conectar con el servidor.'
+}
+
+function fmtDate(s: string): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleString('es-PA', { dateStyle: 'short', timeStyle: 'short' })
+}
+function actionLabel(a: string): string {
+  const map: Record<string, string> = {
+    create: 'Crear',
+    update: 'Editar',
+    delete: 'Eliminar',
+    approve: 'Aprobar',
+    reject: 'Rechazar',
+    login: 'Acceso',
+  }
+  return map[a] || a
+}
+function actionColor(a: string): string {
+  if (a === 'create') return 'color:var(--ok)'
+  if (a === 'delete') return 'color:var(--err)'
+  if (a === 'update') return 'color:var(--navy-hi)'
+  return 'color:var(--mute-2)'
+}
+---
+<AppLayout title="Auditoría">
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Registro de Auditoría</h1>
+        <p class="page-sub">{total} registros — acciones realizadas por usuarios del sistema</p>
+      </div>
+    </div>
+
+    {loadError && <div class="alert alert-err">{loadError}</div>}
+
+    <form method="GET" class="filters">
+      <div class="field">
+        <label class="label">Desde</label>
+        <input type="date" name="from" value={from} class="inp" />
+      </div>
+      <div class="field">
+        <label class="label">Hasta</label>
+        <input type="date" name="to" value={to} class="inp" />
+      </div>
+      <div class="field">
+        <label class="label">Entidad</label>
+        <select name="entity" class="inp">
+          <option value="">Todas</option>
+          <option value="employee" selected={entity === 'employee'}>Empleado</option>
+          <option value="payroll" selected={entity === 'payroll'}>Planilla</option>
+          <option value="employee_file" selected={entity === 'employee_file'}>Expediente</option>
+          <option value="vacation" selected={entity === 'vacation'}>Vacación</option>
+          <option value="attendance" selected={entity === 'attendance'}>Asistencia</option>
+          <option value="dependent" selected={entity === 'dependent'}>Dependiente</option>
+          <option value="user" selected={entity === 'user'}>Usuario</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label">Acción</label>
+        <select name="action" class="inp">
+          <option value="">Todas</option>
+          <option value="create" selected={action === 'create'}>Crear</option>
+          <option value="update" selected={action === 'update'}>Editar</option>
+          <option value="delete" selected={action === 'delete'}>Eliminar</option>
+          <option value="approve" selected={action === 'approve'}>Aprobar</option>
+          <option value="reject" selected={action === 'reject'}>Rechazar</option>
+        </select>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Filtrar</button>
+      </div>
+    </form>
+
+    <div class="card">
+      {entries.length === 0 ? (
+        <div class="empty-state">Sin registros de auditoría.</div>
+      ) : (
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th class="th w-32">Fecha</th>
+              <th class="th">Usuario</th>
+              <th class="th w-24">Acción</th>
+              <th class="th">Entidad</th>
+              <th class="th">Detalles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((e) => (
+              <tr class="tr">
+                <td class="td td-code w-32">{fmtDate(e.createdAt)}</td>
+                <td class="td">{e.userName || (e.userId ? e.userId.slice(0, 8) : '—')}</td>
+                <td class="td w-24">
+                  <span class="text-xs font-semibold uppercase" style={actionColor(e.action)}>{actionLabel(e.action)}</span>
+                </td>
+                <td class="td">
+                  <span class="text-xs">{e.entity}</span>
+                  {e.entityId && <span class="td-code ml-1">{e.entityId.slice(0, 8)}</span>}
+                </td>
+                <td class="td">
+                  <span class="td-code text-xs" title={JSON.stringify(e.changes, null, 2)}>
+                    {Object.keys(e.changes).length > 0 ? Object.keys(e.changes).slice(0, 3).join(', ') + (Object.keys(e.changes).length > 3 ? '…' : '') : '—'}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  </div>
+
+  <style>
+    .page { padding:2rem; }
+    .page-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:1.5rem; }
+    .page-title { font-size:1.25rem; font-weight:600; color:var(--fore); margin:0 0 .25rem; font-family:var(--f-display); }
+    .page-sub { font-size:.8125rem; color:var(--mute); margin:0; }
+    .alert { padding:.75rem 1rem; border-radius:6px; font-size:.8125rem; margin-bottom:1rem; border:1px solid; }
+    .alert-err { background:color-mix(in srgb, var(--err) 10%, var(--ink-2)); border-color:var(--err); color:var(--err); }
+    .filters { display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap; margin-bottom:1.25rem; }
+    .field { display:flex; flex-direction:column; gap:.25rem; }
+    .label { font-size:.75rem; font-weight:500; color:var(--mute-2); }
+    .form-actions { display:flex; gap:.5rem; align-items:flex-end; }
+    .card { background:var(--ink-2); border:1px solid var(--rule); border-radius:8px; overflow:hidden; }
+    .tbl { width:100%; border-collapse:collapse; font-size:.8125rem; table-layout:fixed; }
+    .th { padding:.625rem 1rem; text-align:left; font-size:.75rem; font-weight:600; color:var(--mute); text-transform:uppercase; letter-spacing:.04em; background:var(--ink-3); border-bottom:1px solid var(--rule); }
+    .td { padding:.75rem 1rem; color:var(--fore); border-bottom:1px solid var(--rule); vertical-align:middle; }
+    .tr:last-child .td { border-bottom:none; }
+    .tr:hover .td { background:var(--ink-3); }
+    .td-code { font-family:var(--f-mono); font-size:.75rem; color:var(--mute-2); }
+    .w-24 { width:6rem; } .w-32 { width:8rem; }
+    .ml-1 { margin-left:.25rem; }
+    .btn-primary { background:var(--navy); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; }
+    .btn-primary:hover { background:var(--navy-hi); }
+    .inp { background:var(--ink); color:var(--fore); border:1px solid var(--rule); border-radius:5px; padding:.4375rem .625rem; font-size:.8125rem; outline:none; font-family:inherit; }
+    .inp:focus { border-color:var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft); }
+    .empty-state { padding:3rem; text-align:center; color:var(--mute); font-size:.875rem; }
+  </style>
+</AppLayout>

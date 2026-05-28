@@ -2,46 +2,40 @@ import { boolean, integer, pgTable, text, timestamp, uuid, varchar } from 'drizz
 
 export const companyConfig = pgTable('company_config', {
   id: uuid('id').defaultRandom().primaryKey(),
-  // Basic info
   companyName: varchar('company_name', { length: 255 }),
   ruc: varchar('ruc', { length: 50 }),
   legalRepresentative: varchar('legal_representative', { length: 255 }),
-  // Contact
   address: varchar('address', { length: 500 }),
   phone: varchar('phone', { length: 20 }),
   email: varchar('email', { length: 100 }),
-  // Institution type: 'privada' (individual salaries) | 'publica' (position-based salaries)
-  tipoInstitucion: varchar('tipo_institucion', { length: 20 }).notNull().default('privada'),
-  // Currency
+  institutionType: varchar('institution_type', { length: 20 }).notNull().default('privada'),
   currencyCode: varchar('currency_code', { length: 10 }).notNull().default('USD'),
   currencySymbol: varchar('currency_symbol', { length: 5 }).notNull().default('$'),
-  // SMTP
   mailHost: varchar('mail_host', { length: 255 }),
   mailPort: integer('mail_port').notNull().default(587),
   mailEncryption: varchar('mail_encryption', { length: 10 }).notNull().default('tls'),
   mailUsername: varchar('mail_username', { length: 255 }),
-  mailPassword: varchar('mail_password', { length: 255 }), // stored as-is; encrypt in production
+  mailPassword: varchar('mail_password', { length: 255 }),
   mailFromAddress: varchar('mail_from_address', { length: 255 }),
   mailFromName: varchar('mail_from_name', { length: 255 }),
-  // Payroll report signatures
-  elaboradoPor: varchar('elaborado_por', { length: 255 }),
-  cargoElaborador: varchar('cargo_elaborador', { length: 255 }).default('Especialista en Planilla'),
-  jefeRecursosHumanos: varchar('jefe_recursos_humanos', { length: 255 }),
-  cargoJefeRrhh: varchar('cargo_jefe_rrhh', { length: 255 }).default('Jefe de Recursos Humanos'),
-  // Logos — stored as base64 data URLs (suitable for small company logos up to ~200 KB)
-  logoEmpresa: text('logo_empresa'),
-  logoIzquierdoReportes: text('logo_izquierdo_reportes'),
-  logoDerechoReportes: text('logo_derecho_reportes'),
-  // Per-tenant strategy for the Planilla PDF lifecycle:
-  //   'on_demand'    — render every download (no storage; default).
-  //   'file_storage' — render once, persist to R2 / S3; subsequent
-  //                    downloads stream the stored object para que el
-  //                    usuario reciba el archivo al instante. Credenciales
-  //                    R2_* vía variables de entorno.
-  //   'local_storage' — persist to disk (`STORAGE_DIR`). Pensado para
-  //                    instalaciones on-prem o entornos de desarrollo
-  //                    sin acceso a object storage remoto.
+  preparedBy: varchar('prepared_by', { length: 255 }),
+  preparerTitle: varchar('preparer_title', { length: 255 }).default('Especialista en Planilla'),
+  hrDirectorName: varchar('hr_director_name', { length: 255 }),
+  hrDirectorTitle: varchar('hr_director_title', { length: 255 }).default(
+    'Jefe de Recursos Humanos'
+  ),
+  companyLogo: text('company_logo'),
+  reportLogoLeft: text('report_logo_left'),
+  reportLogoRight: text('report_logo_right'),
   payrollReportMode: varchar('payroll_report_mode', { length: 20 }).notNull().default('on_demand'),
+  absenceFileTypeId: integer('absence_file_type_id'),
+  absenceFileSubtypeId: integer('absence_file_subtype_id'),
+  latenessFileTypeId: integer('lateness_file_type_id'),
+  latenessFileSubtypeId: integer('lateness_file_subtype_id'),
+  portalNotificationsEnabled: boolean('portal_notifications_enabled').notNull().default(false),
+  notifyOnRequestCreated: text('notify_on_request_created'),
+  notifyOnRequestApproved: text('notify_on_request_approved'),
+  notifyOnRequestRejected: text('notify_on_request_rejected'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 })
 

@@ -197,6 +197,195 @@
       "when": 1762128007000,
       "tag": "0028_remove_nomina_wording",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1762128008000,
+      "tag": "0029_employee_files",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1762128009000,
+      "tag": "0030_employee_files_tenant_admin_grant",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1762128010000,
+      "tag": "0031_employee_files_approvals",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1762128011000,
+      "tag": "0032_fix_approval_rules_is_active",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1762128012000,
+      "tag": "0033_employee_files_requires_approval",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1762128013000,
+      "tag": "0034_facial_recognition",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1762128014000,
+      "tag": "0035_vacations_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1762128015000,
+      "tag": "0036_treasury_module",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1762128016000,
+      "tag": "0037_attendance_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1762128017000,
+      "tag": "0038_attendance_punches",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1762128018000,
+      "tag": "0039_english_standardization",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1762128019000,
+      "tag": "0040_attendance_status",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1762128020000,
+      "tag": "0041_attendance_justifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1762128021000,
+      "tag": "0042_employee_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1762128022000,
+      "tag": "0043_portal_approvers",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1762128023000,
+      "tag": "0044_portal_password_reset",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1762128024000,
+      "tag": "0045_portal_must_change_password",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1762128025000,
+      "tag": "0046_portal_access_modules",
+      "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1762128026000,
+      "tag": "0047_employee_photo",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1762128027000,
+      "tag": "0048_dependents",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1762128028000,
+      "tag": "0049_audit_log",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1762128029000,
+      "tag": "0050_employee_gobierno_fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1762128030000,
+      "tag": "0051_portal_allowed_file_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1762128031000,
+      "tag": "0052_compensatory_time",
+      "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1762128032000,
+      "tag": "0053_new_file_types",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1762128033000,
+      "tag": "0054_attendance_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1762128034000,
+      "tag": "0055_attendance_sync_v2",
+      "breakpoints": true
     }
   ]
 }

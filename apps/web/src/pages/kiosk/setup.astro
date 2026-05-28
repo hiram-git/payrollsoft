@@ -1,0 +1,173 @@
+---
+/**
+ * Kiosk pairing + employee-enrollment companion page.
+ *
+ * Two flows:
+ *   1. Pairing  — admin pastes the terminal token here and the page
+ *      writes the kiosk's localStorage config without exposing the
+ *      token in the URL.
+ *   2. Enrollment — when ?enroll=<employeeId> is present, the page
+ *      captures three frames, averages the embeddings and POSTs to
+ *      /facial/enrollments via the current session.
+ */
+import BaseLayout from '../../layouts/BaseLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+const authCookie = Astro.cookies.get('auth')?.value
+const tenantSlug = authCookie ? resolveTenantSlugFromCookie(authCookie) : 'demo'
+const enrollEmployeeId = Astro.url.searchParams.get('enroll') ?? ''
+---
+
+<BaseLayout title="Configurar kiosko">
+  <main class="min-h-screen bg-slate-950 text-slate-100">
+    <div class="max-w-3xl mx-auto p-8">
+
+      <div class="mb-4">
+        <a href={enrollEmployeeId ? '/facial/enrollments' : '/attendance/devices'}
+          class="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 3L4.5 7l4 4"/></svg>
+          Volver
+        </a>
+      </div>
+
+      {enrollEmployeeId ? (
+        <section class="bg-slate-900 rounded-2xl p-6 border border-slate-800 mb-6">
+          <h1 class="text-2xl font-bold mb-1">Enrolamiento de empleado</h1>
+          <p class="text-sm text-slate-400 mb-4">
+            Pide al empleado mirar de frente y parpadear normalmente. Tomaremos
+            3 muestras y promediaremos su vector facial.
+          </p>
+          <video id="enroll-video" class="w-full rounded-xl bg-black aspect-video"
+                 autoplay muted playsinline></video>
+          <div class="mt-4 flex items-center gap-3">
+            <button id="enroll-capture"
+              class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-white text-sm font-semibold">
+              Capturar muestra (<span id="enroll-counter">0</span>/3)
+            </button>
+            <button id="enroll-save" disabled
+              class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-white text-sm font-semibold">
+              Guardar enrolamiento
+            </button>
+          </div>
+          <p id="enroll-status" class="text-xs text-slate-400 mt-3"></p>
+        </section>
+      ) : null}
+
+      <section class="bg-slate-900 rounded-2xl p-6 border border-slate-800">
+        <h1 class="text-2xl font-bold mb-1">Emparejar este kiosko</h1>
+        <p class="text-sm text-slate-400 mb-4">
+          Pega los datos generados al crear la terminal en el panel
+          administrativo. Quedarán guardados en el almacenamiento local
+          de este equipo.
+        </p>
+        <form id="pair-form" class="space-y-3">
+          <div>
+            <label class="block text-xs font-medium mb-1" for="terminal">Código de terminal</label>
+            <input id="terminal" required
+              class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1" for="tenant">Tenant</label>
+            <input id="tenant" required value={tenantSlug}
+              class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium mb-1" for="token">Token de API</label>
+            <textarea id="token" required rows="3"
+              class="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-sm font-mono"></textarea>
+          </div>
+          <button class="bg-blue-600 hover:bg-blue-500 px-4 py-2 rounded-lg text-white text-sm font-semibold">
+            Emparejar y abrir kiosko
+          </button>
+        </form>
+      </section>
+    </div>
+  </main>
+
+  <script is:inline define:vars={{ API_URL, enrollEmployeeId, tenantSlug }}>
+    document.getElementById('pair-form').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const cfg = {
+        terminal: document.getElementById('terminal').value.trim(),
+        tenant: document.getElementById('tenant').value.trim(),
+        token: document.getElementById('token').value.trim(),
+      }
+      localStorage.setItem('payrollsoft:kiosk:cfg', JSON.stringify(cfg))
+      window.location.href = '/kiosk'
+    })
+
+    if (enrollEmployeeId) {
+      const samples = []
+      const counter = document.getElementById('enroll-counter')
+      const status = document.getElementById('enroll-status')
+      const saveBtn = document.getElementById('enroll-save')
+      const captureBtn = document.getElementById('enroll-capture')
+      let faceapi
+
+      async function init() {
+        status.textContent = 'Cargando modelos…'
+        faceapi = await import('/face-models/face-api.esm.js')
+        const MODELS = '/face-models'
+        await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
+        await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
+        await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS)
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        document.getElementById('enroll-video').srcObject = stream
+        status.textContent = 'Listo. Captura 3 muestras del rostro.'
+      }
+      init().catch((err) => { status.textContent = 'Error: ' + err.message })
+
+      captureBtn.addEventListener('click', async () => {
+        const video = document.getElementById('enroll-video')
+        const detection = await faceapi
+          .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor()
+        if (!detection) {
+          status.textContent = 'No se detectó un rostro. Acerca al empleado a la cámara.'
+          return
+        }
+        samples.push({
+          descriptor: Array.from(detection.descriptor),
+          quality: detection.detection.score,
+        })
+        counter.textContent = String(samples.length)
+        status.textContent = `Muestra ${samples.length}/3 capturada (calidad ${(detection.detection.score * 100).toFixed(0)}%).`
+        if (samples.length >= 3) saveBtn.disabled = false
+      })
+
+      saveBtn.addEventListener('click', async () => {
+        if (samples.length < 3) return
+        const dim = samples[0].descriptor.length
+        const avg = new Array(dim).fill(0)
+        for (const s of samples) {
+          for (let i = 0; i < dim; i++) avg[i] += s.descriptor[i]
+        }
+        for (let i = 0; i < dim; i++) avg[i] /= samples.length
+        const quality = samples.reduce((a, b) => a + b.quality, 0) / samples.length
+
+        status.textContent = 'Guardando…'
+        const res = await fetch(`${API_URL}/facial/enrollments`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json', 'X-Tenant': tenantSlug },
+          body: JSON.stringify({
+            employeeId: enrollEmployeeId,
+            embedding: avg,
+            qualityScore: quality,
+            isPrimary: true,
+          }),
+        })
+        if (res.ok) {
+          status.textContent = 'Enrolamiento guardado correctamente.'
+          saveBtn.disabled = true
+          setTimeout(() => { window.location.href = '/facial/enrollments' }, 1200)
+        } else {
+          const j = await res.json().catch(() => ({}))
+          status.textContent = 'Error: ' + (j.error ?? 'no se pudo guardar')
+        }
+      })
+    }
+  </script>
+</BaseLayout>

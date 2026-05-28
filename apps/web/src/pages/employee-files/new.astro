@@ -1,0 +1,335 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:write')) return Astro.redirect('/employee-files')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+const employeeId = (Astro.url.searchParams.get('employeeId') ?? '').trim()
+if (!employeeId) return Astro.redirect('/employee-files')
+
+type Employee = { id: string; code: string; firstName: string; lastName: string }
+type TypeRow = { id: number; code: string; name: string }
+
+let employee: Employee | null = null
+let types: TypeRow[] = []
+try {
+  const [empRes, typesRes] = await Promise.all([
+    fetch(`${API_URL}/employees/${employeeId}`, { headers }),
+    fetch(`${API_URL}/employee-files/types`, { headers }),
+  ])
+  if (empRes.status === 401) return Astro.redirect('/login')
+  if (empRes.status === 404) return Astro.redirect('/employee-files')
+  if (empRes.ok) employee = ((await empRes.json()) as { data: Employee }).data
+  if (typesRes.ok) types = ((await typesRes.json()) as { data: TypeRow[] }).data ?? []
+} catch {
+  return Astro.redirect('/employee-files')
+}
+if (!employee) return Astro.redirect('/employee-files')
+
+const errorMsg = Astro.url.searchParams.get('error') ?? ''
+const today = new Date().toISOString().slice(0, 10)
+---
+
+<AppLayout title="Nuevo expediente">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <a href={`/employee-files?employeeId=${employee.id}`} class="text-xs text-gray-500 hover:text-gray-900">← Volver a expedientes</a>
+      <h1 class="mt-2 text-xl font-semibold text-gray-900 tracking-tight">Nuevo expediente</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Empleado: <span class="font-medium text-gray-900">{employee.lastName}, {employee.firstName}</span>
+        <span class="ml-2 text-gray-400 font-mono text-xs">{employee.code}</span>
+      </p>
+    </div>
+
+    {errorMsg && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{errorMsg}</div>
+    )}
+
+    <form
+      id="ef-form"
+      method="POST"
+      action="/api/employee-files/save"
+      enctype="multipart/form-data"
+      class="space-y-5"
+    >
+      <input type="hidden" name="employeeId" value={employee.id} />
+
+      <!-- Identificación del documento -->
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
+        <h2 class="text-sm font-medium text-gray-900">Documento</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Tipo</label>
+            <select
+              id="ef-type"
+              name="typeId"
+              required
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+            >
+              <option value="">Selecciona…</option>
+              {types.map((t) => (
+                <option value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Subtipo</label>
+            <select
+              id="ef-subtype"
+              name="subtypeId"
+              required
+              disabled
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 disabled:bg-gray-50"
+            >
+              <option value="">Selecciona un tipo primero</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-gray-600 mb-1.5">Fecha del documento</label>
+            <input
+              type="date"
+              id="ef-date"
+              name="documentDate"
+              required
+              value={today}
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+            />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Número de documento (vista previa)</label>
+          <input
+            type="text"
+            id="ef-number-preview"
+            value="Se asigna automáticamente al elegir tipo, subtipo y fecha"
+            disabled
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono bg-gray-50 text-gray-500"
+          />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1.5">Observaciones</label>
+          <textarea
+            name="observations"
+            rows="2"
+            placeholder="Notas libres sobre este expediente (opcional)"
+            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900"
+          ></textarea>
+        </div>
+      </section>
+
+      <!-- Campos dinámicos del tipo/subtipo elegido -->
+      <section
+        id="ef-dynamic-section"
+        class="bg-white border border-gray-200 rounded-lg p-6 space-y-4 hidden"
+      >
+        <div>
+          <h2 class="text-sm font-medium text-gray-900">Datos específicos</h2>
+          <p class="text-xs text-gray-500 mt-1">
+            Estos campos cambian según el tipo y subtipo seleccionado.
+          </p>
+        </div>
+        <div id="ef-dynamic-fields" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+      </section>
+
+      <!-- Adjuntos genéricos -->
+      <section class="bg-white border border-gray-200 rounded-lg p-6 space-y-3">
+        <h2 class="text-sm font-medium text-gray-900">Adjuntos adicionales</h2>
+        <p class="text-xs text-gray-500 -mt-1">
+          PDFs o imágenes hasta 5 MB cada uno. Sube tantos como necesites además de los
+          que pidan los campos específicos.
+        </p>
+        <input
+          type="file"
+          name="attachments"
+          multiple
+          accept="application/pdf,image/jpeg,image/png,image/gif"
+          class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+        />
+      </section>
+
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-gray-200">
+        <a
+          href={`/employee-files?employeeId=${employee.id}`}
+          class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+        >Cancelar</a>
+        <button
+          type="submit"
+          id="ef-submit"
+          class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-70 disabled:cursor-wait"
+        >
+          Crear expediente
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script is:inline define:vars={{ apiUrl: API_URL, tenant: tenantSlug }}>
+    ;(function () {
+      const form = document.getElementById('ef-form')
+      const typeSel = document.getElementById('ef-type')
+      const subtypeSel = document.getElementById('ef-subtype')
+      const dateEl = document.getElementById('ef-date')
+      const numberPreview = document.getElementById('ef-number-preview')
+      const dynSection = document.getElementById('ef-dynamic-section')
+      const dynFields = document.getElementById('ef-dynamic-fields')
+      if (!form || !typeSel || !subtypeSel || !dateEl || !dynSection || !dynFields) return
+
+      // Cache de subtipos y campos para evitar re-fetch al volver a un tipo ya visto.
+      const subtypesCache = new Map()
+      const fieldsCache = new Map()
+
+      async function loadSubtypes(typeId) {
+        if (!typeId) {
+          subtypeSel.innerHTML = '<option value="">Selecciona un tipo primero</option>'
+          subtypeSel.disabled = true
+          return
+        }
+        if (!subtypesCache.has(typeId)) {
+          const res = await fetch('/api/employee-files/proxy?path=' +
+            encodeURIComponent('types/' + typeId + '/subtypes'))
+          const json = await res.json().catch(() => ({}))
+          subtypesCache.set(typeId, json.data || [])
+        }
+        const subs = subtypesCache.get(typeId)
+        subtypeSel.innerHTML =
+          '<option value="">Selecciona…</option>' +
+          subs.map((s) => '<option value="' + s.id + '">' + s.name + '</option>').join('')
+        subtypeSel.disabled = false
+      }
+
+      function renderField(def, prefix) {
+        const id = 'ef-fld-' + def.name
+        const name = prefix + '_' + def.name
+        const req = def.required ? 'required' : ''
+        const ro = def.readonly ? 'readonly' : ''
+        const placeholder = def.placeholder ? 'placeholder="' + def.placeholder + '"' : ''
+        const value = def.default != null ? String(def.default) : ''
+        const wrap = (inner, fullWidth) => (
+          '<div' + (fullWidth ? ' class="md:col-span-2"' : '') + '>' +
+          '<label class="block text-xs font-medium text-gray-600 mb-1.5" for="' + id + '">' +
+          def.label + (def.required ? ' <span class="text-red-500">*</span>' : '') +
+          '</label>' + inner + '</div>'
+        )
+        switch (def.type) {
+          case 'textarea':
+            return wrap(
+              '<textarea id="' + id + '" name="' + name + '" rows="2" ' + req + ' ' + ro + ' ' + placeholder +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">' +
+              value + '</textarea>',
+              true
+            )
+          case 'select': {
+            const opts = (def.options || []).map((o) =>
+              '<option value="' + o.value + '"' + (value === o.value ? ' selected' : '') + '>' + o.label + '</option>'
+            ).join('')
+            return wrap(
+              '<select id="' + id + '" name="' + name + '" ' + req + ' ' + ro +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900">' +
+              '<option value="">Selecciona…</option>' + opts + '</select>',
+              false
+            )
+          }
+          case 'file':
+            return wrap(
+              '<input id="' + id + '" type="file" name="' + name + '" ' + req +
+              ' accept="' + (def.accept || '') + '"' +
+              ' class="block w-full text-sm text-gray-700 file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />',
+              true
+            )
+          case 'number': {
+            const step = def.step != null ? 'step="' + def.step + '"' : ''
+            return wrap(
+              '<input id="' + id + '" type="number" name="' + name + '" ' + req + ' ' + ro + ' ' + step + ' ' + placeholder +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+          }
+          case 'datetime':
+            return wrap(
+              '<input id="' + id + '" type="datetime-local" name="' + name + '" ' + req + ' ' + ro +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+          case 'date':
+            return wrap(
+              '<input id="' + id + '" type="date" name="' + name + '" ' + req + ' ' + ro +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+          default:
+            return wrap(
+              '<input id="' + id + '" type="text" name="' + name + '" ' + req + ' ' + ro + ' ' + placeholder +
+              ' value="' + value + '"' +
+              ' class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900" />',
+              false
+            )
+        }
+      }
+
+      async function loadFields(typeId, subtypeId) {
+        if (!typeId || !subtypeId) {
+          dynSection.classList.add('hidden')
+          dynFields.innerHTML = ''
+          return
+        }
+        const key = typeId + '/' + subtypeId
+        if (!fieldsCache.has(key)) {
+          const res = await fetch('/api/employee-files/proxy?path=' +
+            encodeURIComponent('fields?typeId=' + typeId + '&subtypeId=' + subtypeId))
+          const json = await res.json().catch(() => ({}))
+          fieldsCache.set(key, json.data?.fields || [])
+        }
+        const fields = fieldsCache.get(key)
+        if (fields.length === 0) {
+          dynSection.classList.add('hidden')
+          dynFields.innerHTML = ''
+          return
+        }
+        // type=file → prefix `file_<name>`. Otros → prefix `extra_<name>`.
+        dynFields.innerHTML = fields
+          .map((f) => renderField(f, f.type === 'file' ? 'file' : 'extra'))
+          .join('')
+        dynSection.classList.remove('hidden')
+      }
+
+      async function refreshNumberPreview() {
+        const typeId = typeSel.value
+        const subtypeId = subtypeSel.value
+        const date = dateEl.value
+        if (!typeId || !subtypeId || !date) {
+          numberPreview.value = 'Se asigna automáticamente al elegir tipo, subtipo y fecha'
+          return
+        }
+        try {
+          const res = await fetch('/api/employee-files/proxy?path=' +
+            encodeURIComponent('next-number?typeId=' + typeId + '&subtypeId=' + subtypeId + '&documentDate=' + date))
+          const json = await res.json().catch(() => ({}))
+          numberPreview.value = json.data?.documentNumber || '—'
+        } catch {
+          numberPreview.value = '—'
+        }
+      }
+
+      typeSel.addEventListener('change', async () => {
+        await loadSubtypes(typeSel.value)
+        await loadFields(typeSel.value, subtypeSel.value)
+        await refreshNumberPreview()
+      })
+      subtypeSel.addEventListener('change', async () => {
+        await loadFields(typeSel.value, subtypeSel.value)
+        await refreshNumberPreview()
+      })
+      dateEl.addEventListener('change', refreshNumberPreview)
+    })()
+  </script>
+</AppLayout>

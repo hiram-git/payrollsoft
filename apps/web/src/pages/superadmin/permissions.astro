@@ -1,4 +1,15 @@
 ---
+/**
+ * Catálogo global de permisos y roles del sistema (super-admin).
+ *
+ * Dos secciones:
+ *   1. Permisos — alta/edición del catálogo global. Una vez creado,
+ *      cualquier rol puede asignarlo. No se permite eliminar para no
+ *      romper FKs en `role_permissions` de cada tenant.
+ *   2. Roles del sistema — alta/edición del catálogo de roles. Cada
+ *      rol declara qué permisos otorga; el botón "Propagar" replica
+ *      el rol y sus permisos en TODOS los tenants (UPSERT por code).
+ */
 import SuperAdminLayout from '../../layouts/SuperAdminLayout.astro'
 import { getIdentity } from '../../lib/auth'
 
@@ -17,16 +28,30 @@ type CatalogEntry = {
   description: string
   isDangerous: boolean
 }
+type SystemRole = {
+  code: string
+  name: string
+  description: string | null
+  isDangerous: boolean
+  permissions: string[]
+}
 
 let catalog: CatalogEntry[] = []
+let systemRoles: SystemRole[] = []
 let error = ''
 
 try {
-  const res = await fetch(`${API_URL}/superadmin/permissions`, {
-    headers: { Cookie: `auth=${identity.raw}` },
-  })
-  if (res.ok) catalog = ((await res.json()) as { data: CatalogEntry[] }).data ?? []
-  else error = 'No se pudo cargar el catálogo.'
+  const [permRes, roleRes] = await Promise.all([
+    fetch(`${API_URL}/superadmin/permissions`, {
+      headers: { Cookie: `auth=${identity.raw}` },
+    }),
+    fetch(`${API_URL}/superadmin/system-roles`, {
+      headers: { Cookie: `auth=${identity.raw}` },
+    }),
+  ])
+  if (permRes.ok) catalog = ((await permRes.json()) as { data: CatalogEntry[] }).data ?? []
+  else error = 'No se pudo cargar el catálogo de permisos.'
+  if (roleRes.ok) systemRoles = ((await roleRes.json()) as { data: SystemRole[] }).data ?? []
 } catch {
   error = 'No se pudo conectar con el servidor.'
 }
@@ -37,47 +62,368 @@ for (const e of catalog) {
   grouped.get(e.module)?.push(e)
 }
 const moduleEntries = Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0]))
+
+const flash = Astro.url.searchParams.get('flash') ?? ''
+const flashMsg = Astro.url.searchParams.get('msg') ?? ''
 ---
-<SuperAdminLayout title="Catálogo de permisos">
-  <div class="p-8">
+<SuperAdminLayout title="Permisos y roles del sistema">
+  <div class="p-8 max-w-7xl">
     <div class="mb-6">
-      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Catálogo de permisos</h1>
-      <p class="text-sm text-gray-500 mt-0.5">Códigos canónicos disponibles para asignar a roles. {catalog.length} permisos en total.</p>
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Permisos y roles del sistema</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        {catalog.length} permisos · {systemRoles.length} roles globales. Los cambios en roles se propagan
+        a todos los tenants con el botón <strong>Propagar</strong>.
+      </p>
     </div>
 
+    {flash === 'created' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Creado correctamente.</div>
+    )}
+    {flash === 'updated' && (
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Cambios guardados.</div>
+    )}
+    {flash === 'propagated' && (
+      <div class="mb-4 rounded-md bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-700">Rol propagado a todos los tenants.</div>
+    )}
+    {flash === 'error' && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Algo falló.'}</div>
+    )}
     {error && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
 
-    <div class="space-y-3">
-      {moduleEntries.map(([module, entries]) => (
-        <details class="border border-gray-200 rounded-lg bg-white" open>
-          <summary class="cursor-pointer px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors">
-            <span class="text-sm font-medium text-gray-900">{module}</span>
-            <span class="text-xs text-gray-400">{entries.length} permisos</span>
-          </summary>
-          <div class="border-t border-gray-100">
-            <table class="w-full text-sm">
-              <tbody>
-                {entries.map((p) => (
-                  <tr class="border-b border-gray-100 last:border-0">
-                    <td class="px-4 py-2.5 font-mono text-xs text-gray-900 whitespace-nowrap">{p.code}</td>
-                    <td class="px-4 py-2.5 text-xs">
-                      <span class={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        p.scope === 'global' ? 'bg-purple-50 text-purple-700' : 'bg-gray-100 text-gray-600'
-                      }`}>{p.scope}</span>
-                      {p.isDangerous && (
-                        <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-50 text-red-700">Sensible</span>
-                      )}
-                    </td>
-                    <td class="px-4 py-2.5 text-xs text-gray-600">{p.description}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      ))}
+    <!-- Tabs simples -->
+    <div class="flex gap-1 mb-4 border-b border-gray-200">
+      <button type="button" class="sa-tab sa-tab-active" data-target="tab-roles">Roles del sistema</button>
+      <button type="button" class="sa-tab" data-target="tab-perms">Catálogo de permisos</button>
     </div>
+
+    <!-- ── Roles del sistema ─────────────────────────────────────────────── -->
+    <section id="tab-roles">
+      <div class="bg-white border border-gray-200 rounded-lg mb-4">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-gray-900">Roles globales</h2>
+          <button type="button" id="btn-new-role" class="text-xs text-blue-600 hover:underline">+ Nuevo rol</button>
+        </div>
+
+        <!-- Form nuevo rol -->
+        <form id="form-new-role" class="hidden px-4 py-4 border-b border-gray-100 bg-gray-50" method="POST" action="/api/superadmin/permissions?op=role-create">
+          <input type="hidden" name="_redirect" value="/superadmin/permissions" />
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Código *</label>
+              <input type="text" name="code" required maxlength="50" pattern="[a-z][a-z0-9_]{1,49}" placeholder="ej. payroll_supervisor" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
+              <input type="text" name="name" required maxlength="120" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+            <div class="md:col-span-4">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Descripción</label>
+              <input type="text" name="description" maxlength="500" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+            <div class="md:col-span-1 flex items-center">
+              <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 mt-5">
+                <input type="checkbox" name="isDangerous" value="1" class="rounded" />
+                Sensible
+              </label>
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-2 mt-4">
+            <button type="button" id="cancel-new-role" class="px-3 py-2 text-sm text-gray-500">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">Crear rol</button>
+          </div>
+        </form>
+
+        {systemRoles.length === 0 ? (
+          <div class="p-10 text-center text-sm text-gray-500">No hay roles en el catálogo todavía.</div>
+        ) : (
+          <div class="divide-y divide-gray-100">
+            {systemRoles.map((r) => (
+              <details class="sa-role-block">
+                <summary class="px-4 py-3 cursor-pointer hover:bg-gray-50 flex items-center justify-between gap-3 select-none">
+                  <div class="flex items-center gap-3 min-w-0 flex-1">
+                    <svg class="sa-chevron w-3.5 h-3.5 text-gray-400 flex-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="font-mono text-xs text-gray-500">{r.code}</span>
+                    <span class="text-sm font-medium text-gray-900 truncate">{r.name}</span>
+                    {r.isDangerous && (
+                      <span class="text-[10px] font-medium px-1.5 py-0.5 rounded bg-red-50 text-red-700 uppercase tracking-wide">Sensible</span>
+                    )}
+                    <span class="text-xs text-gray-400">· {r.permissions.length} permisos</span>
+                  </div>
+                  <button
+                    type="button"
+                    class="text-xs text-blue-600 hover:underline ml-2"
+                    data-propagate-code={r.code}
+                  >Propagar a todos los tenants</button>
+                </summary>
+
+                <div class="px-4 py-4 border-t border-gray-100 bg-gray-50 space-y-4">
+                  <!-- Edit metadata -->
+                  <form method="POST" action={`/api/superadmin/permissions?op=role-update&code=${encodeURIComponent(r.code)}`} class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                    <input type="hidden" name="_redirect" value="/superadmin/permissions" />
+                    <div class="md:col-span-4">
+                      <label class="block text-xs font-medium text-gray-600 mb-1.5">Nombre</label>
+                      <input type="text" name="name" value={r.name} required maxlength="120" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                    </div>
+                    <div class="md:col-span-6">
+                      <label class="block text-xs font-medium text-gray-600 mb-1.5">Descripción</label>
+                      <input type="text" name="description" value={r.description ?? ''} maxlength="500" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+                    </div>
+                    <div class="md:col-span-1 flex items-center">
+                      <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                        <input type="checkbox" name="isDangerous" value="1" checked={r.isDangerous} class="rounded" />
+                        Sensible
+                      </label>
+                    </div>
+                    <div class="md:col-span-1 text-right">
+                      <button type="submit" class="px-3 py-2 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700">Guardar</button>
+                    </div>
+                  </form>
+
+                  <!-- Permissions matrix -->
+                  <form method="POST" action={`/api/superadmin/permissions?op=role-permissions&code=${encodeURIComponent(r.code)}`} class="border-t border-gray-200 pt-4">
+                    <input type="hidden" name="_redirect" value="/superadmin/permissions" />
+                    <div class="flex items-center justify-between mb-3">
+                      <h4 class="text-xs font-semibold text-gray-700 uppercase tracking-wide">Permisos asignados</h4>
+                      <div class="flex items-center gap-2">
+                        <button type="button" class="text-xs text-gray-500 hover:text-gray-900" data-check-all={r.code}>Marcar todos</button>
+                        <button type="button" class="text-xs text-gray-500 hover:text-gray-900" data-check-none={r.code}>Limpiar</button>
+                        <button type="submit" class="px-3 py-1.5 bg-blue-600 text-white text-xs rounded-md hover:bg-blue-700">Guardar permisos</button>
+                      </div>
+                    </div>
+
+                    {moduleEntries.map(([mod, entries]) => (
+                      <div class="mb-3" data-role-code={r.code}>
+                        <div class="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{mod}</div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                          {entries.map((p) => {
+                            const granted = r.permissions.includes(p.code)
+                            return (
+                              <label class="flex items-start gap-2 text-xs cursor-pointer hover:bg-gray-100 rounded px-1.5 py-1">
+                                <input type="checkbox" name="permissions" value={p.code} checked={granted} class="rounded mt-0.5 flex-none sa-perm-cb" data-role={r.code} />
+                                <span class="flex-1 min-w-0">
+                                  <span class="font-mono text-[11px] text-gray-700">{p.code}</span>
+                                  {p.isDangerous && (
+                                    <span class="ml-1.5 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-medium bg-red-50 text-red-700">Sensible</span>
+                                  )}
+                                  <div class="text-[10px] text-gray-500">{p.description}</div>
+                                </span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </form>
+                </div>
+              </details>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- ── Catálogo de permisos ──────────────────────────────────────────── -->
+    <section id="tab-perms" class="hidden">
+      <div class="bg-white border border-gray-200 rounded-lg mb-4">
+        <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-gray-900">Catálogo global de permisos</h2>
+          <button type="button" id="btn-new-perm" class="text-xs text-blue-600 hover:underline">+ Nuevo permiso</button>
+        </div>
+
+        <form id="form-new-perm" class="hidden px-4 py-4 border-b border-gray-100 bg-gray-50" method="POST" action="/api/superadmin/permissions?op=permission-create">
+          <input type="hidden" name="_redirect" value="/superadmin/permissions" />
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+            <div class="md:col-span-3">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Code (modulo:accion) *</label>
+              <input type="text" name="code" id="new-perm-code" required maxlength="80" pattern="[a-z][a-z_]+:[a-z][a-z_0-9.]+" placeholder="ej. reports:salary.view" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md font-mono" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Módulo</label>
+              <input type="text" name="module" id="new-perm-module" readonly class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-100" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Acción</label>
+              <input type="text" name="action" id="new-perm-action" readonly class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-100" />
+            </div>
+            <div class="md:col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Scope</label>
+              <select name="scope" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md">
+                <option value="tenant">tenant</option>
+                <option value="global">global</option>
+              </select>
+            </div>
+            <div class="md:col-span-2 flex items-center gap-3">
+              <label class="inline-flex items-center gap-1.5 text-xs text-gray-600 mt-5">
+                <input type="checkbox" name="isDangerous" value="1" class="rounded" />
+                Sensible
+              </label>
+            </div>
+            <div class="md:col-span-12">
+              <label class="block text-xs font-medium text-gray-600 mb-1.5">Descripción *</label>
+              <input type="text" name="description" required maxlength="500" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+            </div>
+          </div>
+          <div class="flex items-center justify-end gap-2 mt-4">
+            <button type="button" id="cancel-new-perm" class="px-3 py-2 text-sm text-gray-500">Cancelar</button>
+            <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700">Crear permiso</button>
+          </div>
+        </form>
+
+        <div class="divide-y divide-gray-100">
+          {moduleEntries.map(([mod, entries]) => (
+            <details class="" open>
+              <summary class="cursor-pointer px-4 py-2.5 flex items-center justify-between hover:bg-gray-50">
+                <span class="text-sm font-medium text-gray-900">{mod}</span>
+                <span class="text-xs text-gray-400">{entries.length} permisos</span>
+              </summary>
+              <table class="w-full text-sm">
+                <tbody>
+                  {entries.map((p) => (
+                    <tr class="border-t border-gray-100">
+                      <td class="px-4 py-2 align-top w-full">
+                        <form method="POST" action={`/api/superadmin/permissions?op=permission-update&code=${encodeURIComponent(p.code)}`} class="flex items-center gap-3">
+                          <input type="hidden" name="_redirect" value="/superadmin/permissions" />
+                          <span class="font-mono text-xs text-gray-700 whitespace-nowrap w-56 truncate">{p.code}</span>
+                          <select name="scope" class="text-xs border border-gray-300 rounded px-2 py-1">
+                            <option value="tenant" selected={p.scope === 'tenant'}>tenant</option>
+                            <option value="global" selected={p.scope === 'global'}>global</option>
+                          </select>
+                          <label class="inline-flex items-center gap-1.5 text-xs text-gray-600">
+                            <input type="checkbox" name="isDangerous" value="1" checked={p.isDangerous} class="rounded" />
+                            Sensible
+                          </label>
+                          <input type="text" name="description" value={p.description} required maxlength="500" class="flex-1 px-2 py-1 text-xs border border-gray-300 rounded" />
+                          <button type="submit" class="px-2.5 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700">✓</button>
+                        </form>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
   </div>
+
+  <script is:inline>
+    ;(function () {
+      // Tabs
+      document.querySelectorAll('.sa-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.sa-tab').forEach((b) => b.classList.remove('sa-tab-active'))
+          btn.classList.add('sa-tab-active')
+          const target = btn.getAttribute('data-target')
+          document.getElementById('tab-roles').classList.toggle('hidden', target !== 'tab-roles')
+          document.getElementById('tab-perms').classList.toggle('hidden', target !== 'tab-perms')
+        })
+      })
+
+      // Toggle forms
+      const newRoleBtn = document.getElementById('btn-new-role')
+      const newRoleForm = document.getElementById('form-new-role')
+      if (newRoleBtn && newRoleForm) {
+        newRoleBtn.addEventListener('click', () => newRoleForm.classList.toggle('hidden'))
+        document.getElementById('cancel-new-role')?.addEventListener('click', () => newRoleForm.classList.add('hidden'))
+      }
+      const newPermBtn = document.getElementById('btn-new-perm')
+      const newPermForm = document.getElementById('form-new-perm')
+      if (newPermBtn && newPermForm) {
+        newPermBtn.addEventListener('click', () => newPermForm.classList.toggle('hidden'))
+        document.getElementById('cancel-new-perm')?.addEventListener('click', () => newPermForm.classList.add('hidden'))
+      }
+
+      // Auto-fill module/action al escribir code en new-perm
+      const codeInput = document.getElementById('new-perm-code')
+      const moduleInput = document.getElementById('new-perm-module')
+      const actionInput = document.getElementById('new-perm-action')
+      if (codeInput && moduleInput && actionInput) {
+        codeInput.addEventListener('input', () => {
+          const v = codeInput.value.trim()
+          const [mod, rest] = v.split(':')
+          moduleInput.value = mod || ''
+          actionInput.value = (rest || '').split('.')[0] || ''
+        })
+      }
+
+      // Marcar/limpiar todos los permisos de un rol
+      document.querySelectorAll('[data-check-all]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const code = btn.getAttribute('data-check-all')
+          document.querySelectorAll(`.sa-perm-cb[data-role="${code}"]`).forEach((cb) => { cb.checked = true })
+        })
+      })
+      document.querySelectorAll('[data-check-none]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const code = btn.getAttribute('data-check-none')
+          document.querySelectorAll(`.sa-perm-cb[data-role="${code}"]`).forEach((cb) => { cb.checked = false })
+        })
+      })
+
+      // Propagar a tenants
+      document.querySelectorAll('[data-propagate-code]').forEach((btn) => {
+        btn.addEventListener('click', async (ev) => {
+          ev.stopPropagation()
+          ev.preventDefault()
+          const code = btn.getAttribute('data-propagate-code')
+          const sa = window.saModal
+          if (!sa) return
+          const ok = await sa.confirm({
+            title: 'Propagar a todos los tenants',
+            message: `Vas a aplicar el rol "${code}" y sus permisos en TODOS los tenants. Operación idempotente — no toca asignaciones de usuarios. ¿Continuar?`,
+            confirmLabel: 'Propagar',
+            tone: 'primary',
+          })
+          if (!ok) return
+          sa.loading({ title: 'Propagando', message: 'Aplicando en cada tenant…' })
+          try {
+            const res = await fetch(`/api/superadmin/permissions?op=role-propagate&code=${encodeURIComponent(code)}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+              body: JSON.stringify({}),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!res.ok || json.ok === false) {
+              await sa.error({ title: 'Falló la propagación', message: json.error || 'HTTP ' + res.status })
+            } else {
+              const result = json.result || {}
+              const applied = (result.applied || []).length
+              const errors = (result.errors || []).length
+              const msg = errors > 0
+                ? `Aplicado en ${applied} tenants. Falló en ${errors}.`
+                : `Aplicado en ${applied} tenants.`
+              await sa.success({ title: 'Propagación completa', message: msg, redirect: json.redirect || window.location.pathname })
+            }
+          } catch (err) {
+            await sa.error({ title: 'Error de red', message: String(err) })
+          }
+        })
+      })
+    })()
+  </script>
+
+  <style>
+    .sa-tab {
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      color: #6b7280;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      background: transparent;
+    }
+    .sa-tab:hover { color: #111827; }
+    .sa-tab-active {
+      color: #2563eb;
+      border-bottom-color: #2563eb;
+      font-weight: 500;
+    }
+    .sa-role-block[open] .sa-chevron { transform: rotate(90deg); }
+    .sa-chevron { transition: transform 120ms; }
+    [data-theme="dark"] .sa-tab { color: var(--mute-2); }
+    [data-theme="dark"] .sa-tab:hover { color: var(--fore); }
+    [data-theme="dark"] .sa-tab-active { color: #60a5fa; border-bottom-color: #60a5fa; }
+  </style>
 </SuperAdminLayout>
