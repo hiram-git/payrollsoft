@@ -2,20 +2,103 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; connect-src *;" />
     <title>PayrollSoft</title>
     <style>
-      html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; background: #0b1f3a; color: #e6e9ef; }
-      main { height: 100%; display: grid; place-items: center; text-align: center; padding: 2rem; }
-      h1 { font-weight: 600; font-size: 1.25rem; margin: 0 0 .5rem; }
-      p { opacity: .8; margin: 0; font-size: .95rem; }
+      :root {
+        --ink: #0b1f3a;
+        --fore: #e6e9ef;
+        --mute: rgba(230, 233, 239, 0.7);
+        --rule: rgba(230, 233, 239, 0.18);
+        --err: #f59ba0;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; font-family: 'Inter Tight', system-ui, -apple-system, Segoe UI, sans-serif; background: var(--ink); color: var(--fore); }
+      main { height: 100%; display: grid; place-items: center; padding: 2rem; }
+      .card { width: min(28rem, 100%); text-align: center; }
+      .brand { display: inline-flex; align-items: center; justify-content: center; width: 64px; height: 64px; border: 1px solid var(--rule); border-radius: 14px; font-weight: 700; font-size: 1.35rem; letter-spacing: 0.04em; margin-bottom: 1.25rem; }
+      h1 { font-weight: 600; font-size: 1.05rem; margin: 0 0 0.5rem; letter-spacing: 0.01em; }
+      p { margin: 0; font-size: 0.92rem; line-height: 1.5; }
+      .mute { color: var(--mute); }
+      .target { margin-top: 0.85rem; font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-size: 0.78rem; color: var(--mute); word-break: break-all; }
+      .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--rule); border-top-color: var(--fore); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -3px; margin-right: 0.5rem; }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .actions { margin-top: 1.5rem; display: none; gap: 0.5rem; justify-content: center; }
+      .actions.show { display: inline-flex; }
+      button { font: inherit; color: var(--fore); background: transparent; border: 1px solid var(--rule); padding: 0.55rem 1.1rem; border-radius: 8px; cursor: pointer; transition: background 0.15s; }
+      button:hover { background: rgba(230, 233, 239, 0.08); }
+      button.primary { background: var(--fore); color: var(--ink); border-color: var(--fore); }
+      button.primary:hover { background: #fff; }
+      .err { color: var(--err); }
     </style>
   </head>
   <body>
     <main>
-      <div>
-        <h1>PayrollSoft</h1>
-        <p>Cargando la aplicación…</p>
+      <div class="card" role="status" aria-live="polite">
+        <div class="brand">PS</div>
+        <h1 id="title">PayrollSoft</h1>
+        <p id="message"><span class="spinner"></span><span class="mute">Conectando con el servidor…</span></p>
+        <p class="target" id="target"></p>
+        <div class="actions" id="actions">
+          <button class="primary" id="retry">Reintentar</button>
+          <button id="quit">Salir</button>
+        </div>
       </div>
     </main>
+    <script>
+      const target = (window.__PAYROLL_TARGET__ || '').toString();
+      const titleEl = document.getElementById('title');
+      const messageEl = document.getElementById('message');
+      const targetEl = document.getElementById('target');
+      const actionsEl = document.getElementById('actions');
+      const retryBtn = document.getElementById('retry');
+      const quitBtn = document.getElementById('quit');
+
+      targetEl.textContent = target || '(DESKTOP_URL no configurada)';
+
+      function showConnecting() {
+        messageEl.innerHTML = '<span class="spinner"></span><span class="mute">Conectando con el servidor…</span>';
+        actionsEl.classList.remove('show');
+      }
+
+      function showError(detail) {
+        titleEl.textContent = 'No se pudo conectar';
+        messageEl.innerHTML = '<span class="err">' + detail + '</span><br><span class="mute">Verifica que el servidor esté corriendo y que <code>DESKTOP_URL</code> apunte al host correcto.</span>';
+        actionsEl.classList.add('show');
+      }
+
+      async function attempt() {
+        if (!target) {
+          showError('DESKTOP_URL no está configurada en el .env.');
+          return;
+        }
+        showConnecting();
+        try {
+          // no-cors mode just probes reachability — the response is opaque
+          // but a network failure (DNS, refused, offline) rejects the promise.
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 6000);
+          await fetch(target, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
+          clearTimeout(timeout);
+          window.location.replace(target);
+        } catch (e) {
+          const detail = e && e.name === 'AbortError'
+            ? 'El servidor no respondió en 6 segundos.'
+            : 'No se pudo establecer conexión con el servidor.';
+          showError(detail);
+        }
+      }
+
+      retryBtn.addEventListener('click', attempt);
+      quitBtn.addEventListener('click', () => {
+        if (window.__TAURI_INTERNALS__) {
+          window.__TAURI_INTERNALS__.invoke('plugin:process|exit', { code: 0 }).catch(() => window.close());
+        } else {
+          window.close();
+        }
+      });
+
+      attempt();
+    </script>
   </body>
 </html>
