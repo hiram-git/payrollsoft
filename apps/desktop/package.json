@@ -2,11 +2,12 @@
   "name": "@payroll/desktop",
   "version": "0.0.1",
   "private": true,
-  "description": "Tauri 2 desktop shell that wraps the PayrollSoft web app",
+  "description": "Tauri 2 desktop shell that wraps the PayrollSoft web app (Windows v1)",
   "scripts": {
-    "dev": "node scripts/dev-guard.mjs",
+    "dev": "node scripts/dev-guard.mjs dev",
+    "build": "node scripts/dev-guard.mjs build",
     "dev:force": "tauri dev",
-    "build": "tauri build",
+    "build:force": "tauri build",
     "tauri": "tauri"
   },
   "devDependencies": {

@@ -1,16 +1,19 @@
 use std::path::PathBuf;
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{
+    menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    Manager, WebviewUrl, WebviewWindowBuilder,
+};
 use url::Url;
 
 const DEFAULT_URL: &str = "http://localhost:4321";
 const KIOSK_PATH: &str = "/kiosk";
 
 fn load_env() {
-    // Look for a .env up the tree starting from the binary's CWD. The desktop
+    // Walk up from the binary's CWD looking for the first .env. The desktop
     // shell is usually launched from the monorepo root (where the shared .env
     // lives) but `tauri dev` runs it from apps/desktop/src-tauri, so we walk
-    // upwards and load the first .env we find.
+    // upwards and load the first match.
     let mut cursor: PathBuf = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     loop {
         let candidate = cursor.join(".env");
@@ -57,6 +60,65 @@ fn is_kiosk_mode() -> bool {
         .unwrap_or(false)
 }
 
+fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let about = AboutMetadata {
+        name: Some("PayrollSoft".into()),
+        version: Some(env!("CARGO_PKG_VERSION").into()),
+        ..Default::default()
+    };
+
+    let file = Submenu::with_items(
+        app,
+        "Archivo",
+        true,
+        &[
+            &MenuItem::with_id(app, "reload", "Recargar", true, Some("CmdOrCtrl+R"))?,
+            &MenuItem::with_id(app, "home", "Ir al inicio", true, Some("CmdOrCtrl+H"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::quit(app, Some("Salir"))?,
+        ],
+    )?;
+
+    let edit = Submenu::with_items(
+        app,
+        "Editar",
+        true,
+        &[
+            &PredefinedMenuItem::undo(app, Some("Deshacer"))?,
+            &PredefinedMenuItem::redo(app, Some("Rehacer"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::cut(app, Some("Cortar"))?,
+            &PredefinedMenuItem::copy(app, Some("Copiar"))?,
+            &PredefinedMenuItem::paste(app, Some("Pegar"))?,
+            &PredefinedMenuItem::select_all(app, Some("Seleccionar todo"))?,
+        ],
+    )?;
+
+    let view = Submenu::with_items(
+        app,
+        "Ver",
+        true,
+        &[
+            &MenuItem::with_id(app, "toggle_devtools", "DevTools", true, Some("F12"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &PredefinedMenuItem::fullscreen(app, Some("Pantalla completa"))?,
+        ],
+    )?;
+
+    let help = Submenu::with_items(
+        app,
+        "Ayuda",
+        true,
+        &[&PredefinedMenuItem::about(
+            app,
+            Some("Acerca de PayrollSoft"),
+            Some(about),
+        )?],
+    )?;
+
+    Menu::with_items(app, &[&file, &edit, &view, &help])
+}
+
 pub fn run() {
     load_env();
 
@@ -80,26 +142,67 @@ pub fn run() {
         }
     };
 
-    eprintln!("[payroll-desktop] loading {target}");
+    eprintln!("[payroll-desktop] target: {target}");
+
+    let target_str = target.to_string();
+    let target_for_menu = target_str.clone();
 
     let kiosk = is_kiosk_mode();
 
     tauri::Builder::default()
         .setup(move |app| {
-            let webview_url = WebviewUrl::External(target.clone());
-            let mut builder = WebviewWindowBuilder::new(app, "main", webview_url)
-                .title(if kiosk { "PayrollSoft — Marcación" } else { "PayrollSoft" })
-                .inner_size(1280.0, 800.0)
-                .min_inner_size(1024.0, 640.0)
-                .resizable(true)
-                .visible(false);
-            if kiosk {
-                builder = builder.fullscreen(true).resizable(false);
-            }
-            let window = builder.build()?;
+            let menu = build_menu(app.handle())?;
+            app.set_menu(menu)?;
+
+            // Inject the target URL into the boot page so it can probe the
+            // server reachability before navigating away. Runs on every page
+            // load; only the boot page reads window.__PAYROLL_TARGET__.
+            let init_script = format!(
+                "window.__PAYROLL_TARGET__ = {};",
+                serde_json::to_string(&target_str).unwrap_or_else(|_| "\"\"".into())
+            );
+
+            let window =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                    .title("PayrollSoft")
+                    .inner_size(1280.0, 800.0)
+                    .min_inner_size(1024.0, 640.0)
+                    .resizable(true)
+                    .visible(false)
+                    .initialization_script(&init_script)
+                    .build()?;
+
             window.show()?;
-            let _ = app.get_webview_window("main");
             Ok(())
+        })
+        .on_menu_event(move |app, event| match event.id().as_ref() {
+            "reload" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.eval("location.reload()");
+                }
+            }
+            "home" => {
+                if let Some(win) = app.get_webview_window("main") {
+                    let js = format!(
+                        "location.replace({})",
+                        serde_json::to_string(&target_for_menu).unwrap_or_else(|_| "''".into())
+                    );
+                    let _ = win.eval(&js);
+                }
+            }
+            "toggle_devtools" => {
+                if let Some(_win) = app.get_webview_window("main") {
+                    #[cfg(any(debug_assertions, feature = "devtools"))]
+                    {
+                        if _win.is_devtools_open() {
+                            _win.close_devtools();
+                        } else {
+                            _win.open_devtools();
+                        }
+                    }
+                }
+            }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

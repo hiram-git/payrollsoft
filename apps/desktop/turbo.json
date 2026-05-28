@@ -1,0 +1,25 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["src-tauri/target/release/bundle/**"],
+      "inputs": [
+        "src/**",
+        "src-tauri/src/**",
+        "src-tauri/icons/**",
+        "src-tauri/capabilities/**",
+        "src-tauri/Cargo.toml",
+        "src-tauri/Cargo.lock",
+        "src-tauri/build.rs",
+        "src-tauri/tauri.conf.json",
+        "package.json",
+        "scripts/**"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}

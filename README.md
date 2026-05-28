@@ -62,7 +62,8 @@ La interfaz usa variables CSS semánticas (`--ink`, `--fore`, `--navy`, `--ok`, 
 payrollsoft/
 ├── apps/
 │   ├── api/          — API REST (Elysia + Bun, puerto 3000)
-│   └── web/          — Frontend SSR (Astro + Tailwind, puerto 4321)
+│   ├── web/          — Frontend SSR (Astro + Tailwind, puerto 4321)
+│   └── desktop/      — Shell de escritorio (Tauri 2) que envuelve el web app
 └── packages/
     ├── core/         — Motor de fórmulas + lógica de planilla (sin dependencias externas)
     └── db/           — Drizzle ORM, schema, query builder, migraciones
@@ -111,7 +112,77 @@ bun --env-file=../../.env src/migrate.ts --all-tenants
 
 ---
 
+## Aplicación de escritorio (Tauri 2)
+
+Además del acceso por navegador, el proyecto incluye un wrapper de
+escritorio en `apps/desktop/` construido con Tauri 2. Es un shell
+delgado: abre una ventana nativa que carga la URL del web app, así que
+**ambos canales conviven** — el navegador sigue funcionando sin
+cambios y la app de escritorio es una entrega adicional con paridad
+total de funciones.
+
+**Alcance v1:** solo Windows (`.msi`). macOS/Linux se habilitan después
+agregándolos a `bundle.targets` y compilando en cada plataforma.
+
+### Habilitar el escritorio
+
+Se controla con dos variables nuevas en el `.env` de la raíz:
+
+| Variable | Default | Descripción |
+|----------|---------|-------------|
+| `DESKTOP_ENABLED` | `false` | Gate de arranque. Sólo si es `true`/`1`/`yes`/`on` la ventana se abre; con cualquier otro valor el binario imprime un aviso y sale sin compilar Rust. |
+| `DESKTOP_URL` | `http://localhost:4321` | URL que carga la ventana. En dev apunta al Astro local; en producción al host público. |
+
+Ambas se leen **en runtime**, así que el mismo `.msi` se repunta a otro
+servidor editando el `.env`, sin reempaquetar. Como el wrapper solo
+carga una URL remota, los cambios del sistema (frontend/backend) llegan
+al refrescar la ventana; el `.msi` solo se reconstruye cuando cambia el
+wrapper en sí. Por eso v1 no incluye auto-updater.
+
+### Levantar en desarrollo
+
+Requiere [prerequisitos de Tauri](https://tauri.app/start/prerequisites/)
+en la máquina (Rust toolchain ≥ 1.77 y, en Windows, Microsoft C++ Build
+Tools + WebView2).
+
+```bash
+# 1. .env en la raíz
+DESKTOP_ENABLED=true
+DESKTOP_URL=http://localhost:4321
+
+# 2. Levanta el web app en una terminal
+bun --filter @payroll/web dev
+
+# 3. Lanza la ventana en otra terminal
+bun --filter @payroll/desktop dev
+```
+
+El script `bun run dev` de la raíz (que corre `--filter='*' dev`)
+respeta el gate: si `DESKTOP_ENABLED` no es truthy, el workspace de
+escritorio se salta sin tocar el toolchain de Rust, así que los
+contribuidores que sólo trabajan en web/api no se ven afectados.
+
+### Empaquetar (Windows)
+
+El `.msi` se genera **en Windows** (usa WiX):
+
+```bash
+bun --filter @payroll/desktop build
+```
+
+El instalador queda en `apps/desktop/src-tauri/target/release/bundle/msi/`.
+
+> **Validación obligatoria antes de considerar la app lista** (no es
+> trámite): (1) probar el login dentro de la ventana Tauri contra el
+> entorno de producción REAL con subdominios — la cookie `auth` puede no
+> cruzar `app.*` ↔ `api.*`; (2) el primer build en una máquina Windows
+> real, que puede revelar problemas de toolchain. Detalle en
+> [`apps/desktop/README.md`](./apps/desktop/README.md).
+
+---
+
 ## Documentación adicional
 
 - [`PROJECT-STATUS.md`](./PROJECT-STATUS.md) — Estado actual de cada módulo, notas técnicas y referencia de la API
 - [`IMPLEMENTATION-PLAN.md`](./IMPLEMENTATION-PLAN.md) — Plan de fases, tareas completadas y pendientes
+- [`apps/desktop/README.md`](./apps/desktop/README.md) — Detalles del shell de escritorio (Tauri 2)

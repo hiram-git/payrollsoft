@@ -1,7 +1,12 @@
 #!/usr/bin/env node
-// Guard for `bun dev` at the monorepo root: skip the Tauri shell unless
-// DESKTOP_ENABLED is truthy in the root .env. Keeps `bun --filter='*' dev`
-// fast for contributors who only work on the web/api.
+// Gate for tauri dev/build commands: skip the Tauri shell unless
+// DESKTOP_ENABLED is truthy in the root .env. Keeps the rest of the
+// monorepo (web/api builds, CI without Rust toolchain) unaffected when
+// desktop isn't in play.
+//
+// Usage: node scripts/dev-guard.mjs <tauri-subcommand> [...args]
+//   node scripts/dev-guard.mjs dev
+//   node scripts/dev-guard.mjs build
 
 import { spawn } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
@@ -9,6 +14,8 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const subcommand = process.argv[2] ?? 'dev'
+const passthrough = process.argv.slice(3)
 
 function findRootEnv(start) {
   let cursor = start
@@ -39,11 +46,11 @@ const raw = readEnvFlag('DESKTOP_ENABLED') ?? ''
 const enabled = ['1', 'true', 'yes', 'on'].includes(raw.trim().toLowerCase())
 
 if (!enabled) {
-  console.log('[payroll-desktop] DESKTOP_ENABLED is not truthy — skipping tauri dev.')
+  console.log(`[payroll-desktop] DESKTOP_ENABLED is not truthy — skipping 'tauri ${subcommand}'.`)
   process.exit(0)
 }
 
-const child = spawn('bunx', ['tauri', 'dev'], {
+const child = spawn('bunx', ['tauri', subcommand, ...passthrough], {
   cwd: resolve(__dirname, '..'),
   stdio: 'inherit',
   env: process.env,

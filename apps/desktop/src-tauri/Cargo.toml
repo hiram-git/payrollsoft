@@ -12,6 +12,12 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+# DevTools are always compiled into debug builds via #[cfg(debug_assertions)];
+# enable this feature on release builds (e.g. internal QA) to ship a binary
+# with DevTools toggle available from the Ver menu.
+devtools = ["tauri/devtools"]
+
 [dependencies]
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
