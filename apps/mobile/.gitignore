@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+*.local
+
+# Capacitor — plataformas nativas generadas (se recrean con `cap add`)
+/ios
+/android
+
+# Vite / Turbo
+.turbo
+*.log
