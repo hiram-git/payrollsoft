@@ -32,6 +32,9 @@ if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
         <option value="approver">Aprobadores</option>
       </select>
       <input id="pc-search" type="text" placeholder="Buscar por nombre, código o cédula..." class="px-3 py-1.5 text-sm border border-gray-300 rounded-md w-64 focus:outline-none focus:ring-2 focus:ring-gray-900" />
+      <button type="button" id="pc-activate-all" class="px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50">
+        Activar todos
+      </button>
       <span id="pc-count" class="ml-auto text-xs text-gray-400 font-mono"></span>
     </div>
 
@@ -222,6 +225,28 @@ if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
           if (res.success) reload(); else alert(res.error || 'Error');
         });
       };
+
+      var activateAllBtn = document.getElementById('pc-activate-all');
+      activateAllBtn.addEventListener('click', function() {
+        var without = allRows.filter(function(r) { return !r.has_credentials; }).length;
+        if (without === 0) { alert('Todos los empleados activos ya tienen credenciales.'); return; }
+        if (!confirm('Se crearán credenciales para ' + without + ' empleado' + (without !== 1 ? 's' : '') + ' sin acceso.\n\nContraseña por defecto: 172839\n(Deberán cambiarla en su primer inicio de sesión)\n\n¿Continuar?')) return;
+        activateAllBtn.disabled = true;
+        activateAllBtn.textContent = 'Activando...';
+        postAction({ action: 'activate-all' }).then(function(res) {
+          activateAllBtn.disabled = false;
+          activateAllBtn.textContent = 'Activar todos';
+          if (res.success) {
+            var d = res.data || {};
+            alert('Credenciales creadas: ' + (d.created || 0) + ' de ' + (d.total || 0) + ' empleados.');
+            reload();
+          } else { alert(res.error || 'Error'); }
+        }).catch(function() {
+          activateAllBtn.disabled = false;
+          activateAllBtn.textContent = 'Activar todos';
+          alert('Error de conexión.');
+        });
+      });
 
       reload();
     })();

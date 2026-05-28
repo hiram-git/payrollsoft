@@ -124,6 +124,43 @@ export const portalCredentialsRoutes = new Elysia({ prefix: '/portal/credentials
     }
   )
 
+  .post(
+    '/activate-all',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const { hashPassword: hp } = await import('../../lib/password')
+      const hash = await hp('172839')
+      const empRows = await db.execute(sql`
+        SELECT e.id FROM employees e
+        LEFT JOIN employee_credentials ec ON ec.employee_id = e.id
+        WHERE e.is_active = true AND ec.id IS NULL
+      `)
+      let created = 0
+      for (const emp of empRows) {
+        try {
+          await db
+            .insert(employeeCredentials)
+            .values({
+              employeeId: emp.id,
+              passwordHash: hash,
+              mustChangePassword: true,
+            })
+            .onConflictDoNothing()
+          created++
+        } catch {
+          /* skip individual errors */
+        }
+      }
+      return { success: true, data: { total: empRows.length, created } }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('users:write')],
+    }
+  )
+
   .get(
     '/status',
     async ({ db, set }) => {
