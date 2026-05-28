@@ -1,0 +1,10 @@
+/* Tema base. Se deja el default de Ionic; la paleta corporativa
+   (#003087 que usa la web) puede mapearse aquí más adelante. */
+:root {
+  --ion-color-primary: #003087;
+  --ion-color-primary-rgb: 0, 48, 135;
+  --ion-color-primary-contrast: #ffffff;
+  --ion-color-primary-contrast-rgb: 255, 255, 255;
+  --ion-color-primary-shade: #002a77;
+  --ion-color-primary-tint: #1a4593;
+}

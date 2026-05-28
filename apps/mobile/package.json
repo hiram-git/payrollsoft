@@ -1,0 +1,43 @@
+{
+  "name": "@payroll/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Cliente móvil de marcaciones (Ionic React + Capacitor). Habla directo con la API Elysia, sin pasar por el BFF de apps/web.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "cap:sync": "cap sync",
+    "cap:add:ios": "cap add ios",
+    "cap:add:android": "cap add android"
+  },
+  "dependencies": {
+    "@capacitor/camera": "^8.2.0",
+    "@capacitor/core": "^8.3.4",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/network": "^8.0.1",
+    "@capacitor/preferences": "^8.0.1",
+    "@ionic/react": "^8.8.8",
+    "@ionic/react-router": "^8.8.8",
+    "@payroll/core": "workspace:*",
+    "@payroll/db": "workspace:*",
+    "@payroll/types": "workspace:*",
+    "ionicons": "^8.0.13",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router": "^5.3.4",
+    "react-router-dom": "^5.3.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.3.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/react-router": "^5.1.20",
+    "@types/react-router-dom": "^5.3.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
