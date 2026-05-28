@@ -151,3 +151,18 @@ fuera del entorno de desarrollo. No marcar la app como lista sin cerrarlos:
   Si en el futuro se necesita acceso offline, filesystem o hardware nativo,
   agregar comandos en `src-tauri/src/lib.rs` y los permisos correspondientes
   en `capabilities/default.json`.
+
+## Pendientes / decisiones abiertas
+
+Estado al cierre de esta fase. Nada aquí bloquea distribuir a un equipo
+interno, pero conviene cerrarlos antes de una distribución más amplia.
+
+| Tema | Estado | Nota |
+|------|--------|------|
+| Auth con subdominios en prod | **Pendiente validar** | Probar login dentro de la ventana contra `app.*`/`api.*` reales. Si falla, fijar `Domain` de la cookie en el backend. Ver sección "Validación obligatoria". |
+| Firma de código (SmartScreen) | **Documentado, no implementado** | `.msi` sin firmar muestra aviso de SmartScreen. Para equipo interno se acepta; para distribución amplia hace falta cert OV/EV. Decisión del proyecto. |
+| Iconos reales | **Placeholder "PS" navy** | Reemplazar `src-tauri/icons/` con el arte del proyecto antes de una entrega oficial. |
+| Modo kiosk (marcación facial) | **Funcional, no distribuido** | Soporta `--mode=kiosk` (booteo a `/kiosk` + fullscreen). No se distribuye en esta fase; se construye aparte cuando se requiera. |
+| Auto-updater | **Descartado v1** | El wrapper carga URL remota: los cambios del sistema llegan al refrescar; el `.msi` solo se rehace si cambia el shell. Reevaluar si crece el uso. |
+| macOS / Linux | **Fuera de v1** | Agregar a `bundle.targets` y compilar en cada plataforma. macOS requiere code signing de Apple. |
+| Offline-first | **No abordado** | Requeriría SQLite local + lógica de sync. Fase aparte si surge la necesidad. |
