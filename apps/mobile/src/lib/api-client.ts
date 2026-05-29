@@ -79,6 +79,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Tenant': tenant,
+    // Marca el request como cliente nativo: el backend devuelve el JWT en
+    // el body del login (no solo cookie httpOnly) y habilita Bearer.
+    'X-Client': 'mobile',
     ...authHeaders(mode, token),
   }
 

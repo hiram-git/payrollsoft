@@ -86,7 +86,12 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
   .post(
     '/login',
-    async ({ db, body, jwt, cookie, set, tenantSlug: headerTenant }) => {
+    async ({ db, body, jwt, cookie, set, headers, tenantSlug: headerTenant }) => {
+      // Clientes nativos (móvil) no pueden leer la cookie httpOnly: piden el
+      // token en el body con el header `X-Client: mobile`. El navegador
+      // (BFF web) nunca envía ese header, así que el JWT nunca se expone a
+      // JS en el navegador.
+      const wantsToken = headers['x-client'] === 'mobile'
       try {
         const idNumber = body.idNumber.trim()
         const password = body.password
@@ -210,7 +215,14 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 
         return {
           success: true,
-          data: { employeeId: emp.id, code: emp.code, name: `${emp.firstName} ${emp.lastName}` },
+          data: {
+            employeeId: emp.id,
+            code: emp.code,
+            name: `${emp.firstName} ${emp.lastName}`,
+            // Solo para clientes móviles (Bearer). El tenant resuelto se
+            // devuelve para que el móvil lo fije en el header X-Tenant.
+            ...(wantsToken ? { token, tenantSlug: resolvedSlug } : {}),
+          },
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)

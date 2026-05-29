@@ -1,6 +1,7 @@
 import { cors } from '@elysiajs/cors'
 import { Elysia } from 'elysia'
 import { env } from './config/env'
+import { isAllowedOrigin } from './config/origins'
 import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
@@ -52,9 +53,11 @@ const app = new Elysia()
   // ── Global middleware (order matters) ──────────────────────────────────────
   .use(
     cors({
-      origin: env.WEB_URL,
+      // Refleja el origin si es de confianza (web, nativo Capacitor o
+      // configurado). El móvil añade Authorization/X-Device-Token/X-Client.
+      origin: (request) => isAllowedOrigin(request.headers.get('origin')),
       credentials: true,
-      allowedHeaders: ['Content-Type', 'X-Tenant'],
+      allowedHeaders: ['Content-Type', 'X-Tenant', 'Authorization', 'X-Device-Token', 'X-Client'],
     })
   )
   .use(globalRateLimit)

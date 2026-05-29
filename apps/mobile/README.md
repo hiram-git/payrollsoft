@@ -78,8 +78,11 @@ Luego abre el proyecto nativo con `bunx cap open android` / `bunx cap
 open ios`. Las carpetas `android/` e `ios/` están en `.gitignore`: se
 regeneran con `cap add`.
 
-> ⚠️ Para que la app nativa pueda llamar a la API hay cambios pendientes
-> de **CORS** y **auth Bearer** en el backend. Ver `NOTES.md`.
+> Los cambios de backend (Bearer auth, token en el body del login, CORS y
+> CSRF para orígenes Capacitor) ya están implementados en `apps/api`. Si
+> pruebas el dev server del móvil en el navegador, añade su origin a
+> `MOBILE_ORIGINS` en el `.env` de la API (p.ej. `http://localhost:5173`).
+> Detalle en `NOTES.md`.
 
 ## Los tres modos
 
@@ -88,9 +91,9 @@ Un solo binario, tres flujos de autenticación que comparten el núcleo
 
 | Modo           | Para qué                                                  | Auth                                               | Estado                          |
 | -------------- | --------------------------------------------------------- | -------------------------------------------------- | ------------------------------- |
-| **Empleado**   | El empleado marca solo lo suyo desde su teléfono.         | `POST /portal/auth/login` (cédula + contraseña) → JWT Bearer | Funcional salvo gap de Bearer en backend (ver `NOTES.md`) |
+| **Empleado**   | El empleado marca solo lo suyo desde su teléfono.         | `POST /portal/auth/login` (cédula + contraseña) → JWT Bearer | **Funcional end-to-end** (login, marcación e historial propio) |
 | **Kiosko**     | Dispositivo compartido fijo que marca a muchos empleados. | Token de dispositivo (`X-Device-Token`)            | **Funcional end-to-end** (identificación facial/NFC pendiente) |
-| **Supervisor** | Marcación manual supervisada y aprobaciones.              | `POST /auth/login` (usuario tenant) → JWT Bearer   | Stub (esbozado, bloqueado por Bearer) |
+| **Supervisor** | Marcación manual supervisada y aprobaciones.              | `POST /auth/login` (usuario tenant) → JWT Bearer   | Auth desbloqueada; flujo de marcación supervisada pendiente |
 
 ## Estructura
 

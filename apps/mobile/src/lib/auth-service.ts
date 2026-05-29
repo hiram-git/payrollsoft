@@ -16,14 +16,15 @@ import { missingRequiredFields } from './forms'
 import { type StoredSession, sessionStore } from './storage'
 
 /**
- * Forma esperada de la respuesta de /portal/auth/login.
- * `token` es OPCIONAL a propósito: hoy el backend no lo manda (lo setea
- * como cookie httpOnly). Cuando se aplique el cambio de NOTES.md, este
- * campo empezará a llegar y el flujo quedará 100% funcional sin tocar
- * el cliente.
+ * Forma de la respuesta de /portal/auth/login.
+ * `token` y `tenantSlug` llegan cuando el request manda `X-Client: mobile`
+ * (lo hace el api-client). `tenantSlug` es el tenant REAL resuelto por el
+ * backend (que escanea todos los tenants por cédula), y debe fijarse como
+ * X-Tenant para que los requests siguientes pasen `guardTenantMatchesToken`.
+ * Siguen siendo opcionales por robustez ante backends antiguos.
  */
 type PortalLoginData =
-  | { employeeId: string; code: string; name: string; token?: string }
+  | { employeeId: string; code: string; name: string; token?: string; tenantSlug?: string }
   | undefined
 
 export type EmployeeLoginResult = {
@@ -61,10 +62,14 @@ export async function loginEmployee(
   const token = data?.token
   if (token) {
     await sessionStore.setToken(token)
+    // Fija el tenant real resuelto por el backend (puede diferir del que
+    // tecleó el usuario) para que X-Tenant coincida con el del JWT.
+    if (data?.tenantSlug) await sessionStore.setTenant(data.tenantSlug)
     return { session, bearerMissing: false }
   }
 
-  // Login validado pero sin token utilizable por el cliente nativo.
+  // Login validado pero sin token utilizable por el cliente nativo
+  // (backend sin el cambio de Bearer). Se entra en modo limitado.
   return { session, bearerMissing: true }
 }
 
