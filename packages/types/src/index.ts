@@ -128,6 +128,10 @@ export const PERMISSION_CODES = [
   'vacations:approve',
   'vacations:reject',
   'vacations:cancel',
+  // Time balances
+  'time_balance:read',
+  'time_balance:write',
+  'time_balance:override',
   // Loans / advances / creditors
   'loans:create',
   'loans:read',
@@ -286,6 +290,9 @@ const HR_PERMISSIONS: readonly PermissionCode[] = [
   'vacations:approve',
   'vacations:reject',
   'vacations:cancel',
+  'time_balance:read',
+  'time_balance:write',
+  'time_balance:override',
   'loans:create',
   'loans:read',
   'loans:update',

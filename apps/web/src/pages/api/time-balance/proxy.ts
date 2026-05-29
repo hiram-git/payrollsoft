@@ -3,7 +3,7 @@ import { getIdentity } from '../../../lib/auth'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 
-const ALLOWED_PREFIXES = ['balance', 'movements']
+const ALLOWED_PREFIXES = ['balances', 'balance', 'movements']
 
 export const GET: APIRoute = async ({ request, cookies }) => {
   const identity = getIdentity(cookies)
@@ -21,7 +21,7 @@ export const GET: APIRoute = async ({ request, cookies }) => {
     return new Response('Path not allowed', { status: 403 })
   }
 
-  const apiUrl = `${API_URL}/compensatory-time/${rawPath}`
+  const apiUrl = `${API_URL}/time-balance/${rawPath}`
   const res = await fetch(apiUrl, {
     headers: {
       Cookie: `auth=${identity.raw}`,
