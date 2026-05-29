@@ -109,6 +109,73 @@ bun run cap:sync` para que el nativo tome la versión nueva.
 > `MOBILE_ORIGINS` en el `.env` de la API (p.ej. `http://localhost:5173`).
 > Detalle en `NOTES.md`.
 
+## Instalar el compilado en una tablet (Android)
+
+> 🔑 **Antes de compilar: apunta `VITE_API_URL` a un host que la tablet
+> pueda alcanzar.** Vite **embebe** las variables `VITE_*` en el bundle en
+> tiempo de build, así que `localhost` NO sirve en un dispositivo físico.
+> Usa la IP LAN de la máquina que corre la API (o una URL pública):
+>
+> ```bash
+> # apps/mobile/.env
+> VITE_API_URL=http://192.168.1.50:3000   # IP de tu PC en la red local
+> VITE_TENANT=demo
+> ```
+>
+> Y recuerda que esa IP/origen debe estar permitida en el backend
+> (`MOBILE_ORIGINS` en el `.env` de la API). La tablet y la PC deben estar
+> en la misma red.
+
+Genera el bundle web y sincronízalo al proyecto nativo (desde
+`apps/mobile`):
+
+```bash
+bun run build
+bun run cap:sync
+```
+
+### Método A — Android Studio (recomendado para empezar)
+
+1. En la tablet: **Ajustes → Opciones de desarrollador → Depuración USB**
+   (activa Opciones de desarrollador tocando 7 veces "Número de
+   compilación" en *Acerca del dispositivo*).
+2. Conecta la tablet por USB y acepta el diálogo "¿Permitir depuración?".
+3. Abre el proyecto: `bunx cap open android`.
+4. En Android Studio elige tu tablet en el selector de dispositivos y pulsa
+   **Run ▶**. Compila, instala y lanza la app en la tablet.
+
+### Método B — APK por línea de comandos (con `adb`)
+
+Compila un APK de depuración y instálalo:
+
+```bash
+cd android
+./gradlew assembleDebug
+# APK generado en:
+#   android/app/build/outputs/apk/debug/app-debug.apk
+
+# Con la tablet conectada por USB (depuración USB activada):
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+`adb` viene con el Android SDK (platform-tools). `adb devices` debe listar
+tu tablet antes de instalar.
+
+### Método C — Copiar el APK manualmente (sin cable)
+
+1. Toma el `app-debug.apk` del paso anterior.
+2. Pásalo a la tablet (USB como almacenamiento, correo, Drive, etc.).
+3. En la tablet, ábrelo con el explorador de archivos y acepta
+   **"Instalar apps de fuentes desconocidas"** para esa app.
+
+> El APK de depuración (`assembleDebug`) sirve para pruebas internas. Para
+> distribución real necesitas un **APK/AAB de release firmado**
+> (`./gradlew assembleRelease` o `bundleRelease` con un keystore propio);
+> ese flujo de firma queda fuera del alcance de esta primera iteración.
+
+Tras cualquier cambio en el código web, repite `bun run build && bun run
+cap:sync` y vuelve a instalar (Run en Android Studio o `adb install -r`).
+
 ## Los tres modos
 
 Un solo binario, tres flujos de autenticación que comparten el núcleo
