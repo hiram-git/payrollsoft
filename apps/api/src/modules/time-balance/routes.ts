@@ -6,6 +6,7 @@ import {
   creditBalance,
   debitBalance,
   getBalance,
+  initializeYearForAllEmployees,
   listBalancesByEmployee,
   listMovements,
 } from './service'
@@ -119,5 +120,27 @@ export const timeBalanceRoutes = new Elysia({ prefix: '/time-balance' })
         description: t.Optional(t.String()),
         allowNegative: t.Optional(t.Boolean()),
       }),
+    }
+  )
+
+  .post(
+    '/backfill',
+    async ({ db, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const year = body.year ?? new Date().getFullYear()
+      const result = await initializeYearForAllEmployees(
+        db,
+        year,
+        user?.userId,
+        'system_initialization'
+      )
+      return { success: true, data: result }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('time_balance:write')],
+      body: t.Object({ year: t.Optional(t.Number()) }),
     }
   )

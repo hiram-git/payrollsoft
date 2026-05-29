@@ -3,6 +3,41 @@ import { and, desc, eq } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
+import { syncConditionalBalance } from '../time-balance/service'
+
+// biome-ignore lint/suspicious/noExplicitAny: Drizzle db instance
+type AnyDb = any
+
+/**
+ * After any dependent mutation, re-evaluate whether the employee has at least
+ * one active dependent with disability and open/close the family_disability
+ * balance for the current year accordingly. Best-effort, non-blocking.
+ */
+async function syncFamilyDisability(db: AnyDb, employeeId: string, performedBy?: string) {
+  try {
+    const disabled = await db
+      .select({ id: dependents.id })
+      .from(dependents)
+      .where(
+        and(
+          eq(dependents.employeeId, employeeId),
+          eq(dependents.isActive, true),
+          eq(dependents.hasDisability, true)
+        )
+      )
+      .limit(1)
+    await syncConditionalBalance(
+      db,
+      employeeId,
+      'family_disability',
+      disabled.length > 0,
+      undefined,
+      performedBy
+    )
+  } catch (_) {
+    /* non-blocking */
+  }
+}
 
 export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
   .use(authPlugin)
@@ -30,7 +65,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
 
   .post(
     '/:employeeId',
-    async ({ db, params, body, set }) => {
+    async ({ db, params, body, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
@@ -49,6 +84,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
           disabilityDescription: body.disabilityDescription?.trim() || null,
         })
         .returning()
+      await syncFamilyDisability(db, params.employeeId, user?.userId)
       set.status = 201
       return { success: true, data: row }
     },
@@ -70,7 +106,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
 
   .put(
     '/:employeeId/:id',
-    async ({ db, params, body, set }) => {
+    async ({ db, params, body, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
@@ -94,6 +130,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
         set.status = 404
         return { success: false, error: 'Dependiente no encontrado.' }
       }
+      await syncFamilyDisability(db, params.employeeId, user?.userId)
       return { success: true, data: row }
     },
     {
@@ -114,7 +151,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
 
   .delete(
     '/:employeeId/:id',
-    async ({ db, params, set }) => {
+    async ({ db, params, user, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
@@ -123,6 +160,7 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
         .update(dependents)
         .set({ isActive: false, updatedAt: new Date() })
         .where(and(eq(dependents.id, params.id), eq(dependents.employeeId, params.employeeId)))
+      await syncFamilyDisability(db, params.employeeId, user?.userId)
       return { success: true }
     },
     {

@@ -5,7 +5,7 @@ import {
   summarizeMovements,
 } from '@payroll/core'
 import { timeBalanceMovements, timeBalances } from '@payroll/db'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, lt, sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: Drizzle db instance
 type AnyDb = any
@@ -323,4 +323,96 @@ export async function initializeEmployeeBalances(
   }
 
   return result
+}
+
+/**
+ * Open or close a conditional balance (disability / family_disability) for
+ * the year to match a current condition.
+ *
+ *   condition true  & no balance         → open it (144h)
+ *   condition false & balance unused     → remove it (no debits recorded)
+ *   condition false & balance has debits → keep it (cannot revoke used time)
+ *
+ * Idempotent. Returns what happened.
+ */
+export async function syncConditionalBalance(
+  db: AnyDb,
+  employeeId: string,
+  type: Extract<BalanceType, 'disability' | 'family_disability'>,
+  hasCondition: boolean,
+  year: number = currentYear(),
+  performedBy?: string
+): Promise<'opened' | 'closed' | 'kept' | 'noop'> {
+  const existing = await findBalanceRow(db, employeeId, type, year)
+
+  if (hasCondition && !existing) {
+    await initializeBalance(db, employeeId, type, year, { performedBy })
+    return 'opened'
+  }
+
+  if (!hasCondition && existing) {
+    const debits = await db
+      .select({ id: timeBalanceMovements.id })
+      .from(timeBalanceMovements)
+      .where(
+        and(
+          eq(timeBalanceMovements.balanceId, existing.id),
+          lt(timeBalanceMovements.amountMinutes, 0)
+        )
+      )
+      .limit(1)
+    if (debits.length > 0) return 'kept'
+
+    await db.delete(timeBalanceMovements).where(eq(timeBalanceMovements.balanceId, existing.id))
+    await db.delete(timeBalances).where(eq(timeBalances.id, existing.id))
+    return 'closed'
+  }
+
+  return 'noop'
+}
+
+/**
+ * Open the year's balances for every active employee. Idempotent per year —
+ * already-initialized employees are skipped. Used by the backfill endpoint
+ * and the annual renewal worker (phase 2.C).
+ *
+ *   compensatory      : every active employee
+ *   family_disability : employees with ≥1 active disabled dependent
+ *   disability        : BLOCKED until employee own-disability field exists
+ */
+export async function initializeYearForAllEmployees(
+  db: AnyDb,
+  year: number = currentYear(),
+  performedBy?: string,
+  sourceType = 'annual_renewal'
+): Promise<{ total: number; compensatoryCreated: number; familyDisabilityCreated: number }> {
+  const empRows: { id: string }[] = await db.execute(
+    sql`SELECT id FROM employees WHERE is_active = true`
+  )
+
+  let compensatoryCreated = 0
+  let familyDisabilityCreated = 0
+
+  for (const emp of empRows) {
+    const c = await initializeBalance(db, emp.id, 'compensatory', year, {
+      performedBy,
+      sourceType,
+    })
+    if (c.created) compensatoryCreated++
+
+    const disabledDep: { id: string }[] = await db.execute(
+      sql`SELECT id FROM dependents
+          WHERE employee_id = ${emp.id} AND is_active = true AND has_disability = true
+          LIMIT 1`
+    )
+    if (disabledDep.length > 0) {
+      const f = await initializeBalance(db, emp.id, 'family_disability', year, {
+        performedBy,
+        sourceType,
+      })
+      if (f.created) familyDisabilityCreated++
+    }
+  }
+
+  return { total: empRows.length, compensatoryCreated, familyDisabilityCreated }
 }
