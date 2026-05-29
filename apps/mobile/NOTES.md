@@ -1,164 +1,110 @@
-# NOTES — cambios pendientes en el backend (NO implementados)
+# NOTES — integración móvil ↔ backend
 
-Estos son los cambios que detecté al integrar `apps/mobile` con la API
-Elysia. **No los implementé** (la tarea pide no tocar `apps/api`); los
-dejo documentados con el cambio mínimo necesario y el archivo afectado.
-El móvil ya está cableado para funcionar el día que se apliquen.
-
----
-
-## 1. Bearer auth en las rutas (BLOQUEANTE para modo Empleado/Supervisor)
-
-**Hoy:** `authPlugin` (`apps/api/src/middleware/auth.ts`) solo lee el
-token de la **cookie** `auth`:
-
-```ts
-.derive({ as: 'global' }, async ({ jwt, cookie }) => {
-  const token = cookie.auth?.value
-  ...
-})
-```
-
-El docstring de `apps/api/src/modules/attendance/punch-routes.ts` afirma
-que soporta `Authorization` header, pero el middleware **no lo lee**. Un
-cliente nativo no usa cookies httpOnly, así que `Authorization: Bearer`
-nunca se honra.
-
-**Cambio mínimo:** en `authPlugin`, aceptar el header como fallback de la
-cookie:
-
-```ts
-.derive({ as: 'global' }, async ({ jwt, cookie, headers }) => {
-  const bearer = headers.authorization?.replace(/^Bearer\s+/i, '')
-  const token = cookie.auth?.value ?? bearer
-  ...
-})
-```
-
-El móvil ya envía `Authorization: Bearer <jwt>` (ver
-`src/lib/api-client.ts`).
+Estado de los cambios de backend que el móvil necesitaba. Los puntos 1–4
+y el de CSRF ya están **implementados** en `apps/api`. El punto de
+almacenamiento seguro es del lado móvil y sigue pendiente.
 
 ---
 
-## 2. `POST /portal/auth/login` debe devolver el JWT en el body (BLOQUEANTE)
+## 1. Bearer auth en las rutas — ✅ IMPLEMENTADO
 
-**Hoy:** `apps/api/src/modules/portal/auth-routes.ts` firma el JWT y lo
-setea **solo como cookie httpOnly** `portal_auth`; el body devuelve
-`{ success, data: { employeeId, code, name } }` **sin el token**. Un
-cliente nativo no puede leer la cookie httpOnly, así que se queda sin
-credencial utilizable.
-
-**Cambio mínimo:** incluir el token en la respuesta (idealmente solo
-cuando el request no viene del navegador, p.ej. detectando ausencia de
-`Origin` web o un header `X-Client: mobile`):
+`authPlugin` (`apps/api/src/middleware/auth.ts`) ahora lee el token de la
+**cookie `auth`** o, como fallback, del header **`Authorization: Bearer`**:
 
 ```ts
-return {
-  success: true,
-  data: { employeeId: emp.id, code: emp.code, name: `${emp.firstName} ${emp.lastName}`, token },
-}
+const bearer = headers.authorization?.replace(/^Bearer\s+/i, '')
+const token = cookie.auth?.value ?? bearer
 ```
 
-El móvil ya está preparado: `loginEmployee` lee `data.token` si está
-presente y lo guarda como Bearer; si no llega, entra en "modo limitado" y
-avisa al usuario (ver `src/lib/auth-service.ts`).
-
-> También aplicaría a `POST /auth/login` (usuario tenant) para habilitar
-> el **modo Supervisor**.
+Esto habilita a los clientes nativos (sin cookies httpOnly) en cualquier
+ruta que use `authPlugin`. El móvil envía `Authorization: Bearer <jwt>`
+desde `src/lib/api-client.ts`.
 
 ---
 
-## 3. Desajuste de forma del JWT de empleado vs. `POST /attendance/punches`
+## 2. Login devuelve el JWT en el body — ✅ IMPLEMENTADO
 
-El JWT del portal lleva `type: 'employee'` y `employeeId` (no `userId`).
-Pero el **Modo 2** de `apps/api/src/modules/attendance/punch-routes.ts`
-asume un JWT de usuario tenant:
+`POST /portal/auth/login` y `POST /auth/login` ahora incluyen el `token`
+en `data` **solo cuando el request trae el header `X-Client: mobile`**.
+El navegador (BFF web) nunca envía ese header, así que el JWT **nunca se
+expone a JS en el navegador** (sigue usando la cookie httpOnly).
 
-```ts
-if (body.employeeId !== user.userId) { ... 403 ... }
-```
+`/portal/auth/login` además devuelve `data.tenantSlug` (el tenant real
+resuelto por el backend al buscar la cédula entre todos los tenants), para
+que el móvil lo fije como `X-Tenant` y los requests siguientes pasen
+`guardTenantMatchesToken`. El móvil lo consume en `src/lib/auth-service.ts`.
 
-y `guardTenantMatchesToken` espera un `user` con `tenantSlug`. Un token de
-empleado del portal no encaja tal cual.
-
-**Cambio mínimo:** reconocer también `type === 'employee'` en ese
-handler, comparando contra `user.employeeId` en lugar de `user.userId`, y
-ajustar el guard de tenant para empleados (el JWT del portal sí trae
-`tenantSlug`). Sin esto, aunque el Bearer se acepte (punto 1), el empleado
-no podría crear su propio punch.
+> El móvil marca todos sus requests con `X-Client: mobile` (ver
+> `src/lib/api-client.ts`).
 
 ---
 
-## 4. CORS para orígenes Capacitor
+## 3. Forma del JWT de empleado en `POST /attendance/punches` — ✅ IMPLEMENTADO
 
-**Hoy:** `apps/api/src/index.ts`:
-
-```ts
-cors({
-  origin: env.WEB_URL,
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'X-Tenant'],
-})
-```
-
-El app nativo de Capacitor hace requests cross-origin desde
-`capacitor://localhost` (iOS) y `http://localhost` (Android), y necesita
-enviar `Authorization` y `X-Device-Token`.
-
-**Cambio mínimo:** ampliar orígenes y headers permitidos:
+`AuthUser` ahora admite `type: 'employee'` con `employeeId`/`employeeCode`.
+El **Modo 2** de `punch-routes.ts` resuelve el id del portador según el
+tipo de token y solo permite marcar para sí mismo:
 
 ```ts
-cors({
-  origin: [env.WEB_URL, 'capacitor://localhost', 'http://localhost', 'ionic://localhost'],
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'X-Tenant', 'Authorization', 'X-Device-Token'],
-})
+const tokenEmployeeId = user.type === 'employee' ? user.employeeId : user.userId
+if (!tokenEmployeeId || body.employeeId !== tokenEmployeeId) { /* 403 */ }
 ```
+
+Además, `GET /attendance/punches` (`unified-routes.ts`) ahora permite a un
+token de empleado leer **solo sus propias** marcaciones (se ignora el
+`employeeId` del query y se fuerza el del token); los usuarios tenant
+siguen requiriendo `attendance:read`.
 
 ---
 
-## 5. Endpoint de punch individual — ✅ ya existe
+## 4. CORS + CSRF para orígenes Capacitor — ✅ IMPLEMENTADO
 
-`POST /attendance/punches` ya está implementado
-(`apps/api/src/modules/attendance/punch-routes.ts`) y soporta los dos
-modos que el móvil necesita:
+Se centralizó la lista de orígenes de confianza en
+`apps/api/src/config/origins.ts` (`isAllowedOrigin`), consumida por:
 
-- **Empleado**: JWT (pendiente puntos 1–3).
-- **Kiosko**: header `X-Device-Token` con el `apiToken` del dispositivo
-  → **funciona hoy mismo end-to-end** (no requiere cambios). El backend
-  deriva el `source` del `connectionMethod` del device.
+- **CORS** (`index.ts`): refleja el origin si es de confianza y permite
+  los headers `Authorization`, `X-Device-Token`, `X-Client` además de
+  `Content-Type` y `X-Tenant`.
+- **CSRF** (`middleware/csrf.ts`): antes solo aceptaba `WEB_URL`, lo que
+  habría bloqueado los POST del móvil (el WebView de Capacitor sí manda
+  `Origin`). Ahora acepta cualquier origin de confianza.
 
-No se necesita endpoint nuevo.
+Orígenes permitidos: `WEB_URL`, esquemas nativos (`capacitor://localhost`,
+`ionic://localhost`, `http(s)://localhost`), cualquier `localhost:<puerto>`
+en desarrollo, y los que se añadan por la variable **`MOBILE_ORIGINS`**
+(coma-separados; útil para el dev server del móvil, p.ej.
+`http://localhost:5173`).
 
 ---
 
-## 6. Almacenamiento seguro del token (mejora, no bloqueante)
+## 5. Endpoint de punch individual — ✅ ya existía
+
+`POST /attendance/punches` soporta los dos modos del móvil: empleado
+(Bearer, puntos 1–3) y kiosko (`X-Device-Token`). No se necesitó endpoint
+nuevo.
+
+---
+
+## 6. Almacenamiento seguro del token — ⏳ PENDIENTE (lado móvil)
 
 El móvil guarda el token con **Capacitor Preferences**, que **no está
-cifrado** (UserDefaults / SharedPreferences en claro). Para producción
-debe migrarse a Keychain (iOS) / Keystore (Android) vía un plugin seguro
-(p.ej. `capacitor-secure-storage-plugin`). Está centralizado en
-`src/lib/storage.ts` para que el cambio sea de un solo archivo.
+cifrado**. Para producción debe migrarse a Keychain (iOS) / Keystore
+(Android) vía un plugin seguro. Centralizado en `src/lib/storage.ts` para
+que el cambio sea de un solo archivo. No depende del backend.
 
 ---
 
-## 7. Cambio que SÍ se aplicó en `packages/db` (mínimo y aditivo)
+## 7. Subpath export aditivo en `packages/db` — ✅ IMPLEMENTADO
 
-Para importar los tipos de fila derivados de Drizzle (`AttendancePunch`,
-`AttendanceDevice`, ...) **sin duplicarlos**, el móvil necesita acceder a
-los módulos de schema concretos. El barrel `@payroll/db` reexporta también
-lógica de provisioning/seed que arrastraría todo el grafo del paquete (con
-errores de tipos preexistentes) al typecheck del móvil.
+`packages/db/package.json` expone `"./schema/*"` para importar los tipos
+de fila derivados de Drizzle sin arrastrar el barrel. Cambio aditivo; no
+afecta a `apps/api` ni `apps/web`.
 
-Se añadió un **subpath export aditivo** en `packages/db/package.json`:
+---
 
-```jsonc
-"exports": {
-  ".": "./src/index.ts",
-  "./schema/*": "./src/schema/*.ts"   // ← añadido
-}
-```
+## Modo Supervisor — auth desbloqueada, flujo pendiente
 
-No cambia el export `.` existente, así que `apps/api` y `apps/web` siguen
-funcionando igual. El móvil importa, p.ej.,
-`@payroll/db/schema/attendance-punches`.
+`POST /auth/login` ya devuelve el token para el móvil (punto 2), así que
+la **autenticación** de supervisor está desbloqueada. El **flujo de
+marcación supervisada** (manual, vía `POST /facial/marcaciones/manual`)
+sigue como `TODO` en la app — es una feature aparte, no solo auth.

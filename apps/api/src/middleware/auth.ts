@@ -10,7 +10,14 @@ export type AuthUser = {
   tenantId: string
   tenantSlug?: string
   role: UserRole
-  type: 'user' | 'super_admin'
+  type: 'user' | 'super_admin' | 'employee'
+  /**
+   * Employee identity, present only when `type === 'employee'` (JWT minted
+   * by the portal login). These tokens carry `employeeId`/`employeeCode`
+   * instead of `userId`, and no `permissions` array.
+   */
+  employeeId?: string
+  employeeCode?: string
   name?: string
   email?: string
   /** Effective permission codes pre-computed at login time. */
@@ -45,12 +52,17 @@ export const jwtPlugin = new Elysia({ name: 'jwt-plugin' }).use(
  * Use this plugin in any Elysia app that needs to know who the current user is.
  * Injects `user: AuthUser | null` into every handler's context.
  *
- * `null` means the request is anonymous (no cookie or invalid token).
+ * The token is read from the `auth` cookie (browser sessions) OR the
+ * `Authorization: Bearer` header (native mobile / API clients, which can't
+ * use httpOnly cookies). The cookie takes precedence when both are present.
+ *
+ * `null` means the request is anonymous (no token or invalid token).
  */
 export const authPlugin = new Elysia({ name: 'auth-plugin' })
   .use(jwtPlugin)
-  .derive({ as: 'global' }, async ({ jwt, cookie }) => {
-    const token = cookie.auth?.value
+  .derive({ as: 'global' }, async ({ jwt, cookie, headers }) => {
+    const bearer = headers.authorization?.replace(/^Bearer\s+/i, '')
+    const token = cookie.auth?.value ?? bearer
     if (!token) return { user: null as AuthUser | null }
 
     const payload = await jwt.verify(token)

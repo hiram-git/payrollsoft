@@ -71,11 +71,15 @@ export const punchRoutes = new Elysia()
         set.status = 401
         return {
           success: false,
-          error: 'Unauthorized: provide auth cookie or X-Device-Token header',
+          error: 'Unauthorized: provide auth cookie, Authorization Bearer or X-Device-Token header',
         }
       }
 
-      if (body.employeeId !== user.userId) {
+      // El token del portal trae `employeeId` (type='employee'); un token
+      // de usuario tenant trae `userId`. En ambos casos el portador solo
+      // puede marcar para sí mismo.
+      const tokenEmployeeId = user.type === 'employee' ? user.employeeId : user.userId
+      if (!tokenEmployeeId || body.employeeId !== tokenEmployeeId) {
         set.status = 403
         return {
           success: false,

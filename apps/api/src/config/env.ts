@@ -7,6 +7,12 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
   JWT_SECRET: z.string().min(32),
   WEB_URL: z.string().url().default('http://localhost:4321'),
+  // Orígenes adicionales permitidos por CORS y CSRF, separados por coma.
+  // El app móvil (Capacitor) hace requests desde orígenes como
+  // `capacitor://localhost` / `https://localhost`; esos esquemas nativos
+  // ya se permiten por defecto. Usa esta variable para añadir el origin
+  // del dev server del móvil (p.ej. `http://localhost:5173`) u otros.
+  MOBILE_ORIGINS: z.string().optional(),
   // Absolute path to packages/db/drizzle/tenant. Required in bundled
   // deploys (Bun build rewrites import.meta.url so the in-package
   // default resolves to the wrong directory). In dev the source-tree

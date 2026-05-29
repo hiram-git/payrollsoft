@@ -29,7 +29,7 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
   // ── POST /auth/login ────────────────────────────────────────────────────────
   .post(
     '/login',
-    async ({ jwt, body, cookie: { auth }, db, tenantSlug, set }) => {
+    async ({ jwt, body, cookie: { auth }, db, tenantSlug, set, headers }) => {
       if (!tenantSlug) {
         set.status = 400
         return { success: false, error: 'Tenant not identified. Use X-Tenant header.' }
@@ -48,12 +48,18 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         ...cookieOptions(env.NODE_ENV === 'production'),
       })
 
+      // Clientes nativos (móvil) reciben el token en el body para usarlo
+      // como Bearer; el navegador usa la cookie httpOnly y nunca ve el JWT.
+      const wantsToken = headers['x-client'] === 'mobile'
+
       return {
         success: true,
         data: {
           userId: authUser.userId,
           role: authUser.role,
           tenantId: authUser.tenantId,
+          tenantSlug: authUser.tenantSlug,
+          ...(wantsToken ? { token } : {}),
         },
       }
     },
