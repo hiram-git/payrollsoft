@@ -5,6 +5,7 @@ import { csrfPlugin } from './middleware/csrf'
 import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
+import { approvalDelegationRoutes } from './modules/approvals/delegation-routes'
 import { consolidationRoutes } from './modules/attendance/consolidation-routes'
 import { attendanceDevicesRoutes } from './modules/attendance/devices-routes'
 import { attendanceImportRoutes } from './modules/attendance/import-routes'
@@ -24,7 +25,6 @@ import { departmentsRoutes } from './modules/catalogs/departments/routes'
 import { jobFunctionsRoutes } from './modules/catalogs/job-functions/routes'
 import { jobTitlesRoutes } from './modules/catalogs/job-titles/routes'
 import { companyRoutes } from './modules/company/routes'
-import { compensatoryTimeRoutes } from './modules/compensatory-time/routes'
 import { creditorRoutes } from './modules/creditors/routes'
 import { customFieldsRoutes } from './modules/custom-fields/routes'
 import { dashboardRoutes } from './modules/dashboard/routes'
@@ -41,6 +41,9 @@ import { positionsRoutes } from './modules/positions/routes'
 import { reportsRoutes } from './modules/reports/routes'
 import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
 import { superadminRoutes } from './modules/superadmin/routes'
+import { timeBalanceRenewalRoutes } from './modules/time-balance/renewal-routes'
+import { bootstrapRenewalWorkers } from './modules/time-balance/renewal-worker'
+import { timeBalanceRoutes } from './modules/time-balance/routes'
 import { treasuryRoutes } from './modules/treasury/routes'
 import { tenantUserRoutes } from './modules/users/routes'
 import { vacationsRoutes } from './modules/vacations/routes'
@@ -96,7 +99,9 @@ const app = new Elysia()
   .use(customFieldsRoutes)
   .use(employeeFilesRoutes)
   .use(vacationsRoutes)
-  .use(compensatoryTimeRoutes)
+  .use(timeBalanceRoutes)
+  .use(timeBalanceRenewalRoutes)
+  .use(approvalDelegationRoutes)
   .use(payrollRoutes)
   .use(reportsRoutes)
   .use(facialRoutes)
@@ -113,6 +118,13 @@ console.log(`API running at http://${env.HOST}:${app.server?.port}`)
 
 bootstrapWorkers(env.DATABASE_URL).catch((err) =>
   console.error('[sync-worker] bootstrap failed:', err instanceof Error ? err.message : err)
+)
+
+bootstrapRenewalWorkers(env.DATABASE_URL).catch((err) =>
+  console.error(
+    '[time-balance-renewal] bootstrap failed:',
+    err instanceof Error ? err.message : err
+  )
 )
 
 export type App = typeof app

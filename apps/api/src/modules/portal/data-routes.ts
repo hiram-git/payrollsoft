@@ -9,7 +9,6 @@ import { and, asc, desc, eq, gte, sql } from 'drizzle-orm'
 import { Elysia, t } from 'elysia'
 import { jwtPlugin } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
-import { applyCompensatoryTimeOnApproval } from '../compensatory-time/approval-hook'
 import { getFieldsFor } from '../employee-files/dynamic-fields'
 import {
   type EmployeeFileInput,
@@ -18,6 +17,7 @@ import {
   createWithCorrelative,
   rejectEmployeeFile,
 } from '../employee-files/service'
+import { applyTimeBalanceOnApproval } from '../time-balance/approval-hook'
 import {
   approveRequest as approveVacation,
   getBalance,
@@ -512,7 +512,7 @@ export const portalDataRoutes = new Elysia({ prefix: '/portal/data' })
           typeName: fileInfo.type_name,
           subtypeName: fileInfo.subtype_name,
         })
-        applyCompensatoryTimeOnApproval(db, params.id, portalEmployee.employeeId)
+        applyTimeBalanceOnApproval(db, params.id, portalEmployee.employeeId)
       }
       return result
     },

@@ -1240,13 +1240,21 @@ const freqLabel: Record<string, string> = {
         </div>
 
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4 mt-4">
-          <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
-          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas por pool.</p>
+          <div class="flex items-end justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Saldos de tiempo</h3>
+              <p class="text-xs text-gray-500">Tiempo compensatorio, incapacidad y familiar con discapacidad. Se reinician cada 1 de enero.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500">Año</label>
+              <select id="ct-year" class="px-2 py-1.5 text-sm border border-gray-300 rounded-md"></select>
+            </div>
+          </div>
           <div id="comp-time-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="text-center py-6 text-sm text-gray-400">Cargando...</div>
+            <div class="text-center py-6 text-sm text-gray-400 col-span-3">Cargando...</div>
           </div>
           <div id="comp-time-movements">
-            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movimientos recientes</h4>
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movimientos del año</h4>
             <div id="comp-time-mov-body" class="text-center py-4 text-sm text-gray-400">Cargando...</div>
           </div>
         </div>
@@ -1967,64 +1975,85 @@ function syncToggleUI(id, val) {
   if (!empId) return;
   var cardsEl = document.getElementById('comp-time-cards');
   var movEl = document.getElementById('comp-time-mov-body');
-  var POOL_LABELS = { compensatory: 'Tiempo Compensatorio', disability: 'Incapacidad', family_disability: 'Familiar con Discapacidad' };
+  var yearSel = document.getElementById('ct-year');
+  var TYPE_LABELS = { compensatory: 'Tiempo Compensatorio', disability: 'Incapacidad', family_disability: 'Familiar con Discapacidad' };
+  var MOV_LABELS = { initialization: 'Inicialización', credit: 'Crédito', debit: 'Débito', adjustment: 'Ajuste' };
+  function h(min) { return (Number(min) / 60).toFixed(1); }
 
-  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('balance/' + empId))
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-      var balances = (res && res.data) || [];
-      if (balances.length === 0) {
-        cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Sin saldos de tiempo compensatorio para este año.</div>';
-        return;
-      }
-      var html = '';
-      for (var i = 0; i < balances.length; i++) {
-        var b = balances[i];
-        var label = POOL_LABELS[b.pool] || b.pool;
-        html += '<div class="border border-gray-200 rounded-lg p-4">' +
-          '<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">' + label + '</h4>' +
-          '<div class="text-2xl font-light text-gray-900 mb-2">' + b.available.toFixed(1) + ' <span class="text-sm text-gray-500">hrs</span></div>' +
-          '<div class="flex gap-4 text-xs text-gray-500">' +
-            '<span>Ganadas: <b class="text-gray-700">' + b.earned.toFixed(1) + '</b></span>' +
-            '<span>Usadas: <b class="text-gray-700">' + b.used.toFixed(1) + '</b></span>' +
-            '<span>Reservadas: <b class="text-gray-700">' + b.reserved.toFixed(1) + '</b></span>' +
-          '</div></div>';
-      }
-      cardsEl.innerHTML = html;
-    })
-    .catch(function() {
-      cardsEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar saldos.</div>';
-    });
+  // Year selector: current year + 4 previous (historical archive).
+  var nowYear = new Date().getFullYear();
+  for (var y = nowYear; y >= nowYear - 4; y--) {
+    var opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = String(y) + (y === nowYear ? ' (actual)' : '');
+    yearSel.appendChild(opt);
+  }
 
-  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('movements/' + empId + '?limit=10'))
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-      var movs = (res && res.data) || [];
-      if (movs.length === 0) {
-        movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Sin movimientos registrados.</div>';
-        return;
-      }
-      var MOV_LABELS = { initialization: 'Inicialización', overtime: 'Horas extra', absence: 'Ausencia', lateness: 'Tardanza', permission: 'Permiso', birthday: 'Cumpleaños', adjustment: 'Ajuste', ausencias: 'Ausencia', tardanzas: 'Tardanza', permisos: 'Permiso', horas_extra: 'Horas extra' };
-      var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">' +
-        '<th class="text-left py-2 px-2">Fecha</th><th class="text-left py-2 px-2">Pool</th><th class="text-left py-2 px-2">Tipo</th><th class="text-right py-2 px-2">Horas</th><th class="text-left py-2 px-2">Notas</th></tr></thead><tbody>';
-      for (var j = 0; j < movs.length; j++) {
-        var m = movs[j];
-        var hrs = Number(m.hours);
-        var color = hrs >= 0 ? 'text-green-600' : 'text-red-600';
-        var poolLabel = (POOL_LABELS[m.pool] || m.pool).substring(0, 15);
-        var typeLabel = MOV_LABELS[m.movementType] || m.movementType;
-        html += '<tr class="border-b border-gray-100">' +
-          '<td class="py-2 px-2 text-gray-600">' + (m.createdAt ? m.createdAt.substring(0, 10) : '—') + '</td>' +
-          '<td class="py-2 px-2 text-gray-500 text-xs">' + poolLabel + '</td>' +
-          '<td class="py-2 px-2">' + typeLabel + '</td>' +
-          '<td class="py-2 px-2 text-right font-medium ' + color + '">' + (hrs >= 0 ? '+' : '') + hrs.toFixed(1) + '</td>' +
-          '<td class="py-2 px-2 text-gray-400 text-xs truncate max-w-[200px]">' + (m.notes || '—') + '</td></tr>';
-      }
-      html += '</tbody></table>';
-      movEl.innerHTML = html;
-    })
-    .catch(function() {
-      movEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar movimientos.</div>';
-    });
+  function loadBalances(year) {
+    cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Cargando...</div>';
+    fetch('/api/time-balance/proxy?path=' + encodeURIComponent('balances/' + empId + '?year=' + year))
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        var balances = (res && res.data) || [];
+        if (balances.length === 0) {
+          cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Sin saldos de tiempo para ' + year + '.</div>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < balances.length; i++) {
+          var b = balances[i];
+          var label = TYPE_LABELS[b.balanceType] || b.balanceType;
+          var negative = Number(b.availableMinutes) < 0;
+          html += '<div class="border border-gray-200 rounded-lg p-4">' +
+            '<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">' + label + '</h4>' +
+            '<div class="text-2xl font-light mb-2 ' + (negative ? 'text-red-600' : 'text-gray-900') + '">' + h(b.availableMinutes) + ' <span class="text-sm text-gray-500">hrs disponibles</span></div>' +
+            '<div class="flex gap-4 text-xs text-gray-500">' +
+              '<span>Acreditadas: <b class="text-gray-700">' + h(b.creditedMinutes) + '</b></span>' +
+              '<span>Debitadas: <b class="text-gray-700">' + h(b.debitedMinutes) + '</b></span>' +
+            '</div></div>';
+        }
+        cardsEl.innerHTML = html;
+      })
+      .catch(function() {
+        cardsEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400 col-span-3">Error al cargar saldos.</div>';
+      });
+  }
+
+  function loadMovements(year) {
+    movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Cargando...</div>';
+    fetch('/api/time-balance/proxy?path=' + encodeURIComponent('movements/' + empId + '?year=' + year + '&limit=100'))
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        var movs = (res && res.data) || [];
+        if (movs.length === 0) {
+          movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Sin movimientos en ' + year + '.</div>';
+          return;
+        }
+        var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">' +
+          '<th class="text-left py-2 px-2">Fecha</th><th class="text-left py-2 px-2">Cuenta</th><th class="text-left py-2 px-2">Tipo</th><th class="text-right py-2 px-2">Horas</th><th class="text-left py-2 px-2">Descripción</th></tr></thead><tbody>';
+        for (var j = 0; j < movs.length; j++) {
+          var m = movs[j];
+          var mins = Number(m.amountMinutes);
+          var color = mins >= 0 ? 'text-green-600' : 'text-red-600';
+          var typeLabel = TYPE_LABELS[m.balanceType] || m.balanceType;
+          var movLabel = MOV_LABELS[m.movementType] || m.movementType;
+          html += '<tr class="border-b border-gray-100">' +
+            '<td class="py-2 px-2 text-gray-600">' + (m.effectiveDate ? String(m.effectiveDate).substring(0, 10) : '—') + '</td>' +
+            '<td class="py-2 px-2 text-gray-500 text-xs">' + typeLabel + '</td>' +
+            '<td class="py-2 px-2">' + movLabel + '</td>' +
+            '<td class="py-2 px-2 text-right font-medium ' + color + '">' + (mins >= 0 ? '+' : '') + h(mins) + '</td>' +
+            '<td class="py-2 px-2 text-gray-400 text-xs truncate max-w-[200px]">' + (m.description || '—') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        movEl.innerHTML = html;
+      })
+      .catch(function() {
+        movEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar movimientos.</div>';
+      });
+  }
+
+  function load(year) { loadBalances(year); loadMovements(year); }
+  yearSel.addEventListener('change', function() { load(yearSel.value); });
+  load(String(nowYear));
 })();
 </script>
