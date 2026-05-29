@@ -393,6 +393,13 @@
       "when": 1762128035000,
       "tag": "0056_time_balances",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1762128036000,
+      "tag": "0057_time_balance_renewal",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,11 @@
 import {
   bigserial,
+  boolean,
   date,
   index,
   integer,
   pgTable,
+  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -61,10 +63,53 @@ export const timeBalanceMovements = pgTable(
   })
 )
 
+/**
+ * Singleton-per-tenant state for the annual renewal worker. The worker ticks
+ * every `intervalMinutes`; on each tick it opens the new year's balances once
+ * the date reaches (run_month, run_day) and `last_renewed_year` is behind the
+ * current year. Idempotent per year.
+ */
+export const timeBalanceRenewalState = pgTable('time_balance_renewal_state', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  status: varchar('status', { length: 20 }).notNull().default('stopped'),
+  intervalMinutes: integer('interval_minutes').notNull().default(1440),
+  runMonth: smallint('run_month').notNull().default(1),
+  runDay: smallint('run_day').notNull().default(1),
+  lastRenewedYear: integer('last_renewed_year'),
+  lastRunAt: timestamp('last_run_at', { withTimezone: true }),
+  lastSuccessAt: timestamp('last_success_at', { withTimezone: true }),
+  lastError: text('last_error'),
+  yearsRenewed: integer('years_renewed').notNull().default(0),
+  autoStart: boolean('auto_start').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const timeBalanceRenewalLog = pgTable(
+  'time_balance_renewal_log',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    status: varchar('status', { length: 20 }).notNull(),
+    year: integer('year'),
+    employeesProcessed: integer('employees_processed').notNull().default(0),
+    compensatoryCreated: integer('compensatory_created').notNull().default(0),
+    familyDisabilityCreated: integer('family_disability_created').notNull().default(0),
+    trigger: varchar('trigger', { length: 20 }).notNull().default('worker'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    createdIdx: index('time_balance_renewal_log_created_idx').on(t.createdAt),
+  })
+)
+
 export type TimeBalance = typeof timeBalances.$inferSelect
 export type NewTimeBalance = typeof timeBalances.$inferInsert
 export type TimeBalanceMovement = typeof timeBalanceMovements.$inferSelect
 export type NewTimeBalanceMovement = typeof timeBalanceMovements.$inferInsert
+export type TimeBalanceRenewalState = typeof timeBalanceRenewalState.$inferSelect
 
 export type TimeBalanceType = 'compensatory' | 'disability' | 'family_disability'
 export type TimeMovementType = 'initialization' | 'credit' | 'debit' | 'adjustment'

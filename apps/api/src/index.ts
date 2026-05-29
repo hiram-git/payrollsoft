@@ -40,6 +40,8 @@ import { positionsRoutes } from './modules/positions/routes'
 import { reportsRoutes } from './modules/reports/routes'
 import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
 import { superadminRoutes } from './modules/superadmin/routes'
+import { timeBalanceRenewalRoutes } from './modules/time-balance/renewal-routes'
+import { bootstrapRenewalWorkers } from './modules/time-balance/renewal-worker'
 import { timeBalanceRoutes } from './modules/time-balance/routes'
 import { treasuryRoutes } from './modules/treasury/routes'
 import { tenantUserRoutes } from './modules/users/routes'
@@ -97,6 +99,7 @@ const app = new Elysia()
   .use(employeeFilesRoutes)
   .use(vacationsRoutes)
   .use(timeBalanceRoutes)
+  .use(timeBalanceRenewalRoutes)
   .use(payrollRoutes)
   .use(reportsRoutes)
   .use(facialRoutes)
@@ -113,6 +116,13 @@ console.log(`API running at http://${env.HOST}:${app.server?.port}`)
 
 bootstrapWorkers(env.DATABASE_URL).catch((err) =>
   console.error('[sync-worker] bootstrap failed:', err instanceof Error ? err.message : err)
+)
+
+bootstrapRenewalWorkers(env.DATABASE_URL).catch((err) =>
+  console.error(
+    '[time-balance-renewal] bootstrap failed:',
+    err instanceof Error ? err.message : err
+  )
 )
 
 export type App = typeof app

@@ -124,6 +124,11 @@ const navAll: NavEntry[] = [
       },
       { href: '/personal/baja', label: 'De Baja', require: 'employees:read' },
       { href: '/personal/documentos', label: 'Documentos', require: 'employees:read' },
+      {
+        href: '/time-balance/renewal',
+        label: 'Renovación de saldos',
+        require: 'time_balance:write',
+      },
     ],
   },
   {
