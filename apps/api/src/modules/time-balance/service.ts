@@ -2,6 +2,7 @@ import {
   ANNUAL_MINUTES,
   canDebit,
   computeAvailableMinutes,
+  resolvePeriodYear,
   summarizeMovements,
 } from '@payroll/core'
 import { timeBalanceMovements, timeBalances } from '@payroll/db'
@@ -160,7 +161,8 @@ export async function creditBalance(
   } = {}
 ): Promise<{ balanceId: string; availableMinutes: number }> {
   if (minutes <= 0) throw new Error('credit amount must be positive')
-  const year = opts.year ?? currentYear()
+  // Impute to the year of the event (effectiveDate), not the capture date.
+  const year = resolvePeriodYear(opts, currentYear())
 
   let row = await findBalanceRow(db, employeeId, type, year)
   if (!row) {
@@ -216,7 +218,8 @@ export async function debitBalance(
   | { ok: false; reason: 'insufficient'; availableMinutes: number; requestedMinutes: number }
 > {
   if (minutes <= 0) throw new Error('debit amount must be positive')
-  const year = opts.year ?? currentYear()
+  // Impute to the year of the event (effectiveDate), not the capture date.
+  const year = resolvePeriodYear(opts, currentYear())
 
   let row = await findBalanceRow(db, employeeId, type, year)
   if (!row) {

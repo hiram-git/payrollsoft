@@ -5,6 +5,7 @@ import {
   computeAvailableMinutes,
   hoursToMinutes,
   minutesToHours,
+  resolvePeriodYear,
   summarizeMovements,
 } from '../calculation'
 
@@ -81,5 +82,24 @@ describe('hours <-> minutes', () => {
     expect(minutesToHours(8640)).toBe(144)
     expect(minutesToHours(90)).toBe(1.5)
     expect(minutesToHours(50)).toBe(0.83)
+  })
+})
+
+describe('resolvePeriodYear', () => {
+  test('explicit year always wins', () => {
+    expect(resolvePeriodYear({ year: 2024, effectiveDate: '2025-06-01' }, 2026)).toBe(2024)
+  })
+
+  test('derives year from effectiveDate when no explicit year', () => {
+    // Event on Dec 29 2025, captured in 2026 → imputed to 2025
+    expect(resolvePeriodYear({ effectiveDate: '2025-12-29' }, 2026)).toBe(2025)
+  })
+
+  test('falls back when neither year nor effectiveDate given', () => {
+    expect(resolvePeriodYear({}, 2026)).toBe(2026)
+  })
+
+  test('ignores malformed effectiveDate and falls back', () => {
+    expect(resolvePeriodYear({ effectiveDate: 'bad' }, 2026)).toBe(2026)
   })
 })

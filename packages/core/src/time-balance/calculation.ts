@@ -75,3 +75,23 @@ export function minutesToHours(minutes: number): number {
 export function hoursToMinutes(hours: number): number {
   return Math.round(hours * MINUTES_PER_HOUR)
 }
+
+/**
+ * Resolve which balance year a movement is imputed to.
+ *
+ * Accounting standard: impute to the period of the event (`effectiveDate`),
+ * NOT the period of capture (`created_at`). An explicit `year` always wins;
+ * otherwise derive it from `effectiveDate` (YYYY-...); fall back to
+ * `fallbackYear` (the current year) when neither is usable.
+ */
+export function resolvePeriodYear(
+  opts: { year?: number; effectiveDate?: string },
+  fallbackYear: number
+): number {
+  if (opts.year != null) return opts.year
+  if (opts.effectiveDate) {
+    const y = Number(opts.effectiveDate.slice(0, 4))
+    if (Number.isFinite(y) && y > 1900) return y
+  }
+  return fallbackYear
+}

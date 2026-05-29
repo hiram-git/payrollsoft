@@ -8,5 +8,6 @@ export {
   computeAvailableMinutes,
   hoursToMinutes,
   minutesToHours,
+  resolvePeriodYear,
   summarizeMovements,
 } from './calculation'
