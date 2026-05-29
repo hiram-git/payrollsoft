@@ -62,21 +62,46 @@ se persiste por sesión tras el login (ver `src/lib/storage.ts`).
 ## Plataformas nativas con Capacitor
 
 El proyecto ya trae `capacitor.config.ts` (appId
-`com.payrollsoft.marcaciones`, `webDir: dist`). Para generar los
-proyectos nativos:
+`com.payrollsoft.marcaciones`, `webDir: dist`).
+
+> ⚠️ **Estos comandos se corren DESDE `apps/mobile`**, no desde la raíz
+> del monorepo. Los scripts `cap:*` viven en `apps/mobile/package.json`;
+> si ejecutas `bun run cap:add:android` desde la raíz verás
+> `error: Script not found "cap:add:android"`. Usa una de estas dos vías:
+>
+> ```bash
+> # Vía A — entra a la carpeta del móvil:
+> cd apps/mobile
+> bun run cap:add:android
+>
+> # Vía B — desde la raíz, con filtro de workspace:
+> bun --filter @payroll/mobile cap:add:android
+> ```
+
+**Requisitos previos** (en tu máquina local, no en un contenedor CI):
+
+- **Android:** JDK 17 + Android Studio / Android SDK (con `ANDROID_HOME`).
+- **iOS:** macOS + Xcode + CocoaPods.
+
+**Flujo completo** (ejemplos desde `apps/mobile`; antepón
+`bun --filter @payroll/mobile` si prefieres correrlos desde la raíz):
 
 ```bash
-bun run build              # genera dist/ (webDir de Capacitor)
+cd apps/mobile
 
-bun run cap:add:android    # crea ./android (requiere Android Studio + JDK)
-bun run cap:add:ios        # crea ./ios     (requiere macOS + Xcode)
+bun run build              # 1. genera dist/ (webDir de Capacitor) — REQUERIDO antes de add/sync
 
-bun run cap:sync           # copia el build web y sincroniza plugins
+bun run cap:add:android    # 2. crea ./android (requiere toolchain de Android)
+bun run cap:add:ios        #    crea ./ios     (requiere macOS + Xcode)
+
+bun run cap:sync           # 3. copia el build web y sincroniza plugins
+bunx cap open android      # 4. abre el proyecto en Android Studio / Xcode
+bunx cap open ios
 ```
 
-Luego abre el proyecto nativo con `bunx cap open android` / `bunx cap
-open ios`. Las carpetas `android/` e `ios/` están en `.gitignore`: se
-regeneran con `cap add`.
+Las carpetas `android/` e `ios/` están en `.gitignore`: se regeneran con
+`cap add`. Cada vez que cambies el código web, repite `bun run build &&
+bun run cap:sync` para que el nativo tome la versión nueva.
 
 > Los cambios de backend (Bearer auth, token en el body del login, CORS y
 > CSRF para orígenes Capacitor) ya están implementados en `apps/api`. Si
