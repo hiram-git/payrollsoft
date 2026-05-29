@@ -85,6 +85,13 @@
       "when": 1762128010000,
       "tag": "0011_time_balance_permissions",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1762128011000,
+      "tag": "0012_approval_delegation_permission",
+      "breakpoints": true
     }
   ]
 }

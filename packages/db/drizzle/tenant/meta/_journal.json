@@ -400,6 +400,13 @@
       "when": 1762128036000,
       "tag": "0057_time_balance_renewal",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1762128037000,
+      "tag": "0058_approval_delegations",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,222 @@
+---
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'approvals:delegate')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type UserRow = { id: string; name: string; email: string; isActive: boolean }
+let users: UserRow[] = []
+try {
+  const res = await fetch(`${API_URL}/tenant-users?isActive=true`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) users = ((await res.json()) as { data: UserRow[] }).data ?? []
+} catch {
+  // page still renders; client fetch surfaces errors
+}
+
+const today = new Date().toISOString().slice(0, 10)
+---
+
+<AppLayout title="Delegaciones de aprobación">
+  <div class="p-8 pb-16 max-w-5xl mx-auto">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold text-gray-900 tracking-tight">Delegaciones de aprobación</h1>
+      <p class="text-sm text-gray-500 mt-0.5">
+        Cuando un jefe no está disponible (vacaciones, misión), puede delegar temporalmente
+        sus aprobaciones en otra persona. La delegación vale solo dentro del rango de fechas.
+      </p>
+    </div>
+
+    <div id="flash" class="mb-4 rounded-md px-4 py-3 text-sm hidden"></div>
+
+    <!-- Create form -->
+    <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <h2 class="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+        <span class="w-1.5 h-5 bg-blue-500 rounded-full inline-block"></span>
+        Nueva delegación
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Quien delega (jefe) *</label>
+          <select id="del-delegator" class="dg-input">
+            <option value="">Selecciona...</option>
+            {users.map((u) => <option value={u.id}>{u.name} ({u.email})</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Quien recibe (suplente) *</label>
+          <select id="del-delegate" class="dg-input">
+            <option value="">Selecciona...</option>
+            {users.map((u) => <option value={u.id}>{u.name} ({u.email})</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Desde *</label>
+          <input type="date" id="del-from" class="dg-input" value={today} />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Hasta *</label>
+          <input type="date" id="del-to" class="dg-input" value={today} />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium text-gray-700 mb-1">Motivo (opcional)</label>
+          <input type="text" id="del-reason" class="dg-input" maxlength="500"
+            placeholder="Ej: vacaciones del jefe, misión oficial..." />
+        </div>
+      </div>
+      <div class="flex justify-end mt-4">
+        <button type="button" id="del-create"
+          class="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
+          Crear delegación
+        </button>
+      </div>
+    </div>
+
+    <!-- List -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+        <h2 class="font-semibold text-gray-800">Delegaciones registradas</h2>
+        <label class="flex items-center gap-2 text-xs text-gray-500">
+          <input type="checkbox" id="del-active-only" />
+          Solo activas hoy
+        </label>
+      </div>
+      <div id="del-body">
+        <div class="text-center text-sm text-gray-400 py-12">Cargando...</div>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      var flash = document.getElementById('flash')
+      var body = document.getElementById('del-body')
+      var activeOnly = document.getElementById('del-active-only')
+
+      function showFlash(msg, ok) {
+        flash.textContent = msg
+        flash.className = 'mb-4 rounded-md px-4 py-3 text-sm ' +
+          (ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700')
+      }
+      function esc(s) { return s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;') : '' }
+      function fmt(d) { return d ? String(d).substring(0, 10) : '—' }
+
+      function load() {
+        var qs = activeOnly.checked ? '?activeOnly=true' : ''
+        fetch('/api/approvals/delegations' + qs)
+          .then(function (r) { return r.json() })
+          .then(function (res) {
+            var rows = (res && res.data) || []
+            if (rows.length === 0) {
+              body.innerHTML = '<div class="text-center text-sm text-gray-400 py-12">No hay delegaciones registradas.</div>'
+              return
+            }
+            var todayStr = new Date().toISOString().slice(0, 10)
+            var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">' +
+              '<th class="px-4 py-3 text-left font-medium">Delega</th>' +
+              '<th class="px-4 py-3 text-left font-medium">Suplente</th>' +
+              '<th class="px-4 py-3 text-left font-medium">Vigencia</th>' +
+              '<th class="px-4 py-3 text-left font-medium">Motivo</th>' +
+              '<th class="px-4 py-3 text-left font-medium">Estado</th>' +
+              '<th class="px-4 py-3 text-right font-medium">Acciones</th>' +
+              '</tr></thead><tbody>'
+            for (var i = 0; i < rows.length; i++) {
+              var r = rows[i]
+              var isActive = r.validFrom <= todayStr && r.validTo >= todayStr
+              var isFuture = r.validFrom > todayStr
+              var badge = isActive
+                ? '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">Activa</span>'
+                : isFuture
+                  ? '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-700">Programada</span>'
+                  : '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Finalizada</span>'
+              var canEnd = isActive || isFuture
+              html += '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
+                '<td class="px-4 py-3 text-gray-900">' + esc(r.delegatorName || r.delegatorUserId) + '</td>' +
+                '<td class="px-4 py-3 text-gray-900">' + esc(r.delegateName || r.delegateUserId) + '</td>' +
+                '<td class="px-4 py-3 text-gray-600">' + fmt(r.validFrom) + ' → ' + fmt(r.validTo) + '</td>' +
+                '<td class="px-4 py-3 text-gray-500">' + esc(r.reason || '—') + '</td>' +
+                '<td class="px-4 py-3">' + badge + '</td>' +
+                '<td class="px-4 py-3 text-right">' +
+                  (canEnd ? '<button class="text-red-600 hover:underline text-xs font-medium" data-end="' + r.id + '">Finalizar</button>' : '<span class="text-gray-300 text-xs">—</span>') +
+                '</td></tr>'
+            }
+            html += '</tbody></table>'
+            body.innerHTML = html
+
+            body.querySelectorAll('[data-end]').forEach(function (btn) {
+              btn.addEventListener('click', function () {
+                if (!confirm('¿Finalizar esta delegación? Dejará de aplicar a partir de hoy.')) return
+                fetch('/api/approvals/delegations?end=' + btn.getAttribute('data-end'), { method: 'POST' })
+                  .then(function (r) { return r.json() })
+                  .then(function (res) {
+                    if (res.ok) { showFlash('Delegación finalizada.', true); load() }
+                    else showFlash(res.error || 'Error', false)
+                  })
+              })
+            })
+          })
+          .catch(function () {
+            body.innerHTML = '<div class="text-center text-sm text-red-400 py-12">Error al cargar.</div>'
+          })
+      }
+
+      activeOnly.addEventListener('change', load)
+
+      document.getElementById('del-create').addEventListener('click', function () {
+        var delegatorUserId = document.getElementById('del-delegator').value
+        var delegateUserId = document.getElementById('del-delegate').value
+        var validFrom = document.getElementById('del-from').value
+        var validTo = document.getElementById('del-to').value
+        var reason = document.getElementById('del-reason').value.trim()
+
+        if (!delegatorUserId || !delegateUserId || !validFrom || !validTo) {
+          showFlash('Completa quién delega, quién recibe y el rango de fechas.', false)
+          return
+        }
+        if (delegatorUserId === delegateUserId) {
+          showFlash('El suplente debe ser una persona distinta.', false)
+          return
+        }
+        fetch('/api/approvals/delegations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ delegatorUserId: delegatorUserId, delegateUserId: delegateUserId, validFrom: validFrom, validTo: validTo, reason: reason }),
+        })
+          .then(function (r) { return r.json() })
+          .then(function (res) {
+            if (res.ok) {
+              showFlash('Delegación creada correctamente.', true)
+              document.getElementById('del-reason').value = ''
+              load()
+            } else showFlash(res.error || 'No se pudo crear la delegación.', false)
+          })
+          .catch(function () { showFlash('Error de conexión.', false) })
+      })
+
+      load()
+    })()
+  </script>
+
+  <style is:global>
+    .dg-input {
+      width: 100%;
+      border-radius: 0.5rem;
+      border: 1px solid #d1d5db;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+    }
+    .dg-input:focus {
+      outline: none;
+      border-color: transparent;
+      box-shadow: 0 0 0 2px #3b82f6;
+    }
+    [data-theme='dark'] .dg-input { background: var(--ink-3); border-color: var(--rule); color: var(--fore); }
+  </style>
+</AppLayout>

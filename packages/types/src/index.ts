@@ -132,6 +132,8 @@ export const PERMISSION_CODES = [
   'time_balance:read',
   'time_balance:write',
   'time_balance:override',
+  // Approval delegation
+  'approvals:delegate',
   // Loans / advances / creditors
   'loans:create',
   'loans:read',
@@ -293,6 +295,7 @@ const HR_PERMISSIONS: readonly PermissionCode[] = [
   'time_balance:read',
   'time_balance:write',
   'time_balance:override',
+  'approvals:delegate',
   'loans:create',
   'loans:read',
   'loans:update',

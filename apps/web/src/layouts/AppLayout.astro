@@ -129,6 +129,11 @@ const navAll: NavEntry[] = [
         label: 'Renovación de saldos',
         require: 'time_balance:write',
       },
+      {
+        href: '/config/delegations',
+        label: 'Delegaciones',
+        require: 'approvals:delegate',
+      },
     ],
   },
   {
