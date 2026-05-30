@@ -18,8 +18,10 @@ paquetes internos (`@payroll/types`, `@payroll/core`, tipos de
 - **Vite 6** como bundler/dev server
 - **Bun** como runtime y gestor de paquetes (workspaces)
 - Plugins Capacitor: `Preferences` (sesión + cola), `Network`
-  (conectividad), `Camera` (esqueleto facial), `Geolocation` (reservado
-  para geofencing del modo empleado)
+  (conectividad), `Camera` (esqueleto facial). El geofencing del modo
+  empleado usará un plugin de geolocalización más adelante; se omite por
+  ahora porque `@capacitor/geolocation` crashea al arrancar en algunos
+  dispositivos Samsung (ver Solución de problemas).
 
 ## Correr en desarrollo
 
@@ -222,6 +224,35 @@ marcan como `failed` y quedan visibles en la pestaña **Cuenta** para no
 perderse en silencio.
 
 ## Solución de problemas (Android)
+
+### Crash al arrancar en Samsung por `@capacitor/geolocation` (resuelto)
+
+Síntoma: la app muestra el logo de Capacitor y se cierra con un diálogo
+de error. En `adb logcat` aparece un crash nativo (no de JS):
+
+```
+JNI DETECTED ERROR IN APPLICATION: input is not valid Modified UTF-8 ...
+  in call to NewStringUTF
+  from android.hardware.SystemSensorManager.nativeGetSensorAtIndex
+  ... io.ionic.libs.iongeolocationlib...IONGLOCSensorHandler.<init>
+  ... com.capacitorjs.plugins.geolocation.GeolocationPlugin.load
+```
+
+Causa: al cargar, el plugin Geolocation enumera los sensores del
+dispositivo y en varios equipos Samsung un sensor trae un nombre con
+bytes UTF-8 inválidos, lo que aborta el proceso (`SIGABRT`) antes de
+pintar la UI. No es un fallo de tu código.
+
+Solución aplicada: se quitó `@capacitor/geolocation` de las dependencias
+(no se usaba todavía). Si lo reintroduces para geofencing, evalúa un
+plugin alternativo o difiere su inicialización. Tras quitarlo:
+
+```bash
+bun install
+bun run build && bun run cap:sync
+# recrea el nativo si el plugin quedó registrado de un build anterior:
+#   rm -rf android && bun run cap:add:android && bun run cap:sync
+```
 
 ### La app instala pero crashea/cierra tras el splash de Capacitor
 
