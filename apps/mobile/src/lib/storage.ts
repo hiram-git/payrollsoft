@@ -51,6 +51,9 @@ export const sessionStore = {
   async setTenant(tenant: string): Promise<void> {
     await set(KEYS.tenant, tenant)
   },
+  async clearTenant(): Promise<void> {
+    await remove(KEYS.tenant)
+  },
 
   async getMode(): Promise<AppMode | null> {
     return (await get(KEYS.mode)) as AppMode | null

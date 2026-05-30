@@ -27,7 +27,7 @@ import { useState } from 'react'
 import { useHistory } from 'react-router-dom'
 
 export default function EmployeeLogin() {
-  const { loginEmployee, tenant } = useAuth()
+  const { loginEmployee } = useAuth()
   const history = useHistory()
   const [present] = useIonToast()
   const [idNumber, setIdNumber] = useState('')
@@ -37,7 +37,7 @@ export default function EmployeeLogin() {
   async function handleLogin() {
     setLoading(true)
     try {
-      const { bearerMissing } = await loginEmployee(idNumber, password, tenant)
+      const { bearerMissing } = await loginEmployee(idNumber, password)
       if (bearerMissing) {
         await present({
           message:
