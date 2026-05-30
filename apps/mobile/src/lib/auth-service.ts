@@ -35,17 +35,20 @@ export type EmployeeLoginResult = {
 
 export async function loginEmployee(
   idNumber: string,
-  password: string,
-  tenant: string
+  password: string
 ): Promise<EmployeeLoginResult> {
   const missing = missingRequiredFields(['idNumber', 'password'], { idNumber, password })
   if (missing.length > 0) {
     throw new Error('Cédula y contraseña son obligatorias.')
   }
 
-  // El tenant debe estar disponible antes del request (lo inyecta el
-  // cliente como X-Tenant). Se persiste primero.
-  await sessionStore.setTenant(tenant)
+  // El login de empleado NO depende de un tenant: replica el portal de
+  // colaboradores, donde el backend busca la cédula en TODOS los tenants
+  // (ignora X-Tenant). Se limpia cualquier tenant residual de una sesión
+  // previa para no mandar un X-Tenant equivocado; el tenant real llega en
+  // la respuesta (data.tenantSlug) y se persiste después para que los
+  // requests autenticados pasen guardTenantMatchesToken.
+  await sessionStore.clearTenant()
   await sessionStore.setMode('employee')
 
   const data = await apiClient.post<PortalLoginData>(
@@ -62,8 +65,8 @@ export async function loginEmployee(
   const token = data?.token
   if (token) {
     await sessionStore.setToken(token)
-    // Fija el tenant real resuelto por el backend (puede diferir del que
-    // tecleó el usuario) para que X-Tenant coincida con el del JWT.
+    // Fija el tenant real resuelto por el backend a partir de la cédula
+    // (p.ej. "otra-empresa"). Es el que debe ir en X-Tenant de ahí en más.
     if (data?.tenantSlug) await sessionStore.setTenant(data.tenantSlug)
     return { session, bearerMissing: false }
   }
