@@ -1,18 +1,23 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 // Configuración de Capacitor. `webDir` apunta al bundle de Vite.
-// El `server.androidScheme` mantiene el origin en https para que el
-// WebView trate la app como contexto seguro (necesario para cámara).
 //
-// `cleartext: true` permite que el WebView haga requests a `http://`
-// (API en LAN durante desarrollo). En producción la API debe servirse
-// por `https://` y este flag puede quitarse.
+// androidScheme:
+//   - 'http'  → la app se carga desde http://localhost. Necesario en
+//     DESARROLLO cuando la API va por http:// en la LAN: si la app se
+//     cargara desde https://, el WebView bloquearía el fetch a http como
+//     "mixed content" (TypeError: Failed to fetch), independientemente de
+//     `cleartext`. http://localhost sigue siendo "secure context" en
+//     Chromium, así que la cámara y demás APIs funcionan igual.
+//   - 'https' → recomendado en PRODUCCIÓN, con la API también por https.
+//
+// cleartext: permite tráfico http:// a nivel de red Android (API en LAN).
 const config: CapacitorConfig = {
   appId: 'com.payrollsoft.marcaciones',
   appName: 'PayrollSoft Marcaciones',
   webDir: 'dist',
   server: {
-    androidScheme: 'https',
+    androidScheme: 'http',
     cleartext: true,
   },
   plugins: {
