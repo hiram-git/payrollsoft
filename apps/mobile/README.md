@@ -258,8 +258,20 @@ Busca líneas `E/AndroidRuntime` (crash nativo) o errores `chromium`
 
 ### El login/marcación falla pero la app abre (error de red)
 
-La tablet debe poder alcanzar la API y Android permite `http://` solo si
-se habilita. Opciones:
+La tablet debe poder alcanzar la API. Revisa en orden:
+
+1. **La API escucha en la LAN, no solo en localhost.** Arranca con
+   `HOST=0.0.0.0` (es el default) y el log debe decir
+   `http://0.0.0.0:3000`. Compruébalo abriendo
+   `http://TU_IP_LAN:3000/health` desde el navegador **de la tablet**. Si
+   no responde, es binding o firewall (en Windows, permite el puerto 3000
+   / la app `bun` en el Firewall de Windows Defender).
+2. **`VITE_API_URL` apunta a la IP de la PC, no a `localhost`.** En el
+   dispositivo `localhost` es la propia tablet. Usa la IP LAN de tu PC
+   (p.ej. `http://192.168.100.36:3000`) y recompila
+   (`bun run build && bun run cap:sync`): Vite embebe esa variable en el
+   bundle.
+3. **Cleartext HTTP.** Android bloquea `http://` por defecto. Opciones:
 
 - **Recomendado:** servir la API por `https://` (con un certificado o un
   túnel tipo ngrok/cloudflared) y poner esa URL en `VITE_API_URL`.

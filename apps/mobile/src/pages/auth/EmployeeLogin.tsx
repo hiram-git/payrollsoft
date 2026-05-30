@@ -19,7 +19,6 @@ import {
   IonList,
   IonNote,
   IonPage,
-  IonText,
   IonTitle,
   IonToolbar,
   useIonToast,
@@ -90,7 +89,7 @@ export default function EmployeeLogin() {
           </IonItem>
         </IonList>
         <IonNote className="ion-margin-start">
-          Tenant: <IonText color="primary">{tenant}</IonText>
+          La empresa se detecta automáticamente a partir de tu cédula.
         </IonNote>
         <IonButton
           expand="block"
