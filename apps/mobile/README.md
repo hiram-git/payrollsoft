@@ -220,3 +220,83 @@ reintenta automáticamente al recuperar la conexión. Cada item lleva una
 (`INSERT ... ON CONFLICT DO NOTHING` en el backend). Los rechazos 4xx se
 marcan como `failed` y quedan visibles en la pestaña **Cuenta** para no
 perderse en silencio.
+
+## Solución de problemas (Android)
+
+### La app instala pero crashea/cierra tras el splash de Capacitor
+
+Lo primero es **ver el error real** (no adivines). Dos formas:
+
+**A) Inspeccionar el WebView desde Chrome (mejor para errores de JS):**
+1. Tablet conectada por USB con depuración USB activada.
+2. En el PC abre Chrome → `chrome://inspect/#devices`.
+3. Bajo la app aparece su WebView → clic en **inspect** → pestaña
+   **Console**. Ahí sale el error de JavaScript en rojo.
+
+**B) `adb logcat` (incluye errores nativos y de consola):**
+```bash
+adb logcat -c            # limpia el buffer
+# abre la app en la tablet y reproduce el crash, luego:
+adb logcat | grep -iE "chromium|Capacitor|AndroidRuntime|System.err|ReactNative"
+```
+Busca líneas `E/AndroidRuntime` (crash nativo) o errores `chromium`
+(error de JS). Comparte ese texto para diagnóstico fino.
+
+**Causas comunes y arreglos:**
+
+- **Rutas de assets absolutas** → ya mitigado con `base: './'` en
+  `vite.config.ts` (genera `./assets/...` en vez de `/assets/...`, que en
+  el WebView nativo puede romper la carga del bundle). Si actualizas
+  desde una versión vieja, vuelve a `bun run build && bun run cap:sync`.
+- **Bundle desactualizado en el nativo** → siempre `bun run build` y
+  luego `bun run cap:sync` antes de instalar; si dudas, borra y recrea:
+  `rm -rf android && bun run cap:add:android`.
+- **API por HTTP (cleartext) no responde** → Android bloquea `http://`
+  por defecto. No causa el crash de arranque (la primera pantalla no
+  llama a la API), pero sí rompe el login. Usa `https://`, o habilita
+  cleartext para tu IP de desarrollo (ver siguiente punto).
+
+### El login/marcación falla pero la app abre (error de red)
+
+La tablet debe poder alcanzar la API. Revisa en orden:
+
+1. **La API escucha en la LAN, no solo en localhost.** Arranca con
+   `HOST=0.0.0.0` (es el default) y el log debe decir
+   `http://0.0.0.0:3000`. Compruébalo abriendo
+   `http://TU_IP_LAN:3000/health` desde el navegador **de la tablet**. Si
+   no responde, es binding o firewall (en Windows, permite el puerto 3000
+   / la app `bun` en el Firewall de Windows Defender).
+2. **`VITE_API_URL` apunta a la IP de la PC, no a `localhost`.** En el
+   dispositivo `localhost` es la propia tablet. Usa la IP LAN de tu PC
+   (p.ej. `http://192.168.100.36:3000`) y recompila
+   (`bun run build && bun run cap:sync`): Vite embebe esa variable en el
+   bundle.
+3. **Cleartext HTTP.** Android bloquea `http://` por defecto. Opciones:
+
+- **Recomendado:** servir la API por `https://` (con un certificado o un
+  túnel tipo ngrok/cloudflared) y poner esa URL en `VITE_API_URL`.
+- **Desarrollo en LAN con HTTP:** habilita cleartext. Como `android/` se
+  regenera, la vía durable es `capacitor.config.ts`:
+  ```ts
+  // capacitor.config.ts
+  server: { androidScheme: 'https', cleartext: true }
+  ```
+  Tras cambiarlo: `bun run build && bun run cap:sync`. Verifica también
+  que la IP/origen esté en `MOBILE_ORIGINS` del `.env` de la API y que
+  ambos equipos estén en la misma red (prueba abriendo
+  `http://IP:3000/health` desde el navegador de la tablet).
+
+### Warnings de Gradle al compilar (no son errores)
+
+`Using flatDir should be avoided…` y `Condition is always 'false'`
+(en `IonCameraFlow.kt`) son **advertencias** del propio Capacitor/plugins,
+no afectan el funcionamiento. Se pueden ignorar.
+
+### Samsung One UI: activar Opciones de desarrollador
+
+En Galaxy Tab A8 el "Número de compilación" está en
+**Ajustes → Acerca de la tablet → Información de software** (tócalo 7
+veces). Luego **Ajustes → Opciones de desarrollador → Depuración USB**.
+Al conectar el cable, baja la barra de notificaciones y cambia el modo USB
+de "Cargando" a **Transferencia de archivos (MTP)** si el dispositivo no
+aparece en `adb devices` / Android Studio.

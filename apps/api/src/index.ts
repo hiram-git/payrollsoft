@@ -118,6 +118,11 @@ const app = new Elysia()
   .listen({ port: env.PORT, hostname: env.HOST })
 
 console.log(`API running at http://${env.HOST}:${app.server?.port}`)
+if (env.HOST === 'localhost' || env.HOST === '127.0.0.1') {
+  console.warn(
+    `⚠️  HOST=${env.HOST}: la API solo es accesible desde esta máquina. Para que un móvil/tablet en la LAN la alcance, usa HOST=0.0.0.0.`
+  )
+}
 
 bootstrapWorkers(env.DATABASE_URL).catch((err) =>
   console.error('[sync-worker] bootstrap failed:', err instanceof Error ? err.message : err)
