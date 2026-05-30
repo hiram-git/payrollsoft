@@ -1,3 +1,4 @@
+import { API_URL } from '@/config/env'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api-client'
 /**
@@ -90,6 +91,9 @@ export default function EmployeeLogin() {
         </IonList>
         <IonNote className="ion-margin-start">
           La empresa se detecta automáticamente a partir de tu cédula.
+        </IonNote>
+        <IonNote className="ion-margin-start" style={{ display: 'block', marginTop: 8 }}>
+          API: {API_URL}
         </IonNote>
         <IonButton
           expand="block"

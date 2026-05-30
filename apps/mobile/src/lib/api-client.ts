@@ -86,18 +86,19 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   let res: Response
+  const targetUrl = buildUrl(path, query)
   try {
-    res = await fetch(buildUrl(path, query), {
+    res = await fetch(targetUrl, {
       method,
       headers,
       body: body == null ? undefined : JSON.stringify(body),
     })
   } catch (err) {
-    // Error de red (sin conexión, DNS, CORS). Siempre explícito.
-    throw new ApiError(
-      err instanceof Error ? err.message : 'No se pudo conectar con el servidor',
-      0
-    )
+    // Error de red (sin conexión, DNS, cleartext bloqueado, CORS). Se
+    // incluye la URL de destino en el mensaje: "Failed to fetch" no la
+    // muestra y sin ella es imposible saber a dónde intentó conectar.
+    const cause = err instanceof Error ? err.message : 'desconocido'
+    throw new ApiError(`No se pudo conectar con ${targetUrl} (${cause})`, 0)
   }
 
   if (res.status === 401) {
