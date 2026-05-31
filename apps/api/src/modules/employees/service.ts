@@ -303,6 +303,8 @@ export async function createEmployeeService(
     requiresAttendanceMarking: input.requiresAttendanceMarking ?? true,
     canRead: input.canRead ?? false,
     canWrite: input.canWrite ?? false,
+    // photo is stored as a visual reference only; biometric face enrollment
+    // stays on the kiosk flow — see docs/photo-face-enrollment.md (Phase 2.F).
     photo: input.photo ?? null,
     scannedId: input.scannedId ?? null,
   })
