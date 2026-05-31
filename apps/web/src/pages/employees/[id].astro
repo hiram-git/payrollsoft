@@ -389,12 +389,12 @@ const freqLabel: Record<string, string> = {
     </div>
 
     {success && (
-      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+      <div id="serverSuccess" class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
         Empleado actualizado correctamente.
       </div>
     )}
     {error && (
-      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div id="serverError" class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
       </div>
     )}
@@ -2400,6 +2400,17 @@ function syncToggleUI(id, val) {
         banner.scrollIntoView({ behavior: 'smooth', block: 'center' })
       }
 
+      // Notificación tipo toast con resumen para captar la atención cuando el
+      // usuario ya hizo scroll lejos del banner.
+      if (window.toast) {
+        var summary = salaryError && !missing.length
+          ? salaryError
+          : missing.length === 1
+            ? 'Falta el campo «' + missing[0].label + '».'
+            : 'Faltan ' + missing.length + ' campos obligatorios.'
+        window.toast.error(summary)
+      }
+
       var focusEl = missing.length ? missing[0].el : salary
       if (focusEl) {
         var ti = tabInfo(focusEl)
@@ -2407,5 +2418,20 @@ function syncToggleUI(id, val) {
         try { focusEl.focus() } catch (_) {}
       }
     })
+
+    // Si el server retornó error/éxito (banners SSR visibles al cargar),
+    // dispara también el toast para que sea visible tras scroll/recarga.
+    if (window.toast) {
+      var serverErr = document.getElementById('serverError')
+      if (serverErr) {
+        var et = serverErr.textContent && serverErr.textContent.trim()
+        if (et) window.toast.error(et)
+      }
+      var serverOk = document.getElementById('serverSuccess')
+      if (serverOk) {
+        var ot = serverOk.textContent && serverOk.textContent.trim()
+        if (ot) window.toast.success(ot)
+      }
+    }
   })()
 </script>
