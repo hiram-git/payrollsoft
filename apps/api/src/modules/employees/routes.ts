@@ -18,6 +18,8 @@ const EmployeeBody = t.Object({
   lastName: t.String({ minLength: 1, maxLength: 100 }),
   idNumber: t.String({ minLength: 1, maxLength: 20 }),
   socialSecurityNumber: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
+  sex: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
+  nationality: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
   email: t.Optional(t.Nullable(t.String({ format: 'email' }))),
   phone: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   jobTitleId: t.Optional(t.Nullable(t.String())),
@@ -29,6 +31,7 @@ const EmployeeBody = t.Object({
   payFrequency: t.Optional(
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
+  contractType: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
   // Personal flags + media (Phase 2.D)

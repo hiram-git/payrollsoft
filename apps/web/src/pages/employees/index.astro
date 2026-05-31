@@ -44,8 +44,8 @@ let error = ''
 let isGobierno = false
 // Position number + budget item (partida) are only shown for institutions
 // with positions; resolved employee.positionId → position.code / budgetItem.
-let positionCodeById = new Map<string, string>()
-let partidaByPositionId = new Map<string, string>()
+const positionCodeById = new Map<string, string>()
+const partidaByPositionId = new Map<string, string>()
 
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
@@ -59,8 +59,10 @@ try {
       fetch(`${API_URL}/positions`, { headers }),
       fetch(`${API_URL}/budget-items`, { headers }),
     ])
-    const positions = posRes.ok ? ((await posRes.json()) as { data: Position[] }).data ?? [] : []
-    const budgetItems = biRes.ok ? ((await biRes.json()) as { data: BudgetItem[] }).data ?? [] : []
+    const positions = posRes.ok ? (((await posRes.json()) as { data: Position[] }).data ?? []) : []
+    const budgetItems = biRes.ok
+      ? (((await biRes.json()) as { data: BudgetItem[] }).data ?? [])
+      : []
     const budgetById = new Map(budgetItems.map((b) => [b.id, `${b.code} — ${b.name}`]))
     for (const p of positions) {
       positionCodeById.set(p.id, p.code)

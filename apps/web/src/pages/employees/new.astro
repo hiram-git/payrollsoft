@@ -92,7 +92,8 @@ const errorMessages: Record<string, string> = {
       </div>
     )}
 
-    <form method="POST" action="/api/employees" id="empForm">
+    <form method="POST" action="/api/employees" id="empForm" novalidate>
+      <div id="reqError" class="hidden mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"></div>
       <!-- Tabs -->
       <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
         <button type="button" class="tab-btn active" data-tab="personal" onclick="switchTab('personal', this)">
@@ -130,6 +131,23 @@ const errorMessages: Record<string, string> = {
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Seguro Social</label>
               <input type="text" name="socialSecurityNumber" class="input" placeholder="000-00-0000" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo *</label>
+              <select name="sex" class="input" required>
+                <option value="">—</option>
+                <option value="M">Masculino</option>
+                <option value="F">Femenino</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad *</label>
+              <select name="nationality" class="input" required>
+                <option value="">—</option>
+                <option value="panamanian">Panameño(a)</option>
+                <option value="foreign">Extranjero(a)</option>
+                <option value="naturalized">Nacionalizado(a)</option>
+              </select>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Correo electrónico</label>
@@ -311,6 +329,33 @@ const errorMessages: Record<string, string> = {
                 <option value="weekly">Semanal</option>
               </select>
             </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato *</label>
+              <select name="contractType" class="input" required>
+                <option value="">—</option>
+                <option value="permanent">Permanente</option>
+                <option value="transitory">Contrato transitorio</option>
+                <option value="contingent">Contrato contingente</option>
+                <option value="professional_services">Servicios profesionales</option>
+                <option value="deputy">Contrato diputado</option>
+                <option value="interim">Contrato interino</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Método de pago *</label>
+              <select name="paymentMethod" class="input" required>
+                <option value="check">Cheque</option>
+                <option value="ach">ACH</option>
+                <option value="cash">Efectivo</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Estatus</label>
+              <select class="input" disabled>
+                <option>Activo</option>
+              </select>
+              <p class="mt-1 text-xs text-gray-500">Los empleados nuevos se crean activos.</p>
+            </div>
             <div class="col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Salario base (USD) *
@@ -429,39 +474,83 @@ const errorMessages: Record<string, string> = {
     })
   }
 
-  // On submit: validate required fields in hidden tabs + salary ceiling
-  document.getElementById('empForm').addEventListener('submit', function (e) {
-    const salary = document.getElementById('baseSalaryInput')
-    if (salary) {
-      const max = parseFloat(salary.dataset.positionMax || '')
-      const val = parseFloat(salary.value || '')
-      if (!isNaN(max) && !isNaN(val) && val > max) {
-        e.preventDefault()
-        switchTab('laboral', document.querySelector('[data-tab="laboral"]'))
-        salary.focus()
-        alert('El salario base no puede superar el salario de la posición ($' + max + ').')
-        return
-      }
+  // Validación al enviar: lista todos los obligatorios faltantes con la ruta
+  // «Pestaña → Campo» en un banner, y enfoca el primero. También aplica el
+  // tope salarial cuando la posición lo define.
+  ;(function () {
+    const form = document.getElementById('empForm')
+    if (!form) return
+    const banner = document.getElementById('reqError')
+
+    function tabInfo(el) {
+      const panel = el && el.closest ? el.closest('[id^="tab-"]') : null
+      if (!panel) return null
+      const key = panel.id.replace('tab-', '')
+      const btn = document.querySelector('[data-tab="' + key + '"]')
+      return { key, label: btn ? btn.textContent.trim() : key }
     }
-    const required = this.querySelectorAll('[required]')
-    let firstInvalid = null
-    for (const el of required) {
-      if (!el.value.trim()) {
-        if (!firstInvalid) firstInvalid = el
-      }
+
+    function fieldLabel(el) {
+      const wrap = el.closest('div')
+      const lbl = wrap ? wrap.querySelector('label') : null
+      return lbl ? lbl.textContent.replace('*', '').trim() : el.name
     }
-    if (firstInvalid) {
+
+    function collectMissing() {
+      const missing = []
+      const required = form.querySelectorAll('[required]')
+      for (const el of required) {
+        if (!String(el.value || '').trim()) missing.push({ el, label: fieldLabel(el) })
+      }
+      const ptypes = form.querySelectorAll('input[name="payrollTypeIds[]"]')
+      if (ptypes.length && ![...ptypes].some((b) => b.checked)) {
+        missing.push({ el: ptypes[0], label: 'Tipo de planilla' })
+      }
+      return missing
+    }
+
+    form.addEventListener('submit', function (e) {
+      if (banner) banner.classList.add('hidden')
+      const missing = collectMissing()
+
+      let salaryError = null
+      const salary = document.getElementById('baseSalaryInput')
+      if (salary) {
+        const max = parseFloat(salary.dataset.positionMax || '')
+        const val = parseFloat(salary.value || '')
+        if (!isNaN(max) && !isNaN(val) && val > max) {
+          salaryError = 'El salario base no puede superar el salario de la posición ($' + max + ').'
+        }
+      }
+
+      if (!missing.length && !salaryError) return
       e.preventDefault()
-      const tabDiv = firstInvalid.closest('[id^="tab-"]')
-      if (tabDiv) {
-        const tabName = tabDiv.id.replace('tab-', '')
-        const btn = document.querySelector(`[data-tab="${tabName}"]`)
-        switchTab(tabName, btn)
+      e.stopImmediatePropagation()
+
+      const lines = []
+      if (missing.length) {
+        lines.push('<strong>Faltan campos obligatorios:</strong>')
+        for (const m of missing) {
+          const t = tabInfo(m.el)
+          lines.push('• ' + (t ? 'Pestaña «' + t.label + '» → ' : '') + m.label)
+        }
       }
-      firstInvalid.focus()
-      firstInvalid.reportValidity()
-    }
-  })
+      if (salaryError) lines.push((missing.length ? '<br>' : '') + salaryError)
+
+      if (banner) {
+        banner.innerHTML = lines.join('<br>')
+        banner.classList.remove('hidden')
+        banner.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+
+      const focusEl = missing.length ? missing[0].el : salary
+      if (focusEl) {
+        const t = tabInfo(focusEl)
+        if (t) switchTab(t.key, document.querySelector('[data-tab="' + t.key + '"]'))
+        try { focusEl.focus() } catch (_) {}
+      }
+    })
+  })()
 
   // Foto / cédula: leer el archivo a base64, validar MIME + tamaño, y dejarlo
   // en el input hidden que viaja en el form. Vista previa inmediata.

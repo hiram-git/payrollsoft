@@ -349,9 +349,7 @@ const deptOptions = buildOptions(departamentos, emp.departmentId)
 const positionOptions = isPublica ? positions.filter((p) => p.isActive) : []
 // Currently assigned position drives the salary ceiling and the read-only
 // info block shown for institutions with positions.
-const currentPosition = isPublica
-  ? (positions.find((p) => p.id === emp.positionId) ?? null)
-  : null
+const currentPosition = isPublica ? (positions.find((p) => p.id === emp.positionId) ?? null) : null
 const jobTitleNameById = new Map(cargos.map((c) => [c.id, c.name]))
 
 const error = Astro.url.searchParams.get('error') ?? ''
@@ -403,6 +401,7 @@ const freqLabel: Record<string, string> = {
 
     <form method="POST" action={`/api/employees/${id}`} id="empForm" novalidate>
       <input type="hidden" name="_method" value="PUT" />
+      <div id="reqError" class="hidden mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"></div>
 
       <!-- Tabs -->
       <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
@@ -498,8 +497,8 @@ const freqLabel: Record<string, string> = {
               <input type="text" name="socialSecurityNumber" class="input" value={emp.socialSecurityNumber ?? ''} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
-              <select name="sex" class="input">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo *</label>
+              <select name="sex" class="input" required>
                 <option value="">—</option>
                 <option value="M" selected={emp.sex === 'M'}>Masculino</option>
                 <option value="F" selected={emp.sex === 'F'}>Femenino</option>
@@ -517,8 +516,8 @@ const freqLabel: Record<string, string> = {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad</label>
-              <select name="nationality" class="input">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad *</label>
+              <select name="nationality" class="input" required>
                 <option value="">—</option>
                 <option value="panamanian" selected={emp.nationality === 'panamanian'}>Panameño(a)</option>
                 <option value="foreign" selected={emp.nationality === 'foreign'}>Extranjero(a)</option>
@@ -683,8 +682,8 @@ const freqLabel: Record<string, string> = {
               <!-- Empresa privada: selección directa -->
               <>
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                  <select name="departmentId" class="input">
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Departamento *</label>
+                  <select name="departmentId" class="input" required>
                     <option value="">— Sin departamento —</option>
                     {deptOptions.map((d) => (
                       <option value={d.id} selected={emp!.departmentId === d.id}>
@@ -816,8 +815,8 @@ const freqLabel: Record<string, string> = {
               <input type="text" name="externalUserRef" class="input" value={emp.externalUserRef ?? ''} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato</label>
-              <select name="contractType" class="input">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato *</label>
+              <select name="contractType" class="input" required>
                 <option value="">—</option>
                 <option value="permanent" selected={emp.contractType === 'permanent'}>Permanente</option>
                 <option value="transitory" selected={emp.contractType === 'transitory'}>Contrato transitorio</option>
@@ -882,7 +881,7 @@ const freqLabel: Record<string, string> = {
           </p>
 
           <div>
-            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago</label>
+            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago *</label>
             <div class="bank-radio-group">
               <label class="bank-radio-label">
                 <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} class="bank-radio-input" />
@@ -1884,19 +1883,6 @@ const freqLabel: Record<string, string> = {
     })
   }
 
-  // Enforce the salary ceiling client-side before the form round-trips.
-  if (salaryInput) {
-    const form = document.getElementById('empForm')
-    form?.addEventListener('submit', function (e) {
-      const max = parseFloat(salaryInput.dataset.positionMax || '')
-      const val = parseFloat(salaryInput.value || '')
-      if (!isNaN(max) && !isNaN(val) && val > max) {
-        e.preventDefault()
-        salaryInput.focus()
-        alert('El salario base no puede superar el salario de la posición ($' + max + ').')
-      }
-    })
-  }
 
   // Foto / cédula: leer el archivo a base64, validar MIME + tamaño, y dejarlo
   // en el input hidden que viaja en el form. Vista previa inmediata.
@@ -2334,22 +2320,91 @@ function syncToggleUI(id, val) {
 })();
 </script>
 
-<script is:inline id="empForm-tab-validation">
+<script is:inline id="empForm-required-validation">
   ;(function () {
     var form = document.getElementById('empForm')
     if (!form) return
-    function revealTabFor(el) {
+    var banner = document.getElementById('reqError')
+
+    function tabInfo(el) {
       var panel = el && el.closest ? el.closest('[id^="tab-"]') : null
-      if (!panel) return
-      var btn = document.querySelector('[data-tab="' + panel.id.replace('tab-', '') + '"]')
-      if (btn) btn.click()
+      if (!panel) return null
+      var key = panel.id.replace('tab-', '')
+      var btn = document.querySelector('[data-tab="' + key + '"]')
+      return { key: key, label: btn ? btn.textContent.trim() : key }
     }
+
+    function fieldLabel(el) {
+      var wrap = el.closest('div')
+      var lbl = wrap ? wrap.querySelector('label') : null
+      return lbl ? lbl.textContent.replace('*', '').trim() : el.name
+    }
+
+    function collectMissing() {
+      var missing = []
+      var seenRadios = {}
+      var required = form.querySelectorAll('[required]')
+      for (var i = 0; i < required.length; i++) {
+        var el = required[i]
+        if (el.type === 'radio') {
+          if (seenRadios[el.name]) continue
+          seenRadios[el.name] = true
+          var group = form.querySelectorAll('input[name="' + el.name + '"]')
+          var any = false
+          for (var j = 0; j < group.length; j++) if (group[j].checked) { any = true; break }
+          if (!any) missing.push({ el: group[0], label: fieldLabel(el) })
+          continue
+        }
+        if (!String(el.value || '').trim()) missing.push({ el: el, label: fieldLabel(el) })
+      }
+      var ptypes = form.querySelectorAll('input[name="payrollTypeIds[]"]')
+      if (ptypes.length) {
+        var anyChecked = false
+        for (var k = 0; k < ptypes.length; k++) if (ptypes[k].checked) { anyChecked = true; break }
+        if (!anyChecked) missing.push({ el: ptypes[0], label: 'Tipo de planilla' })
+      }
+      return missing
+    }
+
     form.addEventListener('submit', function (e) {
-      var invalid = form.querySelector(':invalid')
-      if (invalid) {
-        e.preventDefault()
-        revealTabFor(invalid)
-        invalid.reportValidity()
+      if (banner) banner.classList.add('hidden')
+      var missing = collectMissing()
+
+      var salaryError = null
+      var salary = document.getElementById('baseSalaryInput')
+      if (salary) {
+        var max = parseFloat(salary.dataset.positionMax || '')
+        var val = parseFloat(salary.value || '')
+        if (!isNaN(max) && !isNaN(val) && val > max) {
+          salaryError = 'El salario base no puede superar el salario de la posición ($' + max + ').'
+        }
+      }
+
+      if (!missing.length && !salaryError) return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+
+      var lines = []
+      if (missing.length) {
+        lines.push('<strong>Faltan campos obligatorios:</strong>')
+        for (var i = 0; i < missing.length; i++) {
+          var t = tabInfo(missing[i].el)
+          lines.push('• ' + (t ? 'Pestaña «' + t.label + '» → ' : '') + missing[i].label)
+        }
+      }
+      if (salaryError) lines.push((missing.length ? '<br>' : '') + salaryError)
+
+      if (banner) {
+        banner.innerHTML = lines.join('<br>')
+        banner.classList.remove('hidden')
+        banner.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+
+      var focusEl = missing.length ? missing[0].el : salary
+      if (focusEl) {
+        var ti = tabInfo(focusEl)
+        if (ti) switchTab(ti.key, document.querySelector('[data-tab="' + ti.key + '"]'))
+        try { focusEl.focus() } catch (_) {}
       }
     })
   })()
