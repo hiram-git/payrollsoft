@@ -401,7 +401,7 @@ const freqLabel: Record<string, string> = {
       </div>
     )}
 
-    <form method="POST" action={`/api/employees/${id}`} id="empForm">
+    <form method="POST" action={`/api/employees/${id}`} id="empForm" novalidate>
       <input type="hidden" name="_method" value="PUT" />
 
       <!-- Tabs -->
@@ -2332,4 +2332,25 @@ function syncToggleUI(id, val) {
   yearSel.addEventListener('change', function() { load(yearSel.value); });
   load(String(nowYear));
 })();
+</script>
+
+<script is:inline id="empForm-tab-validation">
+  ;(function () {
+    var form = document.getElementById('empForm')
+    if (!form) return
+    function revealTabFor(el) {
+      var panel = el && el.closest ? el.closest('[id^="tab-"]') : null
+      if (!panel) return
+      var btn = document.querySelector('[data-tab="' + panel.id.replace('tab-', '') + '"]')
+      if (btn) btn.click()
+    }
+    form.addEventListener('submit', function (e) {
+      var invalid = form.querySelector(':invalid')
+      if (invalid) {
+        e.preventDefault()
+        revealTabFor(invalid)
+        invalid.reportValidity()
+      }
+    })
+  })()
 </script>
