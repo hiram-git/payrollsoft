@@ -185,9 +185,38 @@ Un solo binario, tres flujos de autenticación que comparten el núcleo
 
 | Modo           | Para qué                                                  | Auth                                               | Estado                          |
 | -------------- | --------------------------------------------------------- | -------------------------------------------------- | ------------------------------- |
-| **Empleado**   | El empleado marca solo lo suyo desde su teléfono.         | `POST /portal/auth/login` (cédula + contraseña) → JWT Bearer | **Funcional end-to-end** (login, marcación e historial propio) |
-| **Kiosko**     | Dispositivo compartido fijo que marca a muchos empleados. | Token de dispositivo (`X-Device-Token`)            | **Funcional end-to-end** (identificación facial/NFC pendiente) |
+| **Empleado**   | El empleado marca solo lo suyo desde su teléfono **con reconocimiento facial** (un solo botón; el backend clasifica entrada/almuerzo/salida por secuencia). | `POST /portal/auth/login` → JWT Bearer | **Funcional end-to-end**: enrolamiento + match + marcación |
+| **Kiosko**     | Dispositivo compartido fijo que marca a muchos empleados. | Token de dispositivo (`X-Device-Token`)            | Funcional con 4 botones manuales (legacy); flujo facial multi-empleado pendiente |
 | **Supervisor** | Marcación manual supervisada y aprobaciones.              | `POST /auth/login` (usuario tenant) → JWT Bearer   | Auth desbloqueada; flujo de marcación supervisada pendiente |
+
+### Flujo facial del empleado
+
+1. **Primer uso:** la pantalla "Marcar" detecta que no hay enrolamiento
+   y lleva a `/face-enroll`. El empleado se toma una foto, el embedding
+   se manda a `POST /portal/facial/enroll`.
+2. **Marcar:** el empleado toca "Marcar con cara". La cámara detecta su
+   rostro + liveness por parpadeo, extrae el embedding 128-dim, lo
+   manda a `POST /portal/facial/match` (verifica que sea el del JWT) y
+   después a `POST /portal/facial/marcaciones`. El backend cuenta cuántas
+   marcas verificadas tiene hoy y asigna el `kind`:
+   - 1ª del día → `entry`
+   - 2ª → `lunch_start`
+   - 3ª → `lunch_end`
+   - 4ª → `exit`
+   - 5+ → `extra`
+3. La consolidación diaria (`attendance_records`) se actualiza en vivo.
+
+> El flujo requiere conexión a la API: el match anti-fraude se hace en el
+> backend (necesita los enrollments). Si no hay red, la marcación facial
+> se rechaza con un mensaje claro. Ver `NOTES.md` para el TODO de modo
+> offline.
+
+### Modelos face-api
+
+Los modelos ONNX (~8 MB) viven en `apps/mobile/public/face-models/` y se
+empaquetan dentro del APK; no hay descargas en runtime. Son los mismos
+que usa `apps/web/public/face-models/` (kiosk web): cualquier
+actualización debe hacerse en ambos lugares.
 
 ## Estructura
 
