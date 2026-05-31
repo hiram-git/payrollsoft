@@ -28,6 +28,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   // ── PUT (update) ──────────────────────────────────────────────────────────────
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
+  const has = (k: string) => form.get(k) === 'on' || form.get(k) === 'true'
   const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
   // Recoger campos adicionales del form (prefijo cf_<code>) y serializar
@@ -90,6 +91,16 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
+    // Personal flags (Phase 2.D). The edit form always renders these
+    // checkboxes, so an absent value means "unchecked", not "untouched".
+    hasOwnDisability: has('hasOwnDisability'),
+    requiresAttendanceMarking: has('requiresAttendanceMarking'),
+    canRead: has('canRead'),
+    canWrite: has('canWrite'),
+    // Photo / scanned ID: only forward when the form actually carried the
+    // field, so a partial submit never wipes an existing image.
+    ...(form.has('photo') ? { photo: g('photo') || null } : {}),
+    ...(form.has('scannedId') ? { scannedId: g('scannedId') || null } : {}),
     // Datos bancarios (tesorería) — string vacío se mapea a null
     bankId: g('bankId') || null,
     accountNumber: g('accountNumber') || null,

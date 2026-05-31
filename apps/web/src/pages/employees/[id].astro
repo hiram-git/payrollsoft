@@ -64,6 +64,12 @@ type Employee = {
   terminationResolutionDate: string | null
   terminationReason: string | null
   siacapPct: string | null
+  hasOwnDisability?: boolean
+  requiresAttendanceMarking?: boolean
+  canRead?: boolean
+  canWrite?: boolean
+  photo?: string | null
+  scannedId?: string | null
   isActive: boolean
   payrollTypeIds?: string[]
   bankId?: string | null
@@ -568,6 +574,57 @@ const freqLabel: Record<string, string> = {
               <input type="text" name="otherAddress" class="input" value={emp.otherAddress ?? ''} />
             </div>
           </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Condición y registro</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Marque las casillas que apliquen a este colaborador. La discapacidad propia
+            habilita su saldo de incapacidad.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="hasOwnDisability" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.hasOwnDisability ?? false} />
+              <span class="text-sm text-gray-700">Tiene discapacidad propia</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="requiresAttendanceMarking" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.requiresAttendanceMarking ?? true} />
+              <span class="text-sm text-gray-700">Marca reloj (registra asistencia)</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canRead" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.canRead ?? false} />
+              <span class="text-sm text-gray-700">Sabe leer</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canWrite" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.canWrite ?? false} />
+              <span class="text-sm text-gray-700">Sabe escribir</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Foto y cédula</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Imágenes en formato PNG, JPEG o WEBP, hasta 500 KB cada una. La foto se
+            guarda como referencia visual.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Foto del colaborador</label>
+              <img id="photoPreview" src={emp.photo ?? ''} alt="" class={`w-28 h-28 rounded-lg object-cover border border-gray-200 mb-2 ${emp.photo ? '' : 'hidden'}`} />
+              <input type="hidden" name="photo" id="photoInput" value={emp.photo ?? ''} />
+              <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <button type="button" id="photoClear" class={`mt-2 text-xs text-red-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Quitar foto</button>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Cédula escaneada</label>
+              <img id="scannedIdPreview" src={emp.scannedId ?? ''} alt="" class={`w-full max-w-xs rounded-lg object-cover border border-gray-200 mb-2 ${emp.scannedId ? '' : 'hidden'}`} />
+              <input type="hidden" name="scannedId" id="scannedIdInput" value={emp.scannedId ?? ''} />
+              <input type="file" id="scannedIdFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <button type="button" id="scannedIdClear" class={`mt-2 text-xs text-red-600 hover:underline ${emp.scannedId ? '' : 'hidden'}`}>Quitar imagen</button>
+            </div>
+          </div>
+          <p id="imageError" class="hidden mt-3 text-xs text-red-600"></p>
         </div>
       </div>
 
@@ -1836,6 +1893,49 @@ const freqLabel: Record<string, string> = {
       }
     })
   }
+
+  // Foto / cédula: leer el archivo a base64, validar MIME + tamaño, y dejarlo
+  // en el input hidden que viaja en el form. Vista previa inmediata.
+  const MAX_IMG_BYTES = 500 * 1024
+  const ALLOWED_IMG = ['image/png', 'image/jpeg', 'image/webp']
+  const imgError = document.getElementById('imageError')
+  function wireImageField(fileId, inputId, previewId, clearId) {
+    const fileEl = document.getElementById(fileId)
+    const hidden = document.getElementById(inputId)
+    const preview = document.getElementById(previewId)
+    const clearBtn = document.getElementById(clearId)
+    if (!fileEl || !hidden) return
+    fileEl.addEventListener('change', function () {
+      const file = this.files && this.files[0]
+      if (!file) return
+      if (imgError) imgError.classList.add('hidden')
+      if (!ALLOWED_IMG.includes(file.type)) {
+        if (imgError) { imgError.textContent = 'Tipo no permitido. Use PNG, JPEG o WEBP.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      if (file.size > MAX_IMG_BYTES) {
+        if (imgError) { imgError.textContent = 'La imagen excede 500 KB.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = function () {
+        hidden.value = reader.result
+        if (preview) { preview.src = reader.result; preview.classList.remove('hidden') }
+        if (clearBtn) clearBtn.classList.remove('hidden')
+      }
+      reader.readAsDataURL(file)
+    })
+    clearBtn?.addEventListener('click', function () {
+      hidden.value = ''
+      if (preview) { preview.src = ''; preview.classList.add('hidden') }
+      if (fileEl) fileEl.value = ''
+      clearBtn.classList.add('hidden')
+    })
+  }
+  wireImageField('photoFile', 'photoInput', 'photoPreview', 'photoClear')
+  wireImageField('scannedIdFile', 'scannedIdInput', 'scannedIdPreview', 'scannedIdClear')
 </script>
 
 <script is:inline>

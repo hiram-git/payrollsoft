@@ -10,6 +10,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   const form = await request.formData()
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
+  const has = (k: string) => form.get(k) === 'on' || form.get(k) === 'true'
 
   const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
@@ -29,6 +30,14 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     baseSalary: g('baseSalary'),
     payFrequency: (g('payFrequency') || 'biweekly') as 'biweekly' | 'monthly' | 'weekly',
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
+    // Personal flags + media (Phase 2.D). Unchecked checkboxes don't post,
+    // so the booleans default to their schema default server-side.
+    hasOwnDisability: has('hasOwnDisability'),
+    requiresAttendanceMarking: has('requiresAttendanceMarking'),
+    canRead: has('canRead'),
+    canWrite: has('canWrite'),
+    photo: g('photo') || null,
+    scannedId: g('scannedId') || null,
   }
 
   // Basic required-field check

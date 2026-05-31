@@ -41,6 +41,13 @@ export type EmployeeCreateInput = {
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
   payrollTypeIds?: string[]
   customFields?: Record<string, unknown>
+  // Personal flags + media (Phase 2.D)
+  hasOwnDisability?: boolean
+  requiresAttendanceMarking?: boolean
+  canRead?: boolean
+  canWrite?: boolean
+  photo?: string | null
+  scannedId?: string | null
   // Datos bancarios (tesorería)
   bankId?: string | null
   accountNumber?: string | null
@@ -49,6 +56,44 @@ export type EmployeeCreateInput = {
 }
 
 export type EmployeeUpdateInput = Partial<EmployeeCreateInput>
+
+// ─── Image (base64) validation ────────────────────────────────────────────────
+
+const MAX_IMAGE_BYTES = 500 * 1024 // 500 KB
+const ALLOWED_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp'])
+
+/**
+ * Validates a base64 data URL for the photo / scanned ID: MIME must be one of
+ * png/jpeg/webp and the decoded payload must not exceed MAX_IMAGE_BYTES.
+ * Empty / null passes (clearing the field). Returns an error message or null.
+ */
+function validateImagePayload(value: string | null | undefined, label: string): string | null {
+  if (value == null || value === '') return null
+  const match = /^data:([^;]+);base64,(.+)$/s.exec(value)
+  if (!match) return `${label}: formato inválido (se espera data URL base64)`
+  const [, mime, payload] = match
+  if (!ALLOWED_IMAGE_MIME.has(mime)) {
+    return `${label}: tipo no permitido (${mime}). Use PNG, JPEG o WEBP.`
+  }
+  // base64 length → byte size: 4 chars encode 3 bytes, minus padding.
+  const padding = payload.endsWith('==') ? 2 : payload.endsWith('=') ? 1 : 0
+  const bytes = Math.floor((payload.length * 3) / 4) - padding
+  if (bytes > MAX_IMAGE_BYTES) {
+    return `${label}: excede el tamaño máximo de ${Math.round(MAX_IMAGE_BYTES / 1024)} KB`
+  }
+  return null
+}
+
+function validateEmployeeImages(input: {
+  photo?: string | null
+  scannedId?: string | null
+}): { error: 'invalid_image'; message: string } | null {
+  const photoErr = validateImagePayload(input.photo, 'Foto')
+  if (photoErr) return { error: 'invalid_image', message: photoErr }
+  const scanErr = validateImagePayload(input.scannedId, 'Cédula escaneada')
+  if (scanErr) return { error: 'invalid_image', message: scanErr }
+  return null
+}
 
 // ─── Custom field dependency validation ──────────────────────────────────────
 
@@ -202,6 +247,9 @@ export async function createEmployeeService(
   const salaryError = await checkSalaryWithinPosition(db, input.positionId, input.baseSalary)
   if (salaryError) return { success: false as const, ...salaryError }
 
+  const imageError = validateEmployeeImages(input)
+  if (imageError) return { success: false as const, ...imageError }
+
   const { position, department } = await resolveCatalogNames(db, input)
 
   if (input.customFields !== undefined) {
@@ -251,6 +299,12 @@ export async function createEmployeeService(
     accountType: input.accountType ?? null,
     paymentMethod: input.paymentMethod ?? 'check',
     customFields: input.customFields ?? {},
+    hasOwnDisability: input.hasOwnDisability ?? false,
+    requiresAttendanceMarking: input.requiresAttendanceMarking ?? true,
+    canRead: input.canRead ?? false,
+    canWrite: input.canWrite ?? false,
+    photo: input.photo ?? null,
+    scannedId: input.scannedId ?? null,
   })
 
   if (input.payrollTypeIds && input.payrollTypeIds.length > 0) {
@@ -266,11 +320,14 @@ export async function createEmployeeService(
   // Newly assigned position flips to 'en_uso' automatically.
   await recomputePositionStatus(db, employee.positionId)
 
-  // Initialize the compensatory time balance for the new employee.
-  // disability/family_disability hooks are wired in Phase 2.B.
+  // Initialize the compensatory time balance for the new employee, plus the
+  // own-disability balance when the flag is set (Phase 2.D unblocks this).
   try {
     const { initializeEmployeeBalances } = await import('../time-balance/service')
-    await initializeEmployeeBalances(db, employee.id, { performedBy: undefined })
+    await initializeEmployeeBalances(db, employee.id, {
+      hasDisability: employee.hasOwnDisability ?? false,
+      performedBy: undefined,
+    })
   } catch (_) {
     /* non-blocking: table may not exist yet */
   }
@@ -313,6 +370,9 @@ export async function updateEmployeeService(
   const effectiveBaseSalary = input.baseSalary ?? existing.baseSalary
   const salaryError = await checkSalaryWithinPosition(db, effectivePositionId, effectiveBaseSalary)
   if (salaryError) return { success: false as const, ...salaryError }
+
+  const imageError = validateEmployeeImages(input)
+  if (imageError) return { success: false as const, ...imageError }
 
   const patch: Record<string, unknown> = {}
   if (input.code !== undefined) patch.code = input.code.trim().toUpperCase()
@@ -375,6 +435,14 @@ export async function updateEmployeeService(
     patch.terminationReason = input.terminationReason?.trim() || null
   if (input.siacapPct !== undefined) patch.siacapPct = input.siacapPct?.trim() || null
   if (input.customFields !== undefined) patch.customFields = input.customFields
+  // Personal flags + media (Phase 2.D)
+  if (input.hasOwnDisability !== undefined) patch.hasOwnDisability = input.hasOwnDisability
+  if (input.requiresAttendanceMarking !== undefined)
+    patch.requiresAttendanceMarking = input.requiresAttendanceMarking
+  if (input.canRead !== undefined) patch.canRead = input.canRead
+  if (input.canWrite !== undefined) patch.canWrite = input.canWrite
+  if ('photo' in input) patch.photo = input.photo || null
+  if ('scannedId' in input) patch.scannedId = input.scannedId || null
   if ('positionId' in input) {
     const newPosId = input.positionId || null
     if (newPosId && newPosId !== existing.positionId) {
@@ -464,6 +532,24 @@ export async function updateEmployeeService(
   }
 
   const updated = await updateEmployee(db, id, patch)
+
+  // Own-disability flag toggles the disability time balance for the year.
+  // Opening is safe/idempotent; closing only removes an unused balance.
+  if (input.hasOwnDisability !== undefined && input.hasOwnDisability !== existing.hasOwnDisability) {
+    try {
+      const { syncConditionalBalance } = await import('../time-balance/service')
+      await syncConditionalBalance(
+        db,
+        id,
+        'disability',
+        input.hasOwnDisability,
+        undefined,
+        options.changedBy
+      )
+    } catch (_) {
+      /* non-blocking: balances table may not exist yet */
+    }
+  }
 
   if (input.customFields !== undefined) {
     await recordCustomFieldHistory(

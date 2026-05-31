@@ -31,6 +31,13 @@ const EmployeeBody = t.Object({
   ),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
+  // Personal flags + media (Phase 2.D)
+  hasOwnDisability: t.Optional(t.Boolean()),
+  requiresAttendanceMarking: t.Optional(t.Boolean()),
+  canRead: t.Optional(t.Boolean()),
+  canWrite: t.Optional(t.Boolean()),
+  photo: t.Optional(t.Nullable(t.String())),
+  scannedId: t.Optional(t.Nullable(t.String())),
   // Datos bancarios (tesorería)
   bankId: t.Optional(t.Nullable(t.String())),
   accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
@@ -92,6 +99,13 @@ const EmployeeUpdateBody = t.Object({
   siacapPct: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
+  // Personal flags + media (Phase 2.D)
+  hasOwnDisability: t.Optional(t.Boolean()),
+  requiresAttendanceMarking: t.Optional(t.Boolean()),
+  canRead: t.Optional(t.Boolean()),
+  canWrite: t.Optional(t.Boolean()),
+  photo: t.Optional(t.Nullable(t.String())),
+  scannedId: t.Optional(t.Nullable(t.String())),
   bankId: t.Optional(t.Nullable(t.String())),
   accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
   accountType: t.Optional(t.Nullable(t.Union([t.Literal('savings'), t.Literal('checking')]))),
@@ -190,7 +204,9 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           set.status =
             result.error === 'code_taken'
               ? 409
-              : result.error === 'custom_field_required' || result.error === 'salary_exceeds_position'
+              : result.error === 'custom_field_required' ||
+                  result.error === 'salary_exceeds_position' ||
+                  result.error === 'invalid_image'
                 ? 422
                 : result.error === 'custom_field_forbidden'
                   ? 403
@@ -230,7 +246,9 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           set.status =
             result.error === 'not_found'
               ? 404
-              : result.error === 'custom_field_required' || result.error === 'salary_exceeds_position'
+              : result.error === 'custom_field_required' ||
+                  result.error === 'salary_exceeds_position' ||
+                  result.error === 'invalid_image'
                 ? 422
                 : result.error === 'custom_field_forbidden'
                   ? 403
