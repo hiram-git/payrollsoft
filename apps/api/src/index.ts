@@ -38,6 +38,7 @@ import { payrollRoutes } from './modules/payroll/routes'
 import { portalAuthRoutes } from './modules/portal/auth-routes'
 import { portalCredentialsRoutes } from './modules/portal/credentials-routes'
 import { portalDataRoutes } from './modules/portal/data-routes'
+import { portalFacialRoutes } from './modules/portal/facial-routes'
 import { positionsRoutes } from './modules/positions/routes'
 import { reportsRoutes } from './modules/reports/routes'
 import { roleRoutes, userRoleRoutes } from './modules/roles/routes'
@@ -107,6 +108,7 @@ const app = new Elysia()
   .use(portalAuthRoutes)
   .use(portalCredentialsRoutes)
   .use(portalDataRoutes)
+  .use(portalFacialRoutes)
   .use(syncRoutes)
 
   // ── Start ───────────────────────────────────────────────────────────────────
