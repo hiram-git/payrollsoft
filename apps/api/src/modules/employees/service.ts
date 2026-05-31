@@ -11,6 +11,7 @@ import {
   getEmployee,
   getEmployeeByCode,
   getFuncionById,
+  getPosition,
   listEmployees,
   positions,
   recomputePositionStatus,
@@ -136,6 +137,30 @@ async function resolveCatalogNames(
   }
 }
 
+/**
+ * When an employee is tied to a position, the editable baseSalary may be
+ * lowered but never exceed the position's salary (the budgeted ceiling).
+ * Returns an error result when the cap is violated, otherwise null.
+ */
+async function checkSalaryWithinPosition(
+  db: AnyDb,
+  positionId: string | null | undefined,
+  baseSalary: string | undefined
+): Promise<{ error: 'salary_exceeds_position'; message: string } | null> {
+  if (!positionId || baseSalary === undefined) return null
+  const pos = await getPosition(db, positionId)
+  if (!pos) return null
+  const max = Number(pos.salary)
+  const value = Number(baseSalary)
+  if (Number.isFinite(max) && Number.isFinite(value) && value > max) {
+    return {
+      error: 'salary_exceeds_position',
+      message: `El salario base no puede superar el salario de la posición (${pos.salary})`,
+    }
+  }
+  return null
+}
+
 // ─── List ─────────────────────────────────────────────────────────────────────
 
 export function listEmployeesService(
@@ -173,6 +198,9 @@ export async function createEmployeeService(
       message: `Code "${input.code}" is already in use`,
     }
   }
+
+  const salaryError = await checkSalaryWithinPosition(db, input.positionId, input.baseSalary)
+  if (salaryError) return { success: false as const, ...salaryError }
 
   const { position, department } = await resolveCatalogNames(db, input)
 
@@ -277,6 +305,14 @@ export async function updateEmployeeService(
       }
     }
   }
+
+  // Salary ceiling check against the effective position (incoming or current)
+  // and effective baseSalary, so neither field can drift above the budget.
+  const effectivePositionId =
+    'positionId' in input ? input.positionId || null : (existing.positionId ?? null)
+  const effectiveBaseSalary = input.baseSalary ?? existing.baseSalary
+  const salaryError = await checkSalaryWithinPosition(db, effectivePositionId, effectiveBaseSalary)
+  if (salaryError) return { success: false as const, ...salaryError }
 
   const patch: Record<string, unknown> = {}
   if (input.code !== undefined) patch.code = input.code.trim().toUpperCase()

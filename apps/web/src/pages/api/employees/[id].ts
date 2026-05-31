@@ -133,6 +133,9 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   const msg = data.error ?? ''
 
+  if (msg.toLowerCase().includes('salario')) {
+    return redirect(`/employees/${id}?error=salary_max`)
+  }
   if (msg.toLowerCase().includes('tipo de planilla')) {
     return redirect(`/employees/${id}?error=no_payroll_type`)
   }

@@ -190,7 +190,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           set.status =
             result.error === 'code_taken'
               ? 409
-              : result.error === 'custom_field_required'
+              : result.error === 'custom_field_required' || result.error === 'salary_exceeds_position'
                 ? 422
                 : result.error === 'custom_field_forbidden'
                   ? 403
@@ -230,7 +230,7 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           set.status =
             result.error === 'not_found'
               ? 404
-              : result.error === 'custom_field_required'
+              : result.error === 'custom_field_required' || result.error === 'salary_exceeds_position'
                 ? 422
                 : result.error === 'custom_field_forbidden'
                   ? 403

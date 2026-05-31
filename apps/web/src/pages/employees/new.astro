@@ -14,6 +14,8 @@ type Position = {
   code: string
   name: string
   salary: string
+  overtimeAmount: string | null
+  representationAmount: string | null
   jobTitleId: string | null
   departmentId: string | null
   jobFunctionId: string | null
@@ -66,6 +68,7 @@ const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
+  salary_max: 'El salario base no puede superar el salario de la posición.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -157,7 +160,16 @@ const errorMessages: Record<string, string> = {
                 <select name="positionId" id="positionSelect" class="input" required>
                   <option value="">— Seleccionar posición —</option>
                   {positions.map((p) => (
-                    <option value={p.id} data-cargo={p.jobTitleId ?? ''} data-depto={p.departmentId ?? ''} data-funcion={p.jobFunctionId ?? ''} data-salary={p.salary}>
+                    <option
+                      value={p.id}
+                      data-cargo={p.jobTitleId ?? ''}
+                      data-cargo-name={p.jobTitleId ? (activeCargos.find((c) => c.id === p.jobTitleId)?.name ?? '') : ''}
+                      data-depto={p.departmentId ?? ''}
+                      data-funcion={p.jobFunctionId ?? ''}
+                      data-salary={p.salary}
+                      data-overtime={p.overtimeAmount ?? '0'}
+                      data-representation={p.representationAmount ?? '0'}
+                    >
                       {p.name} ({p.code}) — ${p.salary}
                     </option>
                   ))}
@@ -202,6 +214,30 @@ const errorMessages: Record<string, string> = {
           </div>
         </div>
 
+        {isPublica && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4" id="positionInfoCard" style="display:none">
+            <h3 class="font-semibold text-gray-800 mb-4">Información de la posición</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Cargo</div>
+                <div class="text-gray-800" id="posInfoCargo">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Salario de la posición</div>
+                <div class="text-gray-800" id="posInfoSalary">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Sobresueldo</div>
+                <div class="text-gray-800" id="posInfoOvertime">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Gastos de representación</div>
+                <div class="text-gray-800" id="posInfoRepresentation">—</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <h3 class="font-semibold text-gray-800 mb-4">Salario y Contrato</h3>
           <div class="grid grid-cols-2 gap-4">
@@ -220,17 +256,22 @@ const errorMessages: Record<string, string> = {
             <div class="col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Salario base (USD) *
-                {isPublica && <span class="ml-1 text-xs text-gray-400">(se establece desde la posición)</span>}
+                {isPublica && <span class="ml-1 text-xs text-gray-400" id="salaryMaxHint"></span>}
               </label>
               <input
                 type="text"
                 name="baseSalary"
                 id="baseSalaryInput"
-                class={`input ${isPublica ? 'bg-gray-50 text-gray-500' : ''}`}
+                class="input"
                 required
                 placeholder="1200.00"
-                readonly={isPublica}
+                data-position-max=""
               />
+              {isPublica && (
+                <p class="mt-1 text-xs text-gray-500">
+                  Puede ajustar el salario hacia abajo; no puede superar el salario de la posición.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -303,20 +344,49 @@ const errorMessages: Record<string, string> = {
     btn.classList.add('active')
   }
 
-  // Auto-fill cargo/depto/funcion/salary from selected position (empresa pública)
+  // Auto-fill cargo/depto/salary from selected position (empresa pública).
+  // Salary is editable but capped at the position salary; selecting a
+  // position seeds it with the maximum and refreshes the info block.
   const posSelect = document.getElementById('positionSelect')
-  if (posSelect) {
+  const salaryInput = document.getElementById('baseSalaryInput')
+  if (posSelect && salaryInput) {
     posSelect.addEventListener('change', function () {
       const opt = this.options[this.selectedIndex]
-      document.getElementById('hiddenCargoId').value = opt.dataset.cargo || ''
-      document.getElementById('hiddenDepartamentoId').value = opt.dataset.depto || ''
-      document.getElementById('hiddenFuncionId').value = opt.dataset.funcion || ''
-      document.getElementById('baseSalaryInput').value = opt.dataset.salary || ''
+      const max = opt.dataset.salary || ''
+      const hCargo = document.getElementById('hiddenCargoId')
+      const hDepto = document.getElementById('hiddenDepartamentoId')
+      const hFuncion = document.getElementById('hiddenFuncionId')
+      if (hCargo) hCargo.value = opt.dataset.cargo || ''
+      if (hDepto) hDepto.value = opt.dataset.depto || ''
+      if (hFuncion) hFuncion.value = opt.dataset.funcion || ''
+      salaryInput.value = max
+      salaryInput.dataset.positionMax = max
+      const hint = document.getElementById('salaryMaxHint')
+      if (hint) hint.textContent = max ? '(máximo de la posición: $' + max + ')' : ''
+      const card = document.getElementById('positionInfoCard')
+      if (card) card.style.display = opt.value ? '' : 'none'
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
+      set('posInfoCargo', opt.dataset.cargoName || '—')
+      set('posInfoSalary', max ? '$' + max : '—')
+      set('posInfoOvertime', '$' + (opt.dataset.overtime || '0'))
+      set('posInfoRepresentation', '$' + (opt.dataset.representation || '0'))
     })
   }
 
-  // On submit: validate required fields in hidden tabs before sending
+  // On submit: validate required fields in hidden tabs + salary ceiling
   document.getElementById('empForm').addEventListener('submit', function (e) {
+    const salary = document.getElementById('baseSalaryInput')
+    if (salary) {
+      const max = parseFloat(salary.dataset.positionMax || '')
+      const val = parseFloat(salary.value || '')
+      if (!isNaN(max) && !isNaN(val) && val > max) {
+        e.preventDefault()
+        switchTab('laboral', document.querySelector('[data-tab="laboral"]'))
+        salary.focus()
+        alert('El salario base no puede superar el salario de la posición ($' + max + ').')
+        return
+      }
+    }
     const required = this.querySelectorAll('[required]')
     let firstInvalid = null
     for (const el of required) {
