@@ -14,6 +14,8 @@ type Position = {
   code: string
   name: string
   salary: string
+  overtimeAmount: string | null
+  representationAmount: string | null
   jobTitleId: string | null
   departmentId: string | null
   jobFunctionId: string | null
@@ -66,6 +68,7 @@ const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
+  salary_max: 'El salario base no puede superar el salario de la posición.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -138,6 +141,56 @@ const errorMessages: Record<string, string> = {
             </div>
           </div>
         </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Condición y registro</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Marque las casillas que apliquen. La discapacidad propia habilita el saldo
+            de incapacidad del colaborador.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="hasOwnDisability" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <span class="text-sm text-gray-700">Tiene discapacidad propia</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="requiresAttendanceMarking" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked />
+              <span class="text-sm text-gray-700">Marca reloj (registra asistencia)</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canRead" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <span class="text-sm text-gray-700">Sabe leer</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canWrite" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              <span class="text-sm text-gray-700">Sabe escribir</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Foto y cédula</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Imágenes en formato PNG, JPEG o WEBP, hasta 500 KB cada una.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Foto del colaborador</label>
+              <img id="photoPreview" src="" alt="" class="w-28 h-28 rounded-lg object-cover border border-gray-200 mb-2 hidden" />
+              <input type="hidden" name="photo" id="photoInput" />
+              <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <button type="button" id="photoClear" class="mt-2 text-xs text-red-600 hover:underline hidden">Quitar foto</button>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Cédula escaneada</label>
+              <img id="scannedIdPreview" src="" alt="" class="w-full max-w-xs rounded-lg object-cover border border-gray-200 mb-2 hidden" />
+              <input type="hidden" name="scannedId" id="scannedIdInput" />
+              <input type="file" id="scannedIdFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <button type="button" id="scannedIdClear" class="mt-2 text-xs text-red-600 hover:underline hidden">Quitar imagen</button>
+            </div>
+          </div>
+          <p id="imageError" class="hidden mt-3 text-xs text-red-600"></p>
+        </div>
       </div>
 
       <!-- TAB: Datos Laborales -->
@@ -157,22 +210,39 @@ const errorMessages: Record<string, string> = {
                 <select name="positionId" id="positionSelect" class="input" required>
                   <option value="">— Seleccionar posición —</option>
                   {positions.map((p) => (
-                    <option value={p.id} data-cargo={p.jobTitleId ?? ''} data-depto={p.departmentId ?? ''} data-funcion={p.jobFunctionId ?? ''} data-salary={p.salary}>
+                    <option
+                      value={p.id}
+                      data-cargo={p.jobTitleId ?? ''}
+                      data-cargo-name={p.jobTitleId ? (activeCargos.find((c) => c.id === p.jobTitleId)?.name ?? '') : ''}
+                      data-depto={p.departmentId ?? ''}
+                      data-salary={p.salary}
+                      data-overtime={p.overtimeAmount ?? '0'}
+                      data-representation={p.representationAmount ?? '0'}
+                    >
                       {p.name} ({p.code}) — ${p.salary}
                     </option>
                   ))}
                 </select>
               </div>
-              <!-- Hidden inputs auto-filled by JS -->
-              <input type="hidden" name="cargoId" id="hiddenCargoId" />
-              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" />
-              <input type="hidden" name="funcionId" id="hiddenFuncionId" />
+              <!-- Cargo + departamento se derivan de la posición -->
+              <input type="hidden" name="jobTitleId" id="hiddenCargoId" />
+              <input type="hidden" name="departmentId" id="hiddenDepartamentoId" />
+              <!-- La función es atributo del empleado, editable también con posición -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+                <select name="jobFunctionId" class="input">
+                  <option value="">— Sin función —</option>
+                  {activeFunciones.map((f) => (
+                    <option value={f.id}>{f.name} ({f.code})</option>
+                  ))}
+                </select>
+              </div>
             ) : (
               <!-- Empresa privada: selección directa -->
               <>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                  <select name="departamentoId" class="input">
+                  <select name="departmentId" class="input">
                     <option value="">— Sin departamento —</option>
                     {activeDepts.map((d) => (
                       <option value={d.id}>{d.name} ({d.code})</option>
@@ -181,7 +251,7 @@ const errorMessages: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                  <select name="cargoId" class="input">
+                  <select name="jobTitleId" class="input">
                     <option value="">— Sin cargo —</option>
                     {activeCargos.map((c) => (
                       <option value={c.id}>{c.name} ({c.code})</option>
@@ -190,7 +260,7 @@ const errorMessages: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-                  <select name="funcionId" class="input">
+                  <select name="jobFunctionId" class="input">
                     <option value="">— Sin función —</option>
                     {activeFunciones.map((f) => (
                       <option value={f.id}>{f.name} ({f.code})</option>
@@ -201,6 +271,30 @@ const errorMessages: Record<string, string> = {
             )}
           </div>
         </div>
+
+        {isPublica && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4" id="positionInfoCard" style="display:none">
+            <h3 class="font-semibold text-gray-800 mb-4">Información de la posición</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Cargo</div>
+                <div class="text-gray-800" id="posInfoCargo">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Salario de la posición</div>
+                <div class="text-gray-800" id="posInfoSalary">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Sobresueldo</div>
+                <div class="text-gray-800" id="posInfoOvertime">—</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Gastos de representación</div>
+                <div class="text-gray-800" id="posInfoRepresentation">—</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <h3 class="font-semibold text-gray-800 mb-4">Salario y Contrato</h3>
@@ -220,17 +314,22 @@ const errorMessages: Record<string, string> = {
             <div class="col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Salario base (USD) *
-                {isPublica && <span class="ml-1 text-xs text-gray-400">(se establece desde la posición)</span>}
+                {isPublica && <span class="ml-1 text-xs text-gray-400" id="salaryMaxHint"></span>}
               </label>
               <input
                 type="text"
                 name="baseSalary"
                 id="baseSalaryInput"
-                class={`input ${isPublica ? 'bg-gray-50 text-gray-500' : ''}`}
+                class="input"
                 required
                 placeholder="1200.00"
-                readonly={isPublica}
+                data-position-max=""
               />
+              {isPublica && (
+                <p class="mt-1 text-xs text-gray-500">
+                  Puede ajustar el salario hacia abajo; no puede superar el salario de la posición.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -303,20 +402,47 @@ const errorMessages: Record<string, string> = {
     btn.classList.add('active')
   }
 
-  // Auto-fill cargo/depto/funcion/salary from selected position (empresa pública)
+  // Auto-fill cargo/depto/salary from selected position (empresa pública).
+  // Salary is editable but capped at the position salary; selecting a
+  // position seeds it with the maximum and refreshes the info block.
   const posSelect = document.getElementById('positionSelect')
-  if (posSelect) {
+  const salaryInput = document.getElementById('baseSalaryInput')
+  if (posSelect && salaryInput) {
     posSelect.addEventListener('change', function () {
       const opt = this.options[this.selectedIndex]
-      document.getElementById('hiddenCargoId').value = opt.dataset.cargo || ''
-      document.getElementById('hiddenDepartamentoId').value = opt.dataset.depto || ''
-      document.getElementById('hiddenFuncionId').value = opt.dataset.funcion || ''
-      document.getElementById('baseSalaryInput').value = opt.dataset.salary || ''
+      const max = opt.dataset.salary || ''
+      const hCargo = document.getElementById('hiddenCargoId')
+      const hDepto = document.getElementById('hiddenDepartamentoId')
+      if (hCargo) hCargo.value = opt.dataset.cargo || ''
+      if (hDepto) hDepto.value = opt.dataset.depto || ''
+      salaryInput.value = max
+      salaryInput.dataset.positionMax = max
+      const hint = document.getElementById('salaryMaxHint')
+      if (hint) hint.textContent = max ? '(máximo de la posición: $' + max + ')' : ''
+      const card = document.getElementById('positionInfoCard')
+      if (card) card.style.display = opt.value ? '' : 'none'
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
+      set('posInfoCargo', opt.dataset.cargoName || '—')
+      set('posInfoSalary', max ? '$' + max : '—')
+      set('posInfoOvertime', '$' + (opt.dataset.overtime || '0'))
+      set('posInfoRepresentation', '$' + (opt.dataset.representation || '0'))
     })
   }
 
-  // On submit: validate required fields in hidden tabs before sending
+  // On submit: validate required fields in hidden tabs + salary ceiling
   document.getElementById('empForm').addEventListener('submit', function (e) {
+    const salary = document.getElementById('baseSalaryInput')
+    if (salary) {
+      const max = parseFloat(salary.dataset.positionMax || '')
+      const val = parseFloat(salary.value || '')
+      if (!isNaN(max) && !isNaN(val) && val > max) {
+        e.preventDefault()
+        switchTab('laboral', document.querySelector('[data-tab="laboral"]'))
+        salary.focus()
+        alert('El salario base no puede superar el salario de la posición ($' + max + ').')
+        return
+      }
+    }
     const required = this.querySelectorAll('[required]')
     let firstInvalid = null
     for (const el of required) {
@@ -336,4 +462,47 @@ const errorMessages: Record<string, string> = {
       firstInvalid.reportValidity()
     }
   })
+
+  // Foto / cédula: leer el archivo a base64, validar MIME + tamaño, y dejarlo
+  // en el input hidden que viaja en el form. Vista previa inmediata.
+  const MAX_IMG_BYTES = 500 * 1024
+  const ALLOWED_IMG = ['image/png', 'image/jpeg', 'image/webp']
+  const imgError = document.getElementById('imageError')
+  function wireImageField(fileId, inputId, previewId, clearId) {
+    const fileEl = document.getElementById(fileId)
+    const hidden = document.getElementById(inputId)
+    const preview = document.getElementById(previewId)
+    const clearBtn = document.getElementById(clearId)
+    if (!fileEl || !hidden) return
+    fileEl.addEventListener('change', function () {
+      const file = this.files && this.files[0]
+      if (!file) return
+      if (imgError) imgError.classList.add('hidden')
+      if (!ALLOWED_IMG.includes(file.type)) {
+        if (imgError) { imgError.textContent = 'Tipo no permitido. Use PNG, JPEG o WEBP.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      if (file.size > MAX_IMG_BYTES) {
+        if (imgError) { imgError.textContent = 'La imagen excede 500 KB.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = function () {
+        hidden.value = reader.result
+        if (preview) { preview.src = reader.result; preview.classList.remove('hidden') }
+        if (clearBtn) clearBtn.classList.remove('hidden')
+      }
+      reader.readAsDataURL(file)
+    })
+    clearBtn?.addEventListener('click', function () {
+      hidden.value = ''
+      if (preview) { preview.src = ''; preview.classList.add('hidden') }
+      if (fileEl) fileEl.value = ''
+      clearBtn.classList.add('hidden')
+    })
+  }
+  wireImageField('photoFile', 'photoInput', 'photoPreview', 'photoClear')
+  wireImageField('scannedIdFile', 'scannedIdInput', 'scannedIdPreview', 'scannedIdClear')
 </script>

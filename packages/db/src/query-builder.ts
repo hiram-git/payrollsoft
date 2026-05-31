@@ -2440,10 +2440,14 @@ export type CreatePositionData = {
   code: string
   name: string
   salary: string
+  overtimeAmount?: string
+  representationAmount?: string
   jobTitleId?: string | null
   departmentId?: string | null
-  jobFunctionId?: string | null
   budgetItemId?: string | null
+  overtimeBudgetItemId?: string | null
+  representationBudgetItemId?: string | null
+  thirteenthMonthBudgetItemId?: string | null
   status?: 'en_uso' | 'vacante'
 }
 

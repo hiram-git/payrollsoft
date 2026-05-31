@@ -31,10 +31,14 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     code: g('code'),
     name: g('name'),
     salary: g('salary'),
+    overtimeAmount: g('overtimeAmount') || '0',
+    representationAmount: g('representationAmount') || '0',
     jobTitleId: g('jobTitleId') || null,
     departmentId: g('departmentId') || null,
-    jobFunctionId: g('jobFunctionId') || null,
     budgetItemId: g('budgetItemId') || null,
+    overtimeBudgetItemId: g('overtimeBudgetItemId') || null,
+    representationBudgetItemId: g('representationBudgetItemId') || null,
+    thirteenthMonthBudgetItemId: g('thirteenthMonthBudgetItemId') || null,
     status: status === 'en_uso' || status === 'vacante' ? status : 'vacante',
   }
 
@@ -63,6 +67,9 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   if (res.status === 409 || data.error === 'code_taken') {
     return redirect(`/config/estructura/${id}?error=code_taken`)
+  }
+  if (data.error === 'invalid_budget_item') {
+    return redirect(`/config/estructura/${id}?error=invalid_budget_item`)
   }
   return redirect(`/config/estructura/${id}?error=server-error`)
 }

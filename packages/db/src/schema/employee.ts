@@ -70,6 +70,12 @@ export const employees = pgTable('employees', {
   paymentMethod: varchar('payment_method', { length: 10 }).notNull().default('check'),
   siacapPct: varchar('siacap_pct', { length: 10 }),
   photo: text('photo'),
+  // Personal flags (Phase 2.D). has_own_disability drives the own-disability
+  // time balance; requires_attendance_marking gates the time-clock/facial flow.
+  hasOwnDisability: boolean('has_own_disability').notNull().default(false),
+  requiresAttendanceMarking: boolean('requires_attendance_marking').notNull().default(true),
+  canRead: boolean('can_read').notNull().default(false),
+  canWrite: boolean('can_write').notNull().default(false),
   isActive: boolean('is_active').notNull().default(true),
   customFields: jsonb('custom_fields').default({}),
   createdAt: timestamp('created_at').notNull().defaultNow(),

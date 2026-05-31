@@ -64,6 +64,12 @@ type Employee = {
   terminationResolutionDate: string | null
   terminationReason: string | null
   siacapPct: string | null
+  hasOwnDisability?: boolean
+  requiresAttendanceMarking?: boolean
+  canRead?: boolean
+  canWrite?: boolean
+  photo?: string | null
+  scannedId?: string | null
   isActive: boolean
   payrollTypeIds?: string[]
   bankId?: string | null
@@ -81,6 +87,8 @@ type Position = {
   code: string
   name: string
   salary: string
+  overtimeAmount: string | null
+  representationAmount: string | null
   jobTitleId: string | null
   departmentId: string | null
   jobFunctionId: string | null
@@ -339,6 +347,12 @@ const funcionOptions = buildOptions(funciones, emp.jobFunctionId)
 const deptOptions = buildOptions(departamentos, emp.departmentId)
 
 const positionOptions = isPublica ? positions.filter((p) => p.isActive) : []
+// Currently assigned position drives the salary ceiling and the read-only
+// info block shown for institutions with positions.
+const currentPosition = isPublica
+  ? (positions.find((p) => p.id === emp.positionId) ?? null)
+  : null
+const jobTitleNameById = new Map(cargos.map((c) => [c.id, c.name]))
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const success = Astro.url.searchParams.get('success') === '1'
@@ -346,6 +360,7 @@ const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
   no_payroll_type: 'El empleado debe pertenecer a al menos un tipo de planilla.',
+  salary_max: 'El salario base no puede superar el salario de la posición.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -560,6 +575,61 @@ const freqLabel: Record<string, string> = {
             </div>
           </div>
         </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Condición y registro</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Marque las casillas que apliquen a este colaborador. La discapacidad propia
+            habilita su saldo de incapacidad.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="hasOwnDisability" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.hasOwnDisability ?? false} />
+              <span class="text-sm text-gray-700">Tiene discapacidad propia</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="requiresAttendanceMarking" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.requiresAttendanceMarking ?? true} />
+              <span class="text-sm text-gray-700">Marca reloj (registra asistencia)</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canRead" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.canRead ?? false} />
+              <span class="text-sm text-gray-700">Sabe leer</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canWrite" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.canWrite ?? false} />
+              <span class="text-sm text-gray-700">Sabe escribir</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Foto y cédula</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Imágenes en formato PNG, JPEG o WEBP, hasta 500 KB cada una. La foto se
+            guarda como referencia visual y puede usarse para enrolar el rostro.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Foto del colaborador</label>
+              <img id="photoPreview" src={emp.photo ?? ''} alt="" class={`w-28 h-28 rounded-lg object-cover border border-gray-200 mb-2 ${emp.photo ? '' : 'hidden'}`} />
+              <input type="hidden" name="photo" id="photoInput" value={emp.photo ?? ''} />
+              <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <div class="flex items-center gap-3 mt-2">
+                <button type="button" id="photoClear" class={`text-xs text-red-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Quitar foto</button>
+                <button type="button" id="enrollFaceBtn" class={`text-xs font-medium text-blue-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Enrolar rostro desde la foto</button>
+              </div>
+              <p id="enrollStatus" class="hidden mt-2 text-xs"></p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Cédula escaneada</label>
+              <img id="scannedIdPreview" src={emp.scannedId ?? ''} alt="" class={`w-full max-w-xs rounded-lg object-cover border border-gray-200 mb-2 ${emp.scannedId ? '' : 'hidden'}`} />
+              <input type="hidden" name="scannedId" id="scannedIdInput" value={emp.scannedId ?? ''} />
+              <input type="file" id="scannedIdFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <button type="button" id="scannedIdClear" class={`mt-2 text-xs text-red-600 hover:underline ${emp.scannedId ? '' : 'hidden'}`}>Quitar imagen</button>
+            </div>
+          </div>
+          <p id="imageError" class="hidden mt-3 text-xs text-red-600"></p>
+        </div>
       </div>
 
       <!-- TAB: Datos Laborales -->
@@ -583,25 +653,38 @@ const freqLabel: Record<string, string> = {
                       value={p.id}
                       selected={emp!.positionId === p.id}
                       data-cargo={p.jobTitleId ?? ''}
+                      data-cargo-name={p.jobTitleId ? (jobTitleNameById.get(p.jobTitleId) ?? '') : ''}
                       data-depto={p.departmentId ?? ''}
-                      data-funcion={p.jobFunctionId ?? ''}
                       data-salary={p.salary}
+                      data-overtime={p.overtimeAmount ?? '0'}
+                      data-representation={p.representationAmount ?? '0'}
                     >
                       {p.name} ({p.code}) — ${p.salary}
                     </option>
                   ))}
                 </select>
               </div>
-              <!-- Hidden inputs auto-filled by JS, seeded with current employee values -->
-              <input type="hidden" name="cargoId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
-              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
-              <input type="hidden" name="funcionId" id="hiddenFuncionId" value={emp.jobFunctionId ?? ''} />
+              <!-- Cargo + departamento se derivan de la posición -->
+              <input type="hidden" name="jobTitleId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
+              <input type="hidden" name="departmentId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
+              <!-- La función es atributo del empleado, editable también con posición -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+                <select name="jobFunctionId" class="input">
+                  <option value="">— Sin función —</option>
+                  {funcionOptions.map((f) => (
+                    <option value={f.id} selected={emp!.jobFunctionId === f.id}>
+                      {f.name} ({f.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
             ) : (
               <!-- Empresa privada: selección directa -->
               <>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                  <select name="departamentoId" class="input">
+                  <select name="departmentId" class="input">
                     <option value="">— Sin departamento —</option>
                     {deptOptions.map((d) => (
                       <option value={d.id} selected={emp!.departmentId === d.id}>
@@ -612,7 +695,7 @@ const freqLabel: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                  <select name="cargoId" class="input">
+                  <select name="jobTitleId" class="input">
                     <option value="">— Sin cargo —</option>
                     {cargoOptions.map((c) => (
                       <option value={c.id} selected={emp!.jobTitleId === c.id}>
@@ -623,7 +706,7 @@ const freqLabel: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-                  <select name="funcionId" class="input">
+                  <select name="jobFunctionId" class="input">
                     <option value="">— Sin función —</option>
                     {funcionOptions.map((f) => (
                       <option value={f.id} selected={emp!.jobFunctionId === f.id}>
@@ -636,6 +719,32 @@ const freqLabel: Record<string, string> = {
             )}
           </div>
         </div>
+
+        {isPublica && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4" id="positionInfoCard" style={currentPosition ? '' : 'display:none'}>
+            <h3 class="font-semibold text-gray-800 mb-4">Información de la posición</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Cargo</div>
+                <div class="text-gray-800" id="posInfoCargo">
+                  {currentPosition?.jobTitleId ? (jobTitleNameById.get(currentPosition.jobTitleId) ?? '—') : '—'}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Salario de la posición</div>
+                <div class="text-gray-800" id="posInfoSalary">{currentPosition ? `$${currentPosition.salary}` : '—'}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Sobresueldo</div>
+                <div class="text-gray-800" id="posInfoOvertime">{currentPosition ? `$${currentPosition.overtimeAmount ?? '0'}` : '—'}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Gastos de representación</div>
+                <div class="text-gray-800" id="posInfoRepresentation">{currentPosition ? `$${currentPosition.representationAmount ?? '0'}` : '—'}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <h3 class="font-semibold text-gray-800 mb-4">Salario y Contrato</h3>
@@ -655,17 +764,26 @@ const freqLabel: Record<string, string> = {
             <div class="col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Salario base (USD) *
-                {isPublica && <span class="ml-1 text-xs text-gray-400">(se establece desde la posición)</span>}
+                {isPublica && (
+                  <span class="ml-1 text-xs text-gray-400" id="salaryMaxHint">
+                    {currentPosition ? `(máximo de la posición: $${currentPosition.salary})` : ''}
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 name="baseSalary"
                 id="baseSalaryInput"
-                class={`input ${isPublica ? 'bg-gray-50 text-gray-500' : ''}`}
+                class="input"
                 required
                 value={emp.baseSalary}
-                readonly={isPublica}
+                data-position-max={currentPosition?.salary ?? ''}
               />
+              {isPublica && (
+                <p class="mt-1 text-xs text-gray-500">
+                  Puede ajustar el salario hacia abajo; no puede superar el salario de la posición.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1739,17 +1857,175 @@ const freqLabel: Record<string, string> = {
     })
   })()
 
-  // Auto-fill cargo/depto/funcion/salary from selected position (empresa pública)
+  // Auto-fill cargo/depto/salary from selected position (empresa pública).
+  // Salary is editable but capped at the position salary; selecting a
+  // position seeds it with the maximum and refreshes the info block.
   const posSelect = document.getElementById('positionSelect')
-  if (posSelect) {
+  const salaryInput = document.getElementById('baseSalaryInput')
+  if (posSelect && salaryInput) {
     posSelect.addEventListener('change', function () {
       const opt = this.options[this.selectedIndex]
-      document.getElementById('hiddenCargoId').value = opt.dataset.cargo || ''
-      document.getElementById('hiddenDepartamentoId').value = opt.dataset.depto || ''
-      document.getElementById('hiddenFuncionId').value = opt.dataset.funcion || ''
-      document.getElementById('baseSalaryInput').value = opt.dataset.salary || ''
+      const max = opt.dataset.salary || ''
+      const hCargo = document.getElementById('hiddenCargoId')
+      const hDepto = document.getElementById('hiddenDepartamentoId')
+      if (hCargo) hCargo.value = opt.dataset.cargo || ''
+      if (hDepto) hDepto.value = opt.dataset.depto || ''
+      salaryInput.value = max
+      salaryInput.dataset.positionMax = max
+      const hint = document.getElementById('salaryMaxHint')
+      if (hint) hint.textContent = max ? '(máximo de la posición: $' + max + ')' : ''
+      const card = document.getElementById('positionInfoCard')
+      if (card) card.style.display = opt.value ? '' : 'none'
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
+      set('posInfoCargo', opt.dataset.cargoName || '—')
+      set('posInfoSalary', max ? '$' + max : '—')
+      set('posInfoOvertime', '$' + (opt.dataset.overtime || '0'))
+      set('posInfoRepresentation', '$' + (opt.dataset.representation || '0'))
     })
   }
+
+  // Enforce the salary ceiling client-side before the form round-trips.
+  if (salaryInput) {
+    const form = document.getElementById('empForm')
+    form?.addEventListener('submit', function (e) {
+      const max = parseFloat(salaryInput.dataset.positionMax || '')
+      const val = parseFloat(salaryInput.value || '')
+      if (!isNaN(max) && !isNaN(val) && val > max) {
+        e.preventDefault()
+        salaryInput.focus()
+        alert('El salario base no puede superar el salario de la posición ($' + max + ').')
+      }
+    })
+  }
+
+  // Foto / cédula: leer el archivo a base64, validar MIME + tamaño, y dejarlo
+  // en el input hidden que viaja en el form. Vista previa inmediata.
+  const MAX_IMG_BYTES = 500 * 1024
+  const ALLOWED_IMG = ['image/png', 'image/jpeg', 'image/webp']
+  const imgError = document.getElementById('imageError')
+  const enrollBtn = document.getElementById('enrollFaceBtn')
+  function wireImageField(fileId, inputId, previewId, clearId, extraBtn) {
+    const fileEl = document.getElementById(fileId)
+    const hidden = document.getElementById(inputId)
+    const preview = document.getElementById(previewId)
+    const clearBtn = document.getElementById(clearId)
+    if (!fileEl || !hidden) return
+    fileEl.addEventListener('change', function () {
+      const file = this.files && this.files[0]
+      if (!file) return
+      if (imgError) imgError.classList.add('hidden')
+      if (!ALLOWED_IMG.includes(file.type)) {
+        if (imgError) { imgError.textContent = 'Tipo no permitido. Use PNG, JPEG o WEBP.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      if (file.size > MAX_IMG_BYTES) {
+        if (imgError) { imgError.textContent = 'La imagen excede 500 KB.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = function () {
+        hidden.value = reader.result
+        if (preview) { preview.src = reader.result; preview.classList.remove('hidden') }
+        if (clearBtn) clearBtn.classList.remove('hidden')
+        if (extraBtn) extraBtn.classList.remove('hidden')
+      }
+      reader.readAsDataURL(file)
+    })
+    clearBtn?.addEventListener('click', function () {
+      hidden.value = ''
+      if (preview) { preview.src = ''; preview.classList.add('hidden') }
+      if (fileEl) fileEl.value = ''
+      clearBtn.classList.add('hidden')
+      if (extraBtn) extraBtn.classList.add('hidden')
+    })
+  }
+  wireImageField('photoFile', 'photoInput', 'photoPreview', 'photoClear', enrollBtn)
+  wireImageField('scannedIdFile', 'scannedIdInput', 'scannedIdPreview', 'scannedIdClear')
+</script>
+
+<script is:inline define:vars={{ empId: emp?.id ?? '' }}>
+  // Enrolamiento facial desde la foto del colaborador. Reusa face-api y los
+  // mismos modelos que el kiosko (/face-models): detecta el rostro en la foto
+  // (un <img>), calcula el descriptor 128-d en el navegador y lo envía al
+  // proxy /api/facial/enrollments. No requiere IA en el servidor.
+  ;(function () {
+    const btn = document.getElementById('enrollFaceBtn')
+    const status = document.getElementById('enrollStatus')
+    const photoInput = document.getElementById('photoInput')
+    if (!btn || !photoInput) return
+    let faceapi = null
+
+    function show(msg, tone) {
+      if (!status) return
+      status.textContent = msg
+      status.className = 'mt-2 text-xs ' + (tone === 'err' ? 'text-red-600' : tone === 'ok' ? 'text-emerald-600' : 'text-gray-500')
+      status.classList.remove('hidden')
+    }
+
+    async function loadModels() {
+      if (faceapi) return faceapi
+      show('Cargando modelos…')
+      faceapi = await import('/face-models/face-api.esm.js')
+      const MODELS = '/face-models'
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS)
+      return faceapi
+    }
+
+    function loadImage(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = dataUrl
+      })
+    }
+
+    btn.addEventListener('click', async () => {
+      const photo = photoInput.value
+      if (!photo) { show('Primero cargue una foto.', 'err'); return }
+      btn.disabled = true
+      try {
+        const fa = await loadModels()
+        show('Analizando rostro…')
+        const img = await loadImage(photo)
+        const detection = await fa
+          .detectSingleFace(img, new fa.TinyFaceDetectorOptions({ inputSize: 320 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor()
+        if (!detection) {
+          show('No se detectó un rostro en la foto. Use una imagen frontal y nítida.', 'err')
+          btn.disabled = false
+          return
+        }
+        show('Guardando enrolamiento…')
+        const res = await fetch('/api/facial/enrollments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeId: empId,
+            embedding: Array.from(detection.descriptor),
+            qualityScore: detection.detection.score,
+            isPrimary: true,
+            notes: 'Enrolado desde la foto del colaborador',
+          }),
+        })
+        if (res.ok) {
+          show('Rostro enrolado correctamente (calidad ' + (detection.detection.score * 100).toFixed(0) + '%).', 'ok')
+        } else {
+          const j = await res.json().catch(() => ({}))
+          show('Error: ' + (j.error ?? 'no se pudo enrolar'), 'err')
+        }
+      } catch (err) {
+        show('Error: ' + (err && err.message ? err.message : String(err)), 'err')
+      } finally {
+        btn.disabled = false
+      }
+    })
+  })()
 </script>
 
 <script is:inline>

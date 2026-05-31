@@ -289,9 +289,8 @@ export async function listMovements(
  *
  *   - compensatory      : always
  *   - family_disability : when `hasFamilyDisability`
- *   - disability        : BLOCKED — employee schema has no own-disability
- *                         field yet. Pass `hasDisability` once that field
- *                         exists; until then callers leave it false.
+ *   - disability        : when `hasDisability` (employees.has_own_disability,
+ *                         Phase 2.D)
  */
 export async function initializeEmployeeBalances(
   db: AnyDb,
@@ -381,20 +380,26 @@ export async function syncConditionalBalance(
  *
  *   compensatory      : every active employee
  *   family_disability : employees with ≥1 active disabled dependent
- *   disability        : BLOCKED until employee own-disability field exists
+ *   disability        : employees with has_own_disability = true (Phase 2.D)
  */
 export async function initializeYearForAllEmployees(
   db: AnyDb,
   year: number = currentYear(),
   performedBy?: string,
   sourceType = 'annual_renewal'
-): Promise<{ total: number; compensatoryCreated: number; familyDisabilityCreated: number }> {
-  const empRows: { id: string }[] = await db.execute(
-    sql`SELECT id FROM employees WHERE is_active = true`
+): Promise<{
+  total: number
+  compensatoryCreated: number
+  familyDisabilityCreated: number
+  disabilityCreated: number
+}> {
+  const empRows: { id: string; has_own_disability: boolean }[] = await db.execute(
+    sql`SELECT id, has_own_disability FROM employees WHERE is_active = true`
   )
 
   let compensatoryCreated = 0
   let familyDisabilityCreated = 0
+  let disabilityCreated = 0
 
   for (const emp of empRows) {
     const c = await initializeBalance(db, emp.id, 'compensatory', year, {
@@ -415,7 +420,20 @@ export async function initializeYearForAllEmployees(
       })
       if (f.created) familyDisabilityCreated++
     }
+
+    if (emp.has_own_disability) {
+      const d = await initializeBalance(db, emp.id, 'disability', year, {
+        performedBy,
+        sourceType,
+      })
+      if (d.created) disabilityCreated++
+    }
   }
 
-  return { total: empRows.length, compensatoryCreated, familyDisabilityCreated }
+  return {
+    total: empRows.length,
+    compensatoryCreated,
+    familyDisabilityCreated,
+    disabilityCreated,
+  }
 }

@@ -29,24 +29,46 @@ type Employee = {
   idNumber: string
   position: string | null
   department: string | null
+  positionId: string | null
   baseSalary: string
   photo: string | null
   isActive: boolean
 }
+type Position = { id: string; code: string; budgetItemId: string | null }
+type BudgetItem = { id: string; code: string; name: string }
 
 let employees: Employee[] = []
 let total = 0
 let totalPages = 1
 let error = ''
 let isGobierno = false
+// Position number + budget item (partida) are only shown for institutions
+// with positions; resolved employee.positionId → position.code / budgetItem.
+let positionCodeById = new Map<string, string>()
+let partidaByPositionId = new Map<string, string>()
 
 try {
-  const compRes = await fetch(`${API_URL}/company`, {
-    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
-  })
+  const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
+  const compRes = await fetch(`${API_URL}/company`, { headers })
   if (compRes.ok) {
     const compJson = (await compRes.json()) as { data?: { institutionType?: string } }
     isGobierno = (compJson.data?.institutionType ?? 'privada') !== 'privada'
+  }
+  if (isGobierno) {
+    const [posRes, biRes] = await Promise.all([
+      fetch(`${API_URL}/positions`, { headers }),
+      fetch(`${API_URL}/budget-items`, { headers }),
+    ])
+    const positions = posRes.ok ? ((await posRes.json()) as { data: Position[] }).data ?? [] : []
+    const budgetItems = biRes.ok ? ((await biRes.json()) as { data: BudgetItem[] }).data ?? [] : []
+    const budgetById = new Map(budgetItems.map((b) => [b.id, `${b.code} — ${b.name}`]))
+    for (const p of positions) {
+      positionCodeById.set(p.id, p.code)
+      if (p.budgetItemId) {
+        const label = budgetById.get(p.budgetItemId)
+        if (label) partidaByPositionId.set(p.id, label)
+      }
+    }
   }
 } catch {}
 
@@ -174,6 +196,12 @@ const showingTo = Math.min(page * PAGE_SIZE, total)
               <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Nombre</th>
               <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Cédula</th>
               <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">{isGobierno ? 'Departamento' : 'Puesto'}</th>
+              {isGobierno && (
+                <>
+                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">N° Posición</th>
+                  <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Partida</th>
+                </>
+              )}
               <th class="text-left px-4 py-3 text-xs font-medium text-gray-500 uppercase tracking-wide">Estado</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -198,6 +226,12 @@ const showingTo = Math.min(page * PAGE_SIZE, total)
                 </td>
                 <td class="px-4 py-3.5 text-gray-600 font-mono text-xs">{emp.idNumber}</td>
                 <td class="px-4 py-3.5 text-gray-600 text-xs">{isGobierno ? (emp.department ?? '—') : (emp.position ?? '—')}</td>
+                {isGobierno && (
+                  <>
+                    <td class="px-4 py-3.5 text-gray-600 font-mono text-xs">{emp.positionId ? (positionCodeById.get(emp.positionId) ?? '—') : '—'}</td>
+                    <td class="px-4 py-3.5 text-gray-600 font-mono text-xs">{emp.positionId ? (partidaByPositionId.get(emp.positionId) ?? '—') : '—'}</td>
+                  </>
+                )}
                 <td class="px-4 py-3.5">
                   <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${emp.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
                     {emp.isActive ? 'Activo' : 'Inactivo'}
