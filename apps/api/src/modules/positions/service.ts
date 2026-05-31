@@ -1,4 +1,5 @@
 import {
+  budgetItems,
   createPosition,
   deactivatePosition,
   getCargoById,
@@ -6,10 +7,10 @@ import {
   getFuncionById,
   getPosition,
   getPositionByCode,
-  listBudgetItems,
   listPositions,
   updatePosition,
 } from '@payroll/db'
+import { and, eq, inArray } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -57,8 +58,11 @@ async function validateBudgetItems(
     input.thirteenthMonthBudgetItemId,
   ].filter((id): id is string => Boolean(id))
   if (referenced.length === 0) return null
-  const active = await listBudgetItems(db, true)
-  const activeIds = new Set(active.map((b: { id: string }) => b.id))
+  const rows = await db
+    .select({ id: budgetItems.id })
+    .from(budgetItems)
+    .where(and(inArray(budgetItems.id, referenced), eq(budgetItems.isActive, true)))
+  const activeIds = new Set(rows.map((b: { id: string }) => b.id))
   for (const id of referenced) {
     if (!activeIds.has(id)) {
       return {
