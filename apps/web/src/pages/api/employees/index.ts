@@ -14,12 +14,20 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
 
   const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
+  const paymentMethodRaw = g('paymentMethod')
+  const paymentMethod =
+    paymentMethodRaw === 'ach' || paymentMethodRaw === 'check' || paymentMethodRaw === 'cash'
+      ? paymentMethodRaw
+      : undefined
+
   const body = {
     code: g('code'),
     firstName: g('firstName'),
     lastName: g('lastName'),
     idNumber: g('idNumber'),
     socialSecurityNumber: g('socialSecurityNumber') || null,
+    sex: g('sex') || null,
+    nationality: g('nationality') || null,
     email: g('email') || null,
     phone: g('phone') || null,
     positionId: g('positionId') || null,
@@ -29,6 +37,8 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     hireDate: g('hireDate'),
     baseSalary: g('baseSalary'),
     payFrequency: (g('payFrequency') || 'biweekly') as 'biweekly' | 'monthly' | 'weekly',
+    contractType: g('contractType') || null,
+    paymentMethod,
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
     // Personal flags + media (Phase 2.D). Unchecked checkboxes don't post,
     // so the booleans default to their schema default server-side.

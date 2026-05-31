@@ -1,0 +1,21 @@
+---
+/**
+ * Eleva los banners SSR (`?error=…`, `?success=1`) a notificaciones tipo
+ * toast usando el `window.toast` global expuesto por Toasts.astro.
+ *
+ * Uso: marcar el banner con `data-server-toast="error"` o `="success"`. El
+ * banner sigue siendo el fallback accesible (no-JS / lector de pantalla); el
+ * toast solo replica el mensaje para que sea visible tras scroll o recarga.
+ */
+---
+<script is:inline>
+  ;(function () {
+    if (!window.toast) return
+    var nodes = document.querySelectorAll('[data-server-toast]')
+    for (var i = 0; i < nodes.length; i++) {
+      var kind = nodes[i].getAttribute('data-server-toast') === 'success' ? 'success' : 'error'
+      var text = (nodes[i].textContent || '').trim()
+      if (text) window.toast[kind](text)
+    }
+  })()
+</script>

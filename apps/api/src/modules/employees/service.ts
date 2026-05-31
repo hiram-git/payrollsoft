@@ -30,6 +30,8 @@ export type EmployeeCreateInput = {
   lastName: string
   idNumber: string
   socialSecurityNumber?: string | null
+  sex?: string | null
+  nationality?: string | null
   email?: string | null
   phone?: string | null
   cargoId?: string | null
@@ -39,6 +41,7 @@ export type EmployeeCreateInput = {
   hireDate: string
   baseSalary: string
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
+  contractType?: string | null
   payrollTypeIds?: string[]
   customFields?: Record<string, unknown>
   // Personal flags + media (Phase 2.D)
@@ -283,6 +286,8 @@ export async function createEmployeeService(
     lastName: input.lastName.trim(),
     idNumber: input.idNumber.trim(),
     socialSecurityNumber: input.socialSecurityNumber?.trim() || null,
+    sex: input.sex || null,
+    nationality: input.nationality?.trim() || null,
     email: input.email?.trim().toLowerCase() || null,
     phone: input.phone?.trim() || null,
     jobTitleId: input.jobTitleId || null,
@@ -294,6 +299,7 @@ export async function createEmployeeService(
     hireDate: input.hireDate,
     baseSalary: input.baseSalary,
     payFrequency: input.payFrequency ?? 'biweekly',
+    contractType: input.contractType || null,
     bankId: input.bankId ?? null,
     accountNumber: input.accountNumber?.trim() || null,
     accountType: input.accountType ?? null,
@@ -537,7 +543,10 @@ export async function updateEmployeeService(
 
   // Own-disability flag toggles the disability time balance for the year.
   // Opening is safe/idempotent; closing only removes an unused balance.
-  if (input.hasOwnDisability !== undefined && input.hasOwnDisability !== existing.hasOwnDisability) {
+  if (
+    input.hasOwnDisability !== undefined &&
+    input.hasOwnDisability !== existing.hasOwnDisability
+  ) {
     try {
       const { syncConditionalBalance } = await import('../time-balance/service')
       await syncConditionalBalance(
