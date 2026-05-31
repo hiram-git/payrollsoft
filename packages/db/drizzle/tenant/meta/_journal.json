@@ -407,6 +407,13 @@
       "when": 1762128037000,
       "tag": "0058_approval_delegations",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1762128038000,
+      "tag": "0059_position_salary_concepts",
+      "breakpoints": true
     }
   ]
 }

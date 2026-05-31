@@ -14,10 +14,15 @@ type Position = {
   code: string
   name: string
   salary: string
+  overtimeAmount: string | null
+  representationAmount: string | null
   jobTitleId: string | null
   departmentId: string | null
   jobFunctionId: string | null
   budgetItemId: string | null
+  overtimeBudgetItemId: string | null
+  representationBudgetItemId: string | null
+  thirteenthMonthBudgetItemId: string | null
   isActive: boolean
   status: 'en_uso' | 'vacante' | string
 }
@@ -63,12 +68,18 @@ function buildOptions(items: CatalogItem[], currentId: string | null) {
 const cargoOptions = buildOptions(cargos, pos.jobTitleId)
 const funcionOptions = buildOptions(funciones, pos.jobFunctionId)
 const deptOptions = buildOptions(departamentos, pos.departmentId)
-const partidaOptions = buildOptions(partidas, pos.budgetItemId)
+// Each concept's partida selector keeps its currently-assigned (even if
+// inactive) item visible so editing doesn't silently drop it.
+const basePartidaOptions = buildOptions(partidas, pos.budgetItemId)
+const overtimePartidaOptions = buildOptions(partidas, pos.overtimeBudgetItemId)
+const representationPartidaOptions = buildOptions(partidas, pos.representationBudgetItemId)
+const thirteenthPartidaOptions = buildOptions(partidas, pos.thirteenthMonthBudgetItemId)
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const success = Astro.url.searchParams.get('success') === '1'
 const errorMessages: Record<string, string> = {
   code_taken: 'El código ya está en uso.',
+  invalid_budget_item: 'Una de las partidas seleccionadas no existe o está inactiva.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -139,10 +150,20 @@ const errorMessages: Record<string, string> = {
             </select>
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Sobresueldo (USD)</label>
+            <input type="text" name="overtimeAmount" class="input" value={pos.overtimeAmount ?? '0'} />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Gastos de representación (USD)</label>
+            <input type="text" name="representationAmount" class="input" value={pos.representationAmount ?? '0'} />
+          </div>
+        </div>
         <div class="grid grid-cols-3 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-            <select name="cargoId" class="input">
+            <select name="jobTitleId" class="input">
               <option value="">— Sin cargo —</option>
               {cargoOptions.map((c) => (
                 <option value={c.id} selected={pos!.jobTitleId === c.id}>{c.name} ({c.code})</option>
@@ -151,7 +172,7 @@ const errorMessages: Record<string, string> = {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-            <select name="departamentoId" class="input">
+            <select name="departmentId" class="input">
               <option value="">— Sin departamento —</option>
               {deptOptions.map((d) => (
                 <option value={d.id} selected={pos!.departmentId === d.id}>{d.name} ({d.code})</option>
@@ -160,7 +181,7 @@ const errorMessages: Record<string, string> = {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-            <select name="funcionId" class="input">
+            <select name="jobFunctionId" class="input">
               <option value="">— Sin función —</option>
               {funcionOptions.map((f) => (
                 <option value={f.id} selected={pos!.jobFunctionId === f.id}>{f.name} ({f.code})</option>
@@ -168,14 +189,46 @@ const errorMessages: Record<string, string> = {
             </select>
           </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Partida presupuestaria</label>
-          <select name="partidaId" class="input">
-            <option value="">— Sin partida —</option>
-            {partidaOptions.map((p) => (
-              <option value={p.id} selected={pos!.budgetItemId === p.id}>{p.code} — {p.name}</option>
-            ))}
-          </select>
+        <div class="border-t border-gray-100 pt-4">
+          <h4 class="text-sm font-semibold text-gray-700 mb-3">Partidas presupuestarias por concepto</h4>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — salario base</label>
+              <select name="budgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {basePartidaOptions.map((p) => (
+                  <option value={p.id} selected={pos!.budgetItemId === p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — sobresueldo</label>
+              <select name="overtimeBudgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {overtimePartidaOptions.map((p) => (
+                  <option value={p.id} selected={pos!.overtimeBudgetItemId === p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — gastos de representación</label>
+              <select name="representationBudgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {representationPartidaOptions.map((p) => (
+                  <option value={p.id} selected={pos!.representationBudgetItemId === p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — décimo tercer mes</label>
+              <select name="thirteenthMonthBudgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {thirteenthPartidaOptions.map((p) => (
+                  <option value={p.id} selected={pos!.thirteenthMonthBudgetItemId === p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 

@@ -38,6 +38,7 @@ const activePartidas = partidas.filter((p) => p.isActive)
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   code_taken: 'El código ya está en uso.',
+  invalid_budget_item: 'Una de las partidas seleccionadas no existe o está inactiva.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -91,10 +92,20 @@ const errorMessages: Record<string, string> = {
             </select>
           </div>
         </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Sobresueldo (USD)</label>
+            <input type="text" name="overtimeAmount" class="input" placeholder="0.00" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Gastos de representación (USD)</label>
+            <input type="text" name="representationAmount" class="input" placeholder="0.00" />
+          </div>
+        </div>
         <div class="grid grid-cols-3 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-            <select name="cargoId" class="input">
+            <select name="jobTitleId" class="input">
               <option value="">— Sin cargo —</option>
               {activeCargos.map((c) => (
                 <option value={c.id}>{c.name} ({c.code})</option>
@@ -103,7 +114,7 @@ const errorMessages: Record<string, string> = {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-            <select name="departamentoId" class="input">
+            <select name="departmentId" class="input">
               <option value="">— Sin departamento —</option>
               {activeDepts.map((d) => (
                 <option value={d.id}>{d.name} ({d.code})</option>
@@ -112,7 +123,7 @@ const errorMessages: Record<string, string> = {
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-            <select name="funcionId" class="input">
+            <select name="jobFunctionId" class="input">
               <option value="">— Sin función —</option>
               {activeFunciones.map((f) => (
                 <option value={f.id}>{f.name} ({f.code})</option>
@@ -120,14 +131,46 @@ const errorMessages: Record<string, string> = {
             </select>
           </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Partida presupuestaria</label>
-          <select name="partidaId" class="input">
-            <option value="">— Sin partida —</option>
-            {activePartidas.map((p) => (
-              <option value={p.id}>{p.code} — {p.name}</option>
-            ))}
-          </select>
+        <div class="border-t border-gray-100 pt-4">
+          <h4 class="text-sm font-semibold text-gray-700 mb-3">Partidas presupuestarias por concepto</h4>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — salario base</label>
+              <select name="budgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {activePartidas.map((p) => (
+                  <option value={p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — sobresueldo</label>
+              <select name="overtimeBudgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {activePartidas.map((p) => (
+                  <option value={p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — gastos de representación</label>
+              <select name="representationBudgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {activePartidas.map((p) => (
+                  <option value={p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Partida — décimo tercer mes</label>
+              <select name="thirteenthMonthBudgetItemId" class="input">
+                <option value="">— Sin partida —</option>
+                {activePartidas.map((p) => (
+                  <option value={p.id}>{p.code} — {p.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 

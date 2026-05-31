@@ -16,10 +16,15 @@ const PositionBody = t.Object({
   code: t.String({ minLength: 1, maxLength: 20 }),
   name: t.String({ minLength: 1, maxLength: 255 }),
   salary: t.String({ minLength: 1 }),
+  overtimeAmount: t.Optional(t.String()),
+  representationAmount: t.Optional(t.String()),
   jobTitleId: t.Optional(t.Nullable(t.String())),
   departmentId: t.Optional(t.Nullable(t.String())),
   jobFunctionId: t.Optional(t.Nullable(t.String())),
   budgetItemId: t.Optional(t.Nullable(t.String())),
+  overtimeBudgetItemId: t.Optional(t.Nullable(t.String())),
+  representationBudgetItemId: t.Optional(t.Nullable(t.String())),
+  thirteenthMonthBudgetItemId: t.Optional(t.Nullable(t.String())),
   status: t.Optional(StatusLiteral),
 })
 
@@ -27,10 +32,15 @@ const PositionUpdateBody = t.Object({
   code: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   salary: t.Optional(t.String({ minLength: 1 })),
+  overtimeAmount: t.Optional(t.String()),
+  representationAmount: t.Optional(t.String()),
   jobTitleId: t.Optional(t.Nullable(t.String())),
   departmentId: t.Optional(t.Nullable(t.String())),
   jobFunctionId: t.Optional(t.Nullable(t.String())),
   budgetItemId: t.Optional(t.Nullable(t.String())),
+  overtimeBudgetItemId: t.Optional(t.Nullable(t.String())),
+  representationBudgetItemId: t.Optional(t.Nullable(t.String())),
+  thirteenthMonthBudgetItemId: t.Optional(t.Nullable(t.String())),
   status: t.Optional(StatusLiteral),
 })
 
@@ -106,7 +116,8 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       }
       const result = await createPositionService(db, body)
       if (!result.success) {
-        set.status = result.error === 'code_taken' ? 409 : 400
+        set.status =
+          result.error === 'code_taken' ? 409 : result.error === 'invalid_budget_item' ? 422 : 400
         return result
       }
       set.status = 201
@@ -127,7 +138,8 @@ export const positionsRoutes = new Elysia({ prefix: '/positions' })
       }
       const result = await updatePositionService(db, params.id, body)
       if (!result.success) {
-        set.status = result.error === 'not_found' ? 404 : 409
+        set.status =
+          result.error === 'not_found' ? 404 : result.error === 'invalid_budget_item' ? 422 : 409
         return result
       }
       return result
