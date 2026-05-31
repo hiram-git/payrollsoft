@@ -1,44 +1,37 @@
 # Foto del colaborador ↔ enrolamiento facial
 
-> Estado: **foto almacenada; enrolamiento biométrico diferido** (Fase 2.F,
-> decisión F del diagnóstico). No se genera template desde la foto guardada.
+> Estado: **enrolamiento real desde la foto, implementado** (Fase 2.F).
+> El descriptor biométrico se calcula en el navegador a partir de la foto y
+> se guarda como enrolamiento.
 
-## Qué hay hoy
+## Cómo funciona
 
-- `employees.photo` (text, base64) se captura y valida en el formulario de
-  empleado (PNG/JPEG/WEBP, ≤500 KB) — Fase 2.D. Se guarda como **referencia
-  visual**.
-- El módulo de reconocimiento facial **existe y está completo**
-  (`apps/api/src/modules/facial/`): enrolamiento, matching por distancia
-  coseno, ingesta de marcaciones, terminales/kioskos.
-- `facialEnrollments` guarda un `embedding` (vector 128-d) + `photoUrl`
-  opcional + `qualityScore`.
+1. La foto del colaborador (`employees.photo`, base64) se carga y valida en el
+   formulario (PNG/JPEG/WEBP, ≤500 KB) — Fase 2.D.
+2. En la tarjeta "Foto y cédula" del formulario de empleado aparece el botón
+   **"Enrolar rostro desde la foto"**.
+3. Al pulsarlo, el navegador importa **face-api.js** y los modelos desde
+   `/face-models/` — exactamente la misma librería y modelos que usa el kiosko
+   (`apps/web/src/pages/kiosk/*.astro`) — detecta el rostro sobre un `<img>`,
+   calcula el **descriptor de 128 dimensiones** y su `qualityScore`.
+4. El descriptor se envía al proxy same-origin
+   `apps/web/src/pages/api/facial/enrollments.ts`, que reenvía a
+   `POST /facial/enrollments` con auth + tenant.
+5. `createEnrollmentService` (`facial/service.ts`) persiste el enrolamiento
+   como `isPrimary` y desactiva el primario anterior. El mismo embedding lo
+   consume `matchEmbeddingService` cuando el kiosko marca asistencia.
 
-## Por qué no se enrola desde la foto
+## Por qué client-side y no server-side
 
-`createEnrollmentService` (`facial/service.ts`) recibe un **embedding ya
-calculado** — el vector lo produce la **captura del kiosko** con el lector
-facial, no existe un generador de embeddings server-side a partir del base64
-almacenado en `employees.photo`. Generar un template biométrico desde una foto
-arbitraria subida en el formulario daría matches de baja calidad y no es el
-flujo del módulo.
+El embedding se produce con face-api.js en el navegador (igual que en el
+kiosko). No se añadió IA ni dependencias nuevas en el servidor: el descriptor
+de 128-d es idéntico en formato al que genera el kiosko, así que
+`searchSimilarEmbeddings` lo compara sin cambios.
 
-## Punto de integración futura
+## Notas
 
-Cuando se quiera enrolar desde la foto del formulario, el enganche va en
-`createEmployeeService` / `updateEmployeeService`
-(`apps/api/src/modules/employees/service.ts`), tras persistir `photo`:
-
-```
-// Pseudo — pendiente de un generador de embeddings server-side:
-// const embedding = await generateFaceEmbedding(employee.photo)
-// if (embedding) await createEnrollmentService(db, {
-//   employeeId: employee.id, embedding, photoUrl: null,
-//   qualityScore, isPrimary: true,
-// }, performedByUserId)
-```
-
-Requisito bloqueante: un servicio que convierta imagen → embedding 128-d
-compatible con `normaliseEmbedding` / `searchSimilarEmbeddings`. Mientras no
-exista, el enrolamiento sigue por `/kiosk/setup?enroll=<id>`
-(`apps/web/src/pages/attendance/enroll.astro`).
+- Requiere permiso `facial:enroll` (igual que el flujo del kiosko).
+- La foto debe ser frontal y nítida; si no se detecta rostro, el botón avisa y
+  no crea enrolamiento.
+- El enrolamiento por kiosko en vivo (`/kiosk/setup?enroll=<id>`, 3 muestras
+  promediadas) sigue disponible y suele dar mejor calidad que una sola foto.

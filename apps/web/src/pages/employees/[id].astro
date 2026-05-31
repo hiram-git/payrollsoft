@@ -606,7 +606,7 @@ const freqLabel: Record<string, string> = {
           <h3 class="font-semibold text-gray-800 mb-1">Foto y cédula</h3>
           <p class="text-xs text-gray-500 mb-4">
             Imágenes en formato PNG, JPEG o WEBP, hasta 500 KB cada una. La foto se
-            guarda como referencia visual.
+            guarda como referencia visual y puede usarse para enrolar el rostro.
           </p>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
@@ -614,7 +614,11 @@ const freqLabel: Record<string, string> = {
               <img id="photoPreview" src={emp.photo ?? ''} alt="" class={`w-28 h-28 rounded-lg object-cover border border-gray-200 mb-2 ${emp.photo ? '' : 'hidden'}`} />
               <input type="hidden" name="photo" id="photoInput" value={emp.photo ?? ''} />
               <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
-              <button type="button" id="photoClear" class={`mt-2 text-xs text-red-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Quitar foto</button>
+              <div class="flex items-center gap-3 mt-2">
+                <button type="button" id="photoClear" class={`text-xs text-red-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Quitar foto</button>
+                <button type="button" id="enrollFaceBtn" class={`text-xs font-medium text-blue-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Enrolar rostro desde la foto</button>
+              </div>
+              <p id="enrollStatus" class="hidden mt-2 text-xs"></p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Cédula escaneada</label>
@@ -1899,7 +1903,8 @@ const freqLabel: Record<string, string> = {
   const MAX_IMG_BYTES = 500 * 1024
   const ALLOWED_IMG = ['image/png', 'image/jpeg', 'image/webp']
   const imgError = document.getElementById('imageError')
-  function wireImageField(fileId, inputId, previewId, clearId) {
+  const enrollBtn = document.getElementById('enrollFaceBtn')
+  function wireImageField(fileId, inputId, previewId, clearId, extraBtn) {
     const fileEl = document.getElementById(fileId)
     const hidden = document.getElementById(inputId)
     const preview = document.getElementById(previewId)
@@ -1924,6 +1929,7 @@ const freqLabel: Record<string, string> = {
         hidden.value = reader.result
         if (preview) { preview.src = reader.result; preview.classList.remove('hidden') }
         if (clearBtn) clearBtn.classList.remove('hidden')
+        if (extraBtn) extraBtn.classList.remove('hidden')
       }
       reader.readAsDataURL(file)
     })
@@ -1932,10 +1938,94 @@ const freqLabel: Record<string, string> = {
       if (preview) { preview.src = ''; preview.classList.add('hidden') }
       if (fileEl) fileEl.value = ''
       clearBtn.classList.add('hidden')
+      if (extraBtn) extraBtn.classList.add('hidden')
     })
   }
-  wireImageField('photoFile', 'photoInput', 'photoPreview', 'photoClear')
+  wireImageField('photoFile', 'photoInput', 'photoPreview', 'photoClear', enrollBtn)
   wireImageField('scannedIdFile', 'scannedIdInput', 'scannedIdPreview', 'scannedIdClear')
+</script>
+
+<script is:inline define:vars={{ empId: emp?.id ?? '' }}>
+  // Enrolamiento facial desde la foto del colaborador. Reusa face-api y los
+  // mismos modelos que el kiosko (/face-models): detecta el rostro en la foto
+  // (un <img>), calcula el descriptor 128-d en el navegador y lo envía al
+  // proxy /api/facial/enrollments. No requiere IA en el servidor.
+  ;(function () {
+    const btn = document.getElementById('enrollFaceBtn')
+    const status = document.getElementById('enrollStatus')
+    const photoInput = document.getElementById('photoInput')
+    if (!btn || !photoInput) return
+    let faceapi = null
+
+    function show(msg, tone) {
+      if (!status) return
+      status.textContent = msg
+      status.className = 'mt-2 text-xs ' + (tone === 'err' ? 'text-red-600' : tone === 'ok' ? 'text-emerald-600' : 'text-gray-500')
+      status.classList.remove('hidden')
+    }
+
+    async function loadModels() {
+      if (faceapi) return faceapi
+      show('Cargando modelos…')
+      faceapi = await import('/face-models/face-api.esm.js')
+      const MODELS = '/face-models'
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS)
+      return faceapi
+    }
+
+    function loadImage(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = dataUrl
+      })
+    }
+
+    btn.addEventListener('click', async () => {
+      const photo = photoInput.value
+      if (!photo) { show('Primero cargue una foto.', 'err'); return }
+      btn.disabled = true
+      try {
+        const fa = await loadModels()
+        show('Analizando rostro…')
+        const img = await loadImage(photo)
+        const detection = await fa
+          .detectSingleFace(img, new fa.TinyFaceDetectorOptions({ inputSize: 320 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor()
+        if (!detection) {
+          show('No se detectó un rostro en la foto. Use una imagen frontal y nítida.', 'err')
+          btn.disabled = false
+          return
+        }
+        show('Guardando enrolamiento…')
+        const res = await fetch('/api/facial/enrollments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeId: empId,
+            embedding: Array.from(detection.descriptor),
+            qualityScore: detection.detection.score,
+            isPrimary: true,
+            notes: 'Enrolado desde la foto del colaborador',
+          }),
+        })
+        if (res.ok) {
+          show('Rostro enrolado correctamente (calidad ' + (detection.detection.score * 100).toFixed(0) + '%).', 'ok')
+        } else {
+          const j = await res.json().catch(() => ({}))
+          show('Error: ' + (j.error ?? 'no se pudo enrolar'), 'err')
+        }
+      } catch (err) {
+        show('Error: ' + (err && err.message ? err.message : String(err)), 'err')
+      } finally {
+        btn.disabled = false
+      }
+    })
+  })()
 </script>
 
 <script is:inline>
