@@ -35,7 +35,6 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     representationAmount: g('representationAmount') || '0',
     jobTitleId: g('jobTitleId') || null,
     departmentId: g('departmentId') || null,
-    jobFunctionId: g('jobFunctionId') || null,
     budgetItemId: g('budgetItemId') || null,
     overtimeBudgetItemId: g('overtimeBudgetItemId') || null,
     representationBudgetItemId: g('representationBudgetItemId') || null,

@@ -165,7 +165,6 @@ const errorMessages: Record<string, string> = {
                       data-cargo={p.jobTitleId ?? ''}
                       data-cargo-name={p.jobTitleId ? (activeCargos.find((c) => c.id === p.jobTitleId)?.name ?? '') : ''}
                       data-depto={p.departmentId ?? ''}
-                      data-funcion={p.jobFunctionId ?? ''}
                       data-salary={p.salary}
                       data-overtime={p.overtimeAmount ?? '0'}
                       data-representation={p.representationAmount ?? '0'}
@@ -175,16 +174,25 @@ const errorMessages: Record<string, string> = {
                   ))}
                 </select>
               </div>
-              <!-- Hidden inputs auto-filled by JS -->
-              <input type="hidden" name="cargoId" id="hiddenCargoId" />
-              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" />
-              <input type="hidden" name="funcionId" id="hiddenFuncionId" />
+              <!-- Cargo + departamento se derivan de la posición -->
+              <input type="hidden" name="jobTitleId" id="hiddenCargoId" />
+              <input type="hidden" name="departmentId" id="hiddenDepartamentoId" />
+              <!-- La función es atributo del empleado, editable también con posición -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+                <select name="jobFunctionId" class="input">
+                  <option value="">— Sin función —</option>
+                  {activeFunciones.map((f) => (
+                    <option value={f.id}>{f.name} ({f.code})</option>
+                  ))}
+                </select>
+              </div>
             ) : (
               <!-- Empresa privada: selección directa -->
               <>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                  <select name="departamentoId" class="input">
+                  <select name="departmentId" class="input">
                     <option value="">— Sin departamento —</option>
                     {activeDepts.map((d) => (
                       <option value={d.id}>{d.name} ({d.code})</option>
@@ -193,7 +201,7 @@ const errorMessages: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                  <select name="cargoId" class="input">
+                  <select name="jobTitleId" class="input">
                     <option value="">— Sin cargo —</option>
                     {activeCargos.map((c) => (
                       <option value={c.id}>{c.name} ({c.code})</option>
@@ -202,7 +210,7 @@ const errorMessages: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-                  <select name="funcionId" class="input">
+                  <select name="jobFunctionId" class="input">
                     <option value="">— Sin función —</option>
                     {activeFunciones.map((f) => (
                       <option value={f.id}>{f.name} ({f.code})</option>
@@ -355,10 +363,8 @@ const errorMessages: Record<string, string> = {
       const max = opt.dataset.salary || ''
       const hCargo = document.getElementById('hiddenCargoId')
       const hDepto = document.getElementById('hiddenDepartamentoId')
-      const hFuncion = document.getElementById('hiddenFuncionId')
       if (hCargo) hCargo.value = opt.dataset.cargo || ''
       if (hDepto) hDepto.value = opt.dataset.depto || ''
-      if (hFuncion) hFuncion.value = opt.dataset.funcion || ''
       salaryInput.value = max
       salaryInput.dataset.positionMax = max
       const hint = document.getElementById('salaryMaxHint')

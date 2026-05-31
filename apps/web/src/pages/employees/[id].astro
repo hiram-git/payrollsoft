@@ -594,7 +594,6 @@ const freqLabel: Record<string, string> = {
                       data-cargo={p.jobTitleId ?? ''}
                       data-cargo-name={p.jobTitleId ? (jobTitleNameById.get(p.jobTitleId) ?? '') : ''}
                       data-depto={p.departmentId ?? ''}
-                      data-funcion={p.jobFunctionId ?? ''}
                       data-salary={p.salary}
                       data-overtime={p.overtimeAmount ?? '0'}
                       data-representation={p.representationAmount ?? '0'}
@@ -604,16 +603,27 @@ const freqLabel: Record<string, string> = {
                   ))}
                 </select>
               </div>
-              <!-- Hidden inputs auto-filled by JS, seeded with current employee values -->
-              <input type="hidden" name="cargoId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
-              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
-              <input type="hidden" name="funcionId" id="hiddenFuncionId" value={emp.jobFunctionId ?? ''} />
+              <!-- Cargo + departamento se derivan de la posición -->
+              <input type="hidden" name="jobTitleId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
+              <input type="hidden" name="departmentId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
+              <!-- La función es atributo del empleado, editable también con posición -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+                <select name="jobFunctionId" class="input">
+                  <option value="">— Sin función —</option>
+                  {funcionOptions.map((f) => (
+                    <option value={f.id} selected={emp!.jobFunctionId === f.id}>
+                      {f.name} ({f.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
             ) : (
               <!-- Empresa privada: selección directa -->
               <>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                  <select name="departamentoId" class="input">
+                  <select name="departmentId" class="input">
                     <option value="">— Sin departamento —</option>
                     {deptOptions.map((d) => (
                       <option value={d.id} selected={emp!.departmentId === d.id}>
@@ -624,7 +634,7 @@ const freqLabel: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                  <select name="cargoId" class="input">
+                  <select name="jobTitleId" class="input">
                     <option value="">— Sin cargo —</option>
                     {cargoOptions.map((c) => (
                       <option value={c.id} selected={emp!.jobTitleId === c.id}>
@@ -635,7 +645,7 @@ const freqLabel: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-                  <select name="funcionId" class="input">
+                  <select name="jobFunctionId" class="input">
                     <option value="">— Sin función —</option>
                     {funcionOptions.map((f) => (
                       <option value={f.id} selected={emp!.jobFunctionId === f.id}>
@@ -1797,10 +1807,8 @@ const freqLabel: Record<string, string> = {
       const max = opt.dataset.salary || ''
       const hCargo = document.getElementById('hiddenCargoId')
       const hDepto = document.getElementById('hiddenDepartamentoId')
-      const hFuncion = document.getElementById('hiddenFuncionId')
       if (hCargo) hCargo.value = opt.dataset.cargo || ''
       if (hDepto) hDepto.value = opt.dataset.depto || ''
-      if (hFuncion) hFuncion.value = opt.dataset.funcion || ''
       salaryInput.value = max
       salaryInput.dataset.positionMax = max
       const hint = document.getElementById('salaryMaxHint')

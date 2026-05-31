@@ -11,7 +11,6 @@ export const positions = pgTable('positions', {
   representationAmount: varchar('representation_amount', { length: 20 }).notNull().default('0'),
   jobTitleId: uuid('job_title_id'),
   departmentId: uuid('department_id'),
-  jobFunctionId: uuid('job_function_id'),
   // Budget items (partidas) per concept: base salary, overtime, representation
   // and the thirteenth-month payment can each draw from a different partida.
   budgetItemId: uuid('budget_item_id'),

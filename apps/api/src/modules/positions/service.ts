@@ -32,7 +32,6 @@ export type PositionInput = {
   representationAmount?: string
   jobTitleId?: string | null
   departmentId?: string | null
-  jobFunctionId?: string | null
   budgetItemId?: string | null
   overtimeBudgetItemId?: string | null
   representationBudgetItemId?: string | null
