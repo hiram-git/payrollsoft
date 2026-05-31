@@ -1,6 +1,6 @@
 import { useAuth } from '@/contexts/AuthContext'
 import Account from '@/pages/Account'
-import FacialCapture from '@/pages/FacialCapture'
+import FaceEnroll from '@/pages/FaceEnroll'
 import History from '@/pages/History'
 import ModeSelect from '@/pages/ModeSelect'
 import Punch from '@/pages/Punch'
@@ -19,7 +19,7 @@ import {
   setupIonicReact,
 } from '@ionic/react'
 import { IonReactRouter } from '@ionic/react-router'
-import { fingerPrintOutline, personCircleOutline, timeOutline, todayOutline } from 'ionicons/icons'
+import { personCircleOutline, timeOutline, todayOutline } from 'ionicons/icons'
 import { Redirect, Route } from 'react-router-dom'
 
 setupIonicReact()
@@ -30,7 +30,6 @@ function AppTabs() {
       <IonRouterOutlet>
         <Route exact path="/app/punch" component={Punch} />
         <Route exact path="/app/history" component={History} />
-        <Route exact path="/app/facial" component={FacialCapture} />
         <Route exact path="/app/account" component={Account} />
         <Route exact path="/app">
           <Redirect to="/app/punch" />
@@ -44,10 +43,6 @@ function AppTabs() {
         <IonTabButton tab="history" href="/app/history">
           <IonIcon icon={timeOutline} aria-hidden="true" />
           <IonLabel>Historial</IonLabel>
-        </IonTabButton>
-        <IonTabButton tab="facial" href="/app/facial">
-          <IonIcon icon={fingerPrintOutline} aria-hidden="true" />
-          <IonLabel>Facial</IonLabel>
         </IonTabButton>
         <IonTabButton tab="account" href="/app/account">
           <IonIcon icon={personCircleOutline} aria-hidden="true" />
@@ -81,6 +76,9 @@ export default function App() {
           <Route exact path="/login/employee" component={EmployeeLogin} />
           <Route exact path="/login/kiosk" component={KioskLogin} />
           <Route exact path="/login/supervisor" component={SupervisorLogin} />
+          <Route exact path="/face-enroll">
+            {isAuthenticated ? <FaceEnroll /> : <Redirect to="/" />}
+          </Route>
           <Route path="/app">{isAuthenticated ? <AppTabs /> : <Redirect to="/" />}</Route>
         </IonRouterOutlet>
       </IonReactRouter>
