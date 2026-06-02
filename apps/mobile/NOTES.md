@@ -108,3 +108,40 @@ afecta a `apps/api` ni `apps/web`.
 la **autenticación** de supervisor está desbloqueada. El **flujo de
 marcación supervisada** (manual, vía `POST /facial/marcaciones/manual`)
 sigue como `TODO` en la app — es una feature aparte, no solo auth.
+
+---
+
+## Reconocimiento facial — implementado, con TODOs
+
+**Implementado:**
+
+- Backend: nuevos endpoints `/portal/facial/{me, enroll, match, marcaciones}`
+  con auth de empleado (JWT del portal), `employeeId` siempre del JWT,
+  clasificación automática por secuencia diaria (1ª = entry, 2ª =
+  lunch_start, 3ª = lunch_end, 4ª = exit, 5+ = extra), consolidación
+  eager después de cada inserción.
+- Móvil: pantalla `FaceEnroll` (auto-enrolamiento), pantalla `Punch`
+  reescrita con un solo botón "Marcar con cara"; carga lazy de face-api +
+  modelos empaquetados en el APK; liveness por parpadeo; al capturar →
+  match anti-fraude → registro.
+
+**Pendiente (no bloqueante):**
+
+1. **Offline para marcación facial.** Hoy se rechaza si no hay red porque
+   el match anti-fraude vive en el backend. Para soportar offline habría
+   que: (a) hacer el match local en el WebView contra el(los) enrollment
+   propio descargados al iniciar sesión, **o** (b) encolar el embedding
+   y dejar que el backend lo verifique al recibirlo (el endpoint ya
+   acepta el embedding, faltaría que rechace si no hace match).
+2. **Modo Kiosko facial.** El kiosko sigue con los 4 botones manuales +
+   ID del empleado. Para sumar reconocimiento facial multi-empleado
+   habría que apuntar al `/facial/match` admin (no `/portal/facial/match`)
+   con el token del dispositivo, y registrar vía `/facial/marcaciones`.
+   El kiosk web ya hace ese flujo; portarlo al móvil es viable cuando
+   se priorice.
+3. **Re-enrolamiento desde Cuenta.** Hoy solo se llega a `/face-enroll`
+   automáticamente en el primer uso. Conviene un botón "Re-registrar mi
+   cara" en la pestaña Cuenta (p.ej. tras un cambio de aspecto).
+4. **Política de liveness más fuerte.** El liveness por parpadeo (EAR)
+   es pasivo y simple — vulnerable a fotos con animación. Para entornos
+   sensibles, agregar MiniFASNet u otra red anti-spoofing.

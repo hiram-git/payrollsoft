@@ -26,6 +26,13 @@
     }
   },
   "files": {
-    "ignore": ["node_modules", "dist", ".astro", "drizzle", "apps/web/public/face-models"]
+    "ignore": [
+      "node_modules",
+      "dist",
+      ".astro",
+      "drizzle",
+      "apps/web/public/face-models",
+      "apps/mobile/public/face-models"
+    ]
   }
 }
