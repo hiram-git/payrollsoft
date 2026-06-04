@@ -38,9 +38,41 @@ export type FacialMarcacionInput = {
   matchedEnrollmentId?: string
 }
 
+export type KioskEmployee = {
+  id: string
+  code: string
+  firstName: string
+  lastName: string
+  hasEnrollment: boolean
+}
+
+export type KioskMarkResult = {
+  id: string
+  kind: 'entry' | 'lunch_start' | 'lunch_end' | 'exit' | 'extra'
+  deduped: boolean
+  confidence: number
+  employee: KioskEmployee
+}
+
 export const facialService = {
   async me(): Promise<{ hasEnrollment: boolean; enrollment: EnrollmentSummary | null }> {
     return apiClient.get('/portal/facial/me')
+  },
+
+  // ─── Kiosko (usuario tenant) ───────────────────────────────────────────
+  async kioskLookup(idNumber: string): Promise<KioskEmployee> {
+    return apiClient.get('/facial/kiosk/employee', { idNumber })
+  },
+
+  async kioskMark(input: {
+    idNumber: string
+    embedding: number[]
+    photoUrl?: string
+    livenessScore?: number
+    capturedAt?: string
+    idempotencyKey: string
+  }): Promise<KioskMarkResult> {
+    return apiClient.post('/facial/kiosk/mark', input)
   },
 
   async enroll(input: {

@@ -77,18 +77,44 @@ export async function loginEmployee(
 }
 
 /**
- * Login de kiosko: el dispositivo se autentica con su apiToken. No hay
- * usuario; el token identifica al device y el backend confía en el
- * employeeId que se le envíe (identificado por facial/NFC — TODO).
+ * Login de kiosko: el dispositivo lo opera un usuario tenant con permiso
+ * `facial:mark` (mismo modelo que el kiosk web). Autentica contra
+ * /auth/login y guarda el JWT como Bearer. La identificación de cada
+ * empleado al marcar se hace por cédula + verificación facial 1:1.
+ *
+ * Requiere el slug del tenant (a diferencia del empleado): /auth/login es
+ * por empresa.
  */
-export async function loginKiosk(deviceToken: string, tenant: string): Promise<void> {
-  const missing = missingRequiredFields(['deviceToken', 'tenant'], { deviceToken, tenant })
+type TenantLoginData = { userId: string; role: string; token?: string } | undefined
+
+export async function loginKiosk(
+  email: string,
+  password: string,
+  tenant: string
+): Promise<{ bearerMissing: boolean }> {
+  const missing = missingRequiredFields(['email', 'password', 'tenant'], {
+    email,
+    password,
+    tenant,
+  })
   if (missing.length > 0) {
-    throw new Error('Token del dispositivo y tenant son obligatorios.')
+    throw new Error('Correo, contraseña y empresa son obligatorios.')
   }
+
   await sessionStore.setTenant(tenant.trim())
   await sessionStore.setMode('kiosk')
-  await sessionStore.setToken(deviceToken.trim())
+
+  const data = await apiClient.post<TenantLoginData>(
+    '/auth/login',
+    { email: email.trim(), password },
+    { skipAuth: true }
+  )
+
+  if (data?.token) {
+    await sessionStore.setToken(data.token)
+    return { bearerMissing: false }
+  }
+  return { bearerMissing: true }
 }
 
 /**

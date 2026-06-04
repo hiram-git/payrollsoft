@@ -85,8 +85,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginKiosk = useCallback(
     async (...args: Parameters<typeof authService.loginKiosk>) => {
-      await authService.loginKiosk(...args)
+      const result = await authService.loginKiosk(...args)
       await refresh()
+      return result
     },
     [refresh]
   )
