@@ -133,12 +133,13 @@ sigue como `TODO` en la app — es una feature aparte, no solo auth.
    propio descargados al iniciar sesión, **o** (b) encolar el embedding
    y dejar que el backend lo verifique al recibirlo (el endpoint ya
    acepta el embedding, faltaría que rechace si no hace match).
-2. **Modo Kiosko facial.** El kiosko sigue con los 4 botones manuales +
-   ID del empleado. Para sumar reconocimiento facial multi-empleado
-   habría que apuntar al `/facial/match` admin (no `/portal/facial/match`)
-   con el token del dispositivo, y registrar vía `/facial/marcaciones`.
-   El kiosk web ya hace ese flujo; portarlo al móvil es viable cuando
-   se priorice.
+2. **Modo Kiosko facial.** ✅ IMPLEMENTADO. El kiosko ahora se autentica
+   con un usuario tenant (`facial:mark`), el empleado se identifica por
+   cédula (`GET /facial/kiosk/employee`) y la cara se verifica 1:1
+   (`POST /facial/kiosk/mark`). El backend clasifica el `kind` por
+   secuencia diaria, igual que el modo empleado. (Se eligió 1:1 sobre la
+   búsqueda 1:N del kiosk web para evitar falsos positivos en dispositivos
+   compartidos.)
 3. **Re-enrolamiento desde Cuenta.** Hoy solo se llega a `/face-enroll`
    automáticamente en el primer uso. Conviene un botón "Re-registrar mi
    cara" en la pestaña Cuenta (p.ej. tras un cambio de aspecto).
