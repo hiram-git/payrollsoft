@@ -369,6 +369,8 @@ export async function getPayrollLines(db: Db, payrollId: string) {
         email: employees.email,
         department: employees.department,
         position: employees.position,
+        positionId: employees.positionId,
+        socialSecurityNumber: employees.socialSecurityNumber,
       },
     })
     .from(payrollLines)
@@ -416,6 +418,8 @@ export async function getPayrollLinesPaged(
           email: employees.email,
           department: employees.department,
           position: employees.position,
+          positionId: employees.positionId,
+          socialSecurityNumber: employees.socialSecurityNumber,
         },
       })
       .from(payrollLines)
