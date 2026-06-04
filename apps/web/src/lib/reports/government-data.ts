@@ -189,6 +189,29 @@ function round2(v: number): number {
 
 // ─── Data fetcher ──────────────────────────────────────────────────────────
 
+/**
+ * Best-effort fetch that never throws — returns null on any failure
+ * and logs the cause to the server log so we can diagnose silent
+ * misconfiguration without breaking the report.
+ */
+async function tryFetchJson<T>(
+  label: string,
+  url: string,
+  headers: Record<string, string>
+): Promise<T | null> {
+  try {
+    const res = await fetch(url, { headers })
+    if (!res.ok) {
+      console.warn(`[gov-report] ${label} fetch returned ${res.status} for ${url}`)
+      return null
+    }
+    return (await res.json()) as T
+  } catch (err) {
+    console.warn(`[gov-report] ${label} fetch threw for ${url}:`, err)
+    return null
+  }
+}
+
 export async function fetchGovernmentReportData(
   payrollId: string,
   authCookie: string,
@@ -196,34 +219,41 @@ export async function fetchGovernmentReportData(
 ): Promise<GovFetchResult> {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
 
-  // Parallel: payroll + company + positions + partidas
+  // Critical fetch first — fail fast and surface a precise status so
+  // the UI can show a meaningful error instead of "intermittent".
+  const params = new URLSearchParams({
+    linesPage: '1',
+    linesLimit: String(REPORT_LINES_LIMIT),
+  })
   let payrollRes: Response
-  let companyRes: Response
-  let positionsRes: Response
-  let partidasRes: Response
   try {
-    const params = new URLSearchParams({
-      linesPage: '1',
-      linesLimit: String(REPORT_LINES_LIMIT),
-    })
-    ;[payrollRes, companyRes, positionsRes, partidasRes] = await Promise.all([
-      fetch(`${API_URL}/payroll/${payrollId}?${params}`, { headers }),
-      fetch(`${API_URL}/company`, { headers }),
-      fetch(`${API_URL}/positions?limit=10000`, { headers }),
-      fetch(`${API_URL}/partidas?limit=10000`, { headers }),
-    ])
-  } catch {
-    return { kind: 'error', status: 502, message: 'Error de conexión con el servidor' }
+    payrollRes = await fetch(`${API_URL}/payroll/${payrollId}?${params}`, { headers })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error de conexión'
+    console.error(`[gov-report] payroll fetch threw for ${payrollId}:`, err)
+    return { kind: 'error', status: 502, message: `No se pudo cargar la planilla: ${message}` }
   }
 
   if (payrollRes.status === 401) return { kind: 'unauthorized' }
   if (payrollRes.status === 404) return { kind: 'not-found' }
   if (!payrollRes.ok) {
-    return { kind: 'error', status: 500, message: 'Error al obtener la planilla' }
+    const body = await payrollRes.text().catch(() => '')
+    console.error(
+      `[gov-report] payroll fetch returned ${payrollRes.status} for ${payrollId}: ${body}`
+    )
+    return {
+      kind: 'error',
+      status: payrollRes.status,
+      message: `Error al obtener la planilla (HTTP ${payrollRes.status})`,
+    }
   }
 
-  const payrollJson = (await payrollRes.json()) as {
-    data: { payroll: GovPayroll; lines: GovLine[] }
+  let payrollJson: { data: { payroll: GovPayroll; lines: GovLine[] } }
+  try {
+    payrollJson = (await payrollRes.json()) as typeof payrollJson
+  } catch (err) {
+    console.error('[gov-report] payroll JSON parse failed:', err)
+    return { kind: 'error', status: 500, message: 'Respuesta de planilla inválida' }
   }
   const { payroll, lines } = payrollJson.data
 
@@ -231,42 +261,26 @@ export async function fetchGovernmentReportData(
     return { kind: 'bad-status', status: payroll.status }
   }
 
-  // Company config
-  let company: GovCompany | null = null
-  if (companyRes.ok) {
-    try {
-      const json = (await companyRes.json()) as { data: GovCompany | null }
-      company = json.data ?? null
-    } catch {
-      company = null
-    }
-  }
-
-  // Build position → partida lookup
+  // Optional metadata in parallel — failures degrade gracefully.
   type PositionRow = { id: string; partidaId: string | null }
+  const [companyJson, positionsJson, partidasJson] = await Promise.all([
+    tryFetchJson<{ data: GovCompany | null }>('company', `${API_URL}/company`, headers),
+    tryFetchJson<{ data: PositionRow[] }>('positions', `${API_URL}/positions?limit=10000`, headers),
+    tryFetchJson<{ data: Partida[] }>('partidas', `${API_URL}/partidas?limit=10000`, headers),
+  ])
+
+  const company = companyJson?.data ?? null
+
   const positionMap = new Map<string, string | null>()
-  if (positionsRes.ok) {
-    try {
-      const json = (await positionsRes.json()) as { data: PositionRow[] }
-      for (const p of json.data ?? []) positionMap.set(p.id, p.partidaId)
-    } catch {
-      // empty map — ungrouped fallback
-    }
-  }
+  for (const p of positionsJson?.data ?? []) positionMap.set(p.id, p.partidaId)
 
   const partidaMap = new Map<string, Partida>()
-  if (partidasRes.ok) {
-    try {
-      const json = (await partidasRes.json()) as { data: Partida[] }
-      for (const p of json.data ?? []) partidaMap.set(p.id, p)
-    } catch {
-      // empty
-    }
-  }
+  for (const p of partidasJson?.data ?? []) partidaMap.set(p.id, p)
 
-  // Resolve each employee → partida. The payroll lines don't carry
-  // positionId directly, so we need to fetch each employee's record
-  // for the positionId → position → partidaId chain. Cache per employee.
+  // Resolve each employee → partida. The payroll line payload now
+  // carries positionId directly (see getPayrollLines), so the previous
+  // N+1 fetch fallback only runs for legacy payloads. Cache per
+  // employee just in case.
   const employeePositionCache = new Map<string, string | null>()
   async function resolvePartidaForEmployee(emp: GovLineEmployee): Promise<Partida | null> {
     let posId = emp.positionId ?? null
@@ -274,15 +288,12 @@ export async function fetchGovernmentReportData(
       if (employeePositionCache.has(emp.id)) {
         posId = employeePositionCache.get(emp.id) ?? null
       } else {
-        try {
-          const res = await fetch(`${API_URL}/employees/${emp.id}`, { headers })
-          if (res.ok) {
-            const json = (await res.json()) as { data?: { positionId?: string | null } }
-            posId = json.data?.positionId ?? null
-          }
-        } catch {
-          posId = null
-        }
+        const json = await tryFetchJson<{ data?: { positionId?: string | null } }>(
+          'employee',
+          `${API_URL}/employees/${emp.id}`,
+          headers
+        )
+        posId = json?.data?.positionId ?? null
         employeePositionCache.set(emp.id, posId)
       }
     }
