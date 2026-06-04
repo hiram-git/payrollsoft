@@ -60,12 +60,13 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   return url.toString()
 }
 
-function authHeaders(mode: AppMode | null, token: string | null): Record<string, string> {
+function authHeaders(_mode: AppMode | null, token: string | null): Record<string, string> {
   const headers: Record<string, string> = {}
   if (!token) return headers
-  // El kiosko se autentica como dispositivo; los demás como portador JWT.
-  if (mode === 'kiosk') headers['X-Device-Token'] = token
-  else headers.Authorization = `Bearer ${token}`
+  // Todos los modos portan un JWT Bearer: empleado y supervisor (portal /
+  // usuario tenant) y kiosko (usuario tenant con facial:mark). El kiosko
+  // dejó de usar X-Device-Token al pasar a verificación facial 1:1.
+  headers.Authorization = `Bearer ${token}`
   return headers
 }
 

@@ -186,7 +186,7 @@ Un solo binario, tres flujos de autenticación que comparten el núcleo
 | Modo           | Para qué                                                  | Auth                                               | Estado                          |
 | -------------- | --------------------------------------------------------- | -------------------------------------------------- | ------------------------------- |
 | **Empleado**   | El empleado marca solo lo suyo desde su teléfono **con reconocimiento facial** (un solo botón; el backend clasifica entrada/almuerzo/salida por secuencia). | `POST /portal/auth/login` → JWT Bearer | **Funcional end-to-end**: enrolamiento + match + marcación |
-| **Kiosko**     | Dispositivo compartido fijo que marca a muchos empleados. | Token de dispositivo (`X-Device-Token`)            | Funcional con 4 botones manuales (legacy); flujo facial multi-empleado pendiente |
+| **Kiosko**     | Dispositivo compartido fijo que marca a muchos empleados **con reconocimiento facial** (cédula + verificación 1:1; el backend clasifica el tipo). | Usuario tenant con `facial:mark` (`POST /auth/login`) → JWT Bearer | **Funcional end-to-end** |
 | **Supervisor** | Marcación manual supervisada y aprobaciones.              | `POST /auth/login` (usuario tenant) → JWT Bearer   | Auth desbloqueada; flujo de marcación supervisada pendiente |
 
 ### Flujo facial del empleado
@@ -210,6 +210,27 @@ Un solo binario, tres flujos de autenticación que comparten el núcleo
 > backend (necesita los enrollments). Si no hay red, la marcación facial
 > se rechaza con un mensaje claro. Ver `NOTES.md` para el TODO de modo
 > offline.
+
+### Flujo facial del kiosko (multiempleado)
+
+Dispositivo compartido fijo (tablet en una pared) operado por un usuario
+tenant con `facial:mark`. Cada empleado marca así:
+
+1. **Login del dispositivo (una vez):** el operador inicia con su correo +
+   contraseña + empresa (`POST /auth/login`). El JWT queda guardado.
+2. **Identificación:** el empleado teclea su **cédula**. El kiosko llama a
+   `GET /facial/kiosk/employee?idNumber=` para resolverlo y confirmar que
+   tiene cara registrada.
+3. **Verificación 1:1:** la cámara captura el rostro y `POST
+   /facial/kiosk/mark` verifica que la cara coincide **con ese empleado**
+   (no contra todo el tenant — evita falsos positivos). Si coincide,
+   registra la marca; el `kind` se clasifica por secuencia diaria igual
+   que en el modo empleado.
+4. Tras marcar, el kiosko vuelve a pedir cédula para el siguiente.
+
+> El enrolamiento de cada empleado se hace desde su propio teléfono (modo
+> Empleado → "Registrar mi cara") o desde la consola web. El kiosko solo
+> marca; no enrola.
 
 ### Modelos face-api
 

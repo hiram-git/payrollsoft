@@ -1,23 +1,26 @@
 import FaceCapture, { type CapturedFace } from '@/components/FaceCapture'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api-client'
-import { buildFacialIdempotencyKey, descriptorToArray, facialService } from '@/lib/facial-service'
+import {
+  type KioskEmployee,
+  buildFacialIdempotencyKey,
+  descriptorToArray,
+  facialService,
+} from '@/lib/facial-service'
 import { isOnline } from '@/lib/network'
-import { punchQueue } from '@/lib/offline-queue'
-import { PUNCH_TYPE_OPTIONS, type PunchType } from '@/types/domain'
 /**
  * Pantalla "Marcar".
  *
- * Modo Empleado (este caso): un solo botón "Marcar con cara". La cámara
- * captura el rostro, el backend verifica que sea el del JWT (anti-fraude)
- * y clasifica el tipo de marca (entrada / salida almuerzo / regreso /
- * salida) por la secuencia diaria. NO hay 4 botones manuales.
+ * Modo Empleado: un solo botón "Marcar con cara". La cámara captura el
+ * rostro, el backend verifica que sea el del JWT (anti-fraude) y clasifica
+ * el tipo de marca (entrada / salida almuerzo / regreso / salida) por la
+ * secuencia diaria.
  *
- * Modo Kiosko (legacy): mantiene los 4 botones con ID manual del empleado
- * hasta que se implemente el flujo facial multi-empleado.
+ * Modo Kiosko (multiempleado): el empleado teclea su cédula y la cámara
+ * verifica 1:1 que la cara coincide; el tipo de marca también lo clasifica
+ * el backend por secuencia. No hay botones de tipo manuales.
  */
 import {
-  IonBadge,
   IonButton,
   IonCard,
   IonCardContent,
@@ -31,7 +34,6 @@ import {
   IonNote,
   IonPage,
   IonSpinner,
-  IonText,
   IonTitle,
   IonToolbar,
   useIonToast,
@@ -241,43 +243,91 @@ function EmployeePunch({ session }: { session: EmployeeSession }) {
   )
 }
 
-// ─── Kiosko (legacy) ───────────────────────────────────────────────────
+// ─── Kiosko multiempleado (cédula + verificación facial 1:1) ───────────
+
+type KioskStep = 'idNumber' | 'camera'
 
 function KioskPunch() {
   const [present] = useIonToast()
-  const [pending, setPending] = useState(0)
-  const [sending, setSending] = useState<PunchType | null>(null)
-  const [employeeId, setEmployeeId] = useState('')
+  const [step, setStep] = useState<KioskStep>('idNumber')
+  const [idNumber, setIdNumber] = useState('')
+  const [employee, setEmployee] = useState<KioskEmployee | null>(null)
+  const [busy, setBusy] = useState(false)
 
-  useEffect(
-    () =>
-      punchQueue.subscribe((items) => {
-        setPending(items.filter((i) => i.status === 'pending').length)
-      }),
-    []
-  )
+  function reset() {
+    setStep('idNumber')
+    setIdNumber('')
+    setEmployee(null)
+    setBusy(false)
+  }
 
-  async function mark(punchType: PunchType) {
-    if (!employeeId.trim()) {
+  async function lookup() {
+    const id = idNumber.trim()
+    if (!id) {
+      await present({ message: 'Ingresa la cédula.', duration: 2500, color: 'warning' })
+      return
+    }
+    if (!(await isOnline())) {
       await present({
-        message: 'Ingresa el ID del empleado.',
-        duration: 3000,
+        message: 'Sin conexión. El kiosko requiere conexión para verificar la identidad.',
+        duration: 4000,
         color: 'warning',
       })
       return
     }
-    setSending(punchType)
+    setBusy(true)
     try {
-      const { sent } = await punchQueue.enqueue({ employeeId: employeeId.trim(), punchType })
-      await present({
-        message: sent
-          ? 'Marcación registrada.'
-          : 'Sin conexión: marcación guardada y se enviará automáticamente.',
-        duration: 2500,
-        color: sent ? 'success' : 'medium',
-      })
+      const emp = await facialService.kioskLookup(id)
+      if (!emp.hasEnrollment) {
+        await present({
+          message: `${emp.firstName} ${emp.lastName} no tiene cara registrada. Debe enrolarse primero.`,
+          duration: 4000,
+          color: 'warning',
+        })
+        setBusy(false)
+        return
+      }
+      setEmployee(emp)
+      setStep('camera')
+    } catch (err) {
+      const message =
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : 'No se pudo buscar el empleado.'
+      await present({ message, duration: 3500, color: 'danger' })
     } finally {
-      setSending(null)
+      setBusy(false)
+    }
+  }
+
+  async function handleCaptured(face: CapturedFace) {
+    if (!employee) return
+    setBusy(true)
+    try {
+      const capturedAt = new Date()
+      const result = await facialService.kioskMark({
+        idNumber: idNumber.trim(),
+        embedding: descriptorToArray(face.descriptor),
+        livenessScore: face.liveness,
+        capturedAt: capturedAt.toISOString(),
+        idempotencyKey: buildFacialIdempotencyKey(employee.id, capturedAt),
+      })
+      const label = KIND_LABELS[result.kind] ?? result.kind
+      await present({
+        message: result.deduped
+          ? `${result.employee.firstName}: ${label} (ya registrada).`
+          : `${result.employee.firstName}: ${label} registrada.`,
+        duration: 3000,
+        color: 'success',
+      })
+      reset()
+    } catch (err) {
+      const message =
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : 'No se pudo registrar la marcación.'
+      await present({ message, duration: 4000, color: 'danger' })
+      reset()
     }
   }
 
@@ -285,39 +335,56 @@ function KioskPunch() {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Marcar (Kiosko)</IonTitle>
+          <IonTitle>Kiosko</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
         <IonCard>
+          <IonCardHeader>
+            <IonCardSubtitle>Marcación facial</IonCardSubtitle>
+            <IonCardTitle>
+              {step === 'idNumber'
+                ? 'Identifícate'
+                : `${employee?.firstName} ${employee?.lastName}`}
+            </IonCardTitle>
+          </IonCardHeader>
           <IonCardContent>
-            <IonItem className="ion-margin-bottom">
-              <IonInput
-                label="ID del empleado"
-                labelPlacement="floating"
-                value={employeeId}
-                onIonInput={(e) => setEmployeeId(e.detail.value ?? '')}
-              />
-            </IonItem>
-            {PUNCH_TYPE_OPTIONS.map((opt) => (
-              <IonButton
-                key={opt.value}
-                expand="block"
-                className="ion-margin-vertical"
-                disabled={sending !== null}
-                onClick={() => mark(opt.value)}
-              >
-                {sending === opt.value ? 'Enviando…' : opt.label}
-              </IonButton>
-            ))}
+            {step === 'idNumber' ? (
+              <>
+                <IonItem className="ion-margin-bottom">
+                  <IonInput
+                    label="Cédula"
+                    labelPlacement="floating"
+                    value={idNumber}
+                    inputmode="text"
+                    onIonInput={(e) => setIdNumber(e.detail.value ?? '')}
+                  />
+                </IonItem>
+                <IonButton expand="block" disabled={busy || !idNumber} onClick={lookup}>
+                  {busy ? 'Buscando…' : 'Continuar'}
+                </IonButton>
+              </>
+            ) : busy ? (
+              <div className="ion-text-center ion-padding">
+                <IonSpinner />
+                <IonNote>Verificando…</IonNote>
+              </div>
+            ) : (
+              <>
+                <IonNote>Mira a la cámara y parpadea para confirmar tu identidad.</IonNote>
+                <FaceCapture
+                  onCapture={handleCaptured}
+                  onError={(e) =>
+                    present({ message: e.message, duration: 3500, color: 'danger' }).catch(() => {})
+                  }
+                />
+                <IonButton expand="block" fill="outline" className="ion-margin-top" onClick={reset}>
+                  Cancelar
+                </IonButton>
+              </>
+            )}
           </IonCardContent>
         </IonCard>
-        {pending > 0 && (
-          <IonNote className="ion-margin-start">
-            <IonBadge color="warning">{pending}</IonBadge>{' '}
-            <IonText>marcación(es) en cola por enviar</IonText>
-          </IonNote>
-        )}
       </IonContent>
     </IonPage>
   )

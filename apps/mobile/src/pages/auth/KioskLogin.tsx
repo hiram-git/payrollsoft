@@ -1,11 +1,12 @@
 import { useAuth } from '@/contexts/AuthContext'
+import { ApiError } from '@/lib/api-client'
 /**
- * Login de kiosko. El dispositivo se autentica con su apiToken (el que
- * devuelve UNA sola vez la creación del device en /attendance/devices).
+ * Login de kiosko. El dispositivo lo activa un usuario tenant con permiso
+ * `facial:mark` (mismo modelo que el kiosk web). Tras autenticarse, el
+ * dispositivo queda listo para que CUALQUIER empleado marque con su cédula
+ * + verificación facial 1:1.
  *
- * Es la vía funcional end-to-end hoy: el backend acepta X-Device-Token
- * en POST /attendance/punches. La identificación del empleado concreto
- * (facial / NFC) queda como TODO en la pantalla de captura.
+ * Requiere el slug de la empresa porque /auth/login es por tenant.
  */
 import {
   IonBackButton,
@@ -29,21 +30,32 @@ export default function KioskLogin() {
   const { loginKiosk, tenant } = useAuth()
   const history = useHistory()
   const [present] = useIonToast()
-  const [deviceToken, setDeviceToken] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [tenantSlug, setTenantSlug] = useState(tenant)
   const [loading, setLoading] = useState(false)
 
   async function handleLogin() {
     setLoading(true)
     try {
-      await loginKiosk(deviceToken, tenantSlug)
+      const { bearerMissing } = await loginKiosk(email, password, tenantSlug)
+      if (bearerMissing) {
+        await present({
+          message:
+            'Sesión validada pero el backend no entregó token. Revisa que /auth/login devuelva el token (X-Client: mobile).',
+          duration: 4000,
+          color: 'warning',
+        })
+        setLoading(false)
+        return
+      }
       history.replace('/app/punch')
     } catch (err) {
-      await present({
-        message: err instanceof Error ? err.message : 'No se pudo activar el kiosko',
-        duration: 3500,
-        color: 'danger',
-      })
+      const message =
+        err instanceof ApiError || err instanceof Error
+          ? err.message
+          : 'No se pudo activar el kiosko'
+      await present({ message, duration: 3500, color: 'danger' })
     } finally {
       setLoading(false)
     }
@@ -63,7 +75,7 @@ export default function KioskLogin() {
         <IonList inset>
           <IonItem>
             <IonInput
-              label="Tenant (slug)"
+              label="Empresa (slug)"
               labelPlacement="floating"
               value={tenantSlug}
               onIonInput={(e) => setTenantSlug(e.detail.value ?? '')}
@@ -71,21 +83,34 @@ export default function KioskLogin() {
           </IonItem>
           <IonItem>
             <IonInput
-              label="Token del dispositivo"
+              label="Correo del operador"
               labelPlacement="floating"
-              value={deviceToken}
-              onIonInput={(e) => setDeviceToken(e.detail.value ?? '')}
+              type="email"
+              autocomplete="username"
+              value={email}
+              onIonInput={(e) => setEmail(e.detail.value ?? '')}
+            />
+          </IonItem>
+          <IonItem>
+            <IonInput
+              label="Contraseña"
+              labelPlacement="floating"
+              type="password"
+              autocomplete="current-password"
+              value={password}
+              onIonInput={(e) => setPassword(e.detail.value ?? '')}
             />
           </IonItem>
         </IonList>
         <IonNote className="ion-margin-start">
-          El token se genera al crear el dispositivo (tipo de conexión <code>api</code>) en la
-          consola web → Asistencia → Dispositivos.
+          Inicia con un usuario de la empresa que tenga permiso de marcación facial (
+          <code>facial:mark</code>). El dispositivo quedará activo para que los empleados marquen
+          con su cédula.
         </IonNote>
         <IonButton
           expand="block"
           className="ion-margin-top"
-          disabled={loading || !deviceToken || !tenantSlug}
+          disabled={loading || !email || !password || !tenantSlug}
           onClick={handleLogin}
         >
           {loading ? 'Activando…' : 'Activar kiosko'}

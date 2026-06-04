@@ -125,23 +125,24 @@ sigue como `TODO` en la app — es una feature aparte, no solo auth.
   modelos empaquetados en el APK; liveness por parpadeo; al capturar →
   match anti-fraude → registro.
 
-**Pendiente (no bloqueante):**
+**Estado de los TODOs:**
 
-1. **Offline para marcación facial.** Hoy se rechaza si no hay red porque
-   el match anti-fraude vive en el backend. Para soportar offline habría
-   que: (a) hacer el match local en el WebView contra el(los) enrollment
-   propio descargados al iniciar sesión, **o** (b) encolar el embedding
-   y dejar que el backend lo verifique al recibirlo (el endpoint ya
-   acepta el embedding, faltaría que rechace si no hace match).
-2. **Modo Kiosko facial.** El kiosko sigue con los 4 botones manuales +
-   ID del empleado. Para sumar reconocimiento facial multi-empleado
-   habría que apuntar al `/facial/match` admin (no `/portal/facial/match`)
-   con el token del dispositivo, y registrar vía `/facial/marcaciones`.
-   El kiosk web ya hace ese flujo; portarlo al móvil es viable cuando
-   se priorice.
-3. **Re-enrolamiento desde Cuenta.** Hoy solo se llega a `/face-enroll`
-   automáticamente en el primer uso. Conviene un botón "Re-registrar mi
-   cara" en la pestaña Cuenta (p.ej. tras un cambio de aspecto).
-4. **Política de liveness más fuerte.** El liveness por parpadeo (EAR)
-   es pasivo y simple — vulnerable a fotos con animación. Para entornos
-   sensibles, agregar MiniFASNet u otra red anti-spoofing.
+1. **Modo Kiosko facial.** ✅ IMPLEMENTADO. El kiosko se autentica con un
+   usuario tenant (`facial:mark`), el empleado se identifica por cédula
+   (`GET /facial/kiosk/employee`) y la cara se verifica 1:1
+   (`POST /facial/kiosk/mark`). El backend clasifica el `kind` por
+   secuencia diaria, igual que el modo empleado. (Se eligió 1:1 sobre la
+   búsqueda 1:N del kiosk web para evitar falsos positivos en dispositivos
+   compartidos.)
+2. **Offline para marcación facial.** ❌ DESCARTADO por decisión de
+   producto. El flujo facial requiere conexión (el match vive en el
+   backend); si no hay red se rechaza con un mensaje claro y no se
+   implementará modo offline.
+3. **Re-enrolamiento desde otra cuenta / gestión multiusuario.** ❌
+   DESCARTADO. El modelo de uso es **un empleado por empresa**, así que no
+   hace falta gestión de re-enrolamiento desde una cuenta administrativa
+   ni flujos multiusuario de enrolamiento. El enrolamiento inicial del
+   propio empleado (modo Empleado → "Registrar mi cara") es suficiente.
+4. **Política de liveness más fuerte.** Opcional. El liveness por parpadeo
+   (EAR) es pasivo y simple — vulnerable a fotos animadas. Para entornos
+   sensibles podría agregarse MiniFASNet u otra red anti-spoofing.

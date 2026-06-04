@@ -29,6 +29,7 @@
 import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { tenantPlugin } from '../../middleware/tenant'
+import { kioskVerifyAndMarkService, lookupKioskEmployeeService } from './kiosk-service'
 import {
   consolidateAttendanceForDayService,
   createEnrollmentService,
@@ -90,6 +91,16 @@ const MarcacionItem = t.Object({
 
 const MarcacionBatch = t.Object({
   items: t.Array(MarcacionItem, { minItems: 1, maxItems: 200 }),
+})
+
+const KioskVerifyMarkBody = t.Object({
+  idNumber: t.String({ minLength: 1, maxLength: 20 }),
+  embedding: EmbeddingArray,
+  photoUrl: t.Optional(t.String()),
+  livenessScore: t.Optional(t.Number({ minimum: 0, maximum: 1 })),
+  capturedAt: t.Optional(t.String()),
+  idempotencyKey: t.String({ minLength: 8, maxLength: 100 }),
+  terminalCode: t.Optional(t.String()),
 })
 
 const ManualBody = t.Object({
@@ -187,6 +198,64 @@ export const facialRoutes = new Elysia({ prefix: '/facial' })
       return result
     },
     { beforeHandle: [guardAuth, guardPermission('facial:mark')], body: MatchBody }
+  )
+
+  // ─── Kiosko multiempleado (cédula + verificación facial 1:1) ──────────────
+  //
+  // GET  /facial/kiosk/employee?idNumber=  — buscar empleado por cédula
+  // POST /facial/kiosk/mark                — verificar cara 1:1 y registrar
+  .get(
+    '/kiosk/employee',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await lookupKioskEmployeeService(db, query.idNumber)
+      if (!result.found) {
+        set.status = 404
+        return { success: false, error: 'Empleado no encontrado o inactivo.' }
+      }
+      return { success: true, data: result.employee }
+    },
+    {
+      beforeHandle: [guardAuth, guardPermission('facial:mark')],
+      query: t.Object({ idNumber: t.String({ minLength: 1, maxLength: 20 }) }),
+    }
+  )
+  .post(
+    '/kiosk/mark',
+    async ({ db, body, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const lookup = await lookupKioskEmployeeService(db, body.idNumber)
+      if (!lookup.found || !lookup.employee) {
+        set.status = 404
+        return { success: false, error: 'Empleado no encontrado o inactivo.' }
+      }
+
+      const result = await kioskVerifyAndMarkService(db, {
+        employeeId: lookup.employee.id,
+        embedding: body.embedding,
+        photoUrl: body.photoUrl,
+        livenessScore: body.livenessScore,
+        capturedAt: body.capturedAt,
+        idempotencyKey: body.idempotencyKey,
+      })
+
+      if (!result.success) {
+        set.status = result.code === 'no_enrollment' ? 409 : 422
+        return { success: false, error: result.error }
+      }
+      set.status = 201
+      return {
+        success: true,
+        data: { ...result.data, employee: lookup.employee },
+      }
+    },
+    { beforeHandle: [guardAuth, guardPermission('facial:mark')], body: KioskVerifyMarkBody }
   )
 
   // ─── Marcaciones ─────────────────────────────────────────────────────────
