@@ -1,4 +1,4 @@
-import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ type RecapitulacionProps = {
     periodEnd: string
     paymentDate: string | null
   }
-  company: { companyName: string | null } | null
+  company: { companyName: string | null; logoEmpresa: string | null } | null
   groups: RecapitulacionGroup[]
   totals: RecapitulacionTotals
 }
@@ -89,6 +89,12 @@ const s = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
+  brandStack: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 2,
+  },
+  logoImg: { width: 36, height: 36, objectFit: 'contain', marginBottom: 2 },
   reportTitle: {
     fontSize: 14,
     fontFamily: 'Helvetica-Bold',
@@ -219,6 +225,7 @@ const FREQ_LABEL: Record<string, string> = {
 
 export function RecapitulacionPdf({ payroll, company, groups, totals }: RecapitulacionProps) {
   const companyName = company?.companyName ?? 'Empresa'
+  const logo = company?.logoEmpresa ?? null
   const typeLabel = TYPE_LABEL[payroll.type] ?? payroll.type.toUpperCase()
   const freqLabel = FREQ_LABEL[payroll.frequency] ?? payroll.frequency.toUpperCase()
   const periodLine = `Período: ${formatDateDMY(payroll.periodStart)} al ${formatDateDMY(payroll.periodEnd)} — ${typeLabel} ${freqLabel}`
@@ -238,7 +245,10 @@ export function RecapitulacionPdf({ payroll, company, groups, totals }: Recapitu
               <Text style={s.dateText}>Fecha {today}</Text>
             </View>
             <View style={s.headerCenter}>
-              <Text style={s.companyName}>{companyName}</Text>
+              <View style={s.brandStack}>
+                {logo && <Image src={logo} style={s.logoImg} />}
+                <Text style={s.companyName}>{companyName}</Text>
+              </View>
             </View>
             <View style={s.headerRight}>
               <Text

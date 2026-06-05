@@ -1,4 +1,4 @@
-import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ type TransferenciasProps = {
     periodEnd: string
     paymentDate: string | null
   }
-  company: { companyName: string | null } | null
+  company: { companyName: string | null; logoEmpresa: string | null } | null
   groups: TransferenciasGroup[]
   totals: TransferenciasTotals
 }
@@ -67,6 +67,19 @@ const s = StyleSheet.create({
   },
 
   // ── Header ──
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  logoBox: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoImg: { width: 32, height: 32, objectFit: 'contain' },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -244,6 +257,7 @@ const TYPE_LABEL: Record<string, string> = {
 
 export function TransferenciasPdf({ payroll, company, groups, totals }: TransferenciasProps) {
   const companyName = company?.companyName ?? 'Empresa'
+  const logo = company?.logoEmpresa ?? null
   const typeLabel = TYPE_LABEL[payroll.type] ?? payroll.type.toUpperCase()
 
   return (
@@ -251,8 +265,14 @@ export function TransferenciasPdf({ payroll, company, groups, totals }: Transfer
       <Page size="A4" style={s.page} orientation="landscape" wrap>
         {/* ── Header (repeats on every page) ── */}
         <View fixed>
-          <View style={s.headerRow}>
+          <View style={s.brandRow}>
+            {logo && (
+              <View style={s.logoBox}>
+                <Image src={logo} style={s.logoImg} />
+              </View>
+            )}
             <Text style={s.companyName}>{companyName}</Text>
+            <View style={{ flex: 1 }} />
             <Text style={s.frequencyText}>{payroll.frequency}</Text>
           </View>
 
