@@ -270,8 +270,7 @@ export async function fetchGovernmentReportData(
       return {
         kind: 'error',
         status: 429,
-        message:
-          'Se alcanzó el límite de solicitudes por minuto. Espera unos segundos e intenta de nuevo.',
+        message: 'Se alcanzó el límite de solicitudes. Espera ~15 segundos e intenta de nuevo.',
       }
     }
     return {
