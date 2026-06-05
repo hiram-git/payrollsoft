@@ -13,6 +13,31 @@
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const REPORT_LINES_LIMIT = 100000
+const METADATA_TTL_MS = 60_000
+
+// In-process TTL cache for the three metadata endpoints (company,
+// positions, partidas). Government reports re-render on every click,
+// but the catalog data behind them rarely changes — caching it for
+// 60s drops the per-click request count from 4 to 1 once the page is
+// warm, which is the difference between hitting the 100 req/min
+// global rate limit and not. Keyed by tenant slug so multi-tenant
+// instances don't bleed across.
+type CacheEntry<T> = { value: T; expiresAt: number }
+const metadataCache = new Map<string, CacheEntry<unknown>>()
+
+function readCache<T>(key: string): T | null {
+  const entry = metadataCache.get(key)
+  if (!entry) return null
+  if (Date.now() > entry.expiresAt) {
+    metadataCache.delete(key)
+    return null
+  }
+  return entry.value as T
+}
+
+function writeCache<T>(key: string, value: T): void {
+  metadataCache.set(key, { value, expiresAt: Date.now() + METADATA_TTL_MS })
+}
 
 // ─── Types shared across all three reports ─────────────────────────────────
 
@@ -241,6 +266,14 @@ export async function fetchGovernmentReportData(
     console.error(
       `[gov-report] payroll fetch returned ${payrollRes.status} for ${payrollId}: ${body}`
     )
+    if (payrollRes.status === 429) {
+      return {
+        kind: 'error',
+        status: 429,
+        message:
+          'Se alcanzó el límite de solicitudes por minuto. Espera unos segundos e intenta de nuevo.',
+      }
+    }
     return {
       kind: 'error',
       status: payrollRes.status,
@@ -262,11 +295,27 @@ export async function fetchGovernmentReportData(
   }
 
   // Optional metadata in parallel — failures degrade gracefully.
+  // Cache hits skip the network call entirely so a burst of report
+  // clicks within the TTL window doesn't run the per-IP rate limiter
+  // up to 429.
   type PositionRow = { id: string; partidaId: string | null }
+
+  async function fetchCached<T>(
+    label: 'company' | 'positions' | 'partidas',
+    url: string
+  ): Promise<T | null> {
+    const cacheKey = `${tenantSlug}:${label}`
+    const cached = readCache<T>(cacheKey)
+    if (cached !== null) return cached
+    const fresh = await tryFetchJson<T>(label, url, headers)
+    if (fresh !== null) writeCache(cacheKey, fresh)
+    return fresh
+  }
+
   const [companyJson, positionsJson, partidasJson] = await Promise.all([
-    tryFetchJson<{ data: GovCompany | null }>('company', `${API_URL}/company`, headers),
-    tryFetchJson<{ data: PositionRow[] }>('positions', `${API_URL}/positions?limit=10000`, headers),
-    tryFetchJson<{ data: Partida[] }>('partidas', `${API_URL}/partidas?limit=10000`, headers),
+    fetchCached<{ data: GovCompany | null }>('company', `${API_URL}/company`),
+    fetchCached<{ data: PositionRow[] }>('positions', `${API_URL}/positions?limit=10000`),
+    fetchCached<{ data: Partida[] }>('partidas', `${API_URL}/partidas?limit=10000`),
   ])
 
   const company = companyJson?.data ?? null
