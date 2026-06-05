@@ -56,13 +56,18 @@ export function getClientIp(request: Request): string {
 }
 
 /**
- * Elysia plugin: global rate limiter (100 req/min per IP).
+ * Elysia plugin: global rate limiter (300 req/min per IP).
  * Attach to the root app before any routes.
+ *
+ * 300 / minute leaves comfortable headroom for SSR-heavy listing
+ * pages (e.g. `/reports/government`, `/reports/payroll`) that fire
+ * several catalog fetches per server-rendered request, without
+ * giving an actually abusive client unbounded bandwidth.
  */
 export const globalRateLimit = new Elysia({ name: 'global-rate-limit' }).onRequest(
   ({ request, set }) => {
     const ip = getClientIp(request)
-    if (!checkRateLimit(`global:${ip}`, 100, 60_000)) {
+    if (!checkRateLimit(`global:${ip}`, 300, 60_000)) {
       set.status = 429
       return {
         success: false,
