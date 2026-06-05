@@ -189,7 +189,16 @@ export async function downloadPdfWithModal(
     closeLoadingModal()
     console.error('PDF download error:', err)
     const message = err instanceof Error ? err.message : String(err)
-    alert(`Error al generar el PDF: ${message}`)
+    const sa = (
+      window as typeof window & {
+        saModal?: { error: (opts: { title: string; message: string }) => Promise<void> }
+      }
+    ).saModal
+    if (sa) {
+      await sa.error({ title: 'Error al generar el PDF', message })
+    } else {
+      alert(`Error al generar el PDF: ${message}`)
+    }
   } finally {
     downloadInFlight = false
   }

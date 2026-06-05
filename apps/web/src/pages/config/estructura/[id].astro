@@ -222,7 +222,7 @@ const errorMessages: Record<string, string> = {
       <div class="flex justify-between mt-4">
         {pos.isActive && (
           <form method="POST" action={`/api/config/estructura/${id}`}
-            onsubmit="return confirm('¿Dar de baja esta posición?')"
+            data-confirm-submit="¿Dar de baja esta posición?" data-confirm-title="Dar de baja posición" data-confirm-tone="danger" data-confirm-label="Dar de baja"
           >
             <input type="hidden" name="_method" value="DELETE" />
             <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">

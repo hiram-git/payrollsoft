@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 import { can, getIdentity } from '../../../lib/auth'
 
@@ -101,10 +102,10 @@ const errorDetail = Astro.url.searchParams.get('detail') ?? ''
     </div>
 
     {error && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" data-server-toast="error">{error}</div>
     )}
     {errorFlag && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" data-server-toast="error">
         No se pudo guardar el campo.
         {errorDetail && <pre class="mt-2 whitespace-pre-wrap break-words text-xs font-mono opacity-80">{errorDetail}</pre>}
       </div>
@@ -518,4 +519,5 @@ const errorDetail = Astro.url.searchParams.get('detail') ?? ''
       render()
     })()
   </script>
+  <ServerToastBridge />
 </AppLayout>

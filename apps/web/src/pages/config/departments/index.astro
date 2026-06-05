@@ -128,7 +128,7 @@ const total = countAll(tree)
             </a>
             ${node.isActive ? `
               <form method="POST" action="/api/config/departments/${node.id}"
-                onsubmit="return confirm('¿Dar de baja este departamento?')">
+                data-confirm-submit="¿Dar de baja este departamento?" data-confirm-title="Dar de baja departamento" data-confirm-tone="danger" data-confirm-label="Dar de baja">
                 <input type="hidden" name="_method" value="DELETE" />
                 <button type="submit" title="Dar de baja"
                   class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">

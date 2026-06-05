@@ -574,7 +574,10 @@ function switchTab(tab, btn) {
       if (!file) return
 
       if (file.size > MAX_SIZE) {
-        alert('El archivo supera los 2 MB. Por favor elige una imagen más pequeña.')
+        if (window.toast) window.toast.error('El archivo supera los 2 MB. Por favor elige una imagen más pequeña.')
+        if (window.saModal) {
+          window.saModal.error({ title: 'Archivo demasiado grande', message: 'El archivo supera los 2 MB. Por favor elige una imagen más pequeña.' })
+        }
         input.value = ''
         return
       }

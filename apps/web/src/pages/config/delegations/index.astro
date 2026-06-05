@@ -151,8 +151,17 @@ const today = new Date().toISOString().slice(0, 10)
             body.innerHTML = html
 
             body.querySelectorAll('[data-end]').forEach(function (btn) {
-              btn.addEventListener('click', function () {
-                if (!confirm('¿Finalizar esta delegación? Dejará de aplicar a partir de hoy.')) return
+              btn.addEventListener('click', async function () {
+                var ok = window.saModal
+                  ? await window.saModal.confirm({
+                      title: 'Finalizar delegación',
+                      message: '¿Finalizar esta delegación? Dejará de aplicar a partir de hoy.',
+                      tone: 'danger',
+                      confirmLabel: 'Finalizar',
+                    })
+                  : confirm('¿Finalizar esta delegación? Dejará de aplicar a partir de hoy.')
+                if (!ok) return
+                if (window.saModal) window.saModal.close()
                 fetch('/api/approvals/delegations?end=' + btn.getAttribute('data-end'), { method: 'POST' })
                   .then(function (r) { return r.json() })
                   .then(function (res) {

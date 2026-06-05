@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 import { can, getIdentity } from '../../../lib/auth'
 
@@ -83,22 +84,22 @@ const blockDeactivate = !!user?.isTenantAdmin
     </div>
 
     {flash === 'updated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Usuario actualizado.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" data-server-toast="success">Usuario actualizado.</div>
     )}
     {flash === 'roles-updated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Roles asignados.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" data-server-toast="success">Roles asignados.</div>
     )}
     {flash === 'password-updated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Contraseña restablecida.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" data-server-toast="success">Contraseña restablecida.</div>
     )}
     {flash === 'deactivated' && (
-      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">Usuario desactivado.</div>
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800" data-server-toast="success">Usuario desactivado.</div>
     )}
     {flash === 'reactivated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Usuario reactivado.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" data-server-toast="success">Usuario reactivado.</div>
     )}
     {errorFlag && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" data-server-toast="error">
         No se pudo aplicar la acción.
         {errorDetail && (
           <span class="block mt-1 text-xs font-mono opacity-80">{errorDetail}</span>
@@ -106,7 +107,7 @@ const blockDeactivate = !!user?.isTenantAdmin
       </div>
     )}
     {error && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" data-server-toast="error">{error}</div>
     )}
 
     {user && (
@@ -214,7 +215,7 @@ const blockDeactivate = !!user?.isTenantAdmin
             <form
               method="POST"
               action={`/api/tenant-users/${user.id}/deactivate`}
-              onsubmit="return confirm('¿Desactivar este usuario? No podrá iniciar sesión hasta que lo reactives.');"
+              data-confirm-submit="¿Desactivar este usuario? No podrá iniciar sesión hasta que lo reactives." data-confirm-title="Desactivar usuario" data-confirm-tone="danger" data-confirm-label="Desactivar"
             >
               <button type="submit" class="px-3 py-2 text-sm rounded-md border border-red-200 text-red-700 hover:bg-red-50">
                 Desactivar usuario
@@ -243,4 +244,5 @@ const blockDeactivate = !!user?.isTenantAdmin
       </div>
     )}
   </div>
+  <ServerToastBridge />
 </AppLayout>

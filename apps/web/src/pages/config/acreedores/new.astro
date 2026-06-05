@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 
 const authCookie = Astro.cookies.get('auth')?.value
@@ -27,7 +28,7 @@ const errorMsg = errorParam ? (errorMessages[errorParam] ?? 'Error desconocido.'
     </div>
 
     {errorMsg && (
-      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" data-server-toast="error">
         {errorMsg}
       </div>
     )}
@@ -80,6 +81,7 @@ const errorMsg = errorParam ? (errorMessages[errorParam] ?? 'Error desconocido.'
       </div>
     </form>
   </div>
+  <ServerToastBridge />
 </AppLayout>
 
 <script>

@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 import { can, getIdentity } from '../../../lib/auth'
 
@@ -118,18 +119,18 @@ const flash = Astro.url.searchParams.get('flash')
     </div>
 
     {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Rol creado correctamente.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" data-server-toast="success">Rol creado correctamente.</div>
     )}
     {flash === 'updated' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Permisos actualizados.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700" data-server-toast="success">Permisos actualizados.</div>
     )}
     {Astro.url.searchParams.get('error') === 'perms-not-saved' && (
-      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+      <div class="mb-4 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800" data-server-toast="error">
         El rol fue creado pero no se pudieron guardar los permisos iniciales. Vuelve a intentarlo desde aquí.
       </div>
     )}
     {error && (
-      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700" data-server-toast="error">{error}</div>
     )}
 
     {role && (
@@ -467,4 +468,5 @@ const flash = Astro.url.searchParams.get('flash')
       })
     })()
   </script>
+  <ServerToastBridge />
 </AppLayout>

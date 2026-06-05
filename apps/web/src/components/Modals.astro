@@ -362,6 +362,55 @@
     // In case content is added dynamically (rare on SSR pages but cheap).
     document.addEventListener('astro:page-load', bindForms);
 
+    // ── Native submit confirmation (drop-in for `onsubmit="return confirm()"`)
+    // Forms tagged with `data-confirm-submit="texto"` show the modal first;
+    // if confirmed, the form submits as usual (SSR redirect preserved).
+    // Optional: data-confirm-title, data-confirm-tone="danger"|"primary",
+    // data-confirm-label="Eliminar".
+    function bindConfirmSubmit() {
+      document.querySelectorAll('form[data-confirm-submit]').forEach((form) => {
+        if (form.__saConfirmBound) return;
+        form.__saConfirmBound = true;
+        form.addEventListener('submit', async (e) => {
+          if (form.__saConfirmed) return; // already confirmed, let it through
+          e.preventDefault();
+          const message = form.dataset.confirmSubmit || '¿Confirmar acción?';
+          const title = form.dataset.confirmTitle || '¿Confirmar acción?';
+          const tone = form.dataset.confirmTone || 'primary';
+          const confirmLabel = form.dataset.confirmLabel || 'Confirmar';
+          const ok = await api.confirm({ title, message, tone, confirmLabel });
+          if (!ok) return;
+          api.close();
+          form.__saConfirmed = true;
+          form.submit();
+        });
+      });
+    }
+    bindConfirmSubmit();
+    document.addEventListener('astro:page-load', bindConfirmSubmit);
+
+    // ── Native click confirmation (for buttons / links outside forms)
+    // Element with `data-confirm-click="texto"` shows the modal first; if
+    // confirmed, the original click action runs (anchor navigation, etc.).
+    document.addEventListener('click', async (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('[data-confirm-click]') : null;
+      if (!el || el.__saClickConfirmed) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const message = el.dataset.confirmClick || '¿Confirmar acción?';
+      const title = el.dataset.confirmTitle || '¿Confirmar acción?';
+      const tone = el.dataset.confirmTone || 'primary';
+      const confirmLabel = el.dataset.confirmLabel || 'Confirmar';
+      const ok = await api.confirm({ title, message, tone, confirmLabel });
+      if (!ok) return;
+      api.close();
+      el.__saClickConfirmed = true;
+      // Re-dispatch the click so the original handler runs unhindered.
+      el.click();
+      // Allow re-confirmation on subsequent clicks.
+      setTimeout(() => { el.__saClickConfirmed = false; }, 100);
+    }, true);
+
     // ── Auto-display from query string ───────────────────────────────────
     function flashFromUrl() {
       const url = new URL(window.location.href);

@@ -183,7 +183,7 @@ const isCuentasTab = activeTab === 'cuentas'
                         <form
                           method="POST"
                           action={`/api/config/chart-of-accounts/${item.id}`}
-                          onsubmit="return confirm('¿Dar de baja esta cuenta contable?')"
+                          data-confirm-submit="¿Dar de baja esta cuenta contable?" data-confirm-title="Dar de baja cuenta" data-confirm-tone="danger" data-confirm-label="Dar de baja"
                           class="tooltip-wrap"
                         >
                           <input type="hidden" name="_method" value="DELETE" />
@@ -342,7 +342,7 @@ const isCuentasTab = activeTab === 'cuentas'
                         <form
                           method="POST"
                           action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
-                          onsubmit="return confirm('¿Eliminar este registro?')"
+                          data-confirm-submit="¿Eliminar este registro?" data-confirm-title="Eliminar registro" data-confirm-tone="danger" data-confirm-label="Eliminar"
                           class="tooltip-wrap"
                         >
                           <input type="hidden" name="_method" value="DELETE" />

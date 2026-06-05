@@ -110,7 +110,7 @@ const success = Astro.url.searchParams.get('success') === '1'
                       <form
                         method="POST"
                         action={`/api/config/job-titles/${cargo.id}`}
-                        onsubmit="return confirm('¿Dar de baja este cargo?')"
+                        data-confirm-submit="¿Dar de baja este cargo?" data-confirm-title="Dar de baja cargo" data-confirm-tone="danger" data-confirm-label="Dar de baja"
                       >
                         <input type="hidden" name="_method" value="DELETE" />
                         <button

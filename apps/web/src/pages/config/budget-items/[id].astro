@@ -94,7 +94,7 @@ const errorMessages: Record<string, string> = {
           <form
             method="POST"
             action={`/api/config/budget-items/${id}`}
-            onsubmit="return confirm('¿Dar de baja esta partida?')"
+            data-confirm-submit="¿Dar de baja esta partida?" data-confirm-title="Dar de baja partida" data-confirm-tone="danger" data-confirm-label="Dar de baja"
           >
             <input type="hidden" name="_method" value="DELETE" />
             <button

@@ -979,7 +979,7 @@ const freqLabel: Record<string, string> = {
                         </a>
                         {loan.isActive && (
                           <form method="POST" action={`/api/employees/${id}/loans/${loan.id}`}
-                            onsubmit="return confirm('¿Cerrar este préstamo?')"
+                            data-confirm-submit="¿Cerrar este préstamo?" data-confirm-title="Cerrar préstamo" data-confirm-tone="danger" data-confirm-label="Cerrar"
                           >
                             <input type="hidden" name="_method" value="DELETE" />
                             <button type="submit" title="Cerrar préstamo" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
@@ -2221,8 +2221,17 @@ function syncToggleUI(id, val) {
     .catch(function() { saveBtn.disabled = false; });
   });
 
-  window.__depDel = function(depId) {
-    if (!confirm('¿Eliminar este dependiente?')) return;
+  window.__depDel = async function(depId) {
+    var ok = window.saModal
+      ? await window.saModal.confirm({
+          title: 'Eliminar dependiente',
+          message: '¿Eliminar este dependiente?',
+          tone: 'danger',
+          confirmLabel: 'Eliminar',
+        })
+      : confirm('¿Eliminar este dependiente?');
+    if (!ok) return;
+    if (window.saModal) window.saModal.close();
     fetch('/api/employees/' + empId + '/dependents', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dependentId: depId }),
     }).then(function() { loadDeps(); });
