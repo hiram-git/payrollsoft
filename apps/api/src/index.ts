@@ -2,7 +2,6 @@ import { cors } from '@elysiajs/cors'
 import { Elysia } from 'elysia'
 import { env } from './config/env'
 import { csrfPlugin } from './middleware/csrf'
-import { globalRateLimit } from './middleware/rateLimit'
 import { tenantPlugin } from './middleware/tenant'
 import { acumuladosRoutes } from './modules/acumulados/routes'
 import { consolidationRoutes } from './modules/attendance/consolidation-routes'
@@ -51,7 +50,12 @@ const app = new Elysia()
       allowedHeaders: ['Content-Type', 'X-Tenant'],
     })
   )
-  .use(globalRateLimit)
+  // Note: `globalRateLimit` is intentionally not mounted. A blanket
+  // per-IP cap was hurting normal usage of SSR-heavy pages (every page
+  // load fires several catalog fetches; reports add more). Brute-force
+  // protection that actually matters lives on the auth endpoints via
+  // `loginRateLimit`. Re-enable here only with real abuse metrics +
+  // per-route exemptions for the listing / report flows.
   .use(csrfPlugin)
   .use(tenantPlugin)
 
