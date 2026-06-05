@@ -291,6 +291,33 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
     siacap: 'SIACAP',
   }
 
+  // Module-level "busy" flag — guards the whole report surface during
+  // an in-flight request. Synchronous so click-spam can't race us:
+  // every additional click checks this *before* the modal helpers
+  // even start their async work.
+  let busy = false
+
+  function setBusy(state: boolean) {
+    busy = state
+    document.body.classList.toggle('cursor-wait', state)
+    for (const t of document.querySelectorAll<HTMLButtonElement>('[data-gov-trigger]')) {
+      t.disabled = state
+      t.classList.toggle('opacity-60', state)
+      t.classList.toggle('cursor-not-allowed', state)
+    }
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-gov-report]')) {
+      b.disabled = state
+      b.setAttribute('aria-busy', state ? 'true' : 'false')
+    }
+    if (state) {
+      // Close every dropdown panel so the user can't even see the
+      // options while the request is in flight.
+      for (const p of document.querySelectorAll<HTMLElement>('[data-gov-panel]')) {
+        p.classList.add('hidden')
+      }
+    }
+  }
+
   // Per-row dropdown toggle
   for (const dd of document.querySelectorAll<HTMLElement>('[data-gov-dropdown]')) {
     const trigger = dd.querySelector<HTMLButtonElement>('[data-gov-trigger]')
@@ -299,7 +326,7 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation()
-      // Close other open dropdowns first
+      if (busy) return
       for (const other of document.querySelectorAll<HTMLElement>('[data-gov-panel]')) {
         if (other !== panel) other.classList.add('hidden')
       }
@@ -307,6 +334,7 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
     })
   }
   document.addEventListener('click', () => {
+    if (busy) return
     for (const p of document.querySelectorAll<HTMLElement>('[data-gov-panel]')) {
       p.classList.add('hidden')
     }
@@ -314,28 +342,31 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
 
   // Report buttons
   for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-gov-report]')) {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation()
+      if (busy) return
       const report = btn.dataset.govReport ?? ''
       const payrollId = btn.dataset.payrollId ?? ''
       const mode = btn.dataset.mode ?? 'download'
       if (!report || !payrollId) return
 
-      // Close dropdown
-      btn.closest('[data-gov-dropdown]')?.querySelector<HTMLElement>('[data-gov-panel]')?.classList.add('hidden')
-
+      setBusy(true)
       const url = `/api/reports/government/${report}?payrollId=${encodeURIComponent(payrollId)}`
       const title = titles[report] ?? 'Reporte'
       const filename = `${report}-${payrollId.slice(0, 8)}.pdf`
 
-      if (mode === 'preview') {
-        void previewPdfInModal(url, { title, filenameHint: filename })
-      } else {
-        void downloadPdfWithModal(url, {
-          title: `Generando ${title}`,
-          successTitle: `${title} descargada`,
-          filenameHint: filename,
-        })
+      try {
+        if (mode === 'preview') {
+          await previewPdfInModal(url, { title, filenameHint: filename })
+        } else {
+          await downloadPdfWithModal(url, {
+            title: `Generando ${title}`,
+            successTitle: `${title} descargada`,
+            filenameHint: filename,
+          })
+        }
+      } finally {
+        setBusy(false)
       }
     })
   }
