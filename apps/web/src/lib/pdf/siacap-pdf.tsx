@@ -1,4 +1,4 @@
-import { Document, Font, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
+import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -14,7 +14,7 @@ export type SiacapEmployee = {
 
 type SiacapPdfProps = {
   payroll: { name: string; periodStart: string; periodEnd: string }
-  company: { companyName: string | null; ruc: string | null } | null
+  company: { companyName: string | null; ruc: string | null; logoEmpresa: string | null } | null
   employees: SiacapEmployee[]
 }
 
@@ -52,6 +52,13 @@ const s = StyleSheet.create({
   header: {
     marginBottom: 8,
   },
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
+  logoImg: { width: 36, height: 36, objectFit: 'contain' },
   companyName: {
     fontSize: 14,
     fontFamily: 'Helvetica-Bold',
@@ -163,6 +170,7 @@ function formatDateISO(iso: string): string {
 
 export function SiacapPdf({ payroll, company, employees }: SiacapPdfProps) {
   const companyName = company?.companyName ?? 'Empresa'
+  const logo = company?.logoEmpresa ?? null
   const ruc = company?.ruc ?? ''
 
   const rows = employees.map((emp) => {
@@ -194,7 +202,10 @@ export function SiacapPdf({ payroll, company, employees }: SiacapPdfProps) {
       <Page size="A4" style={s.page} orientation="landscape" wrap>
         {/* ── Header (repeats on every page) ── */}
         <View style={s.header} fixed>
-          <Text style={s.companyName}>{companyName}</Text>
+          <View style={s.brandRow}>
+            {logo && <Image src={logo} style={s.logoImg} />}
+            <Text style={s.companyName}>{companyName}</Text>
+          </View>
           <Text style={s.reportTitle}>SIACAP - APORTES MENSUALES</Text>
           <Text style={s.periodLine}>{periodLine}</Text>
         </View>
