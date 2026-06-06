@@ -23,6 +23,8 @@
     "seed-stress:prod": "bun src/seed-stress.ts",
     "db:seed-loans": "bun --env-file=../../.env src/seed-loans.ts",
     "seed-loans:prod": "bun src/seed-loans.ts",
+    "db:seed-attendance": "bun --env-file=../../.env src/seed-attendance.ts",
+    "seed-attendance:prod": "bun src/seed-attendance.ts",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"
   },
