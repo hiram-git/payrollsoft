@@ -12,6 +12,24 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
   const has = (k: string) => form.get(k) === 'on' || form.get(k) === 'true'
 
+  // AJAX submit (X-Form-Submit) gets JSON {ok, error?, redirect?} so the form
+  // keeps its state on error; classic POST keeps redirecting for no-JS.
+  const isAjax = request.headers.get('X-Form-Submit') === '1'
+  const fail = (code: string, status = 400) =>
+    isAjax
+      ? new Response(JSON.stringify({ ok: false, error: code }), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      : redirect(`/employees/new?error=${code}`)
+  const ok = (to: string) =>
+    isAjax
+      ? new Response(JSON.stringify({ ok: true, redirect: to }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      : redirect(to)
+
   const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
   const paymentMethodRaw = g('paymentMethod')
@@ -59,7 +77,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     !body.hireDate ||
     !body.baseSalary
   ) {
-    return redirect('/employees/new?error=missing-fields')
+    return fail('missing-fields')
   }
 
   let res: Response
@@ -74,24 +92,27 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       body: JSON.stringify(body),
     })
   } catch {
-    return redirect('/employees/new?error=server-error')
+    return fail('server-error', 502)
   }
 
   if (res.ok) {
-    return redirect('/employees')
+    return ok('/employees')
   }
 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
-  const msg = data.error ?? ''
+  const msg = (data.error ?? '').toLowerCase()
 
-  if (msg.toLowerCase().includes('salario')) {
-    return redirect('/employees/new?error=salary_max')
+  if (msg.includes('ocupada') || msg.includes('position_occupied')) {
+    return fail('position_occupied', res.status)
   }
-  if (msg.toLowerCase().includes('code') || res.status === 409) {
-    return redirect('/employees/new?error=code_taken')
+  if (msg.includes('salario')) {
+    return fail('salary_max', res.status)
   }
-  if (msg.toLowerCase().includes('cédula') || msg.toLowerCase().includes('id number')) {
-    return redirect('/employees/new?error=id_taken')
+  if (msg.includes('code') || res.status === 409) {
+    return fail('code_taken', 409)
   }
-  return redirect('/employees/new?error=server-error')
+  if (msg.includes('cédula') || msg.includes('id number')) {
+    return fail('id_taken', 409)
+  }
+  return fail('server-error', res.status)
 }
