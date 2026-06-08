@@ -69,6 +69,7 @@ const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
   salary_max: 'El salario base no puede superar el salario de la posición.',
+  position_occupied: 'La posición seleccionada ya está ocupada por otro empleado.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -509,8 +510,36 @@ const errorMessages: Record<string, string> = {
       return missing
     }
 
+    // Mensajes para los códigos de error que devuelve el proxy vía JSON.
+    const SERVER_ERRORS = {
+      code_taken: 'El código de empleado ya está en uso.',
+      id_taken: 'La cédula ya está registrada.',
+      salary_max: 'El salario base no puede superar el salario de la posición.',
+      position_occupied: 'La posición seleccionada ya está ocupada por otro empleado.',
+      no_payroll_type: 'El empleado debe pertenecer a al menos un tipo de planilla.',
+      'missing-fields': 'Completa todos los campos requeridos.',
+      'server-error': 'Error del servidor. Intenta de nuevo.',
+    }
+
+    function showError(html, toastMsg) {
+      if (banner) {
+        banner.innerHTML = html
+        banner.classList.remove('hidden')
+        banner.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      if (window.toast) window.toast.error(toastMsg || (banner ? banner.textContent.trim() : html))
+    }
+
+    let submitting = false
+
     form.addEventListener('submit', function (e) {
+      // Siempre interceptamos: validamos en cliente y, si pasa, enviamos por
+      // fetch para que un error del servidor no recargue ni borre el formulario.
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (submitting) return
       if (banner) banner.classList.add('hidden')
+
       const missing = collectMissing()
 
       let salaryError = null
@@ -523,43 +552,62 @@ const errorMessages: Record<string, string> = {
         }
       }
 
-      if (!missing.length && !salaryError) return
-      e.preventDefault()
-      e.stopImmediatePropagation()
-
-      const lines = []
-      if (missing.length) {
-        lines.push('<strong>Faltan campos obligatorios:</strong>')
-        for (const m of missing) {
-          const t = tabInfo(m.el)
-          lines.push('• ' + (t ? 'Pestaña «' + t.label + '» → ' : '') + m.label)
+      if (missing.length || salaryError) {
+        const lines = []
+        if (missing.length) {
+          lines.push('<strong>Faltan campos obligatorios:</strong>')
+          for (const m of missing) {
+            const t = tabInfo(m.el)
+            lines.push('• ' + (t ? 'Pestaña «' + t.label + '» → ' : '') + m.label)
+          }
         }
-      }
-      if (salaryError) lines.push((missing.length ? '<br>' : '') + salaryError)
+        if (salaryError) lines.push((missing.length ? '<br>' : '') + salaryError)
 
-      if (banner) {
-        banner.innerHTML = lines.join('<br>')
-        banner.classList.remove('hidden')
-        banner.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-
-      // Notificación tipo toast con resumen para captar la atención cuando el
-      // usuario ya hizo scroll lejos del banner.
-      if (window.toast) {
         const summary = salaryError && !missing.length
           ? salaryError
           : missing.length === 1
             ? 'Falta el campo «' + missing[0].label + '».'
             : 'Faltan ' + missing.length + ' campos obligatorios.'
-        window.toast.error(summary)
+        showError(lines.join('<br>'), summary)
+
+        const focusEl = missing.length ? missing[0].el : salary
+        if (focusEl) {
+          const t = tabInfo(focusEl)
+          if (t) switchTab(t.key, document.querySelector('[data-tab="' + t.key + '"]'))
+          try { focusEl.focus() } catch (_) {}
+        }
+        return
       }
 
-      const focusEl = missing.length ? missing[0].el : salary
-      if (focusEl) {
-        const t = tabInfo(focusEl)
-        if (t) switchTab(t.key, document.querySelector('[data-tab="' + t.key + '"]'))
-        try { focusEl.focus() } catch (_) {}
-      }
+      // Validación local OK → envío AJAX. El estado del form se conserva ante
+      // cualquier rechazo del servidor (posición ocupada, cédula duplicada…).
+      submitting = true
+      const submitBtn = form.querySelector('button[type="submit"]')
+      if (submitBtn) submitBtn.disabled = true
+
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Form-Submit': '1' },
+        body: new FormData(form),
+      })
+        .then(function (res) {
+          return res.json().catch(function () { return {} }).then(function (data) {
+            if (res.ok && data.ok) {
+              window.location.href = data.redirect || '/employees'
+              return
+            }
+            const code = data.error || 'server-error'
+            const msg = SERVER_ERRORS[code] || 'Ocurrió un error inesperado.'
+            showError(msg, msg)
+            submitting = false
+            if (submitBtn) submitBtn.disabled = false
+          })
+        })
+        .catch(function () {
+          showError(SERVER_ERRORS['server-error'], SERVER_ERRORS['server-error'])
+          submitting = false
+          if (submitBtn) submitBtn.disabled = false
+        })
     })
 
     // Si el server retornó un error (banner SSR visible al cargar), dispara

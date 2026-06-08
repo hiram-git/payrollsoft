@@ -31,6 +31,24 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   const has = (k: string) => form.get(k) === 'on' || form.get(k) === 'true'
   const payrollTypeIds = form.getAll('payrollTypeIds[]').map(String).filter(Boolean)
 
+  // AJAX submit (X-Form-Submit) gets JSON {ok, error?, redirect?} so the form
+  // keeps its state on error; classic POST keeps redirecting for no-JS.
+  const isAjax = request.headers.get('X-Form-Submit') === '1'
+  const fail = (code: string, status = 400) =>
+    isAjax
+      ? new Response(JSON.stringify({ ok: false, error: code }), {
+          status,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      : redirect(`/employees/${id}?error=${code}`)
+  const ok = (to: string) =>
+    isAjax
+      ? new Response(JSON.stringify({ ok: true, redirect: to }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      : redirect(to)
+
   // Recoger campos adicionales del form (prefijo cf_<code>) y serializar
   // según su tipo. El proxy consulta el catálogo activo para saber qué
   // tipo cast aplicar, evitando sorpresas en el motor de fórmulas.
@@ -117,7 +135,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     !body.hireDate ||
     !body.baseSalary
   ) {
-    return redirect(`/employees/${id}?error=missing-fields`)
+    return fail('missing-fields')
   }
 
   let res: Response
@@ -132,29 +150,32 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
       body: JSON.stringify(body),
     })
   } catch {
-    return redirect(`/employees/${id}?error=server-error`)
+    return fail('server-error', 502)
   }
 
   if (res.status === 401) return redirect('/login')
 
   if (res.ok) {
-    return redirect(`/employees/${id}?success=1`)
+    return ok(`/employees/${id}?success=1`)
   }
 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
-  const msg = data.error ?? ''
+  const msg = (data.error ?? '').toLowerCase()
 
-  if (msg.toLowerCase().includes('salario')) {
-    return redirect(`/employees/${id}?error=salary_max`)
+  if (msg.includes('ocupada') || msg.includes('position_occupied')) {
+    return fail('position_occupied', res.status)
   }
-  if (msg.toLowerCase().includes('tipo de planilla')) {
-    return redirect(`/employees/${id}?error=no_payroll_type`)
+  if (msg.includes('salario')) {
+    return fail('salary_max', res.status)
   }
-  if (msg.toLowerCase().includes('code') || res.status === 409) {
-    return redirect(`/employees/${id}?error=code_taken`)
+  if (msg.includes('tipo de planilla')) {
+    return fail('no_payroll_type', res.status)
   }
-  if (msg.toLowerCase().includes('cédula') || msg.toLowerCase().includes('id number')) {
-    return redirect(`/employees/${id}?error=id_taken`)
+  if (msg.includes('code') || res.status === 409) {
+    return fail('code_taken', 409)
   }
-  return redirect(`/employees/${id}?error=server-error`)
+  if (msg.includes('cédula') || msg.includes('id number')) {
+    return fail('id_taken', 409)
+  }
+  return fail('server-error', res.status)
 }
