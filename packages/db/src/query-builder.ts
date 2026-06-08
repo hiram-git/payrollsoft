@@ -16,6 +16,7 @@ import {
   concepts,
   creditors,
   departments,
+  dependents,
   employeePayrollTypes,
   employees,
   jobFunctions,
@@ -81,6 +82,10 @@ export type EmployeeFilter = {
   isActive?: boolean
   payFrequency?: string
   payrollTypeId?: string
+  /** El propio colaborador tiene discapacidad (employees.has_own_disability). */
+  hasOwnDisability?: boolean
+  /** Tiene al menos un dependiente activo con discapacidad. */
+  hasFamilyDisability?: boolean
 }
 
 /**
@@ -126,6 +131,19 @@ export async function listEmployees(
       .select({ eid: employeePayrollTypes.employeeId })
       .from(employeePayrollTypes)
       .where(eq(employeePayrollTypes.payrollTypeId, filter.payrollTypeId))
+    conditions.push(inArray(employees.id, sub))
+  }
+
+  if (filter.hasOwnDisability !== undefined) {
+    conditions.push(eq(employees.hasOwnDisability, filter.hasOwnDisability))
+  }
+
+  if (filter.hasFamilyDisability) {
+    // Semi-join: solo empleados con un dependiente activo con discapacidad.
+    const sub = db
+      .select({ eid: dependents.employeeId })
+      .from(dependents)
+      .where(and(eq(dependents.isActive, true), eq(dependents.hasDisability, true)))
     conditions.push(inArray(employees.id, sub))
   }
 

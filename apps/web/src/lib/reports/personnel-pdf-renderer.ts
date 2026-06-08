@@ -13,6 +13,7 @@ export async function renderPersonnelPdfBuffer(data: PersonnelReportData): Promi
     employees: data.employees,
     company: data.company,
     payrollTypeName: data.payrollTypeName,
+    filterChips: data.filterChips,
     generatedBy: data.generatedBy ?? null,
   })
   // @react-pdf/renderer's `renderToBuffer` signature doesn't match

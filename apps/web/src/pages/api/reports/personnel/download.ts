@@ -85,7 +85,22 @@ export const GET: APIRoute = async ({ cookies, url, redirect }) => {
     /* default on_demand */
   }
 
-  const storage = isPersistentMode(payrollReportMode) ? getReportStorage(payrollReportMode) : null
+  // ── Filtros del reporte (situación / discapacidad propia / familiar) ──
+  const sitParam = url.searchParams.get('situacion')
+  const situacion: 'active' | 'inactive' | 'all' =
+    sitParam === 'inactive' ? 'inactive' : sitParam === 'all' ? 'all' : 'active'
+  const hasOwnDisability = url.searchParams.get('hasOwnDisability') === 'true'
+  const hasFamilyDisability = url.searchParams.get('hasFamilyDisability') === 'true'
+
+  // Cualquier filtro distinto al default (activos + tipo) hace único el
+  // resultado, así que saltamos el cache persistente — de lo contrario un
+  // reporte filtrado serviría los bytes cacheados sin filtrar.
+  const hasExtraFilters = situacion !== 'active' || hasOwnDisability || hasFamilyDisability
+
+  const storage =
+    !hasExtraFilters && isPersistentMode(payrollReportMode)
+      ? getReportStorage(payrollReportMode)
+      : null
   const storageKey = `reports/personnel/${TENANT}/${payrollTypeId ?? 'all'}.pdf`
 
   let pdfBytes: Uint8Array | null = null
@@ -102,7 +117,9 @@ export const GET: APIRoute = async ({ cookies, url, redirect }) => {
     const fetchResult = await fetchPersonnelReportData(authCookie, {
       payrollTypeId,
       payrollTypeName,
-      activeOnly: true,
+      situacion,
+      hasOwnDisability,
+      hasFamilyDisability,
     })
     if (fetchResult.kind === 'unauthorized') return redirect('/login')
     if (fetchResult.kind === 'error') {

@@ -219,6 +219,8 @@ export function listEmployeesService(
     isActive?: boolean
     payFrequency?: string
     payrollTypeId?: string
+    hasOwnDisability?: boolean
+    hasFamilyDisability?: boolean
   },
   pagination: PaginationOptions
 ) {

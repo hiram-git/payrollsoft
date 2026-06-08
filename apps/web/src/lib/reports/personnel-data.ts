@@ -12,19 +12,32 @@ const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const PAGE_SIZE = 100
 const MAX_PAGES = 50
 
+export type PersonnelSituacion = 'active' | 'inactive' | 'all'
+
 export type PersonnelReportFilters = {
   /** Active payroll-type id from the navbar cookie. */
   payrollTypeId?: string | null
   /** Display name for the type — printed on the PDF chip. */
   payrollTypeName?: string | null
-  /** When false, includes inactive employees too (default: true). */
+  /**
+   * Situación del colaborador: 'active' (default) | 'inactive' | 'all'.
+   * Reemplaza el viejo flag `activeOnly`, que se mantiene como shim.
+   */
+  situacion?: PersonnelSituacion
+  /** @deprecated usar `situacion`. true ⇒ 'active', false ⇒ 'all'. */
   activeOnly?: boolean
+  /** Solo colaboradores con discapacidad propia. */
+  hasOwnDisability?: boolean
+  /** Solo colaboradores con familiares discapacitados. */
+  hasFamilyDisability?: boolean
 }
 
 export type PersonnelReportData = {
   employees: PdfPersonnelEmployee[]
   company: PdfPersonnelCompany | null
   payrollTypeName: string | null
+  /** Lista legible de filtros aplicados para los chips del PDF. */
+  filterChips: string[]
   generatedBy?: PdfPersonnelGeneratedBy | null
 }
 
@@ -46,6 +59,12 @@ type ApiEmployee = {
   isActive: boolean
 }
 
+const SITUACION_LABEL: Record<PersonnelSituacion, string> = {
+  active: 'Activos',
+  inactive: 'De baja',
+  all: 'Todas las situaciones',
+}
+
 /**
  * Fetch the full employee list scoped by the navbar's active payroll
  * type. The API endpoint is paginated (max 100 rows) so we walk pages
@@ -60,7 +79,8 @@ export async function fetchPersonnelReportData(
     'X-Tenant': resolveTenantSlugFromCookie(authCookie),
   }
   const employees: PdfPersonnelEmployee[] = []
-  const activeOnly = filters.activeOnly ?? true
+  const situacion: PersonnelSituacion =
+    filters.situacion ?? (filters.activeOnly === false ? 'all' : 'active')
 
   try {
     for (let page = 1; page <= MAX_PAGES; page++) {
@@ -68,8 +88,11 @@ export async function fetchPersonnelReportData(
         page: String(page),
         limit: String(PAGE_SIZE),
       })
-      if (activeOnly) params.set('isActive', 'true')
+      if (situacion === 'active') params.set('isActive', 'true')
+      else if (situacion === 'inactive') params.set('isActive', 'false')
       if (filters.payrollTypeId) params.set('payrollTypeId', filters.payrollTypeId)
+      if (filters.hasOwnDisability) params.set('hasOwnDisability', 'true')
+      if (filters.hasFamilyDisability) params.set('hasFamilyDisability', 'true')
 
       const res = await fetch(`${API_URL}/employees?${params}`, { headers })
       if (res.status === 401) return { kind: 'unauthorized' }
@@ -113,12 +136,19 @@ export async function fetchPersonnelReportData(
     company = null
   }
 
+  const filterChips: string[] = []
+  if (filters.payrollTypeName) filterChips.push(`Tipo de planilla: ${filters.payrollTypeName}`)
+  filterChips.push(SITUACION_LABEL[situacion])
+  if (filters.hasOwnDisability) filterChips.push('Con discapacidad propia')
+  if (filters.hasFamilyDisability) filterChips.push('Con familiares discapacitados')
+
   return {
     kind: 'ok',
     data: {
       employees,
       company,
       payrollTypeName: filters.payrollTypeName ?? null,
+      filterChips,
     },
   }
 }
