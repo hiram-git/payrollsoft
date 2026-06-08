@@ -204,11 +204,14 @@ export function PersonnelPdf({
   employees,
   company,
   payrollTypeName,
+  filterChips,
   generatedBy,
 }: {
   employees: PdfPersonnelEmployee[]
   company: PdfPersonnelCompany | null
   payrollTypeName: string | null
+  /** Filtros aplicados, un chip cada uno. Si falta, cae al chip de tipo. */
+  filterChips?: string[]
   generatedBy?: PdfPersonnelGeneratedBy | null
 }) {
   const generatedAt = new Date().toLocaleString('es-PA', {
@@ -242,11 +245,21 @@ export function PersonnelPdf({
 
         <View style={s.divider} fixed />
 
-        {payrollTypeName && (
-          <View style={s.filterChip}>
-            <Text style={s.filterLabel}>Tipo de planilla:</Text>
-            <Text style={s.filterValue}>{payrollTypeName}</Text>
+        {filterChips && filterChips.length > 0 ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+            {filterChips.map((chip) => (
+              <View key={chip} style={s.filterChip}>
+                <Text style={s.filterValue}>{chip}</Text>
+              </View>
+            ))}
           </View>
+        ) : (
+          payrollTypeName && (
+            <View style={s.filterChip}>
+              <Text style={s.filterLabel}>Tipo de planilla:</Text>
+              <Text style={s.filterValue}>{payrollTypeName}</Text>
+            </View>
+          )
         )}
 
         <View style={s.table}>

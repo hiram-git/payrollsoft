@@ -121,6 +121,8 @@ const ListQuery = t.Object({
   isActive: t.Optional(t.String()), // 'true' | 'false'
   payFrequency: t.Optional(t.String()),
   payrollTypeId: t.Optional(t.String()),
+  hasOwnDisability: t.Optional(t.String()), // 'true' | 'false'
+  hasFamilyDisability: t.Optional(t.String()), // 'true'
   page: t.Optional(t.Numeric()),
   limit: t.Optional(t.Numeric()),
   sortOrder: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')])),
@@ -150,6 +152,12 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
 
       const isActive =
         query.isActive === 'true' ? true : query.isActive === 'false' ? false : undefined
+      const hasOwnDisability =
+        query.hasOwnDisability === 'true'
+          ? true
+          : query.hasOwnDisability === 'false'
+            ? false
+            : undefined
 
       const result = await listEmployeesService(
         db,
@@ -159,6 +167,8 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           isActive,
           payFrequency: query.payFrequency,
           payrollTypeId: query.payrollTypeId,
+          hasOwnDisability,
+          hasFamilyDisability: query.hasFamilyDisability === 'true' ? true : undefined,
         },
         { page: query.page, limit: query.limit, sortOrder: query.sortOrder }
       )
