@@ -6,9 +6,17 @@ import {
   listFunciones,
   updateFuncion,
 } from '@payroll/db'
+import { sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
+
+async function countJobFunctionRefs(db: AnyDb, id: string): Promise<{ employees: number }> {
+  const [emp] = (await db.execute(
+    sql`SELECT COUNT(*)::int AS n FROM employees WHERE job_function_id = ${id}`
+  )) as { n: number }[]
+  return { employees: emp?.n ?? 0 }
+}
 
 export type FuncionInput = {
   code: string
@@ -68,6 +76,14 @@ export async function deactivateFuncionService(db: AnyDb, id: string) {
   const existing = await getFuncionById(db, id)
   if (!existing) {
     return { success: false as const, error: 'not_found', message: 'Función not found' }
+  }
+  const refs = await countJobFunctionRefs(db, id)
+  if (refs.employees > 0) {
+    return {
+      success: false as const,
+      error: 'in_use',
+      message: `No se puede dar de baja: está siendo utilizada por ${refs.employees} empleado(s).`,
+    }
   }
   const row = await deactivateFuncion(db, id)
   return { success: true as const, data: row }

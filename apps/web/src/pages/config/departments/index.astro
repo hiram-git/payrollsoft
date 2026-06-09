@@ -38,6 +38,15 @@ try {
 }
 
 const success = Astro.url.searchParams.get('success') === '1'
+const deleted = Astro.url.searchParams.get('deleted') === '1'
+const deleteError = Astro.url.searchParams.get('deleteError') ?? ''
+const deleteErrorMsg = Astro.url.searchParams.get('msg') ?? ''
+const deleteBanner =
+  deleteError === 'in_use'
+    ? deleteErrorMsg || 'No se puede dar de baja este departamento porque está siendo utilizado.'
+    : deleteError === 'server-error'
+      ? 'No se pudo dar de baja el departamento. Intenta de nuevo.'
+      : ''
 
 function countAll(nodes: DepartamentoNode[]): number {
   return nodes.reduce((acc, n) => acc + 1 + countAll(n.children), 0)
@@ -66,6 +75,16 @@ const total = countAll(tree)
     {success && (
       <div data-server-toast="success" class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
         Departamento guardado correctamente.
+      </div>
+    )}
+    {deleted && (
+      <div data-server-toast="success" class="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+        Departamento dado de baja correctamente.
+      </div>
+    )}
+    {deleteBanner && (
+      <div data-server-toast="error" class="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+        {deleteBanner}
       </div>
     )}
     {error && (

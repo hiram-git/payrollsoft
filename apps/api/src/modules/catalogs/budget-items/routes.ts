@@ -107,7 +107,8 @@ export const budgetItemsRoutes = new Elysia({ prefix: '/budget-items' })
       }
       const result = await deactivatePartidaService(db, params.id)
       if (!result.success) {
-        set.status = result.error === 'not_found' ? 404 : 400
+        set.status =
+          result.error === 'not_found' ? 404 : result.error === 'in_use' ? 409 : 400
         return { success: false, error: result.message }
       }
       return { success: true, data: result.data }

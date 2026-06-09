@@ -9,6 +9,7 @@ import {
   listDepartamentos,
   updateDepartamento,
 } from '@payroll/db'
+import { sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -108,7 +109,23 @@ export async function deactivateDepartamentoService(db: AnyDb, id: string) {
     return {
       success: false as const,
       error: 'has_children',
-      message: 'Cannot deactivate a department that has active sub-departments',
+      message: `No se puede dar de baja: tiene ${childCount} sub-departamento(s) activo(s).`,
+    }
+  }
+  const [emp] = (await db.execute(
+    sql`SELECT COUNT(*)::int AS n FROM employees WHERE department_id = ${id}`
+  )) as { n: number }[]
+  const [pos] = (await db.execute(
+    sql`SELECT COUNT(*)::int AS n FROM positions WHERE department_id = ${id}`
+  )) as { n: number }[]
+  if ((emp?.n ?? 0) > 0 || (pos?.n ?? 0) > 0) {
+    const parts: string[] = []
+    if ((emp?.n ?? 0) > 0) parts.push(`${emp.n} empleado(s)`)
+    if ((pos?.n ?? 0) > 0) parts.push(`${pos.n} posición(es)`)
+    return {
+      success: false as const,
+      error: 'in_use',
+      message: `No se puede dar de baja: está siendo utilizado por ${parts.join(' y ')}.`,
     }
   }
   const row = await deactivateDepartamento(db, id)

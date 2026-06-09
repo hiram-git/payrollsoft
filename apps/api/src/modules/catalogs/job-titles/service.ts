@@ -6,9 +6,23 @@ import {
   listCargos,
   updateCargo,
 } from '@payroll/db'
+import { sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
+
+async function countJobTitleRefs(
+  db: AnyDb,
+  id: string
+): Promise<{ employees: number; positions: number }> {
+  const [emp] = (await db.execute(
+    sql`SELECT COUNT(*)::int AS n FROM employees WHERE job_title_id = ${id}`
+  )) as { n: number }[]
+  const [pos] = (await db.execute(
+    sql`SELECT COUNT(*)::int AS n FROM positions WHERE job_title_id = ${id}`
+  )) as { n: number }[]
+  return { employees: emp?.n ?? 0, positions: pos?.n ?? 0 }
+}
 
 export type CargoInput = {
   code: string
@@ -68,6 +82,17 @@ export async function deactivateCargoService(db: AnyDb, id: string) {
   const existing = await getCargoById(db, id)
   if (!existing) {
     return { success: false as const, error: 'not_found', message: 'Cargo not found' }
+  }
+  const refs = await countJobTitleRefs(db, id)
+  if (refs.employees > 0 || refs.positions > 0) {
+    const parts: string[] = []
+    if (refs.employees > 0) parts.push(`${refs.employees} empleado(s)`)
+    if (refs.positions > 0) parts.push(`${refs.positions} posición(es)`)
+    return {
+      success: false as const,
+      error: 'in_use',
+      message: `No se puede dar de baja: está siendo utilizado por ${parts.join(' y ')}.`,
+    }
   }
   const row = await deactivateCargo(db, id)
   return { success: true as const, data: row }

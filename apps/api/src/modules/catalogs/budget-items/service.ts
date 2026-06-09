@@ -6,9 +6,23 @@ import {
   listPartidas,
   updatePartida,
 } from '@payroll/db'
+import { sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
+
+async function countBudgetItemRefs(db: AnyDb, id: string): Promise<{ positions: number }> {
+  // Positions reference budget items via 4 columns: budget_item_id, overtime_*,
+  // representation_*, thirteenth_month_*.
+  const [pos] = (await db.execute(
+    sql`SELECT COUNT(*)::int AS n FROM positions
+        WHERE budget_item_id = ${id}
+           OR overtime_budget_item_id = ${id}
+           OR representation_budget_item_id = ${id}
+           OR thirteenth_month_budget_item_id = ${id}`
+  )) as { n: number }[]
+  return { positions: pos?.n ?? 0 }
+}
 
 export type PartidaInput = {
   code: string
@@ -65,6 +79,14 @@ export async function deactivatePartidaService(db: AnyDb, id: string) {
   const existing = await getPartidaById(db, id)
   if (!existing) {
     return { success: false as const, error: 'not_found', message: 'Partida no encontrada' }
+  }
+  const refs = await countBudgetItemRefs(db, id)
+  if (refs.positions > 0) {
+    return {
+      success: false as const,
+      error: 'in_use',
+      message: `No se puede dar de baja: está siendo utilizada por ${refs.positions} posición(es).`,
+    }
   }
   const row = await deactivatePartida(db, id)
   return { success: true as const, data: row }

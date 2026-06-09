@@ -125,7 +125,13 @@ export const departmentsRoutes = new Elysia({ prefix: '/departments' })
       const result = await deactivateDepartamentoService(db, params.id)
       if (!result.success) {
         set.status =
-          result.error === 'not_found' ? 404 : result.error === 'has_children' ? 422 : 400
+          result.error === 'not_found'
+            ? 404
+            : result.error === 'has_children'
+              ? 422
+              : result.error === 'in_use'
+                ? 409
+                : 400
         return { success: false, error: result.message }
       }
       return { success: true, data: result.data }

@@ -14,15 +14,22 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   if (method === 'DELETE') {
     try {
-      const res = await fetch(`${API_URL}/cargos/${id}`, {
+      const res = await fetch(`${API_URL}/job-titles/${id}`, {
         method: 'DELETE',
         headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
       })
       if (res.status === 401) return redirect('/login')
+      if (res.status === 409) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string }
+        return redirect(
+          `/config/job-titles?deleteError=in_use&msg=${encodeURIComponent(data.error ?? '')}`
+        )
+      }
+      if (!res.ok) return redirect('/config/job-titles?deleteError=server-error')
     } catch {
       return redirect(`/config/job-titles/${id}?error=server-error`)
     }
-    return redirect('/config/job-titles')
+    return redirect('/config/job-titles?deleted=1')
   }
 
   const g = (k: string) => form.get(k)?.toString().trim() ?? ''
@@ -36,7 +43,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
 
   let res: Response
   try {
-    res = await fetch(`${API_URL}/cargos/${id}`, {
+    res = await fetch(`${API_URL}/job-titles/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
