@@ -613,7 +613,7 @@ const freqLabel: Record<string, string> = {
               <label class="block text-sm font-medium text-gray-700 mb-2">Foto del colaborador</label>
               <img id="photoPreview" src={emp.photo ?? ''} alt="" class={`w-28 h-28 rounded-lg object-cover border border-gray-200 mb-2 ${emp.photo ? '' : 'hidden'}`} />
               <input type="hidden" name="photo" id="photoInput" value={emp.photo ?? ''} />
-              <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
               <div class="flex items-center gap-3 mt-2">
                 <button type="button" id="photoClear" class={`text-xs text-red-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Quitar foto</button>
                 <button type="button" id="enrollFaceBtn" class={`text-xs font-medium text-blue-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Enrolar rostro desde la foto</button>
@@ -624,7 +624,7 @@ const freqLabel: Record<string, string> = {
               <label class="block text-sm font-medium text-gray-700 mb-2">Cédula escaneada</label>
               <img id="scannedIdPreview" src={emp.scannedId ?? ''} alt="" class={`w-full max-w-xs rounded-lg object-cover border border-gray-200 mb-2 ${emp.scannedId ? '' : 'hidden'}`} />
               <input type="hidden" name="scannedId" id="scannedIdInput" value={emp.scannedId ?? ''} />
-              <input type="file" id="scannedIdFile" accept="image/png,image/jpeg,image/webp" class="block text-sm text-gray-600" />
+              <input type="file" id="scannedIdFile" accept="image/png,image/jpeg,image/webp" class="block w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
               <button type="button" id="scannedIdClear" class={`mt-2 text-xs text-red-600 hover:underline ${emp.scannedId ? '' : 'hidden'}`}>Quitar imagen</button>
             </div>
           </div>
