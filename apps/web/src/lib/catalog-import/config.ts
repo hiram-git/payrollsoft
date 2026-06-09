@@ -34,7 +34,7 @@ export type CatalogConfig = {
 }
 
 export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
-  cargos: {
+  'job-titles': {
     label: 'Cargos',
     apiPath: '/job-titles',
     required: [
@@ -55,7 +55,7 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
     returnPath: '/config/job-titles',
   },
 
-  funciones: {
+  'job-functions': {
     label: 'Funciones',
     apiPath: '/job-functions',
     required: [
@@ -76,7 +76,7 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
     returnPath: '/config/job-functions',
   },
 
-  departamentos: {
+  departments: {
     label: 'Departamentos',
     apiPath: '/departments',
     required: [
@@ -90,13 +90,13 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
         aliases: ['padre', 'parent', 'parent_code', 'departamento_padre'],
       },
     ],
-    dependencies: ['departamentos'],
+    dependencies: ['departments'],
     sampleRow: { code: 'FIN', name: 'Finanzas', parentCode: '' },
     permission: 'catalogs:create',
     returnPath: '/config/departments',
   },
 
-  partidas: {
+  'budget-items': {
     label: 'Partidas presupuestarias',
     apiPath: '/budget-items',
     required: [
@@ -140,7 +140,7 @@ export const CATALOG_CONFIGS: Record<string, CatalogConfig> = {
         aliases: ['partida', 'partida_code', 'cod_partida'],
       },
     ],
-    dependencies: ['cargos', 'funciones', 'departamentos', 'partidas'],
+    dependencies: ['job-titles', 'job-functions', 'departments', 'budget-items'],
     sampleRow: {
       code: 'P001',
       name: 'Analista contable',
