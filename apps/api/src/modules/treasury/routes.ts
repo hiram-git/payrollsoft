@@ -86,6 +86,8 @@ export const treasuryRoutes = new Elysia()
         name: t.String({ minLength: 1, maxLength: 120 }),
         routing: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
         swift: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
+        achFormat: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
+        achEntityCode: t.Optional(t.Nullable(t.String({ maxLength: 9 }))),
       }),
     }
   )
@@ -111,6 +113,8 @@ export const treasuryRoutes = new Elysia()
         name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
         routing: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
         swift: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
+        achFormat: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
+        achEntityCode: t.Optional(t.Nullable(t.String({ maxLength: 9 }))),
         isActive: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
         sortOrder: t.Optional(t.Integer()),
       }),

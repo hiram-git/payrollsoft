@@ -68,12 +68,21 @@ type Checkbook = {
   isActive: number
   purpose: string
 }
+type Bank = {
+  id: string
+  code: string
+  name: string
+  achFormat: string | null
+  achEntityCode: string | null
+  isActive: number
+}
 
 // Buscar la corrida en el listado (no hay GET /:id todavía — ahorra round-trip)
 let run: Run | null = null
 let checks: Check[] = []
 let payables: Payable[] = []
 let checkbooks: Checkbook[] = []
+let banks: Bank[] = []
 let error = ''
 
 try {
@@ -85,16 +94,18 @@ try {
   }
   if (!run) return Astro.redirect('/treasury')
 
-  const [cRes, cbRes, pRes] = await Promise.all([
+  const [cRes, cbRes, pRes, bRes] = await Promise.all([
     fetch(`${API_URL}/treasury/runs/${runId}/checks`, { headers }),
     fetch(`${API_URL}/treasury/checkbooks`, { headers }),
     run.payrollId
       ? fetch(`${API_URL}/treasury/payables?payrollId=${run.payrollId}`, { headers })
       : Promise.resolve(null),
+    fetch(`${API_URL}/banks`, { headers }),
   ])
   if (cRes.ok) checks = ((await cRes.json()) as { data: Check[] }).data ?? []
   if (cbRes.ok) checkbooks = ((await cbRes.json()) as { data: Checkbook[] }).data ?? []
   if (pRes?.ok) payables = ((await pRes.json()) as { data: Payable[] }).data ?? []
+  if (bRes.ok) banks = ((await bRes.json()) as { data: Bank[] }).data ?? []
 } catch {
   error = 'No se pudo conectar.'
 }
@@ -382,6 +393,92 @@ const today = new Date().toISOString().slice(0, 10)
           </div>
         )}
       </div>
+
+      {run.payrollId && canWrite && (
+        <div class="tr-card border rounded-lg overflow-hidden mt-4">
+          <header class="px-5 py-3 border-b tr-rule">
+            <h2 class="text-sm font-semibold tr-title">Archivos de banco y contraloría</h2>
+            <p class="text-xs tr-mute mt-0.5">
+              Genera y descarga el archivo en el formato del banco originador, o los bloqueos
+              presupuestarios. La planilla debe estar cerrada.
+            </p>
+          </header>
+
+          {/* ACH por banco — el formato lo determina el banco seleccionado */}
+          <form method="POST" action="/api/treasury/files/generate" class="px-5 py-4 border-b tr-rule" id="bank-file-form">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="runId" value={runId} />
+            <input type="hidden" name="payrollId" value={run.payrollId} />
+            <input type="hidden" name="format" id="bank-file-format" value="" />
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Banco originador (formato ACH)</label>
+                <select id="bank-file-select" name="sourceBankId" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  {banks
+                    .filter((b) => b.isActive === 1 && b.achFormat)
+                    .map((b) => (
+                      <option value={b.id} data-format={b.achFormat}>{b.name} · {b.achFormat}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Descripción (opcional)</label>
+                <input type="text" name="description" maxlength="200" placeholder="Auto desde la planilla" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="flex justify-end">
+                <button type="submit" disabled={banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0} class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                  Generar y descargar
+                </button>
+              </div>
+            </div>
+            {banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0 && (
+              <p class="text-xs tr-mute mt-2">
+                Ningún banco tiene formato ACH configurado. Asígnalo en el catálogo de bancos.
+              </p>
+            )}
+          </form>
+
+          {/* Bloqueo presupuestario quincenal */}
+          <form method="POST" action="/api/treasury/files/generate" class="px-5 py-4 border-b tr-rule">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="runId" value={runId} />
+            <input type="hidden" name="payrollId" value={run.payrollId} />
+            <input type="hidden" name="format" value="bloqueo_quincenal" />
+            <div class="flex items-center justify-between gap-4">
+              <p class="text-sm tr-cell">
+                Bloqueo presupuestario <strong>quincenal</strong> — totales por partida de lo pagado.
+              </p>
+              <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 whitespace-nowrap">
+                Generar y descargar
+              </button>
+            </div>
+          </form>
+
+          {/* Bloqueo presupuestario mensual (desde el presupuesto de posiciones) */}
+          <form method="POST" action="/api/treasury/files/generate" class="px-5 py-4">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="format" value="bloqueo_mensual" />
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
+                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
+                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="flex justify-end">
+                <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+                  Generar y descargar
+                </button>
+              </div>
+            </div>
+            <p class="text-xs tr-mute mt-2">
+              El bloqueo mensual se calcula desde el presupuesto de las posiciones (no de esta planilla).
+            </p>
+          </form>
+        </div>
+      )}
     </section>
 
     {/* ─── Tab Pagables (preview de empleados) ─────────────── */}
@@ -448,6 +545,20 @@ const today = new Date().toISOString().slice(0, 10)
           }
         })
       })
+
+      // Archivo ACH por banco: el formato lo dicta el banco seleccionado
+      const bankForm = document.getElementById('bank-file-form')
+      const bankSel = document.getElementById('bank-file-select')
+      const bankFmt = document.getElementById('bank-file-format')
+      if (bankForm && bankSel && bankFmt) {
+        const syncFmt = () => {
+          const opt = bankSel.options[bankSel.selectedIndex]
+          bankFmt.value = opt ? opt.getAttribute('data-format') || '' : ''
+        }
+        bankSel.addEventListener('change', syncFmt)
+        bankForm.addEventListener('submit', syncFmt)
+        syncFmt()
+      }
 
       // Toggle form emitir cheque
       const issueBtn = document.getElementById('btn-issue-check')
