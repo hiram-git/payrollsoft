@@ -79,7 +79,7 @@ function fmtMoney(s: string | number): string {
           <strong>{fmtMoney(total)}</strong>
         </p>
       </div>
-      <a href="/treasury" class="tr-btn-ghost">← Corridas de pago</a>
+      <a href="/treasury" class="tr-btn-ghost">← Generación de pagos</a>
     </div>
 
     {error && (
@@ -100,7 +100,7 @@ function fmtMoney(s: string | number): string {
               <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Monto</th>
               <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Estado</th>
               <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Chequera</th>
-              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Corrida</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Generación</th>
               <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Fecha</th>
               <th class="px-5 py-3"></th>
             </tr>
@@ -121,7 +121,7 @@ function fmtMoney(s: string | number): string {
                 <td class="px-5 py-3 align-top text-xs tr-mute">{c.runName ?? '—'}</td>
                 <td class="px-5 py-3 align-top text-xs tr-mute whitespace-nowrap">{fmtDate(c.issueDate)}</td>
                 <td class="px-5 py-3 align-top text-right">
-                  {c.paymentRunId && <a href={`/treasury/${c.paymentRunId}`} class="tr-btn-ghost">Ver corrida</a>}
+                  {c.paymentRunId && <a href={`/treasury/${c.paymentRunId}`} class="tr-btn-ghost">Ver generación</a>}
                 </td>
               </tr>
             ))}

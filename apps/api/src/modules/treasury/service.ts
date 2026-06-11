@@ -521,13 +521,18 @@ export async function listAllAchBatches(db: AnyDb) {
       totalAmount: treasuryAchBatches.totalAmount,
       recordCount: treasuryAchBatches.recordCount,
       generatedAt: treasuryAchBatches.generatedAt,
+      sourceBankId: treasuryAchBatches.sourceBankId,
       paymentRunId: treasuryAchBatches.paymentRunId,
       sourceBankName: banks.name,
       runName: treasuryPaymentRuns.name,
+      payrollId: payrolls.id,
+      payrollName: payrolls.name,
+      payrollPaymentDate: payrolls.paymentDate,
     })
     .from(treasuryAchBatches)
     .leftJoin(banks, eq(banks.id, treasuryAchBatches.sourceBankId))
     .leftJoin(treasuryPaymentRuns, eq(treasuryPaymentRuns.id, treasuryAchBatches.paymentRunId))
+    .leftJoin(payrolls, eq(payrolls.id, treasuryPaymentRuns.payrollId))
     .orderBy(desc(treasuryAchBatches.generatedAt))
 }
 

@@ -85,8 +85,8 @@ function fmtMoney(s: string): string {
       <div>
         <h1 class="text-xl font-semibold tracking-tight tr-title">Tesorería</h1>
         <p class="text-sm mt-0.5 tr-subtitle">
-          {runs.length} {runs.length === 1 ? 'lote' : 'lotes'} de pago — gestiona el pago efectivo
-          después del cierre de una planilla.
+          {runs.length} {runs.length === 1 ? 'generación' : 'generaciones'} de pagos — gestiona el
+          pago efectivo después del cierre de una planilla.
         </p>
       </div>
       {canWrite && (
@@ -97,7 +97,7 @@ function fmtMoney(s: string): string {
     </div>
 
     {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Lote de pago creado.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Generación de pagos creada.</div>
     )}
     {flash === 'error' && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Error.'}</div>
@@ -143,7 +143,7 @@ function fmtMoney(s: string): string {
     <section class="tr-card border rounded-lg overflow-hidden">
       {runs.length === 0 ? (
         <div class="py-16 text-center">
-          <p class="text-sm tr-subtitle">No hay corridas registradas.</p>
+          <p class="text-sm tr-subtitle">No hay generaciones de pagos registradas.</p>
         </div>
       ) : (
         <table class="tr-table w-full text-sm">
