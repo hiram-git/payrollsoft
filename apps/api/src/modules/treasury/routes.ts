@@ -26,6 +26,12 @@ import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 import {
+  generateBancoGeneralFile,
+  generateBancoNacionalFile,
+  generateBloqueoMensualFile,
+  generateBloqueoQuincenalFile,
+} from './file-service'
+import {
   closePaymentRun,
   createBank,
   createCheckbook,
@@ -80,6 +86,8 @@ export const treasuryRoutes = new Elysia()
         name: t.String({ minLength: 1, maxLength: 120 }),
         routing: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
         swift: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
+        achFormat: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
+        achEntityCode: t.Optional(t.Nullable(t.String({ maxLength: 9 }))),
       }),
     }
   )
@@ -105,6 +113,8 @@ export const treasuryRoutes = new Elysia()
         name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
         routing: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
         swift: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
+        achFormat: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
+        achEntityCode: t.Optional(t.Nullable(t.String({ maxLength: 9 }))),
         isActive: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
         sortOrder: t.Optional(t.Integer()),
       }),
@@ -412,13 +422,108 @@ export const treasuryRoutes = new Elysia()
         set.status = 404
         return 'Batch no encontrado'
       }
-      const b = batch as { fileName: string; fileContent: string }
+      const b = batch as { fileName: string; fileContent: string; format?: string }
+      const disposition = `attachment; filename="${b.fileName}"`
+      // El formato de Banco Nacional (líneas L) viaja en Latin-1 (la Ñ es 0xD1);
+      // el resto es ASCII/LF.
+      if (b.format === 'banco_nacional') {
+        return new Response(Buffer.from(b.fileContent, 'latin1'), {
+          headers: { 'Content-Type': 'text/plain; charset=iso-8859-1', 'Content-Disposition': disposition },
+        })
+      }
       set.headers['Content-Type'] = 'text/plain; charset=ascii'
-      set.headers['Content-Disposition'] = `attachment; filename="${b.fileName}"`
+      set.headers['Content-Disposition'] = disposition
       return b.fileContent
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
       params: t.Object({ batchId: t.String() }),
+    }
+  )
+
+  // ── Archivos de banco / contraloría (multi-formato) ─────────────────────
+  .post(
+    '/treasury/runs/:id/files',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const generatedBy = user?.userId ?? null
+      const base = { paymentRunId: params.id, payrollId: body.payrollId }
+      let result:
+        | Awaited<ReturnType<typeof generateBancoNacionalFile>>
+        | Awaited<ReturnType<typeof generateBloqueoQuincenalFile>>
+      switch (body.format) {
+        case 'banco_nacional':
+          if (!body.sourceBankId) {
+            set.status = 422
+            return { success: false, error: 'sourceBankId es obligatorio para Banco Nacional.' }
+          }
+          result = await generateBancoNacionalFile(
+            db,
+            { ...base, sourceBankId: body.sourceBankId, description: body.description ?? undefined },
+            { generatedBy }
+          )
+          break
+        case 'banco_general':
+          if (!body.sourceBankId) {
+            set.status = 422
+            return { success: false, error: 'sourceBankId es obligatorio para Banco General.' }
+          }
+          result = await generateBancoGeneralFile(
+            db,
+            { ...base, sourceBankId: body.sourceBankId, description: body.description ?? undefined },
+            { generatedBy }
+          )
+          break
+        default:
+          result = await generateBloqueoQuincenalFile(db, base, { generatedBy })
+          break
+      }
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      set.status = 201
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:write')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        format: t.Union([
+          t.Literal('banco_nacional'),
+          t.Literal('banco_general'),
+          t.Literal('bloqueo_quincenal'),
+        ]),
+        payrollId: t.String(),
+        sourceBankId: t.Optional(t.Nullable(t.String())),
+        description: t.Optional(t.Nullable(t.String({ maxLength: 200 }))),
+      }),
+    }
+  )
+
+  .post(
+    '/treasury/bloqueo-mensual',
+    async ({ db, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await generateBloqueoMensualFile(db, body, { generatedBy: user?.userId ?? null })
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      set.status = 201
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:write')],
+      body: t.Object({
+        month: t.Integer({ minimum: 1, maximum: 12 }),
+        year: t.Integer({ minimum: 2000, maximum: 2100 }),
+      }),
     }
   )

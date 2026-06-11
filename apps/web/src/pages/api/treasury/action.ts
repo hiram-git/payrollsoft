@@ -91,6 +91,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         name: str(body.name),
         routing: strOrNull(body.routing),
         swift: strOrNull(body.swift),
+        achFormat: strOrNull(body.achFormat),
+        achEntityCode: strOrNull(body.achEntityCode),
       })
       break
     case 'bank-update':
@@ -98,6 +100,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         name: body.name ? str(body.name) : undefined,
         routing: body.routing !== undefined ? strOrNull(body.routing) : undefined,
         swift: body.swift !== undefined ? strOrNull(body.swift) : undefined,
+        achFormat: body.achFormat !== undefined ? strOrNull(body.achFormat) : undefined,
+        achEntityCode: body.achEntityCode !== undefined ? strOrNull(body.achEntityCode) : undefined,
         isActive:
           body.isActive != null
             ? body.isActive === '1' || body.isActive === 1 || body.isActive === 'on'

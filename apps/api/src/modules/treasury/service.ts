@@ -37,7 +37,14 @@ export async function listBanks(db: AnyDb) {
 
 export async function createBank(
   db: AnyDb,
-  input: { code: string; name: string; routing?: string | null; swift?: string | null }
+  input: {
+    code: string
+    name: string
+    routing?: string | null
+    swift?: string | null
+    achFormat?: string | null
+    achEntityCode?: string | null
+  }
 ) {
   const [row] = await db
     .insert(banks)
@@ -46,6 +53,8 @@ export async function createBank(
       name: input.name,
       routing: input.routing ?? null,
       swift: input.swift ?? null,
+      achFormat: input.achFormat ?? null,
+      achEntityCode: input.achEntityCode ?? null,
     })
     .returning()
   return row
@@ -58,6 +67,8 @@ export async function updateBank(
     name?: string
     routing?: string | null
     swift?: string | null
+    achFormat?: string | null
+    achEntityCode?: string | null
     isActive?: number
     sortOrder?: number
   }
