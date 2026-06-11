@@ -1,0 +1,141 @@
+---
+/**
+ * Vista consolidada de ACH's — todos los lotes / archivos de banco y
+ * contraloría generados en todas las corridas, con descarga directa.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'treasury:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type Batch = {
+  id: string
+  format: string
+  fileName: string
+  totalAmount: string
+  recordCount: number
+  generatedAt: string
+  paymentRunId: string | null
+  sourceBankName: string | null
+  runName: string | null
+}
+
+let batches: Batch[] = []
+let error = ''
+try {
+  const res = await fetch(`${API_URL}/treasury/ach`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) batches = ((await res.json()) as { data: Batch[] }).data ?? []
+  else error = `No se pudo cargar el listado (HTTP ${res.status}).`
+} catch {
+  error = 'No se pudo conectar.'
+}
+
+const FORMAT_LABELS: Record<string, string> = {
+  banco_nacional: 'Banco Nacional (L)',
+  banco_general: 'Banco General (C/D/T)',
+  bloqueo_quincenal: 'Bloqueo quincenal',
+  bloqueo_mensual: 'Bloqueo mensual',
+  mupa_v1: 'MUPA v1',
+}
+function formatLabel(f: string): string {
+  return FORMAT_LABELS[f] ?? f
+}
+function fmtDateTime(s: string): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleString('es-PA')
+}
+function fmtMoney(s: string | number): string {
+  const n = Number(s)
+  if (!Number.isFinite(n)) return '—'
+  return `B/. ${n.toFixed(2)}`
+}
+---
+<AppLayout title="Tesorería · ACH's">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-end justify-between gap-2">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight tr-title">ACH's y archivos de banco</h1>
+        <p class="text-sm mt-0.5 tr-subtitle">
+          {batches.length} {batches.length === 1 ? 'archivo generado' : 'archivos generados'} ·
+          Genera nuevos desde una corrida de pago.
+        </p>
+      </div>
+      <a href="/treasury" class="tr-btn-ghost">← Corridas de pago</a>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <section class="tr-card border rounded-lg overflow-hidden">
+      {batches.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm tr-subtitle">No hay archivos generados todavía.</p>
+        </div>
+      ) : (
+        <table class="tr-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Archivo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Formato</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Banco / Corrida</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Registros</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Total</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Generado</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {batches.map((b) => (
+              <tr class="border-b last:border-0 tr-rule">
+                <td class="px-5 py-3 align-top font-mono text-xs tr-cell">{b.fileName}</td>
+                <td class="px-5 py-3 align-top text-xs tr-cell">{formatLabel(b.format)}</td>
+                <td class="px-5 py-3 align-top text-xs tr-mute">
+                  {b.sourceBankName ?? '—'}
+                  {b.runName && <span class="block tr-mute">{b.runName}</span>}
+                </td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{b.recordCount}</td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(b.totalAmount)}</td>
+                <td class="px-5 py-3 align-top text-xs tr-mute whitespace-nowrap">{fmtDateTime(b.generatedAt)}</td>
+                <td class="px-5 py-3 align-top text-right">
+                  <a href={`/api/treasury/ach/${b.id}/download`} class="tr-btn-ghost">Descargar</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  </div>
+
+  <style>
+    .tr-title    { color: var(--fore); }
+    .tr-subtitle { color: var(--fore-dim); }
+    .tr-cell     { color: var(--fore-dim); }
+    .tr-mute     { color: var(--mute); }
+    .tr-card { background: var(--ink-2); border-color: var(--rule); }
+    .tr-rule { border-color: var(--rule); }
+    .tr-btn-ghost {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:5px 12px; border-radius:6px; font-size:12px; font-weight:500;
+      border:1px solid var(--rule); color:var(--fore-dim); text-decoration:none;
+      transition:border-color 140ms, background 140ms, color 140ms;
+    }
+    .tr-btn-ghost:hover { border-color:var(--rule-hi); background:var(--ink-4); color:var(--fore); }
+    .tr-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
+    .tr-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .tr-table tbody tr:hover { background: var(--ink-4); }
+    [data-theme='light'] .tr-card { background: #ffffff; }
+    [data-theme='light'] .tr-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .tr-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .tr-table tbody tr:hover { background: #f9fafb; }
+  </style>
+</AppLayout>
