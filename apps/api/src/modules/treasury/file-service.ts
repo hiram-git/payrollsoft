@@ -160,7 +160,8 @@ async function scopeMeta(
   db: AnyDb,
   scope: AchScope
 ): Promise<
-  { ok: true; description: string; month: number; year: number } | { ok: false; error: string }
+  | { ok: true; description: string; month: number; year: number; dateCompact: string }
+  | { ok: false; error: string }
 > {
   if (scope.beneficiary === 'employees') {
     const payroll = await getPayroll(db, scope.payrollId)
@@ -175,6 +176,7 @@ async function scopeMeta(
       description: deriveDescription(payroll, half),
       month: Number(dateSrc.slice(5, 7)),
       year: Number(dateSrc.slice(0, 4)),
+      dateCompact: dateSrc.slice(0, 10).replace(/-/g, ''),
     }
   }
   return {
@@ -182,6 +184,7 @@ async function scopeMeta(
     description: `PAGO A ACREEDORES ${monthNameEs(scope.month)} ${scope.year}`,
     month: scope.month,
     year: scope.year,
+    dateCompact: `${scope.year}${pad2(scope.month)}`,
   }
 }
 
@@ -289,8 +292,8 @@ export async function generateBancoNacionalFile(
   const result = generateBancoNacionalText(entries, { description })
   const fileName =
     input.scope.beneficiary === 'creditors'
-      ? `banconacional_acreedores_${meta.year}${pad2(meta.month)}.txt`
-      : 'banconacionalpanama.txt'
+      ? `BNP_acreedores_${meta.dateCompact}.txt`
+      : `BNP_${meta.dateCompact}.txt`
 
   const batchId = await storeBatch(
     db,

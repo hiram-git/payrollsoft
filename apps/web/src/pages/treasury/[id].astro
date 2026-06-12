@@ -193,7 +193,7 @@ const FORMAT_LABELS: Record<string, string> = {
   banco_general: 'Banco General (C/D/T)',
   bloqueo_quincenal: 'Bloqueo quincenal',
   bloqueo_mensual: 'Bloqueo mensual',
-  mupa_v1: 'MUPA v1',
+  mupa_v1: 'ACH legacy',
 }
 
 const achEligible = payables.filter(
@@ -313,10 +313,8 @@ const today = new Date().toISOString().slice(0, 10)
             <div class="flex items-center gap-2">
               {checks.filter((c) => c.status !== 'voided').length > 0 && (
                 <>
-                  <a href={`/api/treasury/runs/${runId}/checks-pdf`} class="text-xs tr-link">Descargar PDF (todos)</a>
-                  <span class="tr-mute text-xs">·</span>
-                  <a href={`/api/treasury/runs/${runId}/checks-xlsx`} class="text-xs tr-link">Excel (todos)</a>
-                  <span class="tr-mute text-xs">·</span>
+                  <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf'`}>PDF (todos)</button>
+                  <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-xlsx'`}>Excel (todos)</button>
                 </>
               )}
               <button type="button" id="btn-issue-bulk" class="text-xs tr-link">+ Generar en lote</button>
@@ -481,10 +479,10 @@ const today = new Date().toISOString().slice(0, 10)
                     <td class="px-5 py-3 text-right whitespace-nowrap">
                       {c.status !== 'voided' && (
                         <>
-                          <a href={`/api/treasury/checks/${c.id}/pdf`} class="text-xs tr-link mr-2">PDF</a>
-                          <a href={`/api/treasury/checks/${c.id}/xlsx`} class="text-xs tr-link mr-2">Excel</a>
+                          <button type="button" class="tr-btn-xs mr-2" onclick={`window.location.href='/api/treasury/checks/${c.id}/pdf'`}>PDF</button>
+                          <button type="button" class="tr-btn-xs mr-2" onclick={`window.location.href='/api/treasury/checks/${c.id}/xlsx'`}>Excel</button>
                           {canVoid && c.status !== 'cleared' && (
-                            <button type="button" class="text-xs text-red-500 hover:underline" data-void-id={c.id} data-num={c.checkNumber}>
+                            <button type="button" class="tr-btn-xs tr-btn-xs-danger" data-void-id={c.id} data-num={c.checkNumber}>
                               Anular
                             </button>
                           )}
@@ -928,6 +926,10 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-rule { border-color: var(--rule); }
     .tr-link { color: #60a5fa; }
     .tr-link:hover { text-decoration: underline; }
+    .tr-btn-xs { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.375rem; font-size: 0.6875rem; font-weight: 500; border: 1px solid rgba(148,163,184,0.35); color: #60a5fa; background: transparent; cursor: pointer; }
+    .tr-btn-xs:hover { background: rgba(148,163,184,0.12); }
+    .tr-btn-xs-danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
+    .tr-btn-xs-danger:hover { background: rgba(248,113,113,0.12); }
     .tr-input {
       background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore);
     }
