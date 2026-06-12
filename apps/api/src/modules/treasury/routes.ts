@@ -41,6 +41,8 @@ import {
   getCheckWithChequera,
   getEmployeePayables,
   issueCheck,
+  listAllAchBatches,
+  listAllChecks,
   listBanks,
   listCheckbooks,
   listChecksByRun,
@@ -243,6 +245,19 @@ export const treasuryRoutes = new Elysia()
 
   // ── Cheques ─────────────────────────────────────────────────────────────
   .get(
+    '/treasury/checks',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listAllChecks(db)
+      return { success: true, data }
+    },
+    { beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')] }
+  )
+
+  .get(
     '/treasury/checks/:id',
     async ({ db, params, set }) => {
       if (!db) {
@@ -385,6 +400,19 @@ export const treasuryRoutes = new Elysia()
         paymentDate: t.String({ minLength: 10, maxLength: 10 }),
       }),
     }
+  )
+
+  .get(
+    '/treasury/ach',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listAllAchBatches(db)
+      return { success: true, data }
+    },
+    { beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')] }
   )
 
   .get(

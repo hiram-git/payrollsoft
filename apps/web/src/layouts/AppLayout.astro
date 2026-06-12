@@ -194,11 +194,16 @@ const navAll: NavEntry[] = [
     ],
   },
   {
-    kind: 'item',
-    href: '/treasury',
+    kind: 'group',
     label: 'Tesorería',
     icon: 'payroll',
-    require: 'treasury:read',
+    children: [
+      { href: '/treasury', label: 'Generación de pagos', require: 'treasury:read' },
+      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
+      { href: '/treasury/checks', label: 'Cheques', require: 'treasury:read' },
+      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
+      { href: '/treasury/ach', label: "ACH's", require: 'treasury:read' },
+    ],
   },
   {
     kind: 'item',
@@ -222,8 +227,6 @@ const navAll: NavEntry[] = [
         require: 'employee_files:approve',
       },
       { href: '/config/portal-credentials', label: 'Portal empleados', require: 'users:write' },
-      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
-      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
       { href: '/audit', label: 'Auditoría', require: 'audit:read' },
     ],
   },

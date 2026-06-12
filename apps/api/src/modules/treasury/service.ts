@@ -360,6 +360,32 @@ export async function listChecksByRun(db: AnyDb, paymentRunId: string) {
     .orderBy(treasuryChecks.checkNumber)
 }
 
+/**
+ * Listado global de cheques (todas las corridas) enriquecido con el nombre de
+ * la chequera, el banco y la corrida — para la vista consolidada de Tesorería.
+ */
+export async function listAllChecks(db: AnyDb) {
+  return db
+    .select({
+      id: treasuryChecks.id,
+      checkNumber: treasuryChecks.checkNumber,
+      beneficiaryName: treasuryChecks.beneficiaryName,
+      amount: treasuryChecks.amount,
+      status: treasuryChecks.status,
+      issueDate: treasuryChecks.issueDate,
+      concept: treasuryChecks.concept,
+      paymentRunId: treasuryChecks.paymentRunId,
+      checkbookName: treasuryCheckbooks.name,
+      bankName: banks.name,
+      runName: treasuryPaymentRuns.name,
+    })
+    .from(treasuryChecks)
+    .leftJoin(treasuryCheckbooks, eq(treasuryCheckbooks.id, treasuryChecks.checkbookId))
+    .leftJoin(banks, eq(banks.id, treasuryCheckbooks.bankId))
+    .leftJoin(treasuryPaymentRuns, eq(treasuryPaymentRuns.id, treasuryChecks.paymentRunId))
+    .orderBy(desc(treasuryChecks.issueDate), desc(treasuryChecks.checkNumber))
+}
+
 export async function markCheckPrinted(db: AnyDb, checkId: string) {
   await db
     .update(treasuryChecks)
@@ -479,6 +505,35 @@ export async function getAchBatch(db: AnyDb, batchId: string) {
     .where(eq(treasuryAchBatches.id, batchId))
     .limit(1)
   return batch ?? null
+}
+
+/**
+ * Listado global de lotes ACH / archivos generados (todas las corridas),
+ * sin el contenido del archivo (que puede ser grande) — para la vista
+ * consolidada de Tesorería. Cada fila es descargable por su `id`.
+ */
+export async function listAllAchBatches(db: AnyDb) {
+  return db
+    .select({
+      id: treasuryAchBatches.id,
+      format: treasuryAchBatches.format,
+      fileName: treasuryAchBatches.fileName,
+      totalAmount: treasuryAchBatches.totalAmount,
+      recordCount: treasuryAchBatches.recordCount,
+      generatedAt: treasuryAchBatches.generatedAt,
+      sourceBankId: treasuryAchBatches.sourceBankId,
+      paymentRunId: treasuryAchBatches.paymentRunId,
+      sourceBankName: banks.name,
+      runName: treasuryPaymentRuns.name,
+      payrollId: payrolls.id,
+      payrollName: payrolls.name,
+      payrollPaymentDate: payrolls.paymentDate,
+    })
+    .from(treasuryAchBatches)
+    .leftJoin(banks, eq(banks.id, treasuryAchBatches.sourceBankId))
+    .leftJoin(treasuryPaymentRuns, eq(treasuryPaymentRuns.id, treasuryAchBatches.paymentRunId))
+    .leftJoin(payrolls, eq(payrolls.id, treasuryPaymentRuns.payrollId))
+    .orderBy(desc(treasuryAchBatches.generatedAt))
 }
 
 void payrolls

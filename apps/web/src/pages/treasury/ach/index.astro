@@ -1,0 +1,253 @@
+---
+/**
+ * Vista consolidada de ACH's — todos los archivos de banco y contraloría
+ * generados en todas las generaciones de pagos, con filtros (banco, mes,
+ * año, planilla) y descarga directa.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'treasury:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type Batch = {
+  id: string
+  format: string
+  fileName: string
+  totalAmount: string
+  recordCount: number
+  generatedAt: string
+  sourceBankId: string | null
+  paymentRunId: string | null
+  sourceBankName: string | null
+  runName: string | null
+  payrollId: string | null
+  payrollName: string | null
+  payrollPaymentDate: string | null
+}
+
+let batches: Batch[] = []
+let error = ''
+try {
+  const res = await fetch(`${API_URL}/treasury/ach`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) batches = ((await res.json()) as { data: Batch[] }).data ?? []
+  else error = `No se pudo cargar el listado (HTTP ${res.status}).`
+} catch {
+  error = 'No se pudo conectar.'
+}
+
+const FORMAT_LABELS: Record<string, string> = {
+  banco_nacional: 'Banco Nacional (L)',
+  banco_general: 'Banco General (C/D/T)',
+  bloqueo_quincenal: 'Bloqueo quincenal',
+  bloqueo_mensual: 'Bloqueo mensual',
+  mupa_v1: 'MUPA v1',
+}
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+function formatLabel(f: string): string {
+  return FORMAT_LABELS[f] ?? f
+}
+function fmtDateTime(s: string): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleString('es-PA')
+}
+function fmtMoney(s: string | number): string {
+  const n = Number(s)
+  if (!Number.isFinite(n)) return '—'
+  return `B/. ${n.toFixed(2)}`
+}
+// Período del archivo: fecha de pago de la planilla si existe, si no la fecha
+// de generación (caso bloqueo mensual, sin planilla asociada).
+function periodOf(b: Batch): { year: string; month: string } {
+  const pd = b.payrollPaymentDate
+  if (pd && /^\d{4}-\d{2}-\d{2}/.test(pd)) {
+    return { year: pd.slice(0, 4), month: String(Number(pd.slice(5, 7))) }
+  }
+  const g = b.generatedAt ? new Date(b.generatedAt) : null
+  if (g && !Number.isNaN(g.getTime())) {
+    return { year: String(g.getFullYear()), month: String(g.getMonth() + 1) }
+  }
+  return { year: '', month: '' }
+}
+
+const rows = batches.map((b) => ({ ...b, ...periodOf(b) }))
+
+const bankOptions = Array.from(
+  new Set(rows.map((r) => r.sourceBankName).filter((n): n is string => !!n))
+).sort()
+const yearOptions = Array.from(new Set(rows.map((r) => r.year).filter(Boolean))).sort().reverse()
+const payrollOptions = Array.from(
+  new Map(
+    rows.filter((r) => r.payrollId).map((r) => [r.payrollId as string, r.payrollName ?? '—'])
+  ).entries()
+)
+---
+<AppLayout title="Tesorería · ACH's">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6 flex items-end justify-between gap-2">
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight tr-title">ACH's y archivos de banco</h1>
+        <p class="text-sm mt-0.5 tr-subtitle">
+          {batches.length} {batches.length === 1 ? 'archivo generado' : 'archivos generados'} ·
+          Genera nuevos desde una generación de pagos.
+        </p>
+      </div>
+      <a href="/treasury" class="tr-btn-ghost">← Generación de pagos</a>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    {batches.length > 0 && (
+      <div class="mb-4 flex flex-wrap items-end gap-3">
+        <div>
+          <label class="block text-xs font-medium mb-1 tr-mute">Banco</label>
+          <select id="f-bank" class="tr-filter">
+            <option value="">Todos</option>
+            {bankOptions.map((b) => <option value={b}>{b}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1 tr-mute">Mes</label>
+          <select id="f-month" class="tr-filter">
+            <option value="">Todos</option>
+            {MESES.map((m, i) => <option value={String(i + 1)}>{m}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1 tr-mute">Año</label>
+          <select id="f-year" class="tr-filter">
+            <option value="">Todos</option>
+            {yearOptions.map((y) => <option value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium mb-1 tr-mute">Planilla</label>
+          <select id="f-payroll" class="tr-filter">
+            <option value="">Todas</option>
+            {payrollOptions.map(([id, name]) => <option value={id}>{name}</option>)}
+          </select>
+        </div>
+        <button type="button" id="f-clear" class="tr-btn-ghost">Limpiar</button>
+      </div>
+    )}
+
+    <section class="tr-card border rounded-lg overflow-hidden">
+      {rows.length === 0 ? (
+        <div class="py-16 text-center">
+          <p class="text-sm tr-subtitle">No hay archivos generados todavía.</p>
+        </div>
+      ) : (
+        <table class="tr-table w-full text-sm">
+          <thead>
+            <tr>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Archivo</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Formato</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Banco / Generación</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Planilla</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Registros</th>
+              <th class="text-right px-5 py-3 text-xs font-medium uppercase tracking-wide">Total</th>
+              <th class="text-left px-5 py-3 text-xs font-medium uppercase tracking-wide">Generado</th>
+              <th class="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((b) => (
+              <tr class="border-b last:border-0 tr-rule" data-ach-row data-bank={b.sourceBankName ?? ''} data-year={b.year} data-month={b.month} data-payroll={b.payrollId ?? ''}>
+                <td class="px-5 py-3 align-top font-mono text-xs tr-cell">{b.fileName}</td>
+                <td class="px-5 py-3 align-top text-xs tr-cell">{formatLabel(b.format)}</td>
+                <td class="px-5 py-3 align-top text-xs tr-mute">
+                  {b.sourceBankName ?? '—'}
+                  {b.runName && <span class="block tr-mute">{b.runName}</span>}
+                </td>
+                <td class="px-5 py-3 align-top text-xs tr-mute">{b.payrollName ?? '—'}</td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{b.recordCount}</td>
+                <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(b.totalAmount)}</td>
+                <td class="px-5 py-3 align-top text-xs tr-mute whitespace-nowrap">{fmtDateTime(b.generatedAt)}</td>
+                <td class="px-5 py-3 align-top text-right">
+                  <a href={`/api/treasury/ach/${b.id}/download`} class="tr-btn-ghost">Descargar</a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <div id="ach-empty-filtered" class="py-12 text-center hidden">
+        <p class="text-sm tr-subtitle">Ningún archivo coincide con los filtros.</p>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const ids = ['f-bank', 'f-month', 'f-year', 'f-payroll']
+      const selects = ids.map((id) => document.getElementById(id))
+      const rows = Array.from(document.querySelectorAll('[data-ach-row]'))
+      const empty = document.getElementById('ach-empty-filtered')
+      if (rows.length === 0) return
+      const apply = () => {
+        const bank = selects[0] ? selects[0].value : ''
+        const month = selects[1] ? selects[1].value : ''
+        const year = selects[2] ? selects[2].value : ''
+        const payroll = selects[3] ? selects[3].value : ''
+        let visible = 0
+        rows.forEach((r) => {
+          const ok =
+            (!bank || r.dataset.bank === bank) &&
+            (!month || r.dataset.month === month) &&
+            (!year || r.dataset.year === year) &&
+            (!payroll || r.dataset.payroll === payroll)
+          r.classList.toggle('hidden', !ok)
+          if (ok) visible++
+        })
+        if (empty) empty.classList.toggle('hidden', visible !== 0)
+      }
+      selects.forEach((s) => s && s.addEventListener('change', apply))
+      document.getElementById('f-clear')?.addEventListener('click', () => {
+        selects.forEach((s) => { if (s) s.value = '' })
+        apply()
+      })
+    })()
+  </script>
+
+  <style>
+    .tr-title    { color: var(--fore); }
+    .tr-subtitle { color: var(--fore-dim); }
+    .tr-cell     { color: var(--fore-dim); }
+    .tr-mute     { color: var(--mute); }
+    .tr-card { background: var(--ink-2); border-color: var(--rule); }
+    .tr-rule { border-color: var(--rule); }
+    .tr-filter {
+      background: var(--ink); color: var(--fore); border: 1px solid var(--rule);
+      border-radius: 6px; padding: 6px 10px; font-size: 13px; min-width: 9rem; outline: none;
+    }
+    .tr-filter:focus { border-color: var(--rule-hi); }
+    .tr-btn-ghost {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:5px 12px; border-radius:6px; font-size:12px; font-weight:500;
+      border:1px solid var(--rule); color:var(--fore-dim); text-decoration:none; cursor:pointer;
+      background:transparent; transition:border-color 140ms, background 140ms, color 140ms;
+    }
+    .tr-btn-ghost:hover { border-color:var(--rule-hi); background:var(--ink-4); color:var(--fore); }
+    .tr-table thead tr { background: var(--ink-3); border-color: var(--rule); color: var(--mute-2); }
+    .tr-table tbody tr { background: var(--ink-2); border-color: var(--rule); }
+    .tr-table tbody tr:hover { background: var(--ink-4); }
+    .hidden { display: none !important; }
+    [data-theme='light'] .tr-card { background: #ffffff; }
+    [data-theme='light'] .tr-filter { background: #ffffff; }
+    [data-theme='light'] .tr-table thead tr { background: #f9fafb; }
+    [data-theme='light'] .tr-table tbody tr { background: #ffffff; }
+    [data-theme='light'] .tr-table tbody tr:hover { background: #f9fafb; }
+  </style>
+</AppLayout>
