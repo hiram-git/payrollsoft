@@ -39,7 +39,7 @@ let error = ''
 try {
   const [rRes, pRes] = await Promise.all([
     fetch(`${API_URL}/treasury/runs`, { headers }),
-    fetch(`${API_URL}/payrolls?status=closed`, { headers }).catch(() => null),
+    fetch(`${API_URL}/payroll?status=closed`, { headers }).catch(() => null),
   ])
   if (rRes.status === 401) return Astro.redirect('/login')
   if (rRes.ok) runs = ((await rRes.json()) as { data: PaymentRun[] }).data ?? []
