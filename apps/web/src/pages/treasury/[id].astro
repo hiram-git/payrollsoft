@@ -76,6 +76,14 @@ type Bank = {
   achEntityCode: string | null
   isActive: number
 }
+type AchBatch = {
+  id: string
+  format: string
+  fileName: string
+  totalAmount: string
+  recordCount: number
+  generatedAt: string
+}
 
 // Buscar la corrida en el listado (no hay GET /:id todavía — ahorra round-trip)
 let run: Run | null = null
@@ -84,7 +92,11 @@ let payables: Payable[] = []
 let creditorPayables: Payable[] = []
 let checkbooks: Checkbook[] = []
 let banks: Bank[] = []
+let runBatches: AchBatch[] = []
 let error = ''
+const now = new Date()
+let creditorMonth = now.getMonth() + 1
+let creditorYear = now.getFullYear()
 
 try {
   const runsRes = await fetch(`${API_URL}/treasury/runs`, { headers })
@@ -95,7 +107,7 @@ try {
   }
   if (!run) return Astro.redirect('/treasury')
 
-  const [cRes, cbRes, pRes, bRes, cpRes] = await Promise.all([
+  const [cRes, cbRes, pRes, bRes, plRes] = await Promise.all([
     fetch(`${API_URL}/treasury/runs/${runId}/checks`, { headers }),
     fetch(`${API_URL}/treasury/checkbooks`, { headers }),
     run.payrollId
@@ -103,14 +115,32 @@ try {
       : Promise.resolve(null),
     fetch(`${API_URL}/banks`, { headers }),
     run.payrollId
-      ? fetch(`${API_URL}/treasury/creditor-payables?payrollId=${run.payrollId}`, { headers })
+      ? fetch(`${API_URL}/payroll/${run.payrollId}?linesPage=1&linesLimit=1`, { headers })
       : Promise.resolve(null),
   ])
   if (cRes.ok) checks = ((await cRes.json()) as { data: Check[] }).data ?? []
   if (cbRes.ok) checkbooks = ((await cbRes.json()) as { data: Checkbook[] }).data ?? []
   if (pRes?.ok) payables = ((await pRes.json()) as { data: Payable[] }).data ?? []
   if (bRes.ok) banks = ((await bRes.json()) as { data: Bank[] }).data ?? []
+
+  // Mes/año de la planilla → base para acreedores (pago por mes).
+  if (plRes?.ok) {
+    const pj = (await plRes.json()) as { data?: { payroll?: { paymentDate?: string | null; periodEnd?: string } } }
+    const d = pj.data?.payroll?.paymentDate ?? pj.data?.payroll?.periodEnd ?? ''
+    if (/^\d{4}-\d{2}-\d{2}/.test(d)) {
+      creditorYear = Number(d.slice(0, 4))
+      creditorMonth = Number(d.slice(5, 7))
+    }
+  }
+
+  const [cpRes, abRes] = await Promise.all([
+    run.payrollId
+      ? fetch(`${API_URL}/treasury/creditor-payables?month=${creditorMonth}&year=${creditorYear}`, { headers })
+      : Promise.resolve(null),
+    fetch(`${API_URL}/treasury/ach?paymentRunId=${runId}`, { headers }),
+  ])
   if (cpRes?.ok) creditorPayables = ((await cpRes.json()) as { data: Payable[] }).data ?? []
+  if (abRes.ok) runBatches = ((await abRes.json()) as { data: AchBatch[] }).data ?? []
 } catch {
   error = 'No se pudo conectar.'
 }
@@ -138,6 +168,33 @@ const beneficiaryOptions = [
     amount: p.amount,
   })),
 ]
+
+// ─── Resumen y vista de acreedores ──────────────────────────────────────────
+const MESES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+const mesLabel = MESES_ES[creditorMonth - 1] ?? ''
+const checksLive = checks.filter((c) => c.status !== 'voided')
+const checksTotal = checksLive.reduce((a, c) => a + (Number(c.amount) || 0), 0)
+const batchesTotal = runBatches.reduce((a, b) => a + (Number(b.totalAmount) || 0), 0)
+const creditorTotal = creditorPayables.reduce((a, p) => a + p.amount, 0)
+function creditorStatus(p: Payable): { label: string; cls: string } {
+  if (p.paymentMethod === 'ach') {
+    return p.accountNumber && p.bankRouting
+      ? { label: 'ACH listo', cls: 'tr-status-closed' }
+      : { label: 'ACH sin cuenta', cls: 'tr-status-cancelled' }
+  }
+  if (p.paymentMethod === 'check') return { label: 'Cheque', cls: 'tr-status-open' }
+  return { label: 'Efectivo', cls: 'tr-status-draft' }
+}
+const FORMAT_LABELS: Record<string, string> = {
+  banco_nacional: 'Banco Nacional (L)',
+  banco_general: 'Banco General (C/D/T)',
+  bloqueo_quincenal: 'Bloqueo quincenal',
+  bloqueo_mensual: 'Bloqueo mensual',
+  mupa_v1: 'MUPA v1',
+}
 
 const achEligible = payables.filter(
   (p) => p.paymentMethod === 'ach' && p.accountNumber && p.bankRouting && p.accountType
@@ -203,7 +260,7 @@ const today = new Date().toISOString().slice(0, 10)
     </div>
 
     {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Operación completada.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{flashMsg || 'Operación completada.'}</div>
     )}
     {flash === 'updated' && (
       <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Cambios guardados.</div>
@@ -215,6 +272,25 @@ const today = new Date().toISOString().slice(0, 10)
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
 
+    {/* ─── Resumen de generación ───────────────────────────── */}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      <div class="tr-card border rounded-lg p-4">
+        <p class="text-xs tr-mute">Cheques emitidos</p>
+        <p class="text-lg font-semibold tr-title">{checksLive.length}</p>
+        <p class="text-xs tr-cell">{fmtMoney(checksTotal)}</p>
+      </div>
+      <div class="tr-card border rounded-lg p-4">
+        <p class="text-xs tr-mute">Archivos ACH generados</p>
+        <p class="text-lg font-semibold tr-title">{runBatches.length}</p>
+        <p class="text-xs tr-cell">{fmtMoney(batchesTotal)}</p>
+      </div>
+      <div class="tr-card border rounded-lg p-4">
+        <p class="text-xs tr-mute">Acreedores por pagar{mesLabel ? ` · ${mesLabel} ${creditorYear}` : ''}</p>
+        <p class="text-lg font-semibold tr-title">{creditorPayables.length}</p>
+        <p class="text-xs tr-cell">{fmtMoney(creditorTotal)}</p>
+      </div>
+    </div>
+
     <div class="flex gap-1 mb-4 border-b tr-rule">
       <button type="button" class="tr-tab tr-tab-active" data-target="tab-checks">
         Cheques ({checks.length})
@@ -222,6 +298,9 @@ const today = new Date().toISOString().slice(0, 10)
       <button type="button" class="tr-tab" data-target="tab-ach">ACH</button>
       {run.payrollId && (
         <button type="button" class="tr-tab" data-target="tab-payables">Pagables ({payables.length})</button>
+      )}
+      {run.payrollId && (
+        <button type="button" class="tr-tab" data-target="tab-creditors">Acreedores ({creditorPayables.length})</button>
       )}
     </div>
 
@@ -350,11 +429,11 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div class="md:col-span-3 bulk-period hidden">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
-                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div class="md:col-span-3 bulk-period hidden">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
-                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div class="md:col-span-6">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Concepto</label>
@@ -432,6 +511,33 @@ const today = new Date().toISOString().slice(0, 10)
           </p>
         </header>
 
+        {runBatches.length > 0 && (
+          <table class="tr-table w-full text-sm border-b tr-rule">
+            <thead>
+              <tr>
+                <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Archivo</th>
+                <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Formato</th>
+                <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Registros</th>
+                <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Total</th>
+                <th class="px-5 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {runBatches.map((b) => (
+                <tr class="border-b last:border-0 tr-rule">
+                  <td class="px-5 py-2.5 font-mono text-xs tr-cell">{b.fileName}</td>
+                  <td class="px-5 py-2.5 text-xs tr-cell">{FORMAT_LABELS[b.format] ?? b.format}</td>
+                  <td class="px-5 py-2.5 text-right font-mono text-xs tr-cell">{b.recordCount}</td>
+                  <td class="px-5 py-2.5 text-right font-mono text-xs tr-cell">{fmtMoney(b.totalAmount)}</td>
+                  <td class="px-5 py-2.5 text-right">
+                    <a href={`/api/treasury/ach/${b.id}/download`} class="text-xs tr-link">Descargar</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
         {run.payrollId && run.status === 'open' && canWrite && (
           <form method="POST" action={`/api/treasury/action?op=ach-generate&runId=${runId}`} class="px-5 py-4 border-b tr-rule">
             <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
@@ -453,11 +559,11 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
-                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
-                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha de pago *</label>
@@ -536,11 +642,11 @@ const today = new Date().toISOString().slice(0, 10)
             <div id="bank-file-period" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 hidden">
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes (acreedores)</label>
-                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
-                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
             </div>
             {banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0 && (
@@ -573,11 +679,11 @@ const today = new Date().toISOString().slice(0, 10)
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
-                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
-                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div class="flex justify-end">
                 <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
@@ -641,6 +747,67 @@ const today = new Date().toISOString().slice(0, 10)
         </div>
       </section>
     )}
+
+    {/* ─── Tab Acreedores ─────────────────────────────────── */}
+    {run.payrollId && (
+      <section id="tab-creditors" class="hidden">
+        <div class="tr-card border rounded-lg overflow-hidden">
+          <header class="px-5 py-3 border-b tr-rule">
+            <h2 class="text-sm font-semibold tr-title">
+              Acreedores por pagar{mesLabel ? ` · ${mesLabel} ${creditorYear}` : ''}
+            </h2>
+            <p class="text-xs tr-mute mt-0.5">
+              Suma de las deducciones <strong>ACR_*</strong> retenidas en las planillas cerradas del
+              mes, agrupada por proveedor (se paga por mes — ambas quincenas).
+            </p>
+          </header>
+          {creditorPayables.length === 0 ? (
+            <div class="py-10 text-center">
+              <p class="text-sm tr-mute">No hay montos retenidos a acreedores en el mes.</p>
+            </div>
+          ) : (
+            <table class="tr-table w-full text-sm">
+              <thead>
+                <tr>
+                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Proveedor</th>
+                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Método</th>
+                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Banco / Cuenta</th>
+                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Estado</th>
+                  <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creditorPayables.map((p) => {
+                  const st = creditorStatus(p)
+                  return (
+                    <tr class="border-b last:border-0 tr-rule">
+                      <td class="px-5 py-3 tr-cell">
+                        {p.beneficiaryName}
+                        {p.identification && <span class="ml-2 text-xs tr-mute font-mono">{p.identification}</span>}
+                      </td>
+                      <td class="px-5 py-3">
+                        <span class={`tr-method-${p.paymentMethod}`}>{p.paymentMethod.toUpperCase()}</span>
+                      </td>
+                      <td class="px-5 py-3 text-xs tr-mute font-mono">
+                        {p.accountNumber ? `${p.accountNumber} · ${p.accountType ?? '?'}` : '—'}
+                      </td>
+                      <td class="px-5 py-3">
+                        <span class={`tr-status-badge ${st.cls}`}>{st.label}</span>
+                      </td>
+                      <td class="px-5 py-3 text-right font-mono text-xs tr-cell">{fmtMoney(p.amount)}</td>
+                    </tr>
+                  )
+                })}
+                <tr class="tr-rule">
+                  <td class="px-5 py-3 text-right text-xs font-semibold tr-subtitle" colspan="4">Total</td>
+                  <td class="px-5 py-3 text-right font-mono text-sm font-semibold tr-title">{fmtMoney(creditorTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+    )}
   </div>
 
   <script is:inline>
@@ -651,7 +818,7 @@ const today = new Date().toISOString().slice(0, 10)
           document.querySelectorAll('.tr-tab').forEach((b) => b.classList.remove('tr-tab-active'))
           btn.classList.add('tr-tab-active')
           const target = btn.getAttribute('data-target')
-          for (const id of ['tab-checks', 'tab-ach', 'tab-payables']) {
+          for (const id of ['tab-checks', 'tab-ach', 'tab-payables', 'tab-creditors']) {
             const el = document.getElementById(id)
             if (el) el.classList.toggle('hidden', id !== target)
           }
@@ -793,6 +960,11 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-method-ach   { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; background: rgba(16,185,129,0.18); color: #34d399; }
     .tr-method-check { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; background: rgba(96,165,250,0.18); color: #60a5fa; }
     .tr-method-cash  { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; background: rgba(156,163,175,0.18); color: var(--mute); }
+    .tr-status-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.6875rem; font-weight: 500; }
+    .tr-status-draft     { background: rgba(156,163,175,0.18); color: var(--mute); }
+    .tr-status-open      { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .tr-status-closed    { background: rgba(16,185,129,0.18); color: #34d399; }
+    .tr-status-cancelled { background: rgba(248,113,113,0.18); color: #f87171; }
 
     [data-theme='light'] .tr-card { background: #ffffff; }
     [data-theme='light'] .tr-table thead tr { background: #f9fafb; }

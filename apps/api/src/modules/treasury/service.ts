@@ -704,8 +704,8 @@ export async function getAchBatch(db: AnyDb, batchId: string) {
  * sin el contenido del archivo (que puede ser grande) — para la vista
  * consolidada de Tesorería. Cada fila es descargable por su `id`.
  */
-export async function listAllAchBatches(db: AnyDb) {
-  return db
+export async function listAllAchBatches(db: AnyDb, paymentRunId?: string) {
+  const query = db
     .select({
       id: treasuryAchBatches.id,
       format: treasuryAchBatches.format,
@@ -725,7 +725,10 @@ export async function listAllAchBatches(db: AnyDb) {
     .leftJoin(banks, eq(banks.id, treasuryAchBatches.sourceBankId))
     .leftJoin(treasuryPaymentRuns, eq(treasuryPaymentRuns.id, treasuryAchBatches.paymentRunId))
     .leftJoin(payrolls, eq(payrolls.id, treasuryPaymentRuns.payrollId))
-    .orderBy(desc(treasuryAchBatches.generatedAt))
+  const filtered = paymentRunId
+    ? query.where(eq(treasuryAchBatches.paymentRunId, paymentRunId))
+    : query
+  return filtered.orderBy(desc(treasuryAchBatches.generatedAt))
 }
 
 void payrolls

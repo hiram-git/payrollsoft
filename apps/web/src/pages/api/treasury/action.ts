@@ -192,15 +192,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     return Response.redirect(new URL(flashUrl(redirectTo, 'error', String(msg)), request.url), 303)
   }
 
+  // Resumen post-generación para la emisión en lote.
+  let successMsg: string | undefined
+  if (op === 'checks-bulk' && result.json.data) {
+    const d = result.json.data as { issued?: number; skipped?: number; totalAmount?: number }
+    const issued = d.issued ?? 0
+    const skipped = d.skipped ?? 0
+    successMsg = `Se generaron ${issued} cheque${issued === 1 ? '' : 's'}${
+      skipped ? ` (${skipped} omitido${skipped === 1 ? '' : 's'})` : ''
+    } · Total B/. ${Number(d.totalAmount ?? 0).toFixed(2)}`
+  }
+
   if (isJsonClient) {
     return new Response(
       JSON.stringify({
         ok: true,
-        redirect: flashUrl(redirectTo, flash),
+        redirect: flashUrl(redirectTo, flash, successMsg),
         data: result.json.data ?? null,
       }),
       { headers: { 'Content-Type': 'application/json' } }
     )
   }
-  return Response.redirect(new URL(flashUrl(redirectTo, flash), request.url), 303)
+  return Response.redirect(new URL(flashUrl(redirectTo, flash, successMsg), request.url), 303)
 }

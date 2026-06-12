@@ -495,15 +495,18 @@ export const treasuryRoutes = new Elysia()
 
   .get(
     '/treasury/ach',
-    async ({ db, set }) => {
+    async ({ db, query, set }) => {
       if (!db) {
         set.status = 400
         return { success: false, error: 'Tenant required' }
       }
-      const data = await listAllAchBatches(db)
+      const data = await listAllAchBatches(db, query.paymentRunId?.trim() || undefined)
       return { success: true, data }
     },
-    { beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')] }
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({ paymentRunId: t.Optional(t.String()) }),
+    }
   )
 
   .get(
