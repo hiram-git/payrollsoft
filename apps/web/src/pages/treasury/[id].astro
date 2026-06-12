@@ -81,6 +81,7 @@ type Bank = {
 let run: Run | null = null
 let checks: Check[] = []
 let payables: Payable[] = []
+let creditorPayables: Payable[] = []
 let checkbooks: Checkbook[] = []
 let banks: Bank[] = []
 let error = ''
@@ -94,18 +95,22 @@ try {
   }
   if (!run) return Astro.redirect('/treasury')
 
-  const [cRes, cbRes, pRes, bRes] = await Promise.all([
+  const [cRes, cbRes, pRes, bRes, cpRes] = await Promise.all([
     fetch(`${API_URL}/treasury/runs/${runId}/checks`, { headers }),
     fetch(`${API_URL}/treasury/checkbooks`, { headers }),
     run.payrollId
       ? fetch(`${API_URL}/treasury/payables?payrollId=${run.payrollId}`, { headers })
       : Promise.resolve(null),
     fetch(`${API_URL}/banks`, { headers }),
+    run.payrollId
+      ? fetch(`${API_URL}/treasury/creditor-payables?payrollId=${run.payrollId}`, { headers })
+      : Promise.resolve(null),
   ])
   if (cRes.ok) checks = ((await cRes.json()) as { data: Check[] }).data ?? []
   if (cbRes.ok) checkbooks = ((await cbRes.json()) as { data: Checkbook[] }).data ?? []
   if (pRes?.ok) payables = ((await pRes.json()) as { data: Payable[] }).data ?? []
   if (bRes.ok) banks = ((await bRes.json()) as { data: Bank[] }).data ?? []
+  if (cpRes?.ok) creditorPayables = ((await cpRes.json()) as { data: Payable[] }).data ?? []
 } catch {
   error = 'No se pudo conectar.'
 }
@@ -116,6 +121,23 @@ const flash = Astro.url.searchParams.get('flash') ?? ''
 const flashMsg = Astro.url.searchParams.get('msg') ?? ''
 
 const activeCheckbooks = checkbooks.filter((c) => c.isActive === 1 && c.nextNumber <= c.endNumber)
+
+// Beneficiarios sugeridos para emisión manual: empleados de la planilla +
+// acreedores (con su monto retenido). Al elegir uno se autocompletan los campos.
+const beneficiaryOptions = [
+  ...payables.map((p) => ({
+    type: 'employee' as const,
+    ref: p.beneficiaryId,
+    name: p.beneficiaryName,
+    amount: p.amount,
+  })),
+  ...creditorPayables.map((p) => ({
+    type: 'creditor' as const,
+    ref: p.beneficiaryId,
+    name: p.beneficiaryName,
+    amount: p.amount,
+  })),
+]
 
 const achEligible = payables.filter(
   (p) => p.paymentMethod === 'ach' && p.accountNumber && p.bankRouting && p.accountType
@@ -226,7 +248,30 @@ const today = new Date().toISOString().slice(0, 10)
         {run.status === 'open' && canWrite && (
           <form id="form-issue-check" method="POST" action={`/api/treasury/action?op=check-issue&runId=${runId}`} class="hidden px-5 py-4 border-b tr-rule">
             <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="beneficiaryRefId" id="benef-ref" value="" />
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+              {beneficiaryOptions.length > 0 && (
+                <div class="md:col-span-12">
+                  <label class="block text-xs font-medium tr-subtitle mb-1.5">Seleccionar beneficiario (autocompleta nombre y monto)</label>
+                  <select id="benef-select" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                    <option value="">— Entrada manual —</option>
+                    <optgroup label="Empleados">
+                      {beneficiaryOptions.filter((o) => o.type === 'employee').map((o, i) => (
+                        <option value={`employee:${i}`} data-name={o.name} data-amount={o.amount} data-type="employee" data-ref={o.ref}>
+                          {o.name} · B/. {o.amount.toFixed(2)}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Acreedores">
+                      {beneficiaryOptions.filter((o) => o.type === 'creditor').map((o, i) => (
+                        <option value={`creditor:${i}`} data-name={o.name} data-amount={o.amount} data-type="creditor" data-ref={o.ref}>
+                          {o.name} · B/. {o.amount.toFixed(2)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+              )}
               <div class="md:col-span-4">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Chequera *</label>
                 <select name="checkbookId" required class="tr-input w-full px-3 py-2 text-sm rounded-md">
@@ -243,11 +288,11 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div class="md:col-span-5">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Beneficiario *</label>
-                <input type="text" name="beneficiaryName" required maxlength="255" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="text" id="benef-name" name="beneficiaryName" required maxlength="255" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div class="md:col-span-3">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Monto *</label>
-                <input type="number" step="0.01" name="amount" required min="0.01" class="tr-input w-full px-3 py-2 text-sm rounded-md font-mono" />
+                <input type="number" step="0.01" id="benef-amount" name="amount" required min="0.01" class="tr-input w-full px-3 py-2 text-sm rounded-md font-mono" />
               </div>
               <div class="md:col-span-3">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha *</label>
@@ -255,7 +300,7 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div class="md:col-span-3">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Tipo de beneficiario</label>
-                <select name="beneficiaryType" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                <select id="benef-type" name="beneficiaryType" class="tr-input w-full px-3 py-2 text-sm rounded-md">
                   <option value="employee">Empleado</option>
                   <option value="creditor">Acreedor</option>
                   <option value="other">Otro</option>
@@ -566,6 +611,23 @@ const today = new Date().toISOString().slice(0, 10)
       const issueCancel = document.getElementById('btn-issue-cancel')
       issueBtn?.addEventListener('click', () => issueForm?.classList.toggle('hidden'))
       issueCancel?.addEventListener('click', () => issueForm?.classList.add('hidden'))
+
+      // Autocompletar el cheque al elegir un beneficiario de la planilla
+      const benefSelect = document.getElementById('benef-select')
+      if (benefSelect) {
+        benefSelect.addEventListener('change', () => {
+          const opt = benefSelect.options[benefSelect.selectedIndex]
+          if (!opt || !opt.value) return
+          const name = document.getElementById('benef-name')
+          const amount = document.getElementById('benef-amount')
+          const type = document.getElementById('benef-type')
+          const ref = document.getElementById('benef-ref')
+          if (name) name.value = opt.getAttribute('data-name') || ''
+          if (amount) amount.value = opt.getAttribute('data-amount') || ''
+          if (type) type.value = opt.getAttribute('data-type') || 'employee'
+          if (ref) ref.value = opt.getAttribute('data-ref') || ''
+        })
+      }
 
       // Anular cheque vía saModal
       document.querySelectorAll('[data-void-id]').forEach((btn) => {

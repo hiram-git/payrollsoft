@@ -24,7 +24,7 @@ import {
   treasuryChecks,
   treasuryPaymentRuns,
 } from '@payroll/db'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
 type AnyDb = any
@@ -220,6 +220,91 @@ export async function getEmployeePayables(db: AnyDb, payrollId: string): Promise
     accountNumber: r.accountNumber ? String(r.accountNumber) : null,
     accountType: (r.accountType ?? null) as 'savings' | 'checking' | null,
   }))
+}
+
+/**
+ * IDs de planillas cerradas cuyo pago cae en un mes/año dados — base para
+ * agregar los pagos a acreedores por mes (junta ambas quincenas).
+ */
+export async function getClosedPayrollIdsForMonth(
+  db: AnyDb,
+  month: number,
+  year: number
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: payrolls.id })
+    .from(payrolls)
+    .where(
+      and(
+        eq(payrolls.status, 'closed'),
+        sql`EXTRACT(YEAR FROM ${payrolls.paymentDate}) = ${year}`,
+        sql`EXTRACT(MONTH FROM ${payrolls.paymentDate}) = ${month}`
+      )
+    )
+  return (rows as Array<{ id: string }>).map((r) => String(r.id))
+}
+
+/**
+ * Pagos a acreedores: suma los conceptos de deducción `ACR_*` (lo retenido a
+ * los empleados) de las planillas indicadas, agrupado por acreedor, y los
+ * enriquece con sus datos de pago (banco, cuenta, método). El monto a cada
+ * proveedor es la suma de lo retenido a todos los empleados en el período.
+ */
+export async function getCreditorPayables(db: AnyDb, payrollIds: string[]): Promise<Payable[]> {
+  if (payrollIds.length === 0) return []
+
+  const lines = await db
+    .select({ concepts: payrollLines.concepts })
+    .from(payrollLines)
+    .where(inArray(payrollLines.payrollId, payrollIds))
+
+  const byConceptCode = new Map<string, number>()
+  for (const row of lines as Array<{ concepts: unknown }>) {
+    const arr = Array.isArray(row.concepts) ? row.concepts : []
+    for (const c of arr as Array<{ code?: string; amount?: unknown; type?: string }>) {
+      const code = String(c.code ?? '')
+      if (c.type === 'deduction' && code.startsWith('ACR_')) {
+        const amt = Number(c.amount ?? 0)
+        if (Number.isFinite(amt)) byConceptCode.set(code, (byConceptCode.get(code) ?? 0) + amt)
+      }
+    }
+  }
+  if (byConceptCode.size === 0) return []
+
+  const creditorRows = await db
+    .select({
+      id: creditors.id,
+      code: creditors.code,
+      name: creditors.name,
+      beneficiaryName: creditors.beneficiaryName,
+      paymentMethod: creditors.paymentMethod,
+      bankId: creditors.bankId,
+      accountNumber: creditors.accountNumber,
+      accountType: creditors.accountType,
+      bankRouting: banks.routing,
+    })
+    .from(creditors)
+    .leftJoin(banks, eq(banks.id, creditors.bankId))
+
+  const out: Payable[] = []
+  for (const cr of creditorRows as Array<Record<string, unknown>>) {
+    const conceptCode = `ACR_${String(cr.code ?? '').toUpperCase()}`
+    const amount = byConceptCode.get(conceptCode)
+    if (!amount || amount <= 0) continue
+    out.push({
+      beneficiaryType: 'creditor',
+      beneficiaryId: String(cr.id),
+      beneficiaryName: String(cr.beneficiaryName || cr.name),
+      identification: cr.code ? String(cr.code) : null,
+      amount,
+      paymentMethod: (cr.paymentMethod ?? 'check') as 'ach' | 'check' | 'cash',
+      bankId: cr.bankId ? String(cr.bankId) : null,
+      bankRouting: cr.bankRouting ? String(cr.bankRouting) : null,
+      accountNumber: cr.accountNumber ? String(cr.accountNumber) : null,
+      accountType: (cr.accountType ?? null) as 'savings' | 'checking' | null,
+    })
+  }
+  return out
 }
 
 // ─── Emitir cheque ────────────────────────────────────────────────────────

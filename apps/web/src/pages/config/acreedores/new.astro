@@ -1,9 +1,24 @@
 ---
 import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
+
+type Bank = { id: string; name: string; isActive: number }
+let banks: Bank[] = []
+try {
+  const res = await fetch(`${API_URL}/banks`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.ok) banks = ((await res.json()) as { data: Bank[] }).data ?? []
+} catch {
+  /* sin bancos */
+}
+const activeBanks = banks.filter((b) => b.isActive === 1)
 
 const errorParam = Astro.url.searchParams.get('error')
 const errorMessages: Record<string, string> = {
@@ -65,6 +80,69 @@ const errorMsg = errorParam ? (errorMessages[errorParam] ?? 'Error desconocido.'
         />
       </div>
 
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="paymentMethod">Forma de pago</label>
+        <select
+          id="paymentMethod"
+          name="paymentMethod"
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="check">Cheque</option>
+          <option value="ach">ACH (transferencia)</option>
+          <option value="cash">Efectivo</option>
+        </select>
+      </div>
+
+      <div id="ach-fields" class="space-y-5 rounded-lg border border-gray-200 bg-gray-50 p-4 hidden">
+        <p class="text-xs font-medium text-gray-500">Datos para transferencia ACH</p>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5" for="bankId">Banco</label>
+          <select
+            id="bankId"
+            name="bankId"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="">— Selecciona un banco —</option>
+            {activeBanks.map((b) => <option value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5" for="accountNumber">N° de cuenta</label>
+          <input
+            id="accountNumber"
+            name="accountNumber"
+            type="text"
+            maxlength="40"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5" for="accountType">Tipo de cuenta</label>
+          <select
+            id="accountType"
+            name="accountType"
+            class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="checking">Corriente</option>
+            <option value="savings">Ahorro</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1.5" for="beneficiaryName">
+          Nombre del beneficiario <span class="text-gray-400">(opcional)</span>
+        </label>
+        <input
+          id="beneficiaryName"
+          name="beneficiaryName"
+          type="text"
+          maxlength="255"
+          placeholder="Si difiere del nombre del acreedor"
+          class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
       <div class="flex gap-3 pt-2">
         <button
           type="submit"
@@ -92,4 +170,11 @@ const errorMsg = errorParam ? (errorMessages[errorParam] ?? 'Error desconocido.'
     codeInput.value = codeInput.value.toUpperCase()
     codeInput.setSelectionRange(pos, pos)
   })
+
+  // Mostrar/ocultar los campos ACH según la forma de pago
+  const pm = document.getElementById('paymentMethod') as HTMLSelectElement | null
+  const achFields = document.getElementById('ach-fields')
+  const syncAch = () => achFields?.classList.toggle('hidden', pm?.value !== 'ach')
+  pm?.addEventListener('change', syncAch)
+  syncAch()
 </script>

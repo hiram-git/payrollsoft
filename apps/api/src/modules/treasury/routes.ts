@@ -39,6 +39,8 @@ import {
   generateAchBatch,
   getAchBatch,
   getCheckWithChequera,
+  getClosedPayrollIdsForMonth,
+  getCreditorPayables,
   getEmployeePayables,
   issueCheck,
   listAllAchBatches,
@@ -240,6 +242,36 @@ export const treasuryRoutes = new Elysia()
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
       query: t.Object({ payrollId: t.Optional(t.String()) }),
+    }
+  )
+
+  // ── Pagables de acreedores (suma de ACR_* por proveedor) ────────────────
+  .get(
+    '/treasury/creditor-payables',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      let payrollIds: string[] = []
+      if (query.payrollId?.trim()) {
+        payrollIds = [query.payrollId.trim()]
+      } else if (query.month && query.year) {
+        payrollIds = await getClosedPayrollIdsForMonth(db, Number(query.month), Number(query.year))
+      } else {
+        set.status = 400
+        return { success: false, error: 'Indica payrollId o month+year' }
+      }
+      const data = await getCreditorPayables(db, payrollIds)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({
+        payrollId: t.Optional(t.String()),
+        month: t.Optional(t.String()),
+        year: t.Optional(t.String()),
+      }),
     }
   )
 
