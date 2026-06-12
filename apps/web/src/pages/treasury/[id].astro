@@ -240,6 +240,8 @@ const today = new Date().toISOString().slice(0, 10)
                   <span class="tr-mute text-xs">·</span>
                 </>
               )}
+              <button type="button" id="btn-issue-bulk" class="text-xs tr-link">+ Generar en lote</button>
+              <span class="tr-mute text-xs">·</span>
               <button type="button" id="btn-issue-check" class="text-xs tr-link">+ Emitir cheque</button>
             </div>
           )}
@@ -314,6 +316,54 @@ const today = new Date().toISOString().slice(0, 10)
             <div class="flex justify-end gap-2 mt-3">
               <button type="button" id="btn-issue-cancel" class="tr-mute px-3 py-2 text-sm">Cancelar</button>
               <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Emitir cheque</button>
+            </div>
+          </form>
+        )}
+
+        {run.status === 'open' && canWrite && (
+          <form id="form-issue-bulk" method="POST" action={`/api/treasury/action?op=checks-bulk&runId=${runId}`} class="hidden px-5 py-4 border-b tr-rule">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="payrollId" value={run.payrollId} />
+            <p class="text-xs tr-mute mb-3">
+              Emite un cheque por cada beneficiario con método <strong>cheque</strong>. Omite los que
+              ya tienen cheque vigente en esta generación.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+              <div class="md:col-span-4">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Chequera *</label>
+                <select name="checkbookId" required class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  {activeCheckbooks.map((c) => (
+                    <option value={c.id}>{c.name} · próx. {String(c.nextNumber).padStart(7, '0')}</option>
+                  ))}
+                </select>
+              </div>
+              <div class="md:col-span-4">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Beneficiarios</label>
+                <select id="bulk-benef" name="beneficiary" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  <option value="employees">Empleados (esta planilla)</option>
+                  <option value="creditors">Acreedores (del mes)</option>
+                </select>
+              </div>
+              <div class="md:col-span-4">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha *</label>
+                <input type="date" name="issueDate" required value={today} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="md:col-span-3 bulk-period hidden">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
+                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="md:col-span-3 bulk-period hidden">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
+                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="md:col-span-6">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Concepto</label>
+                <input type="text" name="concept" maxlength="500" placeholder="ej. Pago acreedores junio 2026" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-3">
+              <button type="button" id="btn-bulk-cancel" class="tr-mute px-3 py-2 text-sm">Cancelar</button>
+              <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Generar cheques</button>
             </div>
           </form>
         )}
@@ -455,7 +505,14 @@ const today = new Date().toISOString().slice(0, 10)
             <input type="hidden" name="runId" value={runId} />
             <input type="hidden" name="payrollId" value={run.payrollId} />
             <input type="hidden" name="format" id="bank-file-format" value="" />
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Beneficiarios</label>
+                <select id="bank-file-benef" name="beneficiary" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  <option value="employees">Empleados (esta planilla)</option>
+                  <option value="creditors">Acreedores (del mes)</option>
+                </select>
+              </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Banco originador (formato ACH)</label>
                 <select id="bank-file-select" name="sourceBankId" class="tr-input w-full px-3 py-2 text-sm rounded-md">
@@ -468,12 +525,22 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Descripción (opcional)</label>
-                <input type="text" name="description" maxlength="200" placeholder="Auto desde la planilla" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="text" name="description" maxlength="200" placeholder="Auto" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div class="flex justify-end">
                 <button type="submit" disabled={banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0} class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
                   Generar y descargar
                 </button>
+              </div>
+            </div>
+            <div id="bank-file-period" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 hidden">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes (acreedores)</label>
+                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
+                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
             </div>
             {banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0 && (
@@ -605,12 +672,38 @@ const today = new Date().toISOString().slice(0, 10)
         syncFmt()
       }
 
+      // Mostrar mes/año cuando el beneficiario son acreedores (pago por mes)
+      const benefSel = document.getElementById('bank-file-benef')
+      const periodBox = document.getElementById('bank-file-period')
+      if (benefSel && periodBox) {
+        const syncBenef = () => periodBox.classList.toggle('hidden', benefSel.value !== 'creditors')
+        benefSel.addEventListener('change', syncBenef)
+        syncBenef()
+      }
+
       // Toggle form emitir cheque
       const issueBtn = document.getElementById('btn-issue-check')
       const issueForm = document.getElementById('form-issue-check')
       const issueCancel = document.getElementById('btn-issue-cancel')
       issueBtn?.addEventListener('click', () => issueForm?.classList.toggle('hidden'))
       issueCancel?.addEventListener('click', () => issueForm?.classList.add('hidden'))
+
+      // Cheques en lote
+      const bulkBtn = document.getElementById('btn-issue-bulk')
+      const bulkForm = document.getElementById('form-issue-bulk')
+      const bulkCancel = document.getElementById('btn-bulk-cancel')
+      bulkBtn?.addEventListener('click', () => bulkForm?.classList.toggle('hidden'))
+      bulkCancel?.addEventListener('click', () => bulkForm?.classList.add('hidden'))
+      const bulkBenef = document.getElementById('bulk-benef')
+      if (bulkBenef) {
+        const syncBulk = () => {
+          document.querySelectorAll('.bulk-period').forEach((el) => {
+            el.classList.toggle('hidden', bulkBenef.value !== 'creditors')
+          })
+        }
+        bulkBenef.addEventListener('change', syncBulk)
+        syncBulk()
+      }
 
       // Autocompletar el cheque al elegir un beneficiario de la planilla
       const benefSelect = document.getElementById('benef-select')

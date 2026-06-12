@@ -29,9 +29,28 @@ import {
   treasuryAchLines,
 } from '@payroll/db'
 import { and, asc, eq, sql } from 'drizzle-orm'
+import { getClosedPayrollIdsForMonth, getCreditorPayables } from './service'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
 type AnyDb = any
+
+/** A quién se le genera el ACH: empleados de una planilla, o acreedores de un mes. */
+export type AchScope =
+  | { beneficiary: 'employees'; payrollId: string }
+  | { beneficiary: 'creditors'; month: number; year: number }
+
+type AchRow = {
+  identification: string
+  name: string
+  amount: number
+  accountNumber: string | null
+  accountType: 'savings' | 'checking' | null
+  bankId: string | null
+  routing: string | null
+  entityCode: string | null
+  refType: 'employee' | 'creditor'
+  refId: string
+}
 
 export type TreasuryFileFormat =
   | 'banco_nacional'
@@ -131,59 +150,148 @@ async function storeBatch(
   })
 }
 
+// ─── Recolección de beneficiarios ACH (empleados o acreedores) ──────────────
+
+function pad2(n: number): string {
+  return String(n).padStart(2, '0')
+}
+
+async function scopeMeta(
+  db: AnyDb,
+  scope: AchScope
+): Promise<
+  { ok: true; description: string; month: number; year: number } | { ok: false; error: string }
+> {
+  if (scope.beneficiary === 'employees') {
+    const payroll = await getPayroll(db, scope.payrollId)
+    if (!payroll) return { ok: false, error: 'Planilla no encontrada.' }
+    if (payroll.status !== 'closed') {
+      return { ok: false, error: 'La planilla debe estar cerrada para generar el archivo.' }
+    }
+    const half = halfFromPaymentDate(payroll.paymentDate)
+    const dateSrc = (payroll.paymentDate ?? payroll.periodEnd) as string
+    return {
+      ok: true,
+      description: deriveDescription(payroll, half),
+      month: Number(dateSrc.slice(5, 7)),
+      year: Number(dateSrc.slice(0, 4)),
+    }
+  }
+  return {
+    ok: true,
+    description: `PAGO A ACREEDORES ${monthNameEs(scope.month)} ${scope.year}`,
+    month: scope.month,
+    year: scope.year,
+  }
+}
+
+async function gatherAchRows(db: AnyDb, scope: AchScope): Promise<AchRow[]> {
+  if (scope.beneficiary === 'employees') {
+    const rows = await db
+      .select({
+        refId: employees.id,
+        idNumber: employees.idNumber,
+        firstName: employees.firstName,
+        lastName: employees.lastName,
+        netAmount: payrollLines.netAmount,
+        accountNumber: employees.accountNumber,
+        accountType: employees.accountType,
+        bankId: employees.bankId,
+        routing: banks.routing,
+        entityCode: banks.achEntityCode,
+      })
+      .from(payrollLines)
+      .innerJoin(employees, eq(employees.id, payrollLines.employeeId))
+      .leftJoin(banks, eq(banks.id, employees.bankId))
+      .where(and(eq(payrollLines.payrollId, scope.payrollId), eq(employees.paymentMethod, 'ach')))
+      .orderBy(asc(employees.idNumber))
+    return (rows as Array<Record<string, unknown>>).map((r) => ({
+      identification: String(r.idNumber ?? ''),
+      name: `${r.firstName} ${r.lastName}`.trim(),
+      amount: Number(r.netAmount ?? 0),
+      accountNumber: r.accountNumber ? String(r.accountNumber) : null,
+      accountType: (r.accountType ?? null) as 'savings' | 'checking' | null,
+      bankId: r.bankId ? String(r.bankId) : null,
+      routing: r.routing ? String(r.routing) : null,
+      entityCode: r.entityCode ? String(r.entityCode) : null,
+      refType: 'employee',
+      refId: String(r.refId),
+    }))
+  }
+
+  const payrollIds = await getClosedPayrollIdsForMonth(db, scope.month, scope.year)
+  const payables = await getCreditorPayables(db, payrollIds)
+  const bankRows = await db.select({ id: banks.id, entityCode: banks.achEntityCode }).from(banks)
+  const entityByBank = new Map<string, string | null>(
+    (bankRows as Array<{ id: string; entityCode: string | null }>).map((b) => [
+      String(b.id),
+      b.entityCode ? String(b.entityCode) : null,
+    ])
+  )
+  return payables
+    .filter((p) => p.paymentMethod === 'ach')
+    .map((p) => ({
+      identification: p.identification ?? '',
+      name: p.beneficiaryName,
+      amount: p.amount,
+      accountNumber: p.accountNumber,
+      accountType: p.accountType,
+      bankId: p.bankId,
+      routing: p.bankRouting,
+      entityCode: p.bankId ? (entityByBank.get(p.bankId) ?? null) : null,
+      refType: 'creditor',
+      refId: p.beneficiaryId,
+    }))
+}
+
+function achLineRow(r: AchRow): Record<string, unknown> {
+  return {
+    employeeId: r.refType === 'employee' ? r.refId : null,
+    creditorId: r.refType === 'creditor' ? r.refId : null,
+    beneficiaryType: r.refType,
+    beneficiaryName: r.name,
+    identification: r.identification || null,
+    bankRouting: r.routing,
+    accountNumber: r.accountNumber ?? '',
+    accountType: r.accountType ?? 'checking',
+    amount: r.amount.toFixed(2),
+  }
+}
+
 // ─── Banco Nacional (líneas L) ──────────────────────────────────────────────
 
 export async function generateBancoNacionalFile(
   db: AnyDb,
-  input: { paymentRunId?: string | null; payrollId: string; sourceBankId: string; description?: string },
+  input: { paymentRunId?: string | null; scope: AchScope; sourceBankId: string; description?: string },
   options: { generatedBy?: string | null } = {}
 ): Promise<GenerateResult> {
-  const payroll = await getPayroll(db, input.payrollId)
-  if (!payroll) return { success: false, error: 'Planilla no encontrada.' }
-  if (payroll.status !== 'closed') {
-    return { success: false, error: 'La planilla debe estar cerrada para generar el archivo.' }
-  }
+  const meta = await scopeMeta(db, input.scope)
+  if (!meta.ok) return { success: false, error: meta.error }
 
-  const rows = await db
-    .select({
-      idNumber: employees.idNumber,
-      firstName: employees.firstName,
-      lastName: employees.lastName,
-      netAmount: payrollLines.netAmount,
-      accountNumber: employees.accountNumber,
-      routing: banks.routing,
-    })
-    .from(payrollLines)
-    .innerJoin(employees, eq(employees.id, payrollLines.employeeId))
-    .leftJoin(banks, eq(banks.id, employees.bankId))
-    .where(
-      and(
-        eq(payrollLines.payrollId, input.payrollId),
-        eq(employees.bankId, input.sourceBankId),
-        eq(employees.paymentMethod, 'ach')
-      )
-    )
-    .orderBy(asc(employees.idNumber))
-
-  const entries: BancoNacionalEntry[] = (rows as Array<Record<string, unknown>>)
-    .filter((r) => r.accountNumber && r.routing)
-    .map((r) => ({
-      identification: String(r.idNumber ?? ''),
-      beneficiaryName: `${r.firstName} ${r.lastName}`.trim(),
-      amount: Number(r.netAmount ?? 0),
-      routing: String(r.routing ?? ''),
-      accountNumber: String(r.accountNumber ?? ''),
-    }))
+  const rows = await gatherAchRows(db, input.scope)
+  const eligible = rows.filter((r) => r.accountNumber && r.routing && r.bankId === input.sourceBankId)
+  const entries: BancoNacionalEntry[] = eligible.map((r) => ({
+    identification: r.identification,
+    beneficiaryName: r.name,
+    amount: r.amount,
+    routing: String(r.routing),
+    accountNumber: String(r.accountNumber),
+  }))
 
   if (entries.length === 0) {
-    return { success: false, error: 'No hay empleados ACH en ese banco con cuenta y ruta configuradas.' }
+    return {
+      success: false,
+      error: 'No hay beneficiarios ACH en ese banco con cuenta y ruta configuradas.',
+    }
   }
 
-  const half = halfFromPaymentDate(payroll.paymentDate)
-  const description = input.description ?? deriveDescription(payroll, half)
+  const description = input.description ?? meta.description
   const result = generateBancoNacionalText(entries, { description })
+  const fileName =
+    input.scope.beneficiary === 'creditors'
+      ? `banconacional_acreedores_${meta.year}${pad2(meta.month)}.txt`
+      : 'banconacionalpanama.txt'
 
-  const fileName = 'banconacionalpanama.txt'
   const batchId = await storeBatch(
     db,
     {
@@ -195,7 +303,8 @@ export async function generateBancoNacionalFile(
       recordCount: result.recordCount,
       totalAmount: result.totalAmount,
     },
-    options
+    options,
+    eligible.map(achLineRow)
   )
 
   return { success: true, data: { batchId, fileName, format: 'banco_nacional', ...result } }
@@ -205,54 +314,32 @@ export async function generateBancoNacionalFile(
 
 export async function generateBancoGeneralFile(
   db: AnyDb,
-  input: { paymentRunId?: string | null; payrollId: string; sourceBankId: string; description?: string },
+  input: { paymentRunId?: string | null; scope: AchScope; sourceBankId: string; description?: string },
   options: { generatedBy?: string | null } = {}
 ): Promise<GenerateResult> {
-  const payroll = await getPayroll(db, input.payrollId)
-  if (!payroll) return { success: false, error: 'Planilla no encontrada.' }
-  if (payroll.status !== 'closed') {
-    return { success: false, error: 'La planilla debe estar cerrada para generar el archivo.' }
-  }
+  const meta = await scopeMeta(db, input.scope)
+  if (!meta.ok) return { success: false, error: meta.error }
 
-  const rows = await db
-    .select({
-      firstName: employees.firstName,
-      lastName: employees.lastName,
-      netAmount: payrollLines.netAmount,
-      accountNumber: employees.accountNumber,
-      accountType: employees.accountType,
-      bankId: employees.bankId,
-      entityCode: banks.achEntityCode,
-      routing: banks.routing,
-    })
-    .from(payrollLines)
-    .innerJoin(employees, eq(employees.id, payrollLines.employeeId))
-    .leftJoin(banks, eq(banks.id, employees.bankId))
-    .where(and(eq(payrollLines.payrollId, input.payrollId), eq(employees.paymentMethod, 'ach')))
-    .orderBy(asc(employees.idNumber))
+  const rows = await gatherAchRows(db, input.scope)
+  const eligible = rows.filter((r) => r.accountNumber)
+  const description = input.description ?? meta.description
 
-  const half = halfFromPaymentDate(payroll.paymentDate)
-  const description = input.description ?? deriveDescription(payroll, half)
-
-  const entries: BancoGeneralEntry[] = (rows as Array<Record<string, unknown>>)
-    .filter((r) => r.accountNumber)
-    .map((r) => ({
-      beneficiaryName: `${r.firstName} ${r.lastName}`.trim(),
-      amount: Number(r.netAmount ?? 0),
-      accountNumber: String(r.accountNumber ?? ''),
-      accountType: (r.accountType ?? 'checking') as 'savings' | 'checking',
-      bankCode: String(r.entityCode ?? r.routing ?? ''),
-      onUs: Boolean(r.bankId) && r.bankId === input.sourceBankId,
-      description,
-    }))
+  const entries: BancoGeneralEntry[] = eligible.map((r) => ({
+    beneficiaryName: r.name,
+    amount: r.amount,
+    accountNumber: String(r.accountNumber),
+    accountType: r.accountType ?? 'checking',
+    bankCode: String(r.entityCode ?? r.routing ?? ''),
+    onUs: Boolean(r.bankId) && r.bankId === input.sourceBankId,
+    description,
+  }))
 
   if (entries.length === 0) {
-    return { success: false, error: 'No hay empleados ACH con cuenta configurada.' }
+    return { success: false, error: 'No hay beneficiarios ACH con cuenta configurada.' }
   }
 
   const result = generateBancoGeneralText(entries)
-  const now = new Date()
-  const fileName = `ACH_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}_${now.getTime()}.txt`
+  const fileName = `ACH_${meta.year}${pad2(meta.month)}_${Date.now()}.txt`
 
   const batchId = await storeBatch(
     db,
@@ -265,7 +352,8 @@ export async function generateBancoGeneralFile(
       recordCount: result.recordCount,
       totalAmount: result.totalAmount,
     },
-    options
+    options,
+    eligible.map(achLineRow)
   )
 
   return { success: true, data: { batchId, fileName, format: 'banco_general', ...result } }

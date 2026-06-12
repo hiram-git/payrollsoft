@@ -54,11 +54,15 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     format === 'bloqueo_quincenal'
   ) {
     const runId = String(form.runId ?? '')
-    if (!runId) return fail('Falta la corrida de pago.')
+    if (!runId) return fail('Falta la generación de pagos.')
     genPath = `/treasury/runs/${runId}/files`
+    const beneficiary = String(form.beneficiary ?? 'employees') === 'creditors' ? 'creditors' : 'employees'
     payload = {
       format,
       payrollId: String(form.payrollId ?? ''),
+      beneficiary,
+      month: form.month ? Number(form.month) : undefined,
+      year: form.year ? Number(form.year) : undefined,
       sourceBankId: form.sourceBankId ? String(form.sourceBankId) : null,
       description: form.description ? String(form.description) : null,
     }

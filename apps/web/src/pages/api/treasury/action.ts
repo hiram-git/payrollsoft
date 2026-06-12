@@ -146,6 +146,18 @@ export const POST: APIRoute = async ({ request, cookies }) => {
         issueDate: str(body.issueDate),
       })
       break
+    case 'checks-bulk':
+      flash = 'created'
+      result = await call(`/treasury/runs/${runId}/checks/bulk`, 'POST', {
+        checkbookId: str(body.checkbookId),
+        issueDate: str(body.issueDate),
+        beneficiary: str(body.beneficiary) === 'creditors' ? 'creditors' : 'employees',
+        payrollId: strOrNull(body.payrollId),
+        month: intOrUndef(body.month),
+        year: intOrUndef(body.year),
+        concept: strOrNull(body.concept),
+      })
+      break
     case 'check-void':
       result = await call(`/treasury/checks/${id}/void`, 'POST', {
         reason: str(body.reason),

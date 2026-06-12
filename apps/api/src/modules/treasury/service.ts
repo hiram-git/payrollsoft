@@ -387,6 +387,113 @@ export async function issueCheck(
   })
 }
 
+export type BulkCheckScope =
+  | { beneficiary: 'employees'; payrollId: string }
+  | { beneficiary: 'creditors'; month: number; year: number }
+
+/**
+ * Emite un cheque por cada beneficiario con método `check` del alcance dado
+ * (empleados de una planilla, o acreedores de un mes). Serializa la asignación
+ * de número con un advisory lock y omite beneficiarios que ya tienen un cheque
+ * vigente en la misma corrida.
+ */
+export async function issueChecksBulk(
+  db: AnyDb,
+  input: {
+    paymentRunId: string
+    checkbookId: string
+    issueDate: string
+    scope: BulkCheckScope
+    concept?: string | null
+  },
+  options: { createdBy?: string | null } = {}
+): Promise<
+  | { success: true; data: { issued: number; skipped: number; totalAmount: number } }
+  | { success: false; error: string }
+> {
+  let payables: Payable[]
+  if (input.scope.beneficiary === 'employees') {
+    payables = await getEmployeePayables(db, input.scope.payrollId)
+  } else {
+    const ids = await getClosedPayrollIdsForMonth(db, input.scope.month, input.scope.year)
+    payables = await getCreditorPayables(db, ids)
+  }
+  const beneficiaries = payables.filter((p) => p.paymentMethod === 'check' && p.amount > 0)
+  if (beneficiaries.length === 0) {
+    return { success: false, error: 'No hay beneficiarios con método de pago cheque.' }
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: drizzle tx
+  return db.transaction(async (tx: any) => {
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${`chk:${input.checkbookId}`}, 0))
+    `)
+    const [book] = await tx
+      .select()
+      .from(treasuryCheckbooks)
+      .where(eq(treasuryCheckbooks.id, input.checkbookId))
+      .limit(1)
+    if (!book) return { success: false as const, error: 'Chequera no encontrada.' }
+    if (book.isActive !== 1) return { success: false as const, error: 'La chequera está inactiva.' }
+
+    const existing = await tx
+      .select({ ref: treasuryChecks.beneficiaryRefId, status: treasuryChecks.status })
+      .from(treasuryChecks)
+      .where(eq(treasuryChecks.paymentRunId, input.paymentRunId))
+    const alreadyPaid = new Set(
+      (existing as Array<{ ref: string | null; status: string }>)
+        .filter((e) => e.status !== 'voided' && e.ref)
+        .map((e) => String(e.ref))
+    )
+
+    let next = book.nextNumber as number
+    let issued = 0
+    let skipped = 0
+    let totalCents = 0
+    const toInsert: Array<Record<string, unknown>> = []
+    for (const p of beneficiaries) {
+      if (alreadyPaid.has(p.beneficiaryId)) {
+        skipped++
+        continue
+      }
+      if (next > (book.endNumber as number)) {
+        return {
+          success: false as const,
+          error: `La chequera se agotó tras emitir ${issued} cheques. Registra una nueva.`,
+        }
+      }
+      const amountStr = p.amount.toFixed(2)
+      toInsert.push({
+        checkbookId: input.checkbookId,
+        checkNumber: next,
+        paymentRunId: input.paymentRunId,
+        beneficiaryType: p.beneficiaryType,
+        beneficiaryRefId: p.beneficiaryId,
+        beneficiaryName: p.beneficiaryName,
+        amount: amountStr,
+        amountInWords: amountToWords(amountStr),
+        concept: input.concept ?? null,
+        issueDate: input.issueDate,
+        status: 'issued',
+        createdBy: options.createdBy ?? null,
+      })
+      next++
+      issued++
+      totalCents += Math.round(p.amount * 100)
+    }
+
+    if (toInsert.length > 0) {
+      await tx.insert(treasuryChecks).values(toInsert)
+      await tx
+        .update(treasuryCheckbooks)
+        .set({ nextNumber: next, updatedAt: new Date() })
+        .where(eq(treasuryCheckbooks.id, input.checkbookId))
+    }
+
+    return { success: true as const, data: { issued, skipped, totalAmount: totalCents / 100 } }
+  })
+}
+
 export async function voidCheck(
   db: AnyDb,
   checkId: string,
