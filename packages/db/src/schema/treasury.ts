@@ -170,6 +170,9 @@ export const treasuryAchLines = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     batchId: uuid('batch_id').notNull(),
     employeeId: uuid('employee_id'),
+    creditorId: uuid('creditor_id'),
+    /** 'employee' | 'creditor' */
+    beneficiaryType: varchar('beneficiary_type', { length: 20 }).notNull().default('employee'),
     beneficiaryName: varchar('beneficiary_name', { length: 255 }).notNull(),
     identification: varchar('identification', { length: 30 }),
     bankRouting: varchar('bank_routing', { length: 15 }),

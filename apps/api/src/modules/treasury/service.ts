@@ -24,7 +24,7 @@ import {
   treasuryChecks,
   treasuryPaymentRuns,
 } from '@payroll/db'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
 type AnyDb = any
@@ -222,6 +222,91 @@ export async function getEmployeePayables(db: AnyDb, payrollId: string): Promise
   }))
 }
 
+/**
+ * IDs de planillas cerradas cuyo pago cae en un mes/año dados — base para
+ * agregar los pagos a acreedores por mes (junta ambas quincenas).
+ */
+export async function getClosedPayrollIdsForMonth(
+  db: AnyDb,
+  month: number,
+  year: number
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: payrolls.id })
+    .from(payrolls)
+    .where(
+      and(
+        eq(payrolls.status, 'closed'),
+        sql`EXTRACT(YEAR FROM ${payrolls.paymentDate}) = ${year}`,
+        sql`EXTRACT(MONTH FROM ${payrolls.paymentDate}) = ${month}`
+      )
+    )
+  return (rows as Array<{ id: string }>).map((r) => String(r.id))
+}
+
+/**
+ * Pagos a acreedores: suma los conceptos de deducción `ACR_*` (lo retenido a
+ * los empleados) de las planillas indicadas, agrupado por acreedor, y los
+ * enriquece con sus datos de pago (banco, cuenta, método). El monto a cada
+ * proveedor es la suma de lo retenido a todos los empleados en el período.
+ */
+export async function getCreditorPayables(db: AnyDb, payrollIds: string[]): Promise<Payable[]> {
+  if (payrollIds.length === 0) return []
+
+  const lines = await db
+    .select({ concepts: payrollLines.concepts })
+    .from(payrollLines)
+    .where(inArray(payrollLines.payrollId, payrollIds))
+
+  const byConceptCode = new Map<string, number>()
+  for (const row of lines as Array<{ concepts: unknown }>) {
+    const arr = Array.isArray(row.concepts) ? row.concepts : []
+    for (const c of arr as Array<{ code?: string; amount?: unknown; type?: string }>) {
+      const code = String(c.code ?? '')
+      if (c.type === 'deduction' && code.startsWith('ACR_')) {
+        const amt = Number(c.amount ?? 0)
+        if (Number.isFinite(amt)) byConceptCode.set(code, (byConceptCode.get(code) ?? 0) + amt)
+      }
+    }
+  }
+  if (byConceptCode.size === 0) return []
+
+  const creditorRows = await db
+    .select({
+      id: creditors.id,
+      code: creditors.code,
+      name: creditors.name,
+      beneficiaryName: creditors.beneficiaryName,
+      paymentMethod: creditors.paymentMethod,
+      bankId: creditors.bankId,
+      accountNumber: creditors.accountNumber,
+      accountType: creditors.accountType,
+      bankRouting: banks.routing,
+    })
+    .from(creditors)
+    .leftJoin(banks, eq(banks.id, creditors.bankId))
+
+  const out: Payable[] = []
+  for (const cr of creditorRows as Array<Record<string, unknown>>) {
+    const conceptCode = `ACR_${String(cr.code ?? '').toUpperCase()}`
+    const amount = byConceptCode.get(conceptCode)
+    if (!amount || amount <= 0) continue
+    out.push({
+      beneficiaryType: 'creditor',
+      beneficiaryId: String(cr.id),
+      beneficiaryName: String(cr.beneficiaryName || cr.name),
+      identification: cr.code ? String(cr.code) : null,
+      amount,
+      paymentMethod: (cr.paymentMethod ?? 'check') as 'ach' | 'check' | 'cash',
+      bankId: cr.bankId ? String(cr.bankId) : null,
+      bankRouting: cr.bankRouting ? String(cr.bankRouting) : null,
+      accountNumber: cr.accountNumber ? String(cr.accountNumber) : null,
+      accountType: (cr.accountType ?? null) as 'savings' | 'checking' | null,
+    })
+  }
+  return out
+}
+
 // ─── Emitir cheque ────────────────────────────────────────────────────────
 
 export type IssueCheckInput = {
@@ -299,6 +384,113 @@ export async function issueCheck(
       success: true as const,
       data: { id: row.id as string, checkNumber, amountInWords },
     }
+  })
+}
+
+export type BulkCheckScope =
+  | { beneficiary: 'employees'; payrollId: string }
+  | { beneficiary: 'creditors'; month: number; year: number }
+
+/**
+ * Emite un cheque por cada beneficiario con método `check` del alcance dado
+ * (empleados de una planilla, o acreedores de un mes). Serializa la asignación
+ * de número con un advisory lock y omite beneficiarios que ya tienen un cheque
+ * vigente en la misma corrida.
+ */
+export async function issueChecksBulk(
+  db: AnyDb,
+  input: {
+    paymentRunId: string
+    checkbookId: string
+    issueDate: string
+    scope: BulkCheckScope
+    concept?: string | null
+  },
+  options: { createdBy?: string | null } = {}
+): Promise<
+  | { success: true; data: { issued: number; skipped: number; totalAmount: number } }
+  | { success: false; error: string }
+> {
+  let payables: Payable[]
+  if (input.scope.beneficiary === 'employees') {
+    payables = await getEmployeePayables(db, input.scope.payrollId)
+  } else {
+    const ids = await getClosedPayrollIdsForMonth(db, input.scope.month, input.scope.year)
+    payables = await getCreditorPayables(db, ids)
+  }
+  const beneficiaries = payables.filter((p) => p.paymentMethod === 'check' && p.amount > 0)
+  if (beneficiaries.length === 0) {
+    return { success: false, error: 'No hay beneficiarios con método de pago cheque.' }
+  }
+
+  // biome-ignore lint/suspicious/noExplicitAny: drizzle tx
+  return db.transaction(async (tx: any) => {
+    await tx.execute(sql`
+      SELECT pg_advisory_xact_lock(hashtextextended(${`chk:${input.checkbookId}`}, 0))
+    `)
+    const [book] = await tx
+      .select()
+      .from(treasuryCheckbooks)
+      .where(eq(treasuryCheckbooks.id, input.checkbookId))
+      .limit(1)
+    if (!book) return { success: false as const, error: 'Chequera no encontrada.' }
+    if (book.isActive !== 1) return { success: false as const, error: 'La chequera está inactiva.' }
+
+    const existing = await tx
+      .select({ ref: treasuryChecks.beneficiaryRefId, status: treasuryChecks.status })
+      .from(treasuryChecks)
+      .where(eq(treasuryChecks.paymentRunId, input.paymentRunId))
+    const alreadyPaid = new Set(
+      (existing as Array<{ ref: string | null; status: string }>)
+        .filter((e) => e.status !== 'voided' && e.ref)
+        .map((e) => String(e.ref))
+    )
+
+    let next = book.nextNumber as number
+    let issued = 0
+    let skipped = 0
+    let totalCents = 0
+    const toInsert: Array<Record<string, unknown>> = []
+    for (const p of beneficiaries) {
+      if (alreadyPaid.has(p.beneficiaryId)) {
+        skipped++
+        continue
+      }
+      if (next > (book.endNumber as number)) {
+        return {
+          success: false as const,
+          error: `La chequera se agotó tras emitir ${issued} cheques. Registra una nueva.`,
+        }
+      }
+      const amountStr = p.amount.toFixed(2)
+      toInsert.push({
+        checkbookId: input.checkbookId,
+        checkNumber: next,
+        paymentRunId: input.paymentRunId,
+        beneficiaryType: p.beneficiaryType,
+        beneficiaryRefId: p.beneficiaryId,
+        beneficiaryName: p.beneficiaryName,
+        amount: amountStr,
+        amountInWords: amountToWords(amountStr),
+        concept: input.concept ?? null,
+        issueDate: input.issueDate,
+        status: 'issued',
+        createdBy: options.createdBy ?? null,
+      })
+      next++
+      issued++
+      totalCents += Math.round(p.amount * 100)
+    }
+
+    if (toInsert.length > 0) {
+      await tx.insert(treasuryChecks).values(toInsert)
+      await tx
+        .update(treasuryCheckbooks)
+        .set({ nextNumber: next, updatedAt: new Date() })
+        .where(eq(treasuryCheckbooks.id, input.checkbookId))
+    }
+
+    return { success: true as const, data: { issued, skipped, totalAmount: totalCents / 100 } }
   })
 }
 
@@ -512,8 +704,8 @@ export async function getAchBatch(db: AnyDb, batchId: string) {
  * sin el contenido del archivo (que puede ser grande) — para la vista
  * consolidada de Tesorería. Cada fila es descargable por su `id`.
  */
-export async function listAllAchBatches(db: AnyDb) {
-  return db
+export async function listAllAchBatches(db: AnyDb, paymentRunId?: string) {
+  const query = db
     .select({
       id: treasuryAchBatches.id,
       format: treasuryAchBatches.format,
@@ -533,7 +725,10 @@ export async function listAllAchBatches(db: AnyDb) {
     .leftJoin(banks, eq(banks.id, treasuryAchBatches.sourceBankId))
     .leftJoin(treasuryPaymentRuns, eq(treasuryPaymentRuns.id, treasuryAchBatches.paymentRunId))
     .leftJoin(payrolls, eq(payrolls.id, treasuryPaymentRuns.payrollId))
-    .orderBy(desc(treasuryAchBatches.generatedAt))
+  const filtered = paymentRunId
+    ? query.where(eq(treasuryAchBatches.paymentRunId, paymentRunId))
+    : query
+  return filtered.orderBy(desc(treasuryAchBatches.generatedAt))
 }
 
 void payrolls
