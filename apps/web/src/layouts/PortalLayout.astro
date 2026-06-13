@@ -245,6 +245,16 @@ const userCode = identity.employeeCode || ''
     .pt-content :is(button, a).ap-btn-approve:hover {
       background-color: var(--btn-success-bg-hover);
     }
+    /* Dropdown menu items must stay borderless (they are rows, not buttons). */
+    .pt-content [role="menu"] button,
+    .pt-content [role="menu"] [type="button"],
+    .pt-content [role="menu"] [type="submit"],
+    .pt-content [role="menuitem"],
+    .pt-content [role="listbox"] button,
+    .pt-content [role="option"] button,
+    .pt-content .pr-combo-list button {
+      border: none;
+    }
     .pt-content dialog,
     .pt-content .shadow-xl,
     .pt-content .shadow-2xl {

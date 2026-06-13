@@ -1091,6 +1091,23 @@ const icons: Record<IconKey, string> = {
         background-color: var(--btn-success-bg-hover);
       }
 
+      /* ── Dropdown menu items: no border ──────────────────────
+         Items inside a dropdown panel are full-width rows, not stand-
+         alone buttons; the soft-border treatment above must not reach
+         them. Covers ARIA menus/listboxes and the named item classes
+         across every module. The dropdown trigger keeps its own border. */
+      .page-content [role="menu"] button,
+      .page-content [role="menu"] [type="button"],
+      .page-content [role="menu"] [type="submit"],
+      .page-content [role="menuitem"],
+      .page-content [role="listbox"] button,
+      .page-content [role="option"] button,
+      .page-content .acciones-menu-item,
+      .page-content .ef-dropdown-item,
+      .page-content .user-dropdown-item {
+        border: none;
+      }
+
       /* ── Soft borders on modal / dialog / elevated cards ──────
          Ad-hoc overlays built with Tailwind (`bg-white shadow-2xl`)
          and native <dialog> get a hairline so the surface reads as a
