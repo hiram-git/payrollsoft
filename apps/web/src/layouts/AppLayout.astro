@@ -1091,21 +1091,28 @@ const icons: Record<IconKey, string> = {
         background-color: var(--btn-success-bg-hover);
       }
 
-      /* ── Dropdown menu items: no border ──────────────────────
+      /* ── Dropdown menu items: never bordered ─────────────────
          Items inside a dropdown panel are full-width rows, not stand-
-         alone buttons; the soft-border treatment above must not reach
-         them. Covers ARIA menus/listboxes and the named item classes
-         across every module. The dropdown trigger keeps its own border. */
+         alone buttons, so none of the button-border rules above may
+         reach them. We match by ARIA role AND by dropdown-panel class,
+         and use !important so this wins over both the neutral and the
+         coloured button rules regardless of their specificity. The
+         dropdown trigger lives outside the panel and keeps its border. */
       .page-content [role="menu"] button,
+      .page-content [role="menu"] a,
       .page-content [role="menu"] [type="button"],
       .page-content [role="menu"] [type="submit"],
       .page-content [role="menuitem"],
       .page-content [role="listbox"] button,
-      .page-content [role="option"] button,
+      .page-content [role="option"],
+      .page-content [data-gov-panel] button,
+      .page-content .acciones-menu button,
       .page-content .acciones-menu-item,
+      .page-content .ef-dropdown button,
       .page-content .ef-dropdown-item,
+      .page-content .user-dropdown button,
       .page-content .user-dropdown-item {
-        border: none;
+        border: none !important;
       }
 
       /* ── Soft borders on modal / dialog / elevated cards ──────

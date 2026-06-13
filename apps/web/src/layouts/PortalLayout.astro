@@ -245,15 +245,18 @@ const userCode = identity.employeeCode || ''
     .pt-content :is(button, a).ap-btn-approve:hover {
       background-color: var(--btn-success-bg-hover);
     }
-    /* Dropdown menu items must stay borderless (they are rows, not buttons). */
+    /* Dropdown menu items must never be bordered (they are rows, not
+       buttons); !important wins over the neutral and coloured button rules. */
     .pt-content [role="menu"] button,
+    .pt-content [role="menu"] a,
     .pt-content [role="menu"] [type="button"],
     .pt-content [role="menu"] [type="submit"],
     .pt-content [role="menuitem"],
     .pt-content [role="listbox"] button,
-    .pt-content [role="option"] button,
-    .pt-content .pr-combo-list button {
-      border: none;
+    .pt-content [role="option"],
+    .pt-content .pr-combo-list button,
+    .pt-content .pr-combo-list li {
+      border: none !important;
     }
     .pt-content dialog,
     .pt-content .shadow-xl,
