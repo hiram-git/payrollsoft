@@ -188,14 +188,16 @@ const userEmail = identity?.email ?? ''
     .sa-content :is(button, a).btn-ok:hover {
       background-color: var(--btn-success-bg-hover);
     }
-    /* Dropdown menu items must stay borderless (they are rows, not buttons). */
+    /* Dropdown menu items must never be bordered (they are rows, not
+       buttons); !important wins over the neutral and coloured button rules. */
     .sa-content [role="menu"] button,
+    .sa-content [role="menu"] a,
     .sa-content [role="menu"] [type="button"],
     .sa-content [role="menu"] [type="submit"],
     .sa-content [role="menuitem"],
     .sa-content [role="listbox"] button,
-    .sa-content [role="option"] button {
-      border: none;
+    .sa-content [role="option"] {
+      border: none !important;
     }
     .sa-content dialog,
     .sa-content .shadow-xl,
