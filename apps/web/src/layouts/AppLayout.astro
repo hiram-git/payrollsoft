@@ -387,6 +387,17 @@ const icons: Record<IconKey, string> = {
            hairline definition over its own fill, in both themes. */
         --btn-edge:  rgba(255,255,255,0.14);
 
+        /* ── Action buttons ─────────────────────────────────────
+           Normal state = the colour these buttons used to show only on
+           hover; the new :hover then pushes one step further (brighter
+           in dark, deeper in light) so the interaction reads clearly. */
+        --btn-bg:               #1d4ed8;
+        --btn-bg-hover:         #3b6fe0;
+        --btn-danger-bg:        #b91c1c;
+        --btn-danger-bg-hover:  #ef4444;
+        --btn-success-bg:       #047857;
+        --btn-success-bg-hover: #10b981;
+
         /* ── Motion ─────────────────────────────────────────── */
         --ease-std: cubic-bezier(.2,.7,.2,1);
         --ease-in:  cubic-bezier(.4,0,1,1);
@@ -418,6 +429,10 @@ const icons: Record<IconKey, string> = {
         --shadow:    0 1px 2px rgba(12,20,36,0.04), 0 1px 1px rgba(12,20,36,0.03);
         --scrim:     rgba(12,20,36,0.18);
         --btn-edge:  rgba(12,20,36,0.10);
+        /* Light theme intensifies the hover by going deeper, not brighter. */
+        --btn-bg-hover:         #1538a0;
+        --btn-danger-bg-hover:  #7f1212;
+        --btn-success-bg-hover: #035f45;
       }
 
       *, *::before, *::after { box-sizing: border-box; }
@@ -1018,20 +1033,79 @@ const icons: Record<IconKey, string> = {
       .page-content a.btn-ghost {
         border: var(--bw) solid var(--rule);
       }
+      /* ── Action buttons: the hover look becomes the default ───
+         Normal state adopts the colour these buttons used to show only
+         on hover; :hover then pushes one step further (brighter in dark,
+         deeper in light — see --btn-*-hover tokens). Selectors are
+         specific enough to beat both Tailwind utilities and page-scoped
+         .btn-* rules, so the change is fully global — no per-file edits. */
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600,
+      .page-content :is(button, a).btn-primary {
+        background-color: var(--btn-bg);
+        border: var(--bw) solid var(--btn-edge);
+        color: #fff;
+        transition: background-color var(--d-std) var(--ease-std);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600:hover,
+      .page-content :is(button, a).btn-primary:hover {
+        background-color: var(--btn-bg-hover);
+      }
+
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
+      .page-content :is(button, a).btn-danger {
+        background-color: var(--btn-danger-bg);
+        border: var(--bw) solid var(--btn-edge);
+        color: #fff;
+        transition: background-color var(--d-std) var(--ease-std);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-700:hover,
+      .page-content :is(button, a).btn-danger:hover {
+        background-color: var(--btn-danger-bg-hover);
+      }
+
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-500,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-700,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
       .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-700,
-      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
-      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
-      .page-content .btn-primary,
-      .page-content a.btn-primary {
+      .page-content :is(button, a).btn-ok {
+        background-color: var(--btn-success-bg);
         border: var(--bw) solid var(--btn-edge);
+        color: #fff;
+        transition: background-color var(--d-std) var(--ease-std);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-500:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-700:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-700:hover,
+      .page-content :is(button, a).btn-ok:hover {
+        background-color: var(--btn-success-bg-hover);
+      }
+
+      /* ── Dropdown menu items: no border ──────────────────────
+         Items inside a dropdown panel are full-width rows, not stand-
+         alone buttons; the soft-border treatment above must not reach
+         them. Covers ARIA menus/listboxes and the named item classes
+         across every module. The dropdown trigger keeps its own border. */
+      .page-content [role="menu"] button,
+      .page-content [role="menu"] [type="button"],
+      .page-content [role="menu"] [type="submit"],
+      .page-content [role="menuitem"],
+      .page-content [role="listbox"] button,
+      .page-content [role="option"] button,
+      .page-content .acciones-menu-item,
+      .page-content .ef-dropdown-item,
+      .page-content .user-dropdown-item {
+        border: none;
       }
 
       /* ── Soft borders on modal / dialog / elevated cards ──────

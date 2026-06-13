@@ -36,6 +36,9 @@ const userCode = identity.employeeCode || ''
       --ink:#07101F; --ink-2:#0A1628; --ink-3:#101E33; --ink-4:#16263F;
       --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.18);
       --rule:#1A2740; --rule-hi:#243555; --btn-edge:rgba(255,255,255,0.14);
+      --btn-bg:#1d4ed8; --btn-bg-hover:#3b6fe0;
+      --btn-danger-bg:#b91c1c; --btn-danger-bg-hover:#ef4444;
+      --btn-success-bg:#047857; --btn-success-bg-hover:#10b981;
       --fore:#EDEEF2; --fore-dim:#C9CEDB; --mute-2:#8B97AE; --mute:#6A7690;
       --warn:#E3B25A; --err:#E06B5C; --ok:#6FB58C;
       --f-display:'Fraunces','Times New Roman',serif;
@@ -46,6 +49,7 @@ const userCode = identity.employeeCode || ''
       --ink:#F4F5F7; --ink-2:#FFFFFF; --ink-3:#FFFFFF; --ink-4:#EFF1F5;
       --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.08);
       --rule:#E4E7EE; --rule-hi:#D2D7E0; --btn-edge:rgba(12,20,36,0.10);
+      --btn-bg-hover:#1538a0; --btn-danger-bg-hover:#7f1212; --btn-success-bg-hover:#035f45;
       --fore:#0C1424; --fore-dim:#2A3346; --mute-2:#5B6478; --mute:#7A8499;
       --warn:#B07A17; --err:#B53A2B; --ok:#2E7A56;
     }
@@ -193,18 +197,63 @@ const userCode = identity.employeeCode || ''
     .pt-content a.btn-primary {
       border: 1px solid var(--rule);
     }
+    /* Action buttons: hover look becomes the default, :hover intensifies. */
     .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500,
     .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600,
     .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700,
     .pt-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600,
-    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
-    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
+    .pt-content :is(button, a).btn-primary,
+    .pt-content :is(button, a).pr-btn-submit,
+    .pt-content :is(button, a).rq-new-btn {
+      background-color: var(--btn-bg);
+      border: 1px solid var(--btn-edge);
+      color: #fff;
+      transition: background-color 160ms ease;
+    }
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500:hover,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600:hover,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700:hover,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600:hover,
+    .pt-content :is(button, a).btn-primary:hover,
+    .pt-content :is(button, a).pr-btn-submit:hover,
+    .pt-content :is(button, a).rq-new-btn:hover {
+      background-color: var(--btn-bg-hover);
+    }
     .pt-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
     .pt-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
-    .pt-content .btn-primary,
-    .pt-content a.btn-primary,
-    .pt-content .pr-btn-submit {
+    .pt-content :is(button, a).ap-btn-danger {
+      background-color: var(--btn-danger-bg);
       border: 1px solid var(--btn-edge);
+      color: #fff;
+      transition: background-color 160ms ease;
+    }
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-red-600:hover,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-red-700:hover,
+    .pt-content :is(button, a).ap-btn-danger:hover {
+      background-color: var(--btn-danger-bg-hover);
+    }
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
+    .pt-content :is(button, a).ap-btn-approve {
+      background-color: var(--btn-success-bg);
+      border: 1px solid var(--btn-edge);
+      color: #fff;
+      transition: background-color 160ms ease;
+    }
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600:hover,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-green-600:hover,
+    .pt-content :is(button, a).ap-btn-approve:hover {
+      background-color: var(--btn-success-bg-hover);
+    }
+    /* Dropdown menu items must stay borderless (they are rows, not buttons). */
+    .pt-content [role="menu"] button,
+    .pt-content [role="menu"] [type="button"],
+    .pt-content [role="menu"] [type="submit"],
+    .pt-content [role="menuitem"],
+    .pt-content [role="listbox"] button,
+    .pt-content [role="option"] button,
+    .pt-content .pr-combo-list button {
+      border: none;
     }
     .pt-content dialog,
     .pt-content .shadow-xl,
