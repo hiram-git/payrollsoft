@@ -33,6 +33,7 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       --navy-lo:  #00205A;
       --rule:     #1A2740;
       --rule-hi:  #243555;
+      --btn-edge: rgba(255,255,255,0.14);
       --mute:     #6A7690;
       --mute-2:   #8B97AE;
       --fore:     #EDEEF2;
@@ -54,6 +55,7 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       --navy-lo:  #00205A;
       --rule:     #E4E7EE;
       --rule-hi:  #D2D7E0;
+      --btn-edge: rgba(12,20,36,0.10);
       --mute:     #7A8499;
       --mute-2:   #5B6478;
       --fore:     #0C1424;
@@ -352,7 +354,7 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       height: 52px;
       background: var(--navy);
       color: #fff;
-      border: none;
+      border: 1px solid var(--btn-edge);
       border-radius: 3px;
       font-family: var(--f-sans);
       font-weight: 500;

@@ -383,6 +383,9 @@ const icons: Record<IconKey, string> = {
         /* ── Borders ────────────────────────────────────────── */
         --bw:        1px;
         --bw-strong: 1.5px;
+        /* Soft edge for solid/coloured controls so every button keeps a
+           hairline definition over its own fill, in both themes. */
+        --btn-edge:  rgba(255,255,255,0.14);
 
         /* ── Motion ─────────────────────────────────────────── */
         --ease-std: cubic-bezier(.2,.7,.2,1);
@@ -414,6 +417,7 @@ const icons: Record<IconKey, string> = {
         --neg:       #B53A2B;
         --shadow:    0 1px 2px rgba(12,20,36,0.04), 0 1px 1px rgba(12,20,36,0.03);
         --scrim:     rgba(12,20,36,0.18);
+        --btn-edge:  rgba(12,20,36,0.10);
       }
 
       *, *::before, *::after { box-sizing: border-box; }
@@ -983,6 +987,61 @@ const icons: Record<IconKey, string> = {
       [data-theme="dark"] .page-content textarea:focus {
         border-color: var(--navy-hi);
         box-shadow: 0 0 0 2px var(--navy-soft);
+      }
+
+      /* ── Soft borders on every form control (both themes) ─────
+         Dark mode already overrides the colour above; this guarantees
+         a hairline in light mode too without relying on inline
+         border-gray-* utilities. */
+      .page-content input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+      .page-content select,
+      .page-content textarea {
+        border: var(--bw) solid var(--rule);
+      }
+
+      /* ── Soft borders on every content button ────────────────
+         Scoped to .page-content so sidebar/topbar/theme-switch chrome
+         is untouched. Neutral buttons use the hairline rule colour;
+         solid/coloured buttons get a translucent edge so the border
+         stays soft over their own fill. Applies in light + dark. */
+      .page-content button,
+      .page-content [type="submit"],
+      .page-content [type="button"],
+      .page-content [type="reset"],
+      .page-content .btn,
+      .page-content .btn-primary,
+      .page-content .btn-secondary,
+      .page-content .btn-ghost,
+      .page-content .btn-danger,
+      .page-content a.btn-primary,
+      .page-content a.btn-secondary,
+      .page-content a.btn-ghost {
+        border: var(--bw) solid var(--rule);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-500,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-700,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-700,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
+      .page-content .btn-primary,
+      .page-content a.btn-primary {
+        border: var(--bw) solid var(--btn-edge);
+      }
+
+      /* ── Soft borders on modal / dialog / elevated cards ──────
+         Ad-hoc overlays built with Tailwind (`bg-white shadow-2xl`)
+         and native <dialog> get a hairline so the surface reads as a
+         distinct panel in both themes, not just a shadow. */
+      .page-content dialog,
+      .page-content .shadow-xl,
+      .page-content .shadow-2xl {
+        border: var(--bw) solid var(--rule);
       }
 
       /* ── Design-system semantic elements & utilities ──────── */
