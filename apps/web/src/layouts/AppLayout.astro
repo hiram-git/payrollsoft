@@ -1115,6 +1115,45 @@ const icons: Record<IconKey, string> = {
         border: none !important;
       }
 
+      /* ── Icon action buttons (Tailwind): semantic colour by default ──
+         The row-action icons (edit/delete/save) used to be grey and only
+         revealed their colour on hover. Promote that colour to the normal
+         state and intensify on hover, matching the rest of the action
+         buttons. Keyed on text-gray-400 + the hover bg utility so only the
+         icon buttons match — dropdown rows (text-gray-700) are untouched. */
+      .page-content :is(button, a).text-gray-400.hover\:bg-blue-50 {
+        background-color: color-mix(in srgb, #2563eb 12%, transparent);
+        color: #2563eb;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-blue-50:hover {
+        background-color: color-mix(in srgb, #2563eb 24%, transparent);
+        color: #1d4ed8;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-red-50 {
+        background-color: color-mix(in srgb, #dc2626 12%, transparent);
+        color: #dc2626;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-red-50:hover {
+        background-color: color-mix(in srgb, #dc2626 24%, transparent);
+        color: #b91c1c;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-emerald-50 {
+        background-color: color-mix(in srgb, #059669 14%, transparent);
+        color: #059669;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-emerald-50:hover {
+        background-color: color-mix(in srgb, #059669 26%, transparent);
+        color: #047857;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-green-50 {
+        background-color: color-mix(in srgb, #16a34a 14%, transparent);
+        color: #16a34a;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-green-50:hover {
+        background-color: color-mix(in srgb, #16a34a 26%, transparent);
+        color: #15803d;
+      }
+
       /* ── Soft borders on modal / dialog / elevated cards ──────
          Ad-hoc overlays built with Tailwind (`bg-white shadow-2xl`)
          and native <dialog> get a hairline so the surface reads as a

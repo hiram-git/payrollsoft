@@ -448,11 +448,14 @@ const isCuentasTab = activeTab === 'cuentas'
   /* Row actions — shared layout for both view-mode and edit-mode icon
      buttons so the column width (w-24) is identical in both states. */
   .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
-  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--mute); cursor: pointer; transition: background .15s, color .15s; }
-  .action-btn:hover { background: var(--navy-soft); color: var(--navy-hi); }
-  .action-ok:hover     { background: color-mix(in srgb, var(--ok) 14%, transparent);  color: var(--ok); }
+  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: var(--navy-soft); color: var(--navy-hi); cursor: pointer; transition: background .15s, color .15s; }
+  .action-btn:hover    { background: color-mix(in srgb, var(--navy) 24%, transparent); color: var(--navy-hi); }
+  .action-ok           { background: color-mix(in srgb, var(--ok) 14%, transparent);  color: var(--ok); }
+  .action-ok:hover     { background: color-mix(in srgb, var(--ok) 26%, transparent);  color: var(--ok); }
+  .action-del          { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+  .action-del:hover    { background: color-mix(in srgb, var(--err) 24%, transparent); color: var(--err); }
+  .action-cancel       { background: transparent; color: var(--mute); }
   .action-cancel:hover { background: var(--ink-4); color: var(--fore-dim); }
-  .action-del:hover    { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
 
   /* Custom tooltip — matches the status-pill / card tokens from the
      design system so it reads as "part of" the surface, not a browser

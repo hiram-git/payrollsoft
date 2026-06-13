@@ -228,9 +228,11 @@ const error =
     .status-ok  { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
     .status-off { background:var(--ink-4); color:var(--mute); }
     .row-actions { display:flex; align-items:center; justify-content:flex-end; gap:.25rem; }
-    .action-btn  { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid var(--rule); background:transparent; color:var(--mute); cursor:pointer; transition:background .15s, color .15s; }
-    .action-btn:hover { background:var(--navy-soft); color:var(--navy-hi); }
-    .action-ok:hover     { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
+    .action-btn  { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid var(--rule); background:var(--navy-soft); color:var(--navy-hi); cursor:pointer; transition:background .15s, color .15s; }
+    .action-btn:hover    { background:color-mix(in srgb, var(--navy) 24%, transparent); color:var(--navy-hi); }
+    .action-ok           { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
+    .action-ok:hover     { background:color-mix(in srgb, var(--ok) 26%, transparent); color:var(--ok); }
+    .action-cancel       { background:transparent; color:var(--mute); }
     .action-cancel:hover { background:var(--ink-4); color:var(--fore-dim); }
     .tooltip-wrap { position:relative; display:inline-flex; }
     .tooltip { position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:var(--ink-2); color:var(--fore-dim); border:1px solid var(--rule-hi); padding:3px 8px; border-radius:4px; font-size:11px; font-weight:500; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .12s; z-index:20; box-shadow:0 2px 6px rgba(0,0,0,.18); }
