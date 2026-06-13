@@ -448,7 +448,7 @@ const isCuentasTab = activeTab === 'cuentas'
   /* Row actions — shared layout for both view-mode and edit-mode icon
      buttons so the column width (w-24) is identical in both states. */
   .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
-  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--mute); cursor: pointer; transition: background .15s, color .15s; }
+  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--mute); cursor: pointer; transition: background .15s, color .15s; }
   .action-btn:hover { background: var(--navy-soft); color: var(--navy-hi); }
   .action-ok:hover     { background: color-mix(in srgb, var(--ok) 14%, transparent);  color: var(--ok); }
   .action-cancel:hover { background: var(--ink-4); color: var(--fore-dim); }
@@ -482,9 +482,9 @@ const isCuentasTab = activeTab === 'cuentas'
   .tooltip-wrap:focus-within > .tooltip { opacity: 1; }
 
   /* Buttons */
-  .btn-primary { background: var(--navy); color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+  .btn-primary { background: var(--navy); color: #fff; border: 1px solid var(--btn-edge); padding: .5rem 1rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: background .15s; }
   .btn-primary:hover { background: var(--navy-hi); }
-  .btn-ok      { background: var(--ok); color: #fff; border: none; padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+  .btn-ok      { background: var(--ok); color: #fff; border: 1px solid var(--btn-edge); padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
   .btn-ok:hover { opacity: .88; }
   .btn-ghost   { background: transparent; color: var(--mute-2); border: 1px solid var(--rule); padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; cursor: pointer; transition: background .15s; white-space: nowrap; }
   .btn-ghost:hover { background: var(--ink-4); }

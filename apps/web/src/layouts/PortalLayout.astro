@@ -35,7 +35,7 @@ const userCode = identity.employeeCode || ''
     :root, [data-theme="dark"] {
       --ink:#07101F; --ink-2:#0A1628; --ink-3:#101E33; --ink-4:#16263F;
       --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.18);
-      --rule:#1A2740; --rule-hi:#243555;
+      --rule:#1A2740; --rule-hi:#243555; --btn-edge:rgba(255,255,255,0.14);
       --fore:#EDEEF2; --fore-dim:#C9CEDB; --mute-2:#8B97AE; --mute:#6A7690;
       --warn:#E3B25A; --err:#E06B5C; --ok:#6FB58C;
       --f-display:'Fraunces','Times New Roman',serif;
@@ -45,7 +45,7 @@ const userCode = identity.employeeCode || ''
     [data-theme="light"] {
       --ink:#F4F5F7; --ink-2:#FFFFFF; --ink-3:#FFFFFF; --ink-4:#EFF1F5;
       --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.08);
-      --rule:#E4E7EE; --rule-hi:#D2D7E0;
+      --rule:#E4E7EE; --rule-hi:#D2D7E0; --btn-edge:rgba(12,20,36,0.10);
       --fore:#0C1424; --fore-dim:#2A3346; --mute-2:#5B6478; --mute:#7A8499;
       --warn:#B07A17; --err:#B53A2B; --ok:#2E7A56;
     }
@@ -173,6 +173,43 @@ const userCode = identity.employeeCode || ''
     [data-theme="dark"] .pt-content select:focus,
     [data-theme="dark"] .pt-content textarea:focus {
       border-color: var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft);
+    }
+
+    /* ── Soft borders on every form control + button (both themes) ──
+       Scoped to .pt-content so the portal chrome is untouched. */
+    .pt-content input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    .pt-content select,
+    .pt-content textarea {
+      border: 1px solid var(--rule);
+    }
+    .pt-content button,
+    .pt-content [type="submit"],
+    .pt-content [type="button"],
+    .pt-content [type="reset"],
+    .pt-content .btn,
+    .pt-content .btn-primary,
+    .pt-content .btn-secondary,
+    .pt-content .btn-ghost,
+    .pt-content a.btn-primary {
+      border: 1px solid var(--rule);
+    }
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
+    .pt-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
+    .pt-content .btn-primary,
+    .pt-content a.btn-primary,
+    .pt-content .pr-btn-submit {
+      border: 1px solid var(--btn-edge);
+    }
+    .pt-content dialog,
+    .pt-content .shadow-xl,
+    .pt-content .shadow-2xl {
+      border: 1px solid var(--rule);
     }
 
     /* ── Light mode overrides for portal content ── */
