@@ -453,6 +453,10 @@ const today = new Date().toISOString().slice(0, 10)
             <p class="text-sm tr-mute">Sin cheques emitidos en esta generación de pagos.</p>
           </div>
         ) : (
+          <div data-tr-list data-tr-page-size="10">
+          <div class="px-5 py-2.5 border-b tr-rule">
+            <input type="search" data-tr-search placeholder="Buscar número, beneficiario, concepto…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+          </div>
           <table class="tr-table w-full text-sm">
             <thead>
               <tr>
@@ -464,7 +468,7 @@ const today = new Date().toISOString().slice(0, 10)
                 <th class="px-5 py-2"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-tr-rows>
               {checks.map((c) => {
                 const sb = checkStatusBadge(c.status)
                 return (
@@ -497,6 +501,8 @@ const today = new Date().toISOString().slice(0, 10)
               })}
             </tbody>
           </table>
+          <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+          </div>
         )}
       </div>
     </section>
@@ -513,6 +519,10 @@ const today = new Date().toISOString().slice(0, 10)
         </header>
 
         {runBatches.length > 0 && (
+          <div data-tr-list data-tr-page-size="10">
+          <div class="px-5 py-2.5 border-b tr-rule">
+            <input type="search" data-tr-search placeholder="Buscar archivo o formato…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+          </div>
           <table class="tr-table w-full text-sm border-b tr-rule">
             <thead>
               <tr>
@@ -523,7 +533,7 @@ const today = new Date().toISOString().slice(0, 10)
                 <th class="px-5 py-2"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-tr-rows>
               {runBatches.map((b) => (
                 <tr class="border-b last:border-0 tr-rule">
                   <td class="px-5 py-2.5 font-mono text-xs tr-cell">{b.fileName}</td>
@@ -537,6 +547,8 @@ const today = new Date().toISOString().slice(0, 10)
               ))}
             </tbody>
           </table>
+          <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-b tr-rule text-xs tr-mute"></div>
+          </div>
         )}
 
         {run.payrollId && run.status === 'open' && canWrite && (
@@ -717,6 +729,10 @@ const today = new Date().toISOString().slice(0, 10)
               <p class="text-sm tr-mute">No hay líneas pagables para esta planilla.</p>
             </div>
           ) : (
+            <div data-tr-list data-tr-page-size="10">
+            <div class="px-5 py-2.5 border-b tr-rule">
+              <input type="search" data-tr-search placeholder="Buscar beneficiario o cuenta…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+            </div>
             <table class="tr-table w-full text-sm">
               <thead>
                 <tr>
@@ -726,7 +742,7 @@ const today = new Date().toISOString().slice(0, 10)
                   <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody data-tr-rows>
                 {payables.map((p) => (
                   <tr class="border-b last:border-0 tr-rule">
                     <td class="px-5 py-3 tr-cell">
@@ -744,6 +760,8 @@ const today = new Date().toISOString().slice(0, 10)
                 ))}
               </tbody>
             </table>
+            <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+            </div>
           )}
         </div>
       </section>
@@ -826,6 +844,10 @@ const today = new Date().toISOString().slice(0, 10)
               <p class="text-sm tr-mute">No hay montos retenidos a acreedores en el mes.</p>
             </div>
           ) : (
+            <div data-tr-list data-tr-page-size="10">
+            <div class="px-5 py-2.5 border-b tr-rule">
+              <input type="search" data-tr-search placeholder="Buscar proveedor o cuenta…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+            </div>
             <table class="tr-table w-full text-sm">
               <thead>
                 <tr>
@@ -836,7 +858,7 @@ const today = new Date().toISOString().slice(0, 10)
                   <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody data-tr-rows>
                 {creditorPayables.map((p) => {
                   const st = creditorStatus(p)
                   return (
@@ -858,12 +880,14 @@ const today = new Date().toISOString().slice(0, 10)
                     </tr>
                   )
                 })}
-                <tr class="tr-rule">
+                <tr class="tr-rule" data-tr-keep>
                   <td class="px-5 py-3 text-right text-xs font-semibold tr-subtitle" colspan="4">Total</td>
                   <td class="px-5 py-3 text-right font-mono text-sm font-semibold tr-title">{fmtMoney(creditorTotal)}</td>
                 </tr>
               </tbody>
             </table>
+            <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+            </div>
           )}
         </div>
       </section>
@@ -1047,6 +1071,50 @@ const today = new Date().toISOString().slice(0, 10)
             }
           })
       }
+
+      // ── Buscador + paginador para las tablas de cada tab ──────
+      function setupTrList(root) {
+        const tbody = root.querySelector('[data-tr-rows]')
+        if (!tbody) return
+        const search = root.querySelector('[data-tr-search]')
+        const pager = root.querySelector('[data-tr-pager]')
+        const pageSize = Number(root.getAttribute('data-tr-page-size')) || 10
+        const rows = Array.prototype.slice
+          .call(tbody.children)
+          .filter((r) => r.tagName === 'TR' && !r.hasAttribute('data-tr-keep'))
+        let page = 1
+        function apply() {
+          const q = ((search && search.value) || '').trim().toLowerCase()
+          const filtered = q
+            ? rows.filter((r) => r.textContent.toLowerCase().indexOf(q) !== -1)
+            : rows
+          const total = filtered.length
+          const pages = Math.max(1, Math.ceil(total / pageSize))
+          if (page > pages) page = pages
+          if (page < 1) page = 1
+          rows.forEach((r) => { r.style.display = 'none' })
+          const start = (page - 1) * pageSize
+          filtered.slice(start, start + pageSize).forEach((r) => { r.style.display = '' })
+          if (!pager) return
+          if (total <= pageSize && !q) { pager.innerHTML = ''; pager.style.display = 'none'; return }
+          pager.style.display = ''
+          const from = total === 0 ? 0 : start + 1
+          const to = Math.min(start + pageSize, total)
+          pager.innerHTML =
+            '<span>' + from + '–' + to + ' de ' + total + '</span>' +
+            '<span class="flex items-center gap-2">' +
+            '<button type="button" data-tr-prev class="tr-btn-xs"' + (page <= 1 ? ' disabled' : '') + '>‹ Anterior</button>' +
+            '<button type="button" data-tr-next class="tr-btn-xs"' + (page >= pages ? ' disabled' : '') + '>Siguiente ›</button>' +
+            '</span>'
+          const prev = pager.querySelector('[data-tr-prev]')
+          const next = pager.querySelector('[data-tr-next]')
+          if (prev) prev.addEventListener('click', () => { if (page > 1) { page--; apply() } })
+          if (next) next.addEventListener('click', () => { if (page < pages) { page++; apply() } })
+        }
+        if (search) search.addEventListener('input', () => { page = 1; apply() })
+        apply()
+      }
+      document.querySelectorAll('[data-tr-list]').forEach(setupTrList)
     })()
   </script>
 
@@ -1063,6 +1131,7 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-btn-xs:hover { background: rgba(148,163,184,0.12); }
     .tr-btn-xs-danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
     .tr-btn-xs-danger:hover { background: rgba(248,113,113,0.12); }
+    .tr-btn-xs:disabled { opacity: 0.4; cursor: not-allowed; }
     .tr-input {
       background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore);
     }
