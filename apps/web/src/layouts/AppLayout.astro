@@ -398,6 +398,14 @@ const icons: Record<IconKey, string> = {
         --btn-success-bg:       #047857;
         --btn-success-bg-hover: #10b981;
 
+        /* Row-action icon buttons — one shared tone per intent so the
+           "edit" icon looks identical whether it comes from a scoped
+           token style or a Tailwind utility. */
+        --icon-edit-fg:       #2563eb;
+        --icon-edit-fg-hover: #1d4ed8;
+        --icon-edit-bg:       color-mix(in srgb, #2563eb 12%, transparent);
+        --icon-edit-bg-hover: color-mix(in srgb, #2563eb 24%, transparent);
+
         /* ── Motion ─────────────────────────────────────────── */
         --ease-std: cubic-bezier(.2,.7,.2,1);
         --ease-in:  cubic-bezier(.4,0,1,1);
@@ -1122,12 +1130,12 @@ const icons: Record<IconKey, string> = {
          buttons. Keyed on text-gray-400 + the hover bg utility so only the
          icon buttons match — dropdown rows (text-gray-700) are untouched. */
       .page-content :is(button, a).text-gray-400.hover\:bg-blue-50 {
-        background-color: color-mix(in srgb, #2563eb 12%, transparent);
-        color: #2563eb;
+        background-color: var(--icon-edit-bg);
+        color: var(--icon-edit-fg);
       }
       .page-content :is(button, a).text-gray-400.hover\:bg-blue-50:hover {
-        background-color: color-mix(in srgb, #2563eb 24%, transparent);
-        color: #1d4ed8;
+        background-color: var(--icon-edit-bg-hover);
+        color: var(--icon-edit-fg-hover);
       }
       .page-content :is(button, a).text-gray-400.hover\:bg-red-50 {
         background-color: color-mix(in srgb, #dc2626 12%, transparent);
@@ -1152,6 +1160,30 @@ const icons: Record<IconKey, string> = {
       .page-content :is(button, a).text-gray-400.hover\:bg-green-50:hover {
         background-color: color-mix(in srgb, #16a34a 26%, transparent);
         color: #15803d;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-amber-50 {
+        background-color: color-mix(in srgb, #d97706 13%, transparent);
+        color: #d97706;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-amber-50:hover {
+        background-color: color-mix(in srgb, #d97706 26%, transparent);
+        color: #b45309;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-orange-50 {
+        background-color: color-mix(in srgb, #ea580c 13%, transparent);
+        color: #ea580c;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-orange-50:hover {
+        background-color: color-mix(in srgb, #ea580c 26%, transparent);
+        color: #c2410c;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-gray-100 {
+        background-color: var(--ink-4);
+        color: var(--fore-dim);
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-gray-100:hover {
+        background-color: color-mix(in srgb, var(--fore) 16%, var(--ink-4));
+        color: var(--fore);
       }
 
       /* ── Soft borders on modal / dialog / elevated cards ──────

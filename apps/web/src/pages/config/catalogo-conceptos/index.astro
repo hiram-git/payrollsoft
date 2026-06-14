@@ -448,8 +448,8 @@ const isCuentasTab = activeTab === 'cuentas'
   /* Row actions — shared layout for both view-mode and edit-mode icon
      buttons so the column width (w-24) is identical in both states. */
   .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
-  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: var(--navy-soft); color: var(--navy-hi); cursor: pointer; transition: background .15s, color .15s; }
-  .action-btn:hover    { background: color-mix(in srgb, var(--navy) 24%, transparent); color: var(--navy-hi); }
+  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: var(--icon-edit-bg); color: var(--icon-edit-fg); cursor: pointer; transition: background .15s, color .15s; }
+  .action-btn:hover    { background: var(--icon-edit-bg-hover); color: var(--icon-edit-fg-hover); }
   .action-ok           { background: color-mix(in srgb, var(--ok) 14%, transparent);  color: var(--ok); }
   .action-ok:hover     { background: color-mix(in srgb, var(--ok) 26%, transparent);  color: var(--ok); }
   .action-del          { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }

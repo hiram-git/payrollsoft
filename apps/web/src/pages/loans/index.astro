@@ -195,11 +195,11 @@ function pageWindow(cur: number, total: number) {
     .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
     .row-btn {
       width: 30px; height: 30px; display: grid; place-items: center;
-      border: 1px solid var(--rule); border-radius: 4px; background: var(--ink-4);
-      color: var(--fore-dim); cursor: pointer; transition: background 140ms ease, color 140ms ease;
+      border: 1px solid var(--rule); border-radius: 4px; background: var(--icon-edit-bg);
+      color: var(--icon-edit-fg); cursor: pointer; transition: background 140ms ease, color 140ms ease;
       text-decoration: none;
     }
-    .row-btn:hover { background: color-mix(in srgb, var(--fore) 14%, var(--ink-4)); color: var(--fore); }
+    .row-btn:hover { background: var(--icon-edit-bg-hover); color: var(--icon-edit-fg-hover); }
     .row-btn-danger { background: rgba(224,107,92,0.12); color: var(--err); }
     .row-btn-danger:hover { background: rgba(224,107,92,0.24); color: var(--err); }
 
