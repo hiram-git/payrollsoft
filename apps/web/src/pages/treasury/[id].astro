@@ -40,6 +40,7 @@ type Check = {
   id: string
   checkNumber: number
   beneficiaryName: string
+  beneficiaryType: string
   amount: string
   amountInWords: string
   concept: string | null
@@ -179,6 +180,8 @@ const checksLive = checks.filter((c) => c.status !== 'voided')
 const checksTotal = checksLive.reduce((a, c) => a + (Number(c.amount) || 0), 0)
 const batchesTotal = runBatches.reduce((a, b) => a + (Number(b.totalAmount) || 0), 0)
 const creditorTotal = creditorPayables.reduce((a, p) => a + p.amount, 0)
+const creditorChecks = checksLive.filter((c) => c.beneficiaryType === 'creditor')
+const creditorCheckPayables = creditorPayables.filter((p) => p.paymentMethod === 'check')
 function creditorStatus(p: Payable): { label: string; cls: string } {
   if (p.paymentMethod === 'ach') {
     return p.accountNumber && p.bankRouting
@@ -450,6 +453,10 @@ const today = new Date().toISOString().slice(0, 10)
             <p class="text-sm tr-mute">Sin cheques emitidos en esta generación de pagos.</p>
           </div>
         ) : (
+          <div data-tr-list data-tr-page-size="10">
+          <div class="px-5 py-2.5 border-b tr-rule">
+            <input type="search" data-tr-search placeholder="Buscar número, beneficiario, concepto…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+          </div>
           <table class="tr-table w-full text-sm">
             <thead>
               <tr>
@@ -461,7 +468,7 @@ const today = new Date().toISOString().slice(0, 10)
                 <th class="px-5 py-2"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-tr-rows>
               {checks.map((c) => {
                 const sb = checkStatusBadge(c.status)
                 return (
@@ -494,6 +501,8 @@ const today = new Date().toISOString().slice(0, 10)
               })}
             </tbody>
           </table>
+          <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+          </div>
         )}
       </div>
     </section>
@@ -510,6 +519,10 @@ const today = new Date().toISOString().slice(0, 10)
         </header>
 
         {runBatches.length > 0 && (
+          <div data-tr-list data-tr-page-size="10">
+          <div class="px-5 py-2.5 border-b tr-rule">
+            <input type="search" data-tr-search placeholder="Buscar archivo o formato…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+          </div>
           <table class="tr-table w-full text-sm border-b tr-rule">
             <thead>
               <tr>
@@ -520,7 +533,7 @@ const today = new Date().toISOString().slice(0, 10)
                 <th class="px-5 py-2"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-tr-rows>
               {runBatches.map((b) => (
                 <tr class="border-b last:border-0 tr-rule">
                   <td class="px-5 py-2.5 font-mono text-xs tr-cell">{b.fileName}</td>
@@ -534,6 +547,8 @@ const today = new Date().toISOString().slice(0, 10)
               ))}
             </tbody>
           </table>
+          <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-b tr-rule text-xs tr-mute"></div>
+          </div>
         )}
 
         {run.payrollId && run.status === 'open' && canWrite && (
@@ -714,6 +729,10 @@ const today = new Date().toISOString().slice(0, 10)
               <p class="text-sm tr-mute">No hay líneas pagables para esta planilla.</p>
             </div>
           ) : (
+            <div data-tr-list data-tr-page-size="10">
+            <div class="px-5 py-2.5 border-b tr-rule">
+              <input type="search" data-tr-search placeholder="Buscar beneficiario o cuenta…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+            </div>
             <table class="tr-table w-full text-sm">
               <thead>
                 <tr>
@@ -723,7 +742,7 @@ const today = new Date().toISOString().slice(0, 10)
                   <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody data-tr-rows>
                 {payables.map((p) => (
                   <tr class="border-b last:border-0 tr-rule">
                     <td class="px-5 py-3 tr-cell">
@@ -741,6 +760,8 @@ const today = new Date().toISOString().slice(0, 10)
                 ))}
               </tbody>
             </table>
+            <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+            </div>
           )}
         </div>
       </section>
@@ -749,6 +770,65 @@ const today = new Date().toISOString().slice(0, 10)
     {/* ─── Tab Acreedores ─────────────────────────────────── */}
     {run.payrollId && (
       <section id="tab-creditors" class="hidden">
+        {/* Cheques de acreedores — mismo flujo que empleados: generar en lote
+            y descargar el formato (PDF / Excel), pero acotado a acreedores. */}
+        {run.status === 'open' && canWrite && (
+          <div class="tr-card border rounded-lg overflow-hidden mb-4">
+            <header class="px-5 py-3 border-b tr-rule flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <h2 class="text-sm font-semibold tr-title">Cheques a acreedores</h2>
+                <p class="text-xs tr-mute mt-0.5">
+                  {creditorCheckPayables.length} acreedor(es) con método <strong>cheque</strong> ·
+                  {creditorChecks.length} cheque(s) ya emitido(s).
+                </p>
+              </div>
+              <div class="flex items-center gap-2">
+                {creditorChecks.length > 0 && (
+                  <>
+                    <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf?beneficiary=creditor'`}>PDF (acreedores)</button>
+                    <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-xlsx?beneficiary=creditor'`}>Excel (acreedores)</button>
+                    <span class="tr-mute text-xs">·</span>
+                  </>
+                )}
+                {activeCheckbooks.length > 0 && (
+                  <button type="button" id="btn-cred-checks" class="text-xs tr-link">+ Generar cheques</button>
+                )}
+              </div>
+            </header>
+
+            {activeCheckbooks.length > 0 && (
+              <form id="form-cred-checks" method="POST" action={`/api/treasury/action?op=checks-bulk&runId=${runId}`} class="hidden px-5 py-4 border-b tr-rule">
+                <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+                <input type="hidden" name="beneficiary" value="creditors" />
+                <input type="hidden" name="month" value={creditorMonth} />
+                <input type="hidden" name="year" value={creditorYear} />
+                <p class="text-xs tr-mute mb-3">
+                  Emite un cheque por cada acreedor con método <strong>cheque</strong> del mes
+                  {mesLabel ? ` (${mesLabel} ${creditorYear})` : ''}. Omite los que ya tienen cheque vigente.
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  <div class="md:col-span-5">
+                    <label class="block text-xs font-medium tr-subtitle mb-1.5">Chequera *</label>
+                    <select name="checkbookId" required class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                      {activeCheckbooks.map((c) => (
+                        <option value={c.id}>{c.name} · próx. {String(c.nextNumber).padStart(7, '0')}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div class="md:col-span-4">
+                    <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha *</label>
+                    <input type="date" name="issueDate" required value={today} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                  </div>
+                  <div class="md:col-span-3 flex justify-end gap-2">
+                    <button type="button" id="btn-cred-checks-cancel" class="tr-mute px-3 py-2 text-sm">Cancelar</button>
+                    <button type="submit" disabled={creditorCheckPayables.length === 0} class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Generar cheques</button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
+
         <div class="tr-card border rounded-lg overflow-hidden">
           <header class="px-5 py-3 border-b tr-rule">
             <h2 class="text-sm font-semibold tr-title">
@@ -764,6 +844,10 @@ const today = new Date().toISOString().slice(0, 10)
               <p class="text-sm tr-mute">No hay montos retenidos a acreedores en el mes.</p>
             </div>
           ) : (
+            <div data-tr-list data-tr-page-size="10">
+            <div class="px-5 py-2.5 border-b tr-rule">
+              <input type="search" data-tr-search placeholder="Buscar proveedor o cuenta…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+            </div>
             <table class="tr-table w-full text-sm">
               <thead>
                 <tr>
@@ -774,7 +858,7 @@ const today = new Date().toISOString().slice(0, 10)
                   <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody data-tr-rows>
                 {creditorPayables.map((p) => {
                   const st = creditorStatus(p)
                   return (
@@ -796,12 +880,14 @@ const today = new Date().toISOString().slice(0, 10)
                     </tr>
                   )
                 })}
-                <tr class="tr-rule">
+                <tr class="tr-rule" data-tr-keep>
                   <td class="px-5 py-3 text-right text-xs font-semibold tr-subtitle" colspan="4">Total</td>
                   <td class="px-5 py-3 text-right font-mono text-sm font-semibold tr-title">{fmtMoney(creditorTotal)}</td>
                 </tr>
               </tbody>
             </table>
+            <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+            </div>
           )}
         </div>
       </section>
@@ -876,6 +962,13 @@ const today = new Date().toISOString().slice(0, 10)
       const issueCancel = document.getElementById('btn-issue-cancel')
       issueBtn?.addEventListener('click', () => issueForm?.classList.toggle('hidden'))
       issueCancel?.addEventListener('click', () => issueForm?.classList.add('hidden'))
+
+      // Cheques a acreedores (tab Acreedores)
+      const credChecksBtn = document.getElementById('btn-cred-checks')
+      const credChecksForm = document.getElementById('form-cred-checks')
+      const credChecksCancel = document.getElementById('btn-cred-checks-cancel')
+      credChecksBtn?.addEventListener('click', () => credChecksForm?.classList.toggle('hidden'))
+      credChecksCancel?.addEventListener('click', () => credChecksForm?.classList.add('hidden'))
 
       // Cheques en lote
       const bulkBtn = document.getElementById('btn-issue-bulk')
@@ -978,6 +1071,50 @@ const today = new Date().toISOString().slice(0, 10)
             }
           })
       }
+
+      // ── Buscador + paginador para las tablas de cada tab ──────
+      function setupTrList(root) {
+        const tbody = root.querySelector('[data-tr-rows]')
+        if (!tbody) return
+        const search = root.querySelector('[data-tr-search]')
+        const pager = root.querySelector('[data-tr-pager]')
+        const pageSize = Number(root.getAttribute('data-tr-page-size')) || 10
+        const rows = Array.prototype.slice
+          .call(tbody.children)
+          .filter((r) => r.tagName === 'TR' && !r.hasAttribute('data-tr-keep'))
+        let page = 1
+        function apply() {
+          const q = ((search && search.value) || '').trim().toLowerCase()
+          const filtered = q
+            ? rows.filter((r) => r.textContent.toLowerCase().indexOf(q) !== -1)
+            : rows
+          const total = filtered.length
+          const pages = Math.max(1, Math.ceil(total / pageSize))
+          if (page > pages) page = pages
+          if (page < 1) page = 1
+          rows.forEach((r) => { r.style.display = 'none' })
+          const start = (page - 1) * pageSize
+          filtered.slice(start, start + pageSize).forEach((r) => { r.style.display = '' })
+          if (!pager) return
+          if (total <= pageSize && !q) { pager.innerHTML = ''; pager.style.display = 'none'; return }
+          pager.style.display = ''
+          const from = total === 0 ? 0 : start + 1
+          const to = Math.min(start + pageSize, total)
+          pager.innerHTML =
+            '<span>' + from + '–' + to + ' de ' + total + '</span>' +
+            '<span class="flex items-center gap-2">' +
+            '<button type="button" data-tr-prev class="tr-btn-xs"' + (page <= 1 ? ' disabled' : '') + '>‹ Anterior</button>' +
+            '<button type="button" data-tr-next class="tr-btn-xs"' + (page >= pages ? ' disabled' : '') + '>Siguiente ›</button>' +
+            '</span>'
+          const prev = pager.querySelector('[data-tr-prev]')
+          const next = pager.querySelector('[data-tr-next]')
+          if (prev) prev.addEventListener('click', () => { if (page > 1) { page--; apply() } })
+          if (next) next.addEventListener('click', () => { if (page < pages) { page++; apply() } })
+        }
+        if (search) search.addEventListener('input', () => { page = 1; apply() })
+        apply()
+      }
+      document.querySelectorAll('[data-tr-list]').forEach(setupTrList)
     })()
   </script>
 
@@ -994,6 +1131,7 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-btn-xs:hover { background: rgba(148,163,184,0.12); }
     .tr-btn-xs-danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
     .tr-btn-xs-danger:hover { background: rgba(248,113,113,0.12); }
+    .tr-btn-xs:disabled { opacity: 0.4; cursor: not-allowed; }
     .tr-input {
       background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore);
     }
