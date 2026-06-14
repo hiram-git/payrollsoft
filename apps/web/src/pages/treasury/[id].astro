@@ -808,6 +808,30 @@ const today = new Date().toISOString().slice(0, 10)
     )}
   </div>
 
+  <dialog id="void-modal" class="void-modal">
+    <div class="void-modal-card">
+      <div class="void-modal-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h3 class="void-modal-title">Anular cheque</h3>
+      <p class="void-modal-sub">
+        Cheque N.º <strong data-void-num></strong>. Esta acción no se puede deshacer.
+      </p>
+      <label class="void-modal-label" for="void-reason">Razón de la anulación</label>
+      <textarea
+        id="void-reason"
+        class="void-modal-textarea"
+        rows="3"
+        placeholder="Describe el motivo (mínimo 3 caracteres)…"
+      ></textarea>
+      <p class="void-modal-error" data-void-error hidden></p>
+      <div class="void-modal-actions">
+        <button type="button" class="void-modal-btn void-modal-btn-ghost" data-void-cancel>Cancelar</button>
+        <button type="button" class="void-modal-btn void-modal-btn-danger" data-void-confirm>Anular cheque</button>
+      </div>
+    </div>
+  </dialog>
+
   <script is:inline>
     ;(function () {
       // Tabs
@@ -887,33 +911,73 @@ const today = new Date().toISOString().slice(0, 10)
         })
       }
 
-      // Anular cheque vía saModal
+      // Anular cheque — modal con campo para la razón
+      const voidModal = document.getElementById('void-modal')
+      const voidReason = document.getElementById('void-reason')
+      const voidError = voidModal && voidModal.querySelector('[data-void-error]')
+      const voidNumEl = voidModal && voidModal.querySelector('[data-void-num]')
+      let voidCheckId = null
+
+      function showVoidError(msg) {
+        if (!voidError) return
+        voidError.textContent = msg
+        voidError.hidden = false
+      }
+      function closeVoidModal() {
+        if (voidModal && typeof voidModal.close === 'function') voidModal.close()
+      }
+      function openVoidModal(id, num) {
+        voidCheckId = id
+        if (voidNumEl) voidNumEl.textContent = num || ''
+        if (voidReason) voidReason.value = ''
+        if (voidError) voidError.hidden = true
+        if (voidModal && typeof voidModal.showModal === 'function') {
+          voidModal.showModal()
+          if (voidReason) voidReason.focus()
+        }
+      }
+
       document.querySelectorAll('[data-void-id]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-void-id')
-          const num = btn.getAttribute('data-num')
-          const sa = window.saModal
-          if (!sa) return
-          const reason = window.prompt(`Razón para anular el cheque ${num}:`, '')
-          if (reason == null) return
-          if (reason.trim().length < 3) {
-            await sa.error({ title: 'Razón requerida', message: 'Escribe al menos 3 caracteres.' })
-            return
-          }
-          sa.loading({ title: 'Anulando', message: 'Procesando…' })
-          const res = await fetch(`/api/treasury/action?op=check-void&id=${id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
-            body: JSON.stringify({ reason: reason.trim() }),
-          })
-          const json = await res.json().catch(() => ({}))
-          if (!json.ok) {
-            await sa.error({ title: 'No se pudo anular', message: json.error })
-          } else {
-            await sa.success({ title: 'Cheque anulado', redirect: window.location.pathname })
-          }
+        btn.addEventListener('click', () => {
+          openVoidModal(btn.getAttribute('data-void-id'), btn.getAttribute('data-num'))
         })
       })
+
+      if (voidModal) {
+        const cancelBtn = voidModal.querySelector('[data-void-cancel]')
+        const confirmBtn = voidModal.querySelector('[data-void-confirm]')
+        if (cancelBtn) cancelBtn.addEventListener('click', closeVoidModal)
+        // Cerrar al hacer clic fuera de la tarjeta (sobre el backdrop)
+        voidModal.addEventListener('click', (e) => {
+          if (e.target === voidModal) closeVoidModal()
+        })
+        if (voidReason) voidReason.addEventListener('input', () => { if (voidError) voidError.hidden = true })
+        if (confirmBtn)
+          confirmBtn.addEventListener('click', async () => {
+            const sa = window.saModal
+            const reason = ((voidReason && voidReason.value) || '').trim()
+            if (reason.length < 3) {
+              showVoidError('Escribe al menos 3 caracteres.')
+              if (voidReason) voidReason.focus()
+              return
+            }
+            closeVoidModal()
+            if (sa) sa.loading({ title: 'Anulando', message: 'Procesando…' })
+            const res = await fetch(`/api/treasury/action?op=check-void&id=${voidCheckId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+              body: JSON.stringify({ reason }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!json.ok) {
+              if (sa) await sa.error({ title: 'No se pudo anular', message: json.error })
+            } else if (sa) {
+              await sa.success({ title: 'Cheque anulado', redirect: window.location.pathname })
+            } else {
+              window.location.reload()
+            }
+          })
+      }
     })()
   </script>
 
@@ -982,5 +1046,26 @@ const today = new Date().toISOString().slice(0, 10)
     [data-theme='light'] .tr-method-ach   { background: #d1fae5; color: #065f46; }
     [data-theme='light'] .tr-method-check { background: #dbeafe; color: #1d4ed8; }
     [data-theme='light'] .tr-method-cash  { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Modal: anular cheque (razón) ───────────────────────── */
+    .void-modal { border: none; background: transparent; padding: 0; max-width: 440px; width: calc(100% - 32px); color: var(--fore); }
+    .void-modal::backdrop { background: rgba(7,16,31,0.62); backdrop-filter: blur(2px); }
+    [data-theme='light'] .void-modal::backdrop { background: rgba(12,20,36,0.45); }
+    .void-modal-card { background: var(--ink-2); border: 1px solid var(--rule); border-radius: 12px; padding: 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.45); font-family: var(--f-sans); }
+    .void-modal-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; background: rgba(224,107,92,0.18); color: var(--err); margin-bottom: 12px; }
+    .void-modal-title { margin: 0 0 6px; font-family: var(--f-display); font-size: 18px; font-weight: 400; letter-spacing: -0.01em; color: var(--fore); }
+    .void-modal-sub { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--fore-dim); }
+    .void-modal-sub strong { color: var(--fore); font-weight: 600; }
+    .void-modal-label { display: block; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--mute-2); margin-bottom: 6px; }
+    .void-modal-textarea { width: 100%; box-sizing: border-box; background: var(--ink-3); border: 1px solid var(--rule); border-radius: 8px; color: var(--fore); font-family: var(--f-sans); font-size: 14px; line-height: 1.5; padding: 10px 12px; resize: vertical; min-height: 76px; }
+    .void-modal-textarea::placeholder { color: var(--mute); }
+    .void-modal-textarea:focus { outline: none; border-color: var(--navy-hi); box-shadow: 0 0 0 2px var(--navy-soft); }
+    .void-modal-error { margin: 8px 0 0; font-size: 12px; color: var(--err); }
+    .void-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .void-modal-btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--f-sans); transition: background 140ms ease, color 140ms ease; }
+    .void-modal-btn-ghost { background: transparent; border: 1px solid var(--rule); color: var(--fore-dim); }
+    .void-modal-btn-ghost:hover { background: var(--ink-4); color: var(--fore); }
+    .void-modal-btn-danger { background: var(--btn-danger-bg); border: 1px solid var(--btn-edge); color: #fff; }
+    .void-modal-btn-danger:hover { background: var(--btn-danger-bg-hover); }
   </style>
 </AppLayout>
