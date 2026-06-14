@@ -19,18 +19,20 @@ type CheckRow = {
   checkNumber: number
   issueDate: string
   beneficiaryName: string
+  beneficiaryType: string
   amount: string
   amountInWords: string
   concept: string | null
   status: string
 }
 
-export const GET: APIRoute = async ({ params, cookies, redirect }) => {
+export const GET: APIRoute = async ({ params, cookies, redirect, url }) => {
   const identity = getIdentity(cookies)
   if (!identity) return redirect('/login')
   const tenant = identity.tenantSlug ?? 'demo'
 
   const id = params.id ?? ''
+  const benef = url.searchParams.get('beneficiary')
   const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenant }
 
   const res = await fetch(`${API_URL}/treasury/runs/${id}/checks`, { headers })
@@ -38,7 +40,9 @@ export const GET: APIRoute = async ({ params, cookies, redirect }) => {
     return new Response('Corrida no encontrada', { status: res.status })
   }
   const { data } = (await res.json()) as { data: CheckRow[] }
-  const printable = data.filter((c) => c.status !== 'voided')
+  const printable = data.filter(
+    (c) => c.status !== 'voided' && (!benef || c.beneficiaryType === benef)
+  )
 
   if (printable.length === 0) {
     return new Response('No hay cheques imprimibles en esta corrida.', { status: 404 })
@@ -63,7 +67,7 @@ export const GET: APIRoute = async ({ params, cookies, redirect }) => {
     }).catch(() => {})
   }
 
-  const filename = `cheques-corrida-${id.slice(0, 8)}.pdf`
+  const filename = `cheques-${benef ?? 'corrida'}-${id.slice(0, 8)}.pdf`
   return new Response(buffer, {
     status: 200,
     headers: {
