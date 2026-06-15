@@ -176,6 +176,46 @@ function hireDate(n: number): string {
   return d.toISOString().slice(0, 10)
 }
 
+/**
+ * Siembra un set demo mínimo de funciones, cargos y departamentos cuando el
+ * tenant aún no los tiene. Idempotente (ON CONFLICT). Necesario para que el
+ * seed de empleados funcione sobre un tenant provisionado desde el wizard,
+ * cuyo bootstrap base no incluye estos catálogos.
+ */
+async function ensureBaseCatalogs(sql: postgres.Sql): Promise<void> {
+  await sql`
+    INSERT INTO job_functions (code, name) VALUES
+      ('ADM', 'Administrativo'),
+      ('OPE', 'Operativo'),
+      ('VEN', 'Ventas')
+    ON CONFLICT (code) DO NOTHING
+  `
+  await sql`
+    INSERT INTO job_titles (code, name) VALUES
+      ('EMP', 'Empleado General'),
+      ('ANL', 'Analista'),
+      ('SUP', 'Supervisor'),
+      ('GER', 'Gerente')
+    ON CONFLICT (code) DO NOTHING
+  `
+  const [admin] = await sql<{ id: string }[]>`
+    INSERT INTO departments (code, name) VALUES ('ADMIN', 'Administración')
+    ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `
+  await sql`
+    INSERT INTO departments (code, name, parent_id) VALUES
+      ('RRHH', 'Recursos Humanos', ${admin.id})
+    ON CONFLICT (code) DO NOTHING
+  `
+  await sql`
+    INSERT INTO departments (code, name) VALUES
+      ('OPS', 'Operaciones'),
+      ('VEN', 'Ventas')
+    ON CONFLICT (code) DO NOTHING
+  `
+}
+
 export async function seedEmployees(
   sql: postgres.Sql,
   options: SeedEmployeesOptions = {}
@@ -183,16 +223,21 @@ export async function seedEmployees(
   const total = Math.max(1, Math.min(10000, options.total ?? 200))
   const log = options.log ?? (() => {})
 
-  // Catálogos: requeridos por el seed base (cargos/funciones/departamentos).
-  const [cargos, funciones, departamentos] = await Promise.all([
-    sql<{ id: string }[]>`SELECT id FROM job_titles LIMIT 20`,
-    sql<{ id: string }[]>`SELECT id FROM job_functions LIMIT 20`,
-    sql<{ id: string }[]>`SELECT id FROM departments LIMIT 20`,
-  ])
+  // Catálogos requeridos (cargos/funciones/departamentos). Un tenant recién
+  // provisionado desde el wizard NO los trae —las migraciones no los siembran
+  // y el bootstrap base sólo crea roles/permisos/conceptos—, así que si faltan
+  // los creamos aquí con un set demo mínimo en vez de abortar el seed.
+  const fetchCatalogs = () =>
+    Promise.all([
+      sql<{ id: string }[]>`SELECT id FROM job_titles LIMIT 20`,
+      sql<{ id: string }[]>`SELECT id FROM job_functions LIMIT 20`,
+      sql<{ id: string }[]>`SELECT id FROM departments LIMIT 20`,
+    ])
+  let [cargos, funciones, departamentos] = await fetchCatalogs()
   if (cargos.length === 0 || funciones.length === 0 || departamentos.length === 0) {
-    throw new Error(
-      'Faltan catálogos base (cargos/funciones/departamentos). Corre el seed base antes de sembrar empleados.'
-    )
+    log('  catálogos base ausentes — sembrando cargos/funciones/departamentos demo')
+    await ensureBaseCatalogs(sql)
+    ;[cargos, funciones, departamentos] = await fetchCatalogs()
   }
 
   // Tipo de planilla por defecto — los empleados se ligan a este para que
