@@ -111,7 +111,7 @@ const success = Astro.url.searchParams.get('success') === '1'
                 <td class="px-4 py-3 text-gray-600 text-xs font-mono">{pos.budgetItemId ? (partidaMap.get(pos.budgetItemId) ?? '—') : '—'}</td>
                 <td class="px-4 py-3">
                   <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${pos.status === 'en_uso' ? 'bg-amber-50 text-amber-700' : 'bg-blue-50 text-blue-700'}`}>
-                    {pos.status === 'en_uso' ? 'En uso' : 'Vacante'}
+                    {pos.status === 'en_uso' ? 'Ocupada' : 'Vacante'}
                   </span>
                 </td>
                 <td class="px-4 py-3">
