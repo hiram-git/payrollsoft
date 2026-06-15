@@ -108,6 +108,23 @@ const prefillName = Astro.url.searchParams.get('name') ?? ''
               placeholder="contacto@empresa.com"
             />
           </div>
+          <div class="mb-4">
+            <label class="block text-xs font-medium text-gray-600 mb-1.5" for="f-institutionType">
+              Tipo de empresa
+            </label>
+            <select
+              id="f-institutionType"
+              name="institutionType"
+              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+            >
+              <option value="privada">Sin posiciones</option>
+              <option value="publica">Con posiciones (usa posiciones + ejecución presupuestaria)</option>
+            </select>
+            <p class="mt-1 text-xs text-gray-500">
+              "Con posiciones" siembra posiciones y partidas presupuestarias además de
+              cargos, funciones y departamentos; "Sin posiciones" solo cargos, funciones y departamentos.
+            </p>
+          </div>
         </fieldset>
 
         <!-- ── Paso 2: Administrador ───────────────────────────────────── -->
