@@ -316,13 +316,16 @@ const today = new Date().toISOString().slice(0, 10)
             <div class="flex items-center gap-2">
               {checks.filter((c) => c.status !== 'voided').length > 0 && (
                 <>
-                  <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf'`}>PDF (todos)</button>
-                  <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-xlsx'`}>Excel (todos)</button>
+                  <button type="button" class="tr-icon-btn tr-icon-pdf" title="PDF (todos los cheques)" aria-label="Descargar PDF de todos los cheques" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf'`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                  </button>
+                  <button type="button" class="tr-icon-btn tr-icon-xls" title="Excel (todos los cheques)" aria-label="Descargar Excel de todos los cheques" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-xlsx'`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                  </button>
                 </>
               )}
-              <button type="button" id="btn-issue-bulk" class="text-xs tr-link">+ Generar en lote</button>
-              <span class="tr-mute text-xs">·</span>
-              <button type="button" id="btn-issue-check" class="text-xs tr-link">+ Emitir cheque</button>
+              <button type="button" id="btn-issue-bulk" class="tr-btn-action">+ Generar en lote</button>
+              <button type="button" id="btn-issue-check" class="tr-btn-action tr-btn-action-primary">+ Emitir cheque</button>
             </div>
           )}
         </header>
@@ -485,15 +488,19 @@ const today = new Date().toISOString().slice(0, 10)
                     </td>
                     <td class="px-5 py-3 text-right whitespace-nowrap">
                       {c.status !== 'voided' && (
-                        <>
-                          <button type="button" class="tr-btn-xs mr-2" onclick={`window.location.href='/api/treasury/checks/${c.id}/pdf'`}>PDF</button>
-                          <button type="button" class="tr-btn-xs mr-2" onclick={`window.location.href='/api/treasury/checks/${c.id}/xlsx'`}>Excel</button>
+                        <div class="inline-flex items-center gap-1.5">
+                          <button type="button" class="tr-icon-btn tr-icon-pdf" title="Imprimir cheque (PDF)" aria-label="Imprimir cheque en PDF" onclick={`window.location.href='/api/treasury/checks/${c.id}/pdf'`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                          </button>
+                          <button type="button" class="tr-icon-btn tr-icon-xls" title="Imprimir cheque (Excel)" aria-label="Imprimir cheque en Excel" onclick={`window.location.href='/api/treasury/checks/${c.id}/xlsx'`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                          </button>
                           {canVoid && c.status !== 'cleared' && (
-                            <button type="button" class="tr-btn-xs tr-btn-xs-danger" data-void-id={c.id} data-num={c.checkNumber}>
-                              Anular
+                            <button type="button" class="tr-icon-btn tr-icon-del" title="Anular cheque" aria-label="Anular cheque" data-void-id={c.id} data-num={c.checkNumber}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                             </button>
                           )}
-                        </>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -1103,13 +1110,19 @@ const today = new Date().toISOString().slice(0, 10)
           pager.innerHTML =
             '<span>' + from + '–' + to + ' de ' + total + '</span>' +
             '<span class="flex items-center gap-2">' +
+            '<button type="button" data-tr-first class="tr-btn-xs"' + (page <= 1 ? ' disabled' : '') + '>« Inicio</button>' +
             '<button type="button" data-tr-prev class="tr-btn-xs"' + (page <= 1 ? ' disabled' : '') + '>‹ Anterior</button>' +
             '<button type="button" data-tr-next class="tr-btn-xs"' + (page >= pages ? ' disabled' : '') + '>Siguiente ›</button>' +
+            '<button type="button" data-tr-last class="tr-btn-xs"' + (page >= pages ? ' disabled' : '') + '>Fin »</button>' +
             '</span>'
+          const first = pager.querySelector('[data-tr-first]')
           const prev = pager.querySelector('[data-tr-prev]')
           const next = pager.querySelector('[data-tr-next]')
+          const last = pager.querySelector('[data-tr-last]')
+          if (first) first.addEventListener('click', () => { if (page > 1) { page = 1; apply() } })
           if (prev) prev.addEventListener('click', () => { if (page > 1) { page--; apply() } })
           if (next) next.addEventListener('click', () => { if (page < pages) { page++; apply() } })
+          if (last) last.addEventListener('click', () => { if (page < pages) { page = pages; apply() } })
         }
         if (search) search.addEventListener('input', () => { page = 1; apply() })
         apply()
@@ -1132,6 +1145,27 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-btn-xs-danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
     .tr-btn-xs-danger:hover { background: rgba(248,113,113,0.12); }
     .tr-btn-xs:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Action buttons (replace link-style) */
+    .tr-btn-action { display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--rule); background: var(--ink-3); color: var(--fore-dim); transition: background .15s, color .15s, border-color .15s; }
+    .tr-btn-action:hover { background: var(--ink-4); color: var(--fore); }
+    .tr-btn-action-primary { background: var(--btn-bg); border-color: var(--btn-edge); color: #fff; }
+    .tr-btn-action-primary:hover { background: var(--btn-bg-hover); }
+
+    /* Icon action buttons (PDF/Excel/TXT/Anular/Ver) — colour per intent */
+    .tr-icon-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+    .tr-icon-btn svg { width: 15px; height: 15px; }
+    .tr-icon-pdf  { color: #dc2626; background: color-mix(in srgb, #dc2626 10%, transparent); border-color: color-mix(in srgb, #dc2626 28%, transparent); }
+    .tr-icon-pdf:hover  { background: color-mix(in srgb, #dc2626 20%, transparent); }
+    .tr-icon-xls  { color: #059669; background: color-mix(in srgb, #059669 12%, transparent); border-color: color-mix(in srgb, #059669 28%, transparent); }
+    .tr-icon-xls:hover  { background: color-mix(in srgb, #059669 22%, transparent); }
+    .tr-icon-txt  { color: #2563eb; background: color-mix(in srgb, #2563eb 10%, transparent); border-color: color-mix(in srgb, #2563eb 28%, transparent); }
+    .tr-icon-txt:hover  { background: color-mix(in srgb, #2563eb 20%, transparent); }
+    .tr-icon-del  { color: #dc2626; background: color-mix(in srgb, #dc2626 10%, transparent); border-color: color-mix(in srgb, #dc2626 28%, transparent); }
+    .tr-icon-del:hover  { background: color-mix(in srgb, #dc2626 22%, transparent); }
+    .tr-icon-view { color: var(--icon-edit-fg); background: var(--icon-edit-bg); border-color: color-mix(in srgb, #2563eb 28%, transparent); }
+    .tr-icon-view:hover { background: var(--icon-edit-bg-hover); color: var(--icon-edit-fg-hover); }
+
     .tr-input {
       background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore);
     }
