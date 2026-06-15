@@ -93,21 +93,69 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     // best-effort: si el catálogo no responde, no sobreescribimos custom_fields
   }
 
+  // Reenvía un campo opcional solo si el form realmente lo trajo, para que un
+  // submit parcial no borre lo que no rendea. String vacío → null (limpia).
+  const opt = (k: string): Record<string, unknown> =>
+    form.has(k) ? { [k]: g(k) || null } : {}
+
   const body: Record<string, unknown> = {
+    // Requeridos
     code: g('code'),
     firstName: g('firstName'),
     lastName: g('lastName'),
     idNumber: g('idNumber'),
-    socialSecurityNumber: g('socialSecurityNumber') || null,
-    email: g('email') || null,
-    phone: g('phone') || null,
-    positionId: g('positionId') || null,
-    jobTitleId: g('jobTitleId') || null,
-    jobFunctionId: g('jobFunctionId') || null,
-    departmentId: g('departmentId') || null,
     hireDate: g('hireDate'),
     baseSalary: g('baseSalary'),
     payFrequency: g('payFrequency') || 'biweekly',
+    // Nombre / cédula
+    ...opt('secondName'),
+    ...opt('secondSurname'),
+    ...opt('marriedSurname'),
+    ...opt('idPrefix'),
+    ...opt('idProvince'),
+    ...opt('idVolume'),
+    ...opt('idFolio'),
+    ...opt('socialSecurityNumber'),
+    // Datos personales
+    ...opt('sex'),
+    ...opt('maritalStatus'),
+    ...opt('nationality'),
+    ...opt('birthDate'),
+    ...opt('birthPlace'),
+    // Contacto
+    ...opt('email'),
+    ...opt('personalEmail'),
+    ...opt('phone'),
+    // Dirección
+    ...opt('addressProvince'),
+    ...opt('addressDistrict'),
+    ...opt('addressTownship'),
+    ...opt('address'),
+    ...opt('otherAddress'),
+    // Estructura / cargo
+    ...opt('positionId'),
+    ...opt('jobTitleId'),
+    ...opt('jobFunctionId'),
+    ...opt('departmentId'),
+    // Nombramiento / resolución / contrato
+    ...opt('decreeNumber'),
+    ...opt('resolutionNumber'),
+    ...opt('decreeDate'),
+    ...opt('resolutionDate'),
+    ...opt('collaboratorNumber'),
+    ...opt('externalUserRef'),
+    ...opt('contractType'),
+    ...opt('irKey'),
+    ...opt('weeklyBaseHours'),
+    ...opt('observations'),
+    ...opt('siacapPct'),
+    // Baja / terminación
+    ...opt('terminationDecree'),
+    ...opt('terminationResolution'),
+    ...opt('terminationDecreeDate'),
+    ...opt('terminationResolutionDate'),
+    ...opt('terminationReason'),
+    // Tipos de planilla (multi)
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
     // Personal flags (Phase 2.D). The edit form always renders these
     // checkboxes, so an absent value means "unchecked", not "untouched".
@@ -119,10 +167,10 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     // field, so a partial submit never wipes an existing image.
     ...(form.has('photo') ? { photo: g('photo') || null } : {}),
     ...(form.has('scannedId') ? { scannedId: g('scannedId') || null } : {}),
-    // Datos bancarios (tesorería) — string vacío se mapea a null
-    bankId: g('bankId') || null,
-    accountNumber: g('accountNumber') || null,
-    accountType: g('accountType') || null,
+    // Datos bancarios (tesorería)
+    ...opt('bankId'),
+    ...opt('accountNumber'),
+    ...opt('accountType'),
     paymentMethod: g('paymentMethod') || 'check',
     ...(customFields !== undefined ? { customFields } : {}),
   }
