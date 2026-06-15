@@ -101,7 +101,9 @@ const flash = Astro.url.searchParams.get('flash')
                   )}
                 </td>
                 <td class="px-4 py-3.5 text-right">
-                  <a href={`/config/roles/${r.id}`} class="text-xs text-gray-500 hover:text-gray-900">Permisos →</a>
+                  <a href={`/config/roles/${r.id}`} title="Permisos" aria-label="Permisos" class="inline-flex items-center justify-center text-gray-500 hover:text-gray-900">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                  </a>
                 </td>
               </tr>
             ))}
