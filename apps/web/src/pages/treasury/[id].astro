@@ -240,9 +240,9 @@ const today = new Date().toISOString().slice(0, 10)
         <div>
           <h1 class="text-xl font-semibold tracking-tight tr-title">{run.name}</h1>
           <p class="text-sm mt-0.5 tr-subtitle">
-            Total <strong>{fmtMoney(run.totalAmount)}</strong>
-            {' · '} ACH <strong>{fmtMoney(run.achTotal)}</strong>
-            {' · '} Cheques <strong>{fmtMoney(run.checkTotal)}</strong>
+            Total <strong>{fmtMoney(checksTotal + batchesTotal)}</strong>
+            {' · '} ACH <strong>{fmtMoney(batchesTotal)}</strong>
+            {' · '} Cheques <strong>{fmtMoney(checksTotal)}</strong>
           </p>
         </div>
         <div class="flex items-center gap-2">
