@@ -126,7 +126,49 @@ export async function createCheckbook(
 // ─── Payment runs ─────────────────────────────────────────────────────────
 
 export async function listPaymentRuns(db: AnyDb) {
-  return db.select().from(treasuryPaymentRuns).orderBy(desc(treasuryPaymentRuns.createdAt))
+  const runs = await db
+    .select()
+    .from(treasuryPaymentRuns)
+    .orderBy(desc(treasuryPaymentRuns.createdAt))
+  if (runs.length === 0) return runs
+
+  // Los totales por corrida no se mantienen materializados: se computan aquí
+  // sumando los cheques vigentes y los lotes ACH realmente generados.
+  const checkRows = await db
+    .select({
+      runId: treasuryChecks.paymentRunId,
+      total: sql<string>`COALESCE(SUM(${treasuryChecks.amount}::numeric), 0)`,
+    })
+    .from(treasuryChecks)
+    .where(sql`${treasuryChecks.status} <> 'voided'`)
+    .groupBy(treasuryChecks.paymentRunId)
+  const achRows = await db
+    .select({
+      runId: treasuryAchBatches.paymentRunId,
+      total: sql<string>`COALESCE(SUM(${treasuryAchBatches.totalAmount}::numeric), 0)`,
+    })
+    .from(treasuryAchBatches)
+    .groupBy(treasuryAchBatches.paymentRunId)
+
+  const checkMap = new Map<string, number>(
+    checkRows.map((r: { runId: string | null; total: string }) => [r.runId ?? '', Number(r.total)])
+  )
+  const achMap = new Map<string, number>(
+    achRows.map((r: { runId: string | null; total: string }) => [r.runId ?? '', Number(r.total)])
+  )
+
+  // biome-ignore lint/suspicious/noExplicitAny: drizzle row
+  return runs.map((r: any) => {
+    const chk = checkMap.get(r.id) ?? 0
+    const ach = achMap.get(r.id) ?? 0
+    const cash = Number(r.cashTotal) || 0
+    return {
+      ...r,
+      checkTotal: chk.toFixed(2),
+      achTotal: ach.toFixed(2),
+      totalAmount: (chk + ach + cash).toFixed(2),
+    }
+  })
 }
 
 export async function createPaymentRun(
