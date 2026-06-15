@@ -105,7 +105,13 @@ export async function provisionTenant(
   // Central client (payroll_auth) — used for tenant + provisioning bookkeeping.
   const central = postgres(databaseUrl, {
     prepare: false,
-    connection: { search_path: 'payroll_auth,public' },
+    max: 1,
+    connection: {
+      search_path: 'payroll_auth,public',
+      lock_timeout: '30s',
+      statement_timeout: '180s',
+      idle_in_transaction_session_timeout: '120s',
+    },
     onnotice: () => {},
   })
 
@@ -137,9 +143,20 @@ export async function provisionTenant(
     `
 
     // Now switch to a tenant-scoped client to build the new schema.
+    // max:1 + timeouts: la provisión es una operación de una sola vía; usar
+    // una única conexión la hace determinista y los timeouts evitan que un
+    // lock o sentencia atascada (p. ej. una conexión huérfana de un intento
+    // previo cancelado) deje la provisión colgada para siempre — en su lugar
+    // falla con error, que queda registrado en metadata.seeds / provisioning.
     const tenant = postgres(databaseUrl, {
       prepare: false,
-      connection: { search_path: `${schemaName},payroll_auth,public` },
+      max: 1,
+      connection: {
+        search_path: `${schemaName},payroll_auth,public`,
+        lock_timeout: '30s',
+        statement_timeout: '180s',
+        idle_in_transaction_session_timeout: '120s',
+      },
       onnotice: () => {},
     })
 
@@ -477,7 +494,13 @@ export async function applySeedToTenant(
 
   const central = postgres(databaseUrl, {
     prepare: false,
-    connection: { search_path: 'payroll_auth,public' },
+    max: 1,
+    connection: {
+      search_path: 'payroll_auth,public',
+      lock_timeout: '30s',
+      statement_timeout: '180s',
+      idle_in_transaction_session_timeout: '120s',
+    },
     onnotice: () => {},
   })
 
@@ -497,7 +520,13 @@ export async function applySeedToTenant(
 
     const tenant = postgres(databaseUrl, {
       prepare: false,
-      connection: { search_path: `tenant_${slugCheck.slug},payroll_auth,public` },
+      max: 1,
+      connection: {
+        search_path: `tenant_${slugCheck.slug},payroll_auth,public`,
+        lock_timeout: '30s',
+        statement_timeout: '180s',
+        idle_in_transaction_session_timeout: '120s',
+      },
       onnotice: () => {},
     })
 
