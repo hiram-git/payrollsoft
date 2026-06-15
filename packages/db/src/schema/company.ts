@@ -9,6 +9,11 @@ export const companyConfig = pgTable('company_config', {
   phone: varchar('phone', { length: 20 }),
   email: varchar('email', { length: 100 }),
   institutionType: varchar('institution_type', { length: 20 }).notNull().default('privada'),
+  // Datos institucionales para reportes de gobierno / contraloría
+  // (Nº patronal CSS, código y nombre de ministerio/entidad).
+  patronalNumber: varchar('patronal_number', { length: 20 }),
+  entityCode: varchar('entity_code', { length: 10 }),
+  entityName: varchar('entity_name', { length: 255 }),
   currencyCode: varchar('currency_code', { length: 10 }).notNull().default('USD'),
   currencySymbol: varchar('currency_symbol', { length: 5 }).notNull().default('$'),
   mailHost: varchar('mail_host', { length: 255 }),
