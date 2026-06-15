@@ -1,4 +1,5 @@
 import type {
+  PdfDependent,
   PdfPersonnelCompany,
   PdfPersonnelEmployee,
   PdfPersonnelGeneratedBy,
@@ -30,6 +31,8 @@ export type PersonnelReportFilters = {
   hasOwnDisability?: boolean
   /** Solo colaboradores con familiares discapacitados. */
   hasFamilyDisability?: boolean
+  /** Incluir el detalle de familiares dependientes en el reporte. */
+  includeDependents?: boolean
 }
 
 export type PersonnelReportData = {
@@ -47,6 +50,7 @@ export type PersonnelFetchResult =
   | { kind: 'error'; status: number; message: string }
 
 type ApiEmployee = {
+  id: string
   code: string
   firstName: string
   lastName: string
@@ -57,6 +61,15 @@ type ApiEmployee = {
   baseSalary: string | null
   payFrequency: string | null
   isActive: boolean
+}
+
+type ApiDependent = {
+  employeeId: string
+  firstName: string
+  lastName: string
+  idNumber: string | null
+  relationship: string | null
+  hasDisability: boolean
 }
 
 const SITUACION_LABEL: Record<PersonnelSituacion, string> = {
@@ -81,6 +94,31 @@ export async function fetchPersonnelReportData(
   const employees: PdfPersonnelEmployee[] = []
   const situacion: PersonnelSituacion =
     filters.situacion ?? (filters.activeOnly === false ? 'all' : 'active')
+
+  // Dependientes (opcional): un solo fetch masivo agrupado por empleado.
+  let depMap: Map<string, PdfDependent[]> | null = null
+  if (filters.includeDependents) {
+    try {
+      const res = await fetch(`${API_URL}/dependents`, { headers })
+      if (res.status === 401) return { kind: 'unauthorized' }
+      if (res.ok) {
+        const json = (await res.json()) as { data: ApiDependent[] }
+        depMap = new Map()
+        for (const d of json.data ?? []) {
+          const arr = depMap.get(d.employeeId) ?? []
+          arr.push({
+            name: `${d.firstName} ${d.lastName}`.trim(),
+            relationship: d.relationship ?? null,
+            idNumber: d.idNumber ?? null,
+            hasDisability: !!d.hasDisability,
+          })
+          depMap.set(d.employeeId, arr)
+        }
+      }
+    } catch {
+      depMap = null // degrada: el reporte sale sin dependientes
+    }
+  }
 
   try {
     for (let page = 1; page <= MAX_PAGES; page++) {
@@ -117,6 +155,7 @@ export async function fetchPersonnelReportData(
           baseSalary: e.baseSalary,
           payFrequency: e.payFrequency,
           isActive: e.isActive,
+          ...(depMap ? { dependents: depMap.get(e.id) ?? [] } : {}),
         })
       }
       if (batch.length < PAGE_SIZE) break
@@ -141,6 +180,7 @@ export async function fetchPersonnelReportData(
   filterChips.push(SITUACION_LABEL[situacion])
   if (filters.hasOwnDisability) filterChips.push('Con discapacidad propia')
   if (filters.hasFamilyDisability) filterChips.push('Con familiares discapacitados')
+  if (filters.includeDependents) filterChips.push('Con familiares dependientes')
 
   return {
     kind: 'ok',

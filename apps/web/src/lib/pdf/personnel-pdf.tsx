@@ -2,6 +2,13 @@ import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type PdfDependent = {
+  name: string
+  relationship: string | null
+  idNumber: string | null
+  hasDisability: boolean
+}
+
 export type PdfPersonnelEmployee = {
   code: string
   firstName: string
@@ -13,6 +20,7 @@ export type PdfPersonnelEmployee = {
   baseSalary: string | null
   payFrequency: string | null
   isActive: boolean
+  dependents?: PdfDependent[]
 }
 
 export type PdfPersonnelCompany = {
@@ -198,6 +206,14 @@ const FREQ_LABEL: Record<string, string> = {
   monthly: 'Mensual',
 }
 
+const REL_LABEL: Record<string, string> = {
+  spouse: 'Cónyuge',
+  child: 'Hijo(a)',
+  parent: 'Padre/Madre',
+  sibling: 'Hermano(a)',
+  other: 'Otro',
+}
+
 // ─── Document ─────────────────────────────────────────────────────────────────
 
 export function PersonnelPdf({
@@ -310,6 +326,31 @@ export function PersonnelPdf({
             <Text style={[s.tdTotal, s.colStatus]} />
           </View>
         </View>
+
+        {employees.some((e) => (e.dependents?.length ?? 0) > 0) && (
+          <View style={{ marginTop: 14 }}>
+            <Text style={{ fontSize: 9, color: C.navy, marginBottom: 5, fontFamily: 'Helvetica-Bold' }}>
+              Familiares dependientes
+            </Text>
+            {employees
+              .filter((e) => (e.dependents?.length ?? 0) > 0)
+              .map((e) => (
+                <View key={`dep-${e.code}`} style={{ marginBottom: 5 }} wrap={false}>
+                  <Text style={{ fontSize: 7.5, color: C.gray700, fontFamily: 'Helvetica-Bold' }}>
+                    {`${e.firstName} ${e.lastName}`.trim()} ({e.code})
+                  </Text>
+                  {(e.dependents ?? []).map((d, di) => (
+                    <Text key={di} style={{ fontSize: 7, color: C.gray500, marginLeft: 12 }}>
+                      {`• ${d.name}`}
+                      {d.relationship ? ` — ${REL_LABEL[d.relationship] ?? d.relationship}` : ''}
+                      {d.idNumber ? ` · ${d.idNumber}` : ''}
+                      {d.hasDisability ? ' · con discapacidad' : ''}
+                    </Text>
+                  ))}
+                </View>
+              ))}
+          </View>
+        )}
 
         <View style={s.footer} fixed>
           <Text style={s.footerText}>

@@ -43,6 +43,27 @@ export const dependentsRoutes = new Elysia({ prefix: '/dependents' })
   .use(authPlugin)
   .use(tenantPlugin)
 
+  // Listado masivo de dependientes activos del tenant (para reportes que
+  // agrupan dependientes por colaborador sin un fetch N+1).
+  .get(
+    '/',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await db
+        .select()
+        .from(dependents)
+        .where(eq(dependents.isActive, true))
+        .orderBy(dependents.employeeId, dependents.lastName)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employees:read')],
+    }
+  )
+
   .get(
     '/:employeeId',
     async ({ db, params, set }) => {
