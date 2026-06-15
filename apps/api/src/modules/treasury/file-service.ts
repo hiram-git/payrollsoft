@@ -28,7 +28,7 @@ import {
   treasuryAchBatches,
   treasuryAchLines,
 } from '@payroll/db'
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, sql } from 'drizzle-orm'
 import { getClosedPayrollIdsForMonth, getCreditorPayables } from './service'
 
 // biome-ignore lint/suspicious/noExplicitAny: drizzle generic
@@ -112,6 +112,130 @@ async function getPayroll(db: AnyDb, payrollId: string) {
 async function getCompanyName(db: AnyDb): Promise<string> {
   const [row] = await db.select({ name: companyConfig.companyName }).from(companyConfig).limit(1)
   return (row?.name as string | null) ?? ''
+}
+
+async function getCompanyEntity(
+  db: AnyDb
+): Promise<{ entityName: string; entityCode: string; patronalNumber: string }> {
+  const [row] = await db
+    .select({
+      name: companyConfig.companyName,
+      entityName: companyConfig.entityName,
+      entityCode: companyConfig.entityCode,
+      patronal: companyConfig.patronalNumber,
+    })
+    .from(companyConfig)
+    .limit(1)
+  return {
+    entityName: (row?.entityName as string | null) ?? (row?.name as string | null) ?? '',
+    entityCode: (row?.entityCode as string | null) ?? '',
+    patronalNumber: (row?.patronal as string | null) ?? '',
+  }
+}
+
+export type ContraloriaReport =
+  | { ok: true; fileName: string; content: string }
+  | { ok: false; error: string }
+
+/**
+ * Bloqueo presupuestario por planilla, agregado por mes + año (+ tipo de
+ * planilla opcional): suma lo pagado por partida a través de TODAS las
+ * planillas cerradas del período. Replica el layout legacy.
+ */
+export async function buildBloqueoPlanillaReport(
+  db: AnyDb,
+  input: { month: number; year: number; payrollTypeId?: string | null }
+): Promise<ContraloriaReport> {
+  const conds = [
+    eq(payrolls.status, 'closed'),
+    sql`EXTRACT(YEAR FROM ${payrolls.paymentDate}) = ${input.year}`,
+    sql`EXTRACT(MONTH FROM ${payrolls.paymentDate}) = ${input.month}`,
+  ]
+  if (input.payrollTypeId) conds.push(eq(payrolls.payrollTypeId, input.payrollTypeId))
+  const idRows = await db
+    .select({ id: payrolls.id })
+    .from(payrolls)
+    .where(and(...conds))
+  const ids = (idRows as Array<{ id: string }>).map((r) => r.id)
+  if (ids.length === 0) {
+    return { ok: false, error: 'No hay planillas cerradas para el mes y tipo seleccionados.' }
+  }
+
+  const rows = await db
+    .select({
+      partida: budgetItems.code,
+      total: sql<string>`SUM(CAST(${payrollLines.grossAmount} AS NUMERIC))`,
+    })
+    .from(payrollLines)
+    .innerJoin(employees, eq(employees.id, payrollLines.employeeId))
+    .innerJoin(positions, eq(positions.id, employees.positionId))
+    .innerJoin(budgetItems, eq(budgetItems.id, positions.budgetItemId))
+    .where(inArray(payrollLines.payrollId, ids))
+    .groupBy(budgetItems.code)
+    .orderBy(asc(budgetItems.code))
+
+  const partidas = (rows as Array<{ partida: string; total: string }>).map((r) => ({
+    partida: r.partida,
+    total: Number(r.total ?? 0),
+  }))
+  if (partidas.length === 0) {
+    return { ok: false, error: 'No hay partidas asociadas a las posiciones de las planillas del mes.' }
+  }
+
+  const entity = await getCompanyEntity(db)
+  const result = generateBloqueoQuincenalText(partidas, {
+    entityName: entity.entityName,
+    ministerioCode: entity.entityCode || (partidas[0]?.partida.slice(0, 3) ?? ''),
+    paymentDateLabel: `${String(input.month).padStart(2, '0')}/${input.year}`,
+    month: input.month,
+    year: input.year,
+    half: 1,
+    periodLabel: 'MENSUAL',
+  })
+  return {
+    ok: true,
+    fileName: `Bloqueo_planilla_${monthNameEs(input.month)}_${input.year}.txt`,
+    content: result.content,
+  }
+}
+
+/** Bloqueo presupuestario mensual desde el presupuesto de las posiciones. */
+export async function buildBloqueoMensualReport(
+  db: AnyDb,
+  input: { month: number; year: number }
+): Promise<ContraloriaReport> {
+  const base = await db
+    .select({
+      partida: budgetItems.code,
+      total: sql<string>`SUM(CAST(${positions.salary} AS NUMERIC))`,
+    })
+    .from(positions)
+    .innerJoin(budgetItems, eq(budgetItems.id, positions.budgetItemId))
+    .groupBy(budgetItems.code)
+    .orderBy(asc(budgetItems.code))
+  const representation = await db
+    .select({
+      partida: budgetItems.code,
+      total: sql<string>`SUM(CAST(${positions.representationAmount} AS NUMERIC))`,
+    })
+    .from(positions)
+    .innerJoin(budgetItems, eq(budgetItems.id, positions.representationBudgetItemId))
+    .where(sql`CAST(${positions.representationAmount} AS NUMERIC) > 0`)
+    .groupBy(budgetItems.code)
+    .orderBy(asc(budgetItems.code))
+  const entries = [...base, ...representation].map((r: { partida: string; total: string }) => ({
+    partida: r.partida,
+    total: Number(r.total ?? 0),
+  }))
+  if (entries.length === 0) {
+    return { ok: false, error: 'No hay posiciones con partida presupuestaria configurada.' }
+  }
+  const result = generateBloqueoMensualText(entries, { month: input.month, year: input.year })
+  return {
+    ok: true,
+    fileName: `Bloqueo_mensual_${monthNameEs(input.month)}_${input.year}.txt`,
+    content: result.content,
+  }
 }
 
 async function storeBatch(
