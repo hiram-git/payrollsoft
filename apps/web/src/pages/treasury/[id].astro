@@ -181,7 +181,6 @@ const checksTotal = checksLive.reduce((a, c) => a + (Number(c.amount) || 0), 0)
 const batchesTotal = runBatches.reduce((a, b) => a + (Number(b.totalAmount) || 0), 0)
 const creditorTotal = creditorPayables.reduce((a, p) => a + p.amount, 0)
 const creditorChecks = checksLive.filter((c) => c.beneficiaryType === 'creditor')
-const creditorCheckPayables = creditorPayables.filter((p) => p.paymentMethod === 'check')
 function creditorStatus(p: Payable): { label: string; cls: string } {
   if (p.paymentMethod === 'ach') {
     return p.accountNumber && p.bankRouting
@@ -299,12 +298,6 @@ const today = new Date().toISOString().slice(0, 10)
         Cheques ({checks.length})
       </button>
       <button type="button" class="tr-tab" data-target="tab-ach">ACH</button>
-      {run.payrollId && (
-        <button type="button" class="tr-tab" data-target="tab-payables">Pagables ({payables.length})</button>
-      )}
-      {run.payrollId && (
-        <button type="button" class="tr-tab" data-target="tab-creditors">Acreedores ({creditorPayables.length})</button>
-      )}
     </div>
 
     {/* ─── Tab Cheques ────────────────────────────────────── */}
@@ -323,6 +316,9 @@ const today = new Date().toISOString().slice(0, 10)
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
                   </button>
                 </>
+              )}
+              {creditorChecks.length > 0 && (
+                <button type="button" class="tr-btn-action" title="Descargar cheques de acreedores (PDF)" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf?beneficiary=creditor'`}>Acreedores PDF</button>
               )}
               <button type="button" id="btn-issue-bulk" class="tr-btn-action">+ Generar en lote</button>
               <button type="button" id="btn-issue-check" class="tr-btn-action tr-btn-action-primary">+ Emitir cheque</button>
@@ -718,187 +714,6 @@ const today = new Date().toISOString().slice(0, 10)
         </div>
       )}
     </section>
-
-    {/* ─── Tab Pagables (preview de empleados) ─────────────── */}
-    {run.payrollId && (
-      <section id="tab-payables" class="hidden">
-        <div class="tr-card border rounded-lg overflow-hidden">
-          <header class="px-5 py-3 border-b tr-rule">
-            <h2 class="text-sm font-semibold tr-title">Pagables de la planilla</h2>
-            <p class="text-xs tr-mute mt-0.5">
-              Empleados de la planilla con su método de pago configurado. Los que están en
-              <strong> ACH</strong> entran al batch automático; los de <strong>cheque</strong>
-              hay que emitirles cheque uno por uno.
-            </p>
-          </header>
-          {payables.length === 0 ? (
-            <div class="py-10 text-center">
-              <p class="text-sm tr-mute">No hay líneas pagables para esta planilla.</p>
-            </div>
-          ) : (
-            <div data-tr-list data-tr-page-size="10">
-            <div class="px-5 py-2.5 border-b tr-rule">
-              <input type="search" data-tr-search placeholder="Buscar beneficiario o cuenta…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
-            </div>
-            <table class="tr-table w-full text-sm">
-              <thead>
-                <tr>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Beneficiario</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Método</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Cuenta</th>
-                  <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
-                </tr>
-              </thead>
-              <tbody data-tr-rows>
-                {payables.map((p) => (
-                  <tr class="border-b last:border-0 tr-rule">
-                    <td class="px-5 py-3 tr-cell">
-                      {p.beneficiaryName}
-                      {p.identification && <span class="ml-2 text-xs tr-mute font-mono">{p.identification}</span>}
-                    </td>
-                    <td class="px-5 py-3">
-                      <span class={`tr-method-${p.paymentMethod}`}>{p.paymentMethod.toUpperCase()}</span>
-                    </td>
-                    <td class="px-5 py-3 text-xs tr-mute font-mono">
-                      {p.accountNumber ? `${p.accountNumber} · ${p.accountType ?? '?'}` : '—'}
-                    </td>
-                    <td class="px-5 py-3 text-right font-mono text-xs tr-cell">{fmtMoney(p.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
-            </div>
-          )}
-        </div>
-      </section>
-    )}
-
-    {/* ─── Tab Acreedores ─────────────────────────────────── */}
-    {run.payrollId && (
-      <section id="tab-creditors" class="hidden">
-        {/* Cheques de acreedores — mismo flujo que empleados: generar en lote
-            y descargar el formato (PDF / Excel), pero acotado a acreedores. */}
-        {run.status === 'open' && canWrite && (
-          <div class="tr-card border rounded-lg overflow-hidden mb-4">
-            <header class="px-5 py-3 border-b tr-rule flex items-center justify-between gap-3 flex-wrap">
-              <div>
-                <h2 class="text-sm font-semibold tr-title">Cheques a acreedores</h2>
-                <p class="text-xs tr-mute mt-0.5">
-                  {creditorCheckPayables.length} acreedor(es) con método <strong>cheque</strong> ·
-                  {creditorChecks.length} cheque(s) ya emitido(s).
-                </p>
-              </div>
-              <div class="flex items-center gap-2">
-                {creditorChecks.length > 0 && (
-                  <>
-                    <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf?beneficiary=creditor'`}>PDF (acreedores)</button>
-                    <button type="button" class="tr-btn-xs" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-xlsx?beneficiary=creditor'`}>Excel (acreedores)</button>
-                    <span class="tr-mute text-xs">·</span>
-                  </>
-                )}
-                {activeCheckbooks.length > 0 && (
-                  <button type="button" id="btn-cred-checks" class="text-xs tr-link">+ Generar cheques</button>
-                )}
-              </div>
-            </header>
-
-            {activeCheckbooks.length > 0 && (
-              <form id="form-cred-checks" method="POST" action={`/api/treasury/action?op=checks-bulk&runId=${runId}`} class="hidden px-5 py-4 border-b tr-rule">
-                <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
-                <input type="hidden" name="beneficiary" value="creditors" />
-                <input type="hidden" name="month" value={creditorMonth} />
-                <input type="hidden" name="year" value={creditorYear} />
-                <p class="text-xs tr-mute mb-3">
-                  Emite un cheque por cada acreedor con método <strong>cheque</strong> del mes
-                  {mesLabel ? ` (${mesLabel} ${creditorYear})` : ''}. Omite los que ya tienen cheque vigente.
-                </p>
-                <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                  <div class="md:col-span-5">
-                    <label class="block text-xs font-medium tr-subtitle mb-1.5">Chequera *</label>
-                    <select name="checkbookId" required class="tr-input w-full px-3 py-2 text-sm rounded-md">
-                      {activeCheckbooks.map((c) => (
-                        <option value={c.id}>{c.name} · próx. {String(c.nextNumber).padStart(7, '0')}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div class="md:col-span-4">
-                    <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha *</label>
-                    <input type="date" name="issueDate" required value={today} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
-                  </div>
-                  <div class="md:col-span-3 flex justify-end gap-2">
-                    <button type="button" id="btn-cred-checks-cancel" class="tr-mute px-3 py-2 text-sm">Cancelar</button>
-                    <button type="submit" disabled={creditorCheckPayables.length === 0} class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">Generar cheques</button>
-                  </div>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-
-        <div class="tr-card border rounded-lg overflow-hidden">
-          <header class="px-5 py-3 border-b tr-rule">
-            <h2 class="text-sm font-semibold tr-title">
-              Acreedores por pagar{mesLabel ? ` · ${mesLabel} ${creditorYear}` : ''}
-            </h2>
-            <p class="text-xs tr-mute mt-0.5">
-              Suma de las deducciones <strong>ACR_*</strong> retenidas en las planillas cerradas del
-              mes, agrupada por proveedor (se paga por mes — ambas quincenas).
-            </p>
-          </header>
-          {creditorPayables.length === 0 ? (
-            <div class="py-10 text-center">
-              <p class="text-sm tr-mute">No hay montos retenidos a acreedores en el mes.</p>
-            </div>
-          ) : (
-            <div data-tr-list data-tr-page-size="10">
-            <div class="px-5 py-2.5 border-b tr-rule">
-              <input type="search" data-tr-search placeholder="Buscar proveedor o cuenta…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
-            </div>
-            <table class="tr-table w-full text-sm">
-              <thead>
-                <tr>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Proveedor</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Método</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Banco / Cuenta</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Estado</th>
-                  <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
-                </tr>
-              </thead>
-              <tbody data-tr-rows>
-                {creditorPayables.map((p) => {
-                  const st = creditorStatus(p)
-                  return (
-                    <tr class="border-b last:border-0 tr-rule">
-                      <td class="px-5 py-3 tr-cell">
-                        {p.beneficiaryName}
-                        {p.identification && <span class="ml-2 text-xs tr-mute font-mono">{p.identification}</span>}
-                      </td>
-                      <td class="px-5 py-3">
-                        <span class={`tr-method-${p.paymentMethod}`}>{p.paymentMethod.toUpperCase()}</span>
-                      </td>
-                      <td class="px-5 py-3 text-xs tr-mute font-mono">
-                        {p.accountNumber ? `${p.accountNumber} · ${p.accountType ?? '?'}` : '—'}
-                      </td>
-                      <td class="px-5 py-3">
-                        <span class={`tr-status-badge ${st.cls}`}>{st.label}</span>
-                      </td>
-                      <td class="px-5 py-3 text-right font-mono text-xs tr-cell">{fmtMoney(p.amount)}</td>
-                    </tr>
-                  )
-                })}
-                <tr class="tr-rule" data-tr-keep>
-                  <td class="px-5 py-3 text-right text-xs font-semibold tr-subtitle" colspan="4">Total</td>
-                  <td class="px-5 py-3 text-right font-mono text-sm font-semibold tr-title">{fmtMoney(creditorTotal)}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
-            </div>
-          )}
-        </div>
-      </section>
-    )}
   </div>
 
   <dialog id="void-modal" class="void-modal">
@@ -969,13 +784,6 @@ const today = new Date().toISOString().slice(0, 10)
       const issueCancel = document.getElementById('btn-issue-cancel')
       issueBtn?.addEventListener('click', () => issueForm?.classList.toggle('hidden'))
       issueCancel?.addEventListener('click', () => issueForm?.classList.add('hidden'))
-
-      // Cheques a acreedores (tab Acreedores)
-      const credChecksBtn = document.getElementById('btn-cred-checks')
-      const credChecksForm = document.getElementById('form-cred-checks')
-      const credChecksCancel = document.getElementById('btn-cred-checks-cancel')
-      credChecksBtn?.addEventListener('click', () => credChecksForm?.classList.toggle('hidden'))
-      credChecksCancel?.addEventListener('click', () => credChecksForm?.classList.add('hidden'))
 
       // Cheques en lote
       const bulkBtn = document.getElementById('btn-issue-bulk')
