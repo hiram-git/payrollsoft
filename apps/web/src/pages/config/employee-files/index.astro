@@ -114,7 +114,7 @@ const ROLE_OPTIONS = [
           <h2 class="text-sm font-semibold cfg-heading">Tipos de expediente</h2>
           <p class="text-xs cfg-hint mt-0.5">{types.length} tipos · {subtypes.length} subtipos</p>
         </div>
-        <button type="button" id="cfg-new-type-btn" class="text-xs cfg-link">+ Nuevo tipo</button>
+        <button type="button" id="cfg-new-type-btn" class="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700">+ Nuevo tipo</button>
       </header>
 
       <!-- Form de nuevo tipo (oculto por default) -->
@@ -218,7 +218,7 @@ const ROLE_OPTIONS = [
                 <div class="cfg-subtypes border-t cfg-rule">
                   <div class="cfg-subtypes-header px-5 py-2 border-b cfg-rule flex items-center justify-between">
                     <span class="text-xs font-semibold uppercase tracking-wide cfg-label">Subtipos</span>
-                    <button type="button" class="text-xs cfg-link" data-toggle-subtype-form={t.id}>+ Nuevo subtipo</button>
+                    <button type="button" class="px-3 py-1.5 rounded-md bg-blue-600 text-white text-xs font-medium hover:bg-blue-700" data-toggle-subtype-form={t.id}>+ Nuevo subtipo</button>
                   </div>
 
                   <!-- Form nuevo subtipo (oculto) -->
