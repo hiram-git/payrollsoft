@@ -33,6 +33,11 @@ export type BloqueoQuincenalOptions = {
   year: number
   /** Quincena: 1 = PRIMERA_QUINCENA, 2 = SEGUNDA_QUINCENA. */
   half: 1 | 2
+  /**
+   * Etiqueta de período que reemplaza a PRIMERA/SEGUNDA_QUINCENA en el
+   * encabezado. Se usa para el bloqueo agregado por mes (p. ej. "MENSUAL").
+   */
+  periodLabel?: string
   /** Sufijo de partida para frecuencias especiales (XIII mes → "050", GR → "030"). */
   partidaSuffix?: '050' | '030' | null
   eol?: string
@@ -48,7 +53,8 @@ export function generateBloqueoQuincenalText(
   options: BloqueoQuincenalOptions
 ): GeneratedFile {
   const eol = options.eol ?? '\n'
-  const quincenaLabel = options.half === 1 ? 'PRIMERA_QUINCENA' : 'SEGUNDA_QUINCENA'
+  const quincenaLabel =
+    options.periodLabel ?? (options.half === 1 ? 'PRIMERA_QUINCENA' : 'SEGUNDA_QUINCENA')
 
   const out: string[] = ['', '']
   out.push(`Fecha: ${options.paymentDateLabel}${' '.repeat(40)}PAGINA: 1     de 1`)

@@ -301,7 +301,7 @@ export function CreditorsPdf({
   return (
     <Document
       title={`Acreedores ${monthLabel} ${report.year}`}
-      author="PayrollSoft"
+      author="RCG SOFTRIX"
       subject="Reporte mensual de acreedores"
     >
       <Page size="A4" style={s.page} orientation="landscape" wrap>
@@ -443,7 +443,7 @@ export function CreditorsPdf({
               ? `Generado por ${generatedBy.name}${
                   generatedBy.email ? ` (${generatedBy.email})` : ''
                 }`
-              : 'PayrollSoft'}
+              : 'RCG SOFTRIX'}
           </Text>
           <Text
             style={s.footerText}

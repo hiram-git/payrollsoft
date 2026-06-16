@@ -27,6 +27,8 @@ import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 import {
   type AchScope,
+  buildBloqueoMensualReport,
+  buildBloqueoPlanillaReport,
   generateBancoGeneralFile,
   generateBancoNacionalFile,
   generateBloqueoMensualFile,
@@ -59,6 +61,57 @@ import {
 export const treasuryRoutes = new Elysia()
   .use(authPlugin)
   .use(tenantPlugin)
+
+  // ── Contraloría: bloqueos presupuestarios (mes + año) ────────────────────
+  .get(
+    '/contraloria/bloqueo-planilla',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const report = await buildBloqueoPlanillaReport(db, {
+        month: Number(query.month),
+        year: Number(query.year),
+        payrollTypeId: query.payrollTypeId || null,
+      })
+      if (!report.ok) {
+        set.status = 422
+        return { success: false, error: report.error }
+      }
+      return { success: true, data: { fileName: report.fileName, content: report.content } }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({
+        month: t.String(),
+        year: t.String(),
+        payrollTypeId: t.Optional(t.String()),
+      }),
+    }
+  )
+  .get(
+    '/contraloria/bloqueo-mensual',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const report = await buildBloqueoMensualReport(db, {
+        month: Number(query.month),
+        year: Number(query.year),
+      })
+      if (!report.ok) {
+        set.status = 422
+        return { success: false, error: report.error }
+      }
+      return { success: true, data: { fileName: report.fileName, content: report.content } }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({ month: t.String(), year: t.String() }),
+    }
+  )
 
   // ── Bancos ──────────────────────────────────────────────────────────────
   .get(

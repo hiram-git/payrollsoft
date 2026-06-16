@@ -442,6 +442,13 @@
       "when": 1762128042000,
       "tag": "0063_ach_lines_creditor",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1762128043000,
+      "tag": "0064_company_institutional_fields",
+      "breakpoints": true
     }
   ]
 }

@@ -372,7 +372,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
       const mailer = mailerConfigFromCompany(companyForMailer as AnyDb)
       if (mailer) {
         const resetUrl = `${env.WEB_URL}/portal/reset-password?token=${encodeURIComponent(token)}`
-        const companyName = cc?.company_name ?? 'PayrollSoft'
+        const companyName = cc?.company_name ?? 'RCG SOFTRIX'
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;color:#333;max-width:600px;margin:0 auto;padding:24px;">
 <div style="border-bottom:2px solid #003087;padding-bottom:12px;margin-bottom:20px;">
   <strong style="color:#003087;">${companyName}</strong> — Portal del Colaborador
@@ -382,7 +382,7 @@ export const portalAuthRoutes = new Elysia({ prefix: '/portal/auth' })
 <p><a href="${resetUrl}" style="display:inline-block;padding:12px 24px;background:#003087;color:#fff;text-decoration:none;border-radius:4px;font-weight:bold;">Restablecer contraseña</a></p>
 <p style="font-size:13px;color:#666;margin-top:16px;">Este enlace expira en <strong>1 hora</strong>. Si no solicitaste este cambio, ignora este correo.</p>
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888;">
-  Este correo fue generado automáticamente por PayrollSoft.
+  Este correo fue generado automáticamente por RCG SOFTRIX.
 </div>
 </body></html>`
         await sendMail(mailer, {

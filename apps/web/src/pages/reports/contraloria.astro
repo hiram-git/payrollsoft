@@ -1,0 +1,127 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'treasury:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type PayrollType = { id: string; name: string; sortOrder: number }
+let payrollTypes: PayrollType[] = []
+try {
+  const res = await fetch(`${API_URL}/concepts/config`, { headers })
+  if (res.ok) {
+    const json = (await res.json()) as { data?: { payrollTypes?: PayrollType[] } }
+    payrollTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
+  }
+} catch {
+  /* ignore */
+}
+
+const now = new Date()
+const currentYear = now.getUTCFullYear()
+const currentMonth = now.getUTCMonth() + 1
+const years = [currentYear, currentYear - 1, currentYear - 2]
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+---
+<AppLayout title="Reportes · Contraloría">
+  <div class="mx-auto w-full max-w-5xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold tracking-tight text-gray-900">Contraloría</h1>
+      <p class="text-sm mt-0.5 text-gray-500">
+        Bloqueos presupuestarios (TXT) de las planillas cerradas, agrupados por mes y año.
+      </p>
+    </div>
+
+    <section class="bg-white border border-gray-200 rounded-lg p-5 mb-5">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="c-mes">Mes</label>
+          <select id="c-mes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {MESES.map((m, i) => (
+              <option value={i + 1} selected={i + 1 === currentMonth}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="c-anio">Año</label>
+          <select id="c-anio" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {years.map((y) => <option value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="c-tipo">Tipo de planilla</label>
+          <select id="c-tipo" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            <option value="">Todos los tipos</option>
+            {payrollTypes.map((t) => <option value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <h2 class="text-sm font-semibold text-gray-800">Bloqueo presupuestario por planilla</h2>
+        <p class="text-xs text-gray-500 mt-1 mb-4">
+          Totales de control por ministerio y partida de lo pagado en las planillas cerradas
+          del mes/año seleccionado (filtra por tipo si se indica).
+        </p>
+        <button type="button" data-dl="bloqueo-planilla" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+          Descargar TXT
+        </button>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <h2 class="text-sm font-semibold text-gray-800">Bloqueo presupuestario mensual</h2>
+        <p class="text-xs text-gray-500 mt-1 mb-4">
+          Totales por partida desde el presupuesto de las posiciones (sueldos y gasto de
+          representación) para el mes/año seleccionado.
+        </p>
+        <button type="button" data-dl="bloqueo-mensual" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+          Descargar TXT
+        </button>
+      </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <h2 class="text-sm font-semibold text-gray-800">TXT de contabilidad / devengos</h2>
+        <p class="text-xs text-gray-500 mt-1 mb-4">
+          Totales del mes, devengos por partida y acreedores, de las planillas cerradas
+          del período (y tipo).
+        </p>
+        <button type="button" data-contab class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+          Descargar TXT
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      const mes = document.getElementById('c-mes')
+      const anio = document.getElementById('c-anio')
+      const tipo = document.getElementById('c-tipo')
+      document.querySelectorAll('[data-dl]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const kind = btn.getAttribute('data-dl')
+          const qs = new URLSearchParams({ kind, month: mes.value, year: anio.value })
+          if (kind === 'bloqueo-planilla' && tipo.value) qs.set('payrollTypeId', tipo.value)
+          window.location.href = '/api/reports/contraloria/download?' + qs.toString()
+        })
+      })
+      const contab = document.querySelector('[data-contab]')
+      if (contab) {
+        contab.addEventListener('click', () => {
+          const qs = new URLSearchParams({ month: mes.value, year: anio.value })
+          if (tipo.value) qs.set('payrollTypeId', tipo.value)
+          window.location.href = '/api/reports/contraloria/contabilidad?' + qs.toString()
+        })
+      }
+    })()
+  </script>
+</AppLayout>

@@ -50,7 +50,7 @@ function formatDate(iso: string | null): string {
 export function buildPayslipEmail(params: PayslipEmailParams): PayslipEmail {
   const symbol = params.currencySymbol ?? '$'
   const safeName = escapeHtml(params.employeeName)
-  const safeCompany = escapeHtml(params.companyName ?? 'PayrollSoft')
+  const safeCompany = escapeHtml(params.companyName ?? 'RCG SOFTRIX')
   const safePayroll = escapeHtml(params.payrollName)
   const period = `${formatDate(params.periodStart)} → ${formatDate(params.periodEnd)}`
   const paymentLine = params.paymentDate
@@ -79,7 +79,7 @@ export function buildPayslipEmail(params: PayslipEmailParams): PayslipEmail {
                   <td width="40" height="40" align="center" valign="middle" style="background:#003087;border-radius:6px;color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:40px;">P</td>
                   <td style="padding-left:14px;">
                     <div style="font-weight:600;color:#0c1424;font-size:14px;letter-spacing:0.01em;">${safeCompany}</div>
-                    <div style="font-size:11px;color:#7a8499;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">PayrollSoft · Comprobante</div>
+                    <div style="font-size:11px;color:#7a8499;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">RCG SOFTRIX · Comprobante</div>
                   </td>
                 </tr>
               </table>
@@ -142,7 +142,7 @@ export function buildPayslipEmail(params: PayslipEmailParams): PayslipEmail {
     '',
     'El detalle completo está en el archivo PDF adjunto.',
     '',
-    `© ${year} ${params.companyName ?? 'PayrollSoft'}`,
+    `© ${year} ${params.companyName ?? 'RCG SOFTRIX'}`,
   ]
     .filter(Boolean)
     .join('\n')

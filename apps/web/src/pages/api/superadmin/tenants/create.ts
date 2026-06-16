@@ -50,6 +50,10 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const adminName = ((formData.get('adminName') as string | null) ?? '').trim()
   const adminEmail = ((formData.get('adminEmail') as string | null) ?? '').trim().toLowerCase()
   const adminPassword = (formData.get('adminPassword') as string | null) ?? ''
+  // Tipo de empresa: "Con posiciones" (publica) usa posiciones + ejecución
+  // presupuestaria; "Sin posiciones" (privada) no. Default privada.
+  const institutionType =
+    (formData.get('institutionType') as string | null) === 'publica' ? 'publica' : 'privada'
 
   // Seeds opcionales — checkboxes en el wizard. El input numérico
   // `seedEmployeesTotal` viaja como string; se valida en el API
@@ -92,6 +96,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
         adminEmail,
         adminName,
         adminPassword,
+        institutionType,
         seeds: seedEmployees || seedLoans ? seeds : undefined,
       }),
     })

@@ -205,7 +205,7 @@ export function MovementsPdf({ company, filters, rows, generatedBy }: MovementsP
     .join('  ·  ')
 
   return (
-    <Document title="Reporte de Movimientos de Expedientes" author="PayrollSoft">
+    <Document title="Reporte de Movimientos de Expedientes" author="RCG SOFTRIX">
       <Page size="A4" style={s.page} wrap>
         {/* ── Header (repeats on every page) ── */}
         <View style={s.header} fixed>

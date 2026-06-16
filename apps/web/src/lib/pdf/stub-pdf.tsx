@@ -343,14 +343,14 @@ export function StubPdf({
   return (
     <Document
       title={`Comprobante — ${employeeName}`}
-      author="PayrollSoft"
+      author="RCG SOFTRIX"
       subject="Comprobante de pago"
     >
       <Page size="LETTER" style={s.page}>
         {/* ── Header ── */}
         <View style={s.headerBar}>
           <View>
-            <Text style={s.appName}>PayrollSoft</Text>
+            <Text style={s.appName}>RCG SOFTRIX</Text>
             <Text style={s.docTitle}>Comprobante de Pago</Text>
           </View>
           <View style={s.payrollBlock}>
@@ -469,7 +469,7 @@ export function StubPdf({
 
         {/* ── Footer ── */}
         <View style={s.footer} fixed>
-          <Text style={s.footerText}>PayrollSoft — Comprobante de Pago</Text>
+          <Text style={s.footerText}>RCG SOFTRIX — Comprobante de Pago</Text>
           <Text style={s.footerText}>Generado: {generatedAt}</Text>
         </View>
       </Page>

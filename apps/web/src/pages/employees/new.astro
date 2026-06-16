@@ -20,6 +20,7 @@ type Position = {
   departmentId: string | null
   jobFunctionId: string | null
   isActive: boolean
+  status: 'en_uso' | 'vacante' | string
 }
 type CompanyConfig = { tipoInstitucion?: string | null }
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
@@ -238,7 +239,7 @@ const errorMessages: Record<string, string> = {
                       data-overtime={p.overtimeAmount ?? '0'}
                       data-representation={p.representationAmount ?? '0'}
                     >
-                      {p.name} ({p.code}) — ${p.salary}
+                      {p.name} ({p.code}) — ${p.salary} · {p.status === 'en_uso' ? 'Ocupada' : 'Vacante'}
                     </option>
                   ))}
                 </select>

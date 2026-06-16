@@ -19,6 +19,9 @@ type CompanyConfig = {
   phone: string | null
   email: string | null
   institutionType: string
+  patronalNumber: string | null
+  entityCode: string | null
+  entityName: string | null
   currencyCode: string
   currencySymbol: string
   mailHost: string | null
@@ -236,6 +239,23 @@ const hasSmtpPassword = Boolean(company?.mailPassword)
             <div class="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-800 space-y-1">
               <p><strong>Sin posiciones:</strong> Sueldos individuales por empleado.</p>
               <p><strong>Con posiciones:</strong> Sueldos tomados de posiciones presupuestarias.</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">N° patronal (CSS)</label>
+              <input type="text" name="patronalNumber" maxlength="20" class="input" value={v('patronalNumber', '')} placeholder="878100038" />
+              <p class="text-xs text-gray-500 mt-1">Para reportes SIPE / SIACAP.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Código de entidad / ministerio</label>
+              <input type="text" name="entityCode" maxlength="10" class="input" value={v('entityCode', '')} placeholder="139" />
+              <p class="text-xs text-gray-500 mt-1">Para bloqueos y TXT de contabilidad.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nombre de entidad / ministerio</label>
+              <input type="text" name="entityName" maxlength="255" class="input" value={v('entityName', '')} placeholder="INSTITUTO TÉCNICO SUPERIOR ESPECIALIZADO" />
             </div>
           </div>
 

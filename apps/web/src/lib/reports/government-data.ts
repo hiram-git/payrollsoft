@@ -297,7 +297,7 @@ export async function fetchGovernmentReportData(
   // Cache hits skip the network call entirely so a burst of report
   // clicks within the TTL window doesn't run the per-IP rate limiter
   // up to 429.
-  type PositionRow = { id: string; partidaId: string | null }
+  type PositionRow = { id: string; budgetItemId: string | null }
 
   async function fetchCached<T>(
     label: 'company' | 'positions' | 'partidas',
@@ -314,13 +314,13 @@ export async function fetchGovernmentReportData(
   const [companyJson, positionsJson, partidasJson] = await Promise.all([
     fetchCached<{ data: GovCompany | null }>('company', `${API_URL}/company`),
     fetchCached<{ data: PositionRow[] }>('positions', `${API_URL}/positions?limit=10000`),
-    fetchCached<{ data: Partida[] }>('partidas', `${API_URL}/partidas?limit=10000`),
+    fetchCached<{ data: Partida[] }>('partidas', `${API_URL}/budget-items`),
   ])
 
   const company = companyJson?.data ?? null
 
   const positionMap = new Map<string, string | null>()
-  for (const p of positionsJson?.data ?? []) positionMap.set(p.id, p.partidaId)
+  for (const p of positionsJson?.data ?? []) positionMap.set(p.id, p.budgetItemId)
 
   const partidaMap = new Map<string, Partida>()
   for (const p of partidasJson?.data ?? []) partidaMap.set(p.id, p)

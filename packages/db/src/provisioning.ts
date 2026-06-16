@@ -32,6 +32,12 @@ export type ProvisionTenantInput = {
   slug: string
   name: string
   contactEmail?: string | null
+  /**
+   * Tipo de empresa: 'publica' = usa posiciones + ejecución presupuestaria
+   * (siembra posiciones + partidas), 'privada' = sin posiciones. El wizard
+   * lo expone como "Con posiciones" / "Sin posiciones". Default 'privada'.
+   */
+  institutionType?: 'publica' | 'privada'
   admin: {
     email: string
     name: string
@@ -169,12 +175,18 @@ export async function provisionTenant(
 
       await runMigrations(tenant, { folder, schemaLabel: schemaName, log })
 
+      const institutionType = input.institutionType ?? 'privada'
       adminUserId = await seedTenantBootstrapData(tenant, input.admin)
       await seedCompanyConfig(tenant, {
         companyName: input.name,
         contactEmail: input.contactEmail ?? null,
+        institutionType,
       })
       await seedDefaultConcepts(tenant)
+      // Catálogos base según el tipo de empresa: siempre cargos/funciones/
+      // departamentos; las empresas "con posiciones" (publica) además reciben
+      // partidas presupuestarias y un set inicial de posiciones.
+      await seedBaseCatalogs(tenant, institutionType === 'publica')
 
       // ── Seeds opcionales ───────────────────────────────────────────
       // Se ejecutan en orden (empleados antes que préstamos, porque
@@ -382,13 +394,82 @@ async function seedTenantBootstrapData(
  */
 async function seedCompanyConfig(
   tenant: postgres.Sql,
-  data: { companyName: string; contactEmail: string | null }
+  data: { companyName: string; contactEmail: string | null; institutionType: string }
 ): Promise<void> {
   await tenant`
-    INSERT INTO company_config (company_name, email)
-    SELECT ${data.companyName}, ${data.contactEmail}
+    INSERT INTO company_config (company_name, email, institution_type)
+    SELECT ${data.companyName}, ${data.contactEmail}, ${data.institutionType}
      WHERE NOT EXISTS (SELECT 1 FROM company_config)
   `
+}
+
+/**
+ * Siembra los catálogos base de la empresa según su tipo. Siempre crea un set
+ * mínimo de funciones, cargos y departamentos. Las empresas "con posiciones"
+ * (publica) además reciben partidas presupuestarias estándar y una posición
+ * por cargo (vacante) ligada al departamento ADMIN y a la partida de sueldos.
+ * Idempotente vía ON CONFLICT.
+ */
+async function seedBaseCatalogs(tenant: postgres.Sql, withPositions: boolean): Promise<void> {
+  await tenant`
+    INSERT INTO job_functions (code, name) VALUES
+      ('ADM', 'Administrativo'),
+      ('OPE', 'Operativo'),
+      ('VEN', 'Ventas')
+    ON CONFLICT (code) DO NOTHING
+  `
+  await tenant`
+    INSERT INTO job_titles (code, name) VALUES
+      ('EMP', 'Empleado General'),
+      ('ANL', 'Analista'),
+      ('SUP', 'Supervisor'),
+      ('GER', 'Gerente')
+    ON CONFLICT (code) DO NOTHING
+  `
+  const [adminDept] = await tenant<{ id: string }[]>`
+    INSERT INTO departments (code, name) VALUES ('ADMIN', 'Administración')
+    ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+    RETURNING id
+  `
+  await tenant`
+    INSERT INTO departments (code, name, parent_id) VALUES
+      ('RRHH', 'Recursos Humanos', ${adminDept.id})
+    ON CONFLICT (code) DO NOTHING
+  `
+  await tenant`
+    INSERT INTO departments (code, name) VALUES
+      ('OPS', 'Operaciones'),
+      ('VEN', 'Ventas')
+    ON CONFLICT (code) DO NOTHING
+  `
+
+  if (!withPositions) return
+
+  await tenant`
+    INSERT INTO budget_items (code, name) VALUES
+      ('6.10.10.001', 'Sueldos'),
+      ('6.10.10.002', 'Horas extras'),
+      ('6.10.10.003', 'Vacaciones'),
+      ('6.10.10.004', 'Décimo tercer mes'),
+      ('6.10.10.007', 'Gasto de representación')
+    ON CONFLICT (code) DO NOTHING
+  `
+  const [sueldos] = await tenant<{ id: string }[]>`
+    SELECT id FROM budget_items WHERE code = '6.10.10.001' LIMIT 1
+  `
+  const cargos = await tenant<{ id: string; name: string }[]>`
+    SELECT id, name FROM job_titles ORDER BY code
+  `
+  let n = 1
+  for (const c of cargos) {
+    const code = `POS-${String(n).padStart(3, '0')}`
+    await tenant`
+      INSERT INTO positions (code, name, salary, job_title_id, department_id, budget_item_id, status)
+      VALUES (${code}, ${c.name}, '0', ${c.id}, ${adminDept.id}, ${sueldos?.id ?? null}, 'vacante')
+      ON CONFLICT (code) DO NOTHING
+    `
+    n++
+  }
 }
 
 /**

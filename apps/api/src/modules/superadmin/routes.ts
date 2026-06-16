@@ -169,6 +169,7 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
         slug: body.slug,
         name: body.name,
         contactEmail: body.contactEmail ?? null,
+        institutionType: body.institutionType === 'publica' ? 'publica' : 'privada',
         admin: {
           email: body.adminEmail,
           name: body.adminName,
@@ -204,6 +205,9 @@ export const superadminRoutes = new Elysia({ prefix: '/superadmin' })
         adminEmail: t.String({ format: 'email' }),
         adminName: t.String({ minLength: 1, maxLength: 255 }),
         adminPassword: t.String({ minLength: 12, maxLength: 256 }),
+        institutionType: t.Optional(
+          t.Union([t.Literal('publica'), t.Literal('privada')])
+        ),
         seeds: t.Optional(
           t.Object({
             employees: t.Optional(t.Boolean()),

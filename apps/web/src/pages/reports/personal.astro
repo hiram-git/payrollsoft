@@ -85,6 +85,7 @@ const situacion: 'active' | 'inactive' | 'all' =
   sp.get('situacion') === 'inactive' ? 'inactive' : sp.get('situacion') === 'all' ? 'all' : 'active'
 const filterOwnDisability = sp.get('ownDisability') === 'true'
 const filterFamilyDisability = sp.get('familyDisability') === 'true'
+const filterIncludeDependents = sp.get('dependents') === 'true'
 
 const activePayrollType = payrollTypes.find((t) => t.id === filterTypeId) ?? null
 
@@ -142,6 +143,7 @@ if (activePayrollType?.name) downloadParams.set('payrollTypeName', activePayroll
 downloadParams.set('situacion', situacion)
 if (filterOwnDisability) downloadParams.set('hasOwnDisability', 'true')
 if (filterFamilyDisability) downloadParams.set('hasFamilyDisability', 'true')
+if (filterIncludeDependents) downloadParams.set('dependents', 'true')
 const downloadUrl = `/api/reports/personnel/download?${downloadParams.toString()}`
 ---
 
@@ -233,6 +235,10 @@ const downloadUrl = `/api/reports/personnel/download?${downloadParams.toString()
         <label class="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
           <input type="checkbox" name="familyDisability" value="true" checked={filterFamilyDisability} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
           Con familiares discapacitados
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
+          <input type="checkbox" name="dependents" value="true" checked={filterIncludeDependents} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+          Incluir familiares dependientes
         </label>
       </div>
       <div class="flex items-center gap-2 mt-4">

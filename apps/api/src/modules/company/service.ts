@@ -15,6 +15,9 @@ export type CompanyConfigInput = {
   phone?: string | null
   email?: string | null
   tipoInstitucion?: string
+  patronalNumber?: string | null
+  entityCode?: string | null
+  entityName?: string | null
   currencyCode?: string
   currencySymbol?: string
   mailHost?: string | null
@@ -53,6 +56,9 @@ export async function saveCompanyConfigService(db: AnyDb, input: CompanyConfigIn
     phone: input.phone ?? null,
     email: input.email ?? null,
     institutionType: input.institutionType ?? 'privada',
+    patronalNumber: input.patronalNumber ?? null,
+    entityCode: input.entityCode ?? null,
+    entityName: input.entityName ?? null,
     currencyCode: input.currencyCode ?? 'USD',
     currencySymbol: input.currencySymbol ?? '$',
     mailHost: input.mailHost ?? null,

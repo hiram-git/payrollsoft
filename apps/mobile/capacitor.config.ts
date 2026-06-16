@@ -14,7 +14,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 // cleartext: permite tráfico http:// a nivel de red Android (API en LAN).
 const config: CapacitorConfig = {
   appId: 'com.payrollsoft.marcaciones',
-  appName: 'PayrollSoft Marcaciones',
+  appName: 'RCG SOFTRIX Marcaciones',
   webDir: 'dist',
   server: {
     androidScheme: 'http',

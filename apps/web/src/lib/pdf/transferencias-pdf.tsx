@@ -261,7 +261,7 @@ export function TransferenciasPdf({ payroll, company, groups, totals }: Transfer
   const typeLabel = TYPE_LABEL[payroll.type] ?? payroll.type.toUpperCase()
 
   return (
-    <Document title={`Transferencias ${typeLabel}`} author="PayrollSoft" subject={payroll.name}>
+    <Document title={`Transferencias ${typeLabel}`} author="RCG SOFTRIX" subject={payroll.name}>
       <Page size="A4" style={s.page} orientation="landscape" wrap>
         {/* ── Header (repeats on every page) ── */}
         <View fixed>
