@@ -962,6 +962,24 @@ const icons: Record<IconKey, string> = {
       .user-dropdown-danger:hover { background: rgba(224,107,92,0.08); color: var(--err); }
 
       /* ── Page content ───────────────────────────────────── */
+      .app-footer {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 20px;
+        border-top: 1px solid var(--rule);
+        background: var(--ink-2);
+        font-family: var(--f-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        color: var(--mute);
+      }
+      .app-footer-name { color: var(--fore-dim); font-weight: 500; }
+      @media (max-width: 640px) {
+        .app-footer-sub { display: none; }
+      }
       .page-content {
         flex: 1;
         /* Same trap as in `.main-col`: in a flex column the child needs
@@ -1541,6 +1559,11 @@ const icons: Record<IconKey, string> = {
         <main class="page-content">
           <slot />
         </main>
+
+        <footer class="app-footer">
+          <span class="app-footer-name">RCG SOFTRIX</span>
+          <span class="app-footer-sub">Recursos Humanos, Planilla y Asistencia · © {new Date().getFullYear()}</span>
+        </footer>
       </div>
 
     </div>
