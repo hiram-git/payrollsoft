@@ -24,7 +24,8 @@ const userCode = identity.employeeCode || ''
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title} — Portal del Colaborador</title>
+  <title>{title} — Portal del Colaborador · RCG SOFTRIX</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -75,10 +76,11 @@ const userCode = identity.employeeCode || ''
     }
     .pt-brand { display:flex; align-items:center; gap:12px; padding:4px 10px 20px; }
     .pt-brand-mark {
-      width:32px; height:32px; border-radius:4px; background:#18A558;
-      display:grid; place-items:center; color:#fff;
-      font-family: var(--f-display); font-size:18px;
+      width:32px; height:32px; border-radius:4px; background:#fff; padding:3px;
+      box-shadow:0 0 0 1px rgba(0,0,0,0.06);
+      display:grid; place-items:center;
     }
+    .pt-brand-mark img { width:100%; height:100%; object-fit:contain; }
     .pt-brand-name { font-weight:500; font-size:14px; color:var(--fore); }
     .pt-brand-sub { font-family:var(--f-mono); font-size:9.5px; color:var(--mute); letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
 
@@ -522,7 +524,7 @@ const userCode = identity.employeeCode || ''
   <div class="pt-shell">
     <aside class="pt-side" id="pt-sidebar">
       <div class="pt-brand">
-        <div class="pt-brand-mark">R</div>
+        <div class="pt-brand-mark"><img src="/brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
         <div>
           <div class="pt-brand-name">RCG SOFTRIX</div>
           <div class="pt-brand-sub">Portal</div>
