@@ -88,6 +88,16 @@ const MESES = [
           Descargar TXT
         </button>
       </div>
+      <div class="bg-white border border-gray-200 rounded-lg p-5">
+        <h2 class="text-sm font-semibold text-gray-800">TXT de contabilidad / devengos</h2>
+        <p class="text-xs text-gray-500 mt-1 mb-4">
+          Totales del mes, devengos por partida y acreedores, de las planillas cerradas
+          del período (y tipo).
+        </p>
+        <button type="button" data-contab class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+          Descargar TXT
+        </button>
+      </div>
     </div>
   </div>
 
@@ -104,6 +114,14 @@ const MESES = [
           window.location.href = '/api/reports/contraloria/download?' + qs.toString()
         })
       })
+      const contab = document.querySelector('[data-contab]')
+      if (contab) {
+        contab.addEventListener('click', () => {
+          const qs = new URLSearchParams({ month: mes.value, year: anio.value })
+          if (tipo.value) qs.set('payrollTypeId', tipo.value)
+          window.location.href = '/api/reports/contraloria/contabilidad?' + qs.toString()
+        })
+      }
     })()
   </script>
 </AppLayout>
