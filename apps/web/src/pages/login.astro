@@ -148,6 +148,38 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       text-transform: uppercase;
       margin-top: 2px;
     }
+    .brand-eyebrow {
+      position: relative;
+      z-index: 2;
+      font-family: var(--f-display);
+      font-weight: 300;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      color: var(--fore-dim);
+      margin: 0;
+    }
+    .brand-hero {
+      display: inline-flex;
+      background: #fff;
+      border-radius: 10px;
+      padding: 20px 26px;
+      box-shadow: 0 10px 34px rgba(0,0,0,0.28);
+      margin: 0 0 26px 0;
+    }
+    .brand-hero img {
+      width: 420px;
+      max-width: 56vw;
+      height: auto;
+      display: block;
+    }
+    .brand-tagline {
+      font-family: var(--f-sans);
+      font-weight: 400;
+      font-size: 17px;
+      letter-spacing: 0.01em;
+      color: var(--fore-dim);
+      margin: 0 0 26px 0;
+    }
     .left-center {
       position: relative;
       z-index: 2;
@@ -479,19 +511,15 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
 
     <!-- Brand -->
     <div class="left-top">
-      <div class="mark-box"><img src="/brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
-      <div>
-        <div class="wordmark">RCG SOFTRIX</div>
-        <div class="wordmark-sub">Recursos Humanos, Planilla y Asistencia</div>
-      </div>
+      <h1 class="brand-eyebrow">Tu equipo, siempre al día.</h1>
     </div>
 
-    <!-- Headline -->
+    <!-- Brand -->
     <div class="left-center">
-      <h1 class="display-h">
-        Tu equipo,<br/>
-        <span class="display-em">siempre al día.</span>
-      </h1>
+      <div class="brand-hero">
+        <img src="/brand/rcg-softrix.png" alt="RCG SOFTRIX" />
+      </div>
+      <div class="brand-tagline">Recursos Humanos, Planilla y Asistencia</div>
       <div class="display-rule"></div>
       <p class="display-p">
         Gestiona planillas, préstamos y asistencia con precisión. Un sistema ágil para el control total de tu operación.
