@@ -234,8 +234,8 @@ export function CheckPdf({
   return (
     <Document
       title={`Cheques (${checks.length})`}
-      author="PayrollSoft"
-      creator="PayrollSoft Treasury"
+      author="RCG SOFTRIX"
+      creator="RCG SOFTRIX Treasury"
     >
       {checks.map((c) => (
         <CheckPage key={`check-${c.checkNumber}`} entry={c} layout={layout} />

@@ -38,7 +38,7 @@ function buildHtml(title: string, body: string, companyName: string) {
 <h2 style="font-size:18px;margin:0 0 16px;">${title}</h2>
 ${body}
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #eee;font-size:12px;color:#888;">
-  Este correo fue generado automáticamente por PayrollSoft.
+  Este correo fue generado automáticamente por RCG SOFTRIX.
 </div>
 </body></html>`
 }
@@ -50,7 +50,7 @@ export async function notifyRequestCreated(db: AnyDb, employeeId: string, ctx: N
     const mailer = mailerConfigFromCompany(company)
     if (!mailer) return
 
-    const companyName = company.companyName ?? 'PayrollSoft'
+    const companyName = company.companyName ?? 'RCG SOFTRIX'
     const subject = `Nueva solicitud: ${ctx.typeName ?? ''} — ${ctx.employeeName}`
     const body = `<p><strong>${ctx.employeeName}</strong> (${ctx.employeeCode}) ha creado una nueva solicitud.</p>
 <table style="border-collapse:collapse;margin:12px 0;">
@@ -82,7 +82,7 @@ export async function notifyRequestApproved(db: AnyDb, employeeId: string, ctx: 
     const mailer = mailerConfigFromCompany(company)
     if (!mailer) return
 
-    const companyName = company.companyName ?? 'PayrollSoft'
+    const companyName = company.companyName ?? 'RCG SOFTRIX'
     const subject = `Solicitud aprobada: ${ctx.documentNumber ?? ''}`
     const body = `<p>La solicitud <strong>${ctx.documentNumber ?? ''}</strong> de <strong>${ctx.employeeName}</strong> ha sido <span style="color:#2e7a56;font-weight:bold;">aprobada</span>.</p>`
     const html = buildHtml('Solicitud aprobada', body, companyName)
@@ -110,7 +110,7 @@ export async function notifyRequestRejected(db: AnyDb, employeeId: string, ctx: 
     const mailer = mailerConfigFromCompany(company)
     if (!mailer) return
 
-    const companyName = company.companyName ?? 'PayrollSoft'
+    const companyName = company.companyName ?? 'RCG SOFTRIX'
     const subject = `Solicitud rechazada: ${ctx.documentNumber ?? ''}`
     const body = `<p>La solicitud <strong>${ctx.documentNumber ?? ''}</strong> de <strong>${ctx.employeeName}</strong> ha sido <span style="color:#b53a2b;font-weight:bold;">rechazada</span>.</p>
 ${ctx.reason ? `<p><strong>Motivo:</strong> ${ctx.reason}</p>` : ''}`

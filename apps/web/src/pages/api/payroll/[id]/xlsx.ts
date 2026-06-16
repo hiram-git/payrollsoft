@@ -53,7 +53,7 @@ export const GET: APIRoute = async ({ params, cookies, redirect }) => {
 
     // ── Sheet 1: Resumen ──────────────────────────────────────────────────────
     const summaryRows = [
-      ['PayrollSoft — Exportación de Planilla'],
+      ['RCG SOFTRIX — Exportación de Planilla'],
       [],
       ['Planilla', payroll.name],
       ['Tipo', TYPE_LABEL[payroll.type] ?? payroll.type],

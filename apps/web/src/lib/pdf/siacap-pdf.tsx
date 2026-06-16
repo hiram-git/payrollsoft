@@ -198,7 +198,7 @@ export function SiacapPdf({ payroll, company, employees }: SiacapPdfProps) {
   const periodLine = `PLANILLA CORRESPONDIENTE AL PERIODO DEL ${formatDateISO(payroll.periodStart)} AL ${formatDateISO(payroll.periodEnd)}`
 
   return (
-    <Document title="SIACAP - APORTES MENSUALES" author="PayrollSoft" subject={payroll.name}>
+    <Document title="SIACAP - APORTES MENSUALES" author="RCG SOFTRIX" subject={payroll.name}>
       <Page size="A4" style={s.page} orientation="landscape" wrap>
         {/* ── Header (repeats on every page) ── */}
         <View style={s.header} fixed>

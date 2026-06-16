@@ -234,7 +234,7 @@ export function RecapitulacionPdf({ payroll, company, groups, totals }: Recapitu
   return (
     <Document
       title="RECAPITULACION DE LA PLANILLA DEL PERIODO"
-      author="PayrollSoft"
+      author="RCG SOFTRIX"
       subject={payroll.name}
     >
       <Page size="A4" style={s.page} orientation="landscape" wrap>

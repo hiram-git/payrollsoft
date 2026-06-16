@@ -241,7 +241,7 @@ export function PersonnelPdf({
   const activeCount = employees.filter((e) => e.isActive).length
 
   return (
-    <Document title={reportTitle} author="PayrollSoft" subject="Listado de personal">
+    <Document title={reportTitle} author="RCG SOFTRIX" subject="Listado de personal">
       <Page size="A4" style={s.page} orientation="landscape" wrap>
         <View style={s.header} fixed>
           <View style={s.logoBox}>

@@ -18,7 +18,7 @@
  * Decisiones de diseño:
  *   • Los centavos se imprimen en formato N/100 (lo que pide el banco).
  *   • La moneda llega como string; el caller decide singular/plural.
- *     El default es "balboas" porque PayrollSoft es Panamá-first.
+ *     El default es "balboas" porque RCG SOFTRIX es Panamá-first.
  *   • Mayúsculas siempre (formato de cheque legal).
  */
 
