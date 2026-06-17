@@ -159,14 +159,25 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
       margin: 0;
     }
     .brand-hero {
-      display: inline-flex;
-      background: #fff;
-      border-radius: 10px;
-      padding: 20px 26px;
-      box-shadow: 0 10px 34px rgba(0,0,0,0.28);
+      position: relative;
+      display: inline-block;
+      padding: 30px 44px;
       margin: 0 0 26px 0;
     }
+    /* Capa de fondo blanco con bordes difuminados hacia transparente */
+    .brand-hero::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: #fff;
+      border-radius: 18px;
+      -webkit-mask-image: radial-gradient(ellipse 78% 72% at center, #000 50%, transparent 100%);
+      mask-image: radial-gradient(ellipse 78% 72% at center, #000 50%, transparent 100%);
+      filter: blur(3px);
+    }
     .brand-hero img {
+      position: relative;
+      z-index: 1;
       width: 420px;
       max-width: 56vw;
       height: auto;
