@@ -161,19 +161,19 @@ const passwordReset = Astro.url.searchParams.get('reset') === 'ok'
     .brand-hero {
       position: relative;
       display: inline-block;
-      padding: 44px 80px;
+      padding: 18px 30px;
       margin: 0 0 26px 0;
     }
-    /* Capa de fondo blanco con bordes difuminados hacia transparente */
+    /* Capa de fondo blanco que abraza el logo con un borde difuminado angosto */
     .brand-hero::before {
       content: "";
       position: absolute;
       inset: 0;
-      background: rgba(255,255,255,0.78);
-      border-radius: 24px;
-      -webkit-mask-image: radial-gradient(ellipse 72% 60% at center, #000 26%, transparent 100%);
-      mask-image: radial-gradient(ellipse 72% 60% at center, #000 26%, transparent 100%);
-      filter: blur(9px);
+      background: rgba(255,255,255,0.9);
+      border-radius: 12px;
+      -webkit-mask-image: radial-gradient(ellipse 92% 84% at center, #000 64%, transparent 100%);
+      mask-image: radial-gradient(ellipse 92% 84% at center, #000 64%, transparent 100%);
+      filter: blur(2px);
     }
     .brand-hero img {
       position: relative;
