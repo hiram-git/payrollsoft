@@ -67,9 +67,14 @@ const MESES = [
       </div>
     </section>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {/* ── Quincenal: por planilla ────────────────────────────────────── */}
+    <div class="flex items-center gap-2 mb-3">
+      <h2 class="text-base font-semibold text-gray-900">Quincenal</h2>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">Por planilla</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
       <div class="bg-white border border-gray-200 rounded-lg p-5">
-        <h2 class="text-sm font-semibold text-gray-800">Bloqueo presupuestario por planilla</h2>
+        <h3 class="text-sm font-semibold text-gray-800">Bloqueo presupuestario por planilla</h3>
         <p class="text-xs text-gray-500 mt-1 mb-4">
           Totales de control por ministerio y partida de lo pagado en las planillas cerradas
           del mes/año seleccionado (filtra por tipo si se indica).
@@ -78,8 +83,16 @@ const MESES = [
           Descargar TXT
         </button>
       </div>
+    </div>
+
+    {/* ── Mensual: consolidado del mes ───────────────────────────────── */}
+    <div class="flex items-center gap-2 mb-3">
+      <h2 class="text-base font-semibold text-gray-900">Mensual</h2>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Consolidado del mes</span>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div class="bg-white border border-gray-200 rounded-lg p-5">
-        <h2 class="text-sm font-semibold text-gray-800">Bloqueo presupuestario mensual</h2>
+        <h3 class="text-sm font-semibold text-gray-800">Bloqueo presupuestario mensual</h3>
         <p class="text-xs text-gray-500 mt-1 mb-4">
           Totales por partida desde el presupuesto de las posiciones (sueldos y gasto de
           representación) para el mes/año seleccionado.
@@ -89,7 +102,7 @@ const MESES = [
         </button>
       </div>
       <div class="bg-white border border-gray-200 rounded-lg p-5">
-        <h2 class="text-sm font-semibold text-gray-800">TXT de contabilidad / devengos</h2>
+        <h3 class="text-sm font-semibold text-gray-800">TXT de contabilidad / devengos</h3>
         <p class="text-xs text-gray-500 mt-1 mb-4">
           Totales del mes, devengos por partida y acreedores, de las planillas cerradas
           del período (y tipo).

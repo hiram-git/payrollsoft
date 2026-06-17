@@ -169,42 +169,16 @@ const MESES_MONTHLY = [
       </div>
     </div>
 
-    {/* ── Reportes mensuales: SIPE / SIACAP ─────────────────────────── */}
-    <section class="bg-white border border-gray-200 rounded-xl p-5 mt-6">
-      <h2 class="text-sm font-semibold text-gray-800">Reportes mensuales (SIPE / SIACAP)</h2>
-      <p class="text-xs text-gray-500 mt-0.5 mb-3">
-        Genera el Excel del mes agregando todas las planillas cerradas del período (y tipo).
-      </p>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-mes">Mes</label>
-          <select id="m-mes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
-            {MESES_MONTHLY.map((m, i) => (
-              <option value={i + 1} selected={i + 1 === curMonth}>{m}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-anio">Año</label>
-          <select id="m-anio" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
-            {monthlyYears.map((y) => <option value={y}>{y}</option>)}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-tipo">Tipo de planilla</label>
-          <select id="m-tipo" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
-            <option value="">Todos los tipos</option>
-            {monthlyTypes.map((t) => <option value={t.id}>{t.name}</option>)}
-          </select>
-        </div>
-        <div class="flex gap-2">
-          <button type="button" data-monthly="sipe" class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">SIPE</button>
-          <button type="button" data-monthly="siacap" class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">SIACAP</button>
-        </div>
-      </div>
-    </section>
+    {/* ── Quincenal: reportes por planilla ──────────────────────────── */}
+    <div class="flex items-center gap-2 mt-8 mb-1">
+      <h2 class="text-base font-semibold text-gray-900">Quincenal</h2>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">Por planilla</span>
+    </div>
+    <p class="text-xs text-gray-500 mb-4">
+      Transferencias, Recapitulación y SIACAP de cada planilla generada o cerrada.
+    </p>
 
-    <div class="flex items-center justify-between gap-4 mb-4 mt-6">
+    <div class="flex items-center justify-between gap-4 mb-4">
       <form method="GET" action="" class="flex items-center gap-2">
         <input
           type="search"
@@ -337,6 +311,49 @@ const MESES_MONTHLY = [
         </div>
       </div>
     )}
+
+    {/* ── Mensual: SIPE / SIACAP ─────────────────────────────────────── */}
+    <div class="flex items-center gap-2 mt-10 mb-1">
+      <h2 class="text-base font-semibold text-gray-900">Mensual</h2>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Consolidado del mes</span>
+    </div>
+    <p class="text-xs text-gray-500 mb-4">
+      Genera el Excel del mes agregando todas las planillas cerradas del período (y tipo).
+    </p>
+
+    <section class="bg-white border border-gray-200 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-gray-800">Reportes mensuales (SIPE / SIACAP)</h3>
+      <p class="text-xs text-gray-500 mt-0.5 mb-3">
+        SIPE y SIACAP del período seleccionado.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-mes">Mes</label>
+          <select id="m-mes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {MESES_MONTHLY.map((m, i) => (
+              <option value={i + 1} selected={i + 1 === curMonth}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-anio">Año</label>
+          <select id="m-anio" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {monthlyYears.map((y) => <option value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-tipo">Tipo de planilla</label>
+          <select id="m-tipo" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            <option value="">Todos los tipos</option>
+            {monthlyTypes.map((t) => <option value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" data-monthly="sipe" class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">SIPE</button>
+          <button type="button" data-monthly="siacap" class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">SIACAP</button>
+        </div>
+      </div>
+    </section>
   </div>
 </AppLayout>
 
