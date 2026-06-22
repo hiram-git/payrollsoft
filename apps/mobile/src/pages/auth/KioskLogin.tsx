@@ -1,3 +1,4 @@
+import Logo from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api-client'
 /**
@@ -72,6 +73,9 @@ export default function KioskLogin() {
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
+        <div className="ion-margin-vertical" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Logo size={44} />
+        </div>
         <IonList inset>
           <IonItem>
             <IonInput

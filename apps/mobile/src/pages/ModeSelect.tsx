@@ -1,3 +1,4 @@
+import Logo from '@/components/Logo'
 import type { AppMode } from '@/types/domain'
 /**
  * Pantalla de selección de modo. Punto de entrada cuando no hay sesión.
@@ -56,6 +57,9 @@ export default function ModeSelect() {
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
+        <div className="ion-margin-vertical" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Logo size={48} />
+        </div>
         <IonCard>
           <IonCardHeader>
             <IonCardSubtitle>Selecciona un modo</IonCardSubtitle>

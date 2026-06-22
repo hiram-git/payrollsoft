@@ -1,3 +1,4 @@
+import Logo from '@/components/Logo'
 import { useAuth } from '@/contexts/AuthContext'
 /**
  * STUB de login de supervisor (usuario tenant).
@@ -50,6 +51,9 @@ export default function SupervisorLogin() {
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
+        <div className="ion-margin-vertical" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Logo size={44} />
+        </div>
         <IonNote color="warning" className="ion-margin-start">
           ⚠️ Stub no funcional. Esbozo de la auth de usuario tenant.
         </IonNote>

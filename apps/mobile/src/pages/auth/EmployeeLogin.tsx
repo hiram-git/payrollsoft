@@ -1,3 +1,4 @@
+import Logo from '@/components/Logo'
 import { API_URL } from '@/config/env'
 import { useAuth } from '@/contexts/AuthContext'
 import { ApiError } from '@/lib/api-client'
@@ -68,6 +69,9 @@ export default function EmployeeLogin() {
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
+        <div className="ion-margin-vertical" style={{ display: 'flex', justifyContent: 'center' }}>
+          <Logo size={44} />
+        </div>
         <IonList inset>
           <IonItem>
             <IonInput
