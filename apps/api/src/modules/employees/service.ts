@@ -42,6 +42,7 @@ export type EmployeeCreateInput = {
   baseSalary: string
   payFrequency?: 'biweekly' | 'monthly' | 'weekly'
   contractType?: string | null
+  contractEndDate?: string | null
   payrollTypeIds?: string[]
   customFields?: Record<string, unknown>
   // Personal flags + media (Phase 2.D)
@@ -302,6 +303,7 @@ export async function createEmployeeService(
     baseSalary: input.baseSalary,
     payFrequency: input.payFrequency ?? 'biweekly',
     contractType: input.contractType || null,
+    contractEndDate: input.contractEndDate || null,
     bankId: input.bankId ?? null,
     accountNumber: input.accountNumber?.trim() || null,
     accountType: input.accountType ?? null,
@@ -428,6 +430,7 @@ export async function updateEmployeeService(
   if (input.externalUserRef !== undefined)
     patch.externalUserRef = input.externalUserRef?.trim() || null
   if (input.contractType !== undefined) patch.contractType = input.contractType || null
+  if (input.contractEndDate !== undefined) patch.contractEndDate = input.contractEndDate || null
   if (input.irKey !== undefined) patch.irKey = input.irKey?.trim() || null
   if (input.shiftId !== undefined) patch.shiftId = input.shiftId || null
   if (input.weeklyBaseHours !== undefined)

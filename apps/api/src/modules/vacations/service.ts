@@ -768,8 +768,32 @@ export async function listPendingApprovals(db: AnyDb, userRoles: string[]) {
   return rows
 }
 
-// ─── Reglas de aprobación ─────────────────────────────────────────────────
+/**
+ * Personal que está en vacaciones hoy: solicitudes aprobadas o
+ * procesadas cuyo rango [start_date, end_date] cubre la fecha actual.
+ */
+export async function listActiveVacations(db: AnyDb) {
+  // biome-ignore lint/suspicious/noExplicitAny: rows
+  const rows: any[] = await db.execute(sql`
+    SELECT r.id, r.request_number, r.start_date, r.end_date, r.request_type,
+           r.enjoy_days, r.paid_days, r.status,
+           e.code        AS employee_code,
+           e.first_name  AS employee_first_name,
+           e.last_name   AS employee_last_name,
+           e.department  AS employee_department,
+           e.position    AS employee_position
+    FROM vacation_requests r
+    JOIN employees e ON e.id = r.employee_id
+    WHERE r.status IN ('approved', 'processed')
+      AND r.start_date IS NOT NULL
+      AND r.end_date IS NOT NULL
+      AND CURRENT_DATE BETWEEN r.start_date AND r.end_date
+    ORDER BY r.end_date ASC, e.last_name ASC
+  `)
+  return rows
+}
 
+// ─── Reglas de aprobación ─────────────────────────────────────────────────
 export async function listApprovalRules(db: AnyDb) {
   return db.select().from(vacationApprovalRules).where(eq(vacationApprovalRules.isActive, 1))
 }

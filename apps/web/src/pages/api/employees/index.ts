@@ -98,6 +98,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     baseSalary: g('baseSalary'),
     payFrequency: (g('payFrequency') || 'biweekly') as 'biweekly' | 'monthly' | 'weekly',
     contractType: g('contractType') || null,
+    contractEndDate: g('contractEndDate') || null,
     paymentMethod,
     payrollTypeIds: payrollTypeIds.length > 0 ? payrollTypeIds : undefined,
     // Personal flags + media (Phase 2.D). Unchecked checkboxes don't post,

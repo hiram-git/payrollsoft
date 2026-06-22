@@ -449,6 +449,13 @@
       "when": 1762128043000,
       "tag": "0064_company_institutional_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1762128044000,
+      "tag": "0065_employee_contract_end_date",
+      "breakpoints": true
     }
   ]
 }

@@ -145,6 +145,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
     ...opt('collaboratorNumber'),
     ...opt('externalUserRef'),
     ...opt('contractType'),
+    ...opt('contractEndDate'),
     ...opt('irKey'),
     ...opt('weeklyBaseHours'),
     ...opt('observations'),

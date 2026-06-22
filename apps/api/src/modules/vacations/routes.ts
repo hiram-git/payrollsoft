@@ -34,6 +34,7 @@ import {
   listApprovalRules,
   listByEmployee,
   listMovements,
+  listActiveVacations,
   listPendingApprovals,
   rejectRequest,
 } from './service'
@@ -199,6 +200,22 @@ export const vacationsRoutes = new Elysia({ prefix: '/vacations' })
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('vacations:create')],
       params: t.Object({ id: t.String() }),
+    }
+  )
+
+  // ── Personal en vacaciones hoy ─────────────────────────────────────────
+  .get(
+    '/active',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listActiveVacations(db)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('vacations:read')],
     }
   )
 
