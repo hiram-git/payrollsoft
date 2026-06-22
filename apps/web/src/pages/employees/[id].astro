@@ -1,6 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
 import PositionSelect from '../../components/PositionSelect.astro'
+import CustomFieldInputs from '../../components/CustomFieldInputs.astro'
+import { customFieldValueToString } from '../../lib/custom-fields'
 import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
@@ -329,6 +331,14 @@ function cfValue(code: string): string {
   if (v instanceof Date) return v.toISOString().slice(0, 10)
   return String(v)
 }
+// Valor a mostrar: el almacenado para el empleado; si nunca se ha
+// establecido, se precarga el valor por defecto de la definición.
+function cfDisplayValue(cf: { code: string; fieldType: string; defaultValue: unknown }): string {
+  if (Object.prototype.hasOwnProperty.call(empCustomFields, cf.code)) return cfValue(cf.code)
+  return customFieldValueToString(cf.defaultValue, cf.fieldType)
+}
+const cfValues: Record<string, string> = {}
+for (const cf of customFieldDefs) cfValues[cf.code] = cfDisplayValue(cf)
 
 if (!emp) return Astro.redirect('/employees')
 
@@ -1035,65 +1045,7 @@ const freqLabel: Record<string, string> = {
               adicionales</a>. Los valores numéricos se pueden referenciar en fórmulas con
               <code class="font-mono">CAMPOADICIONAL("código")</code>.
             </p>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {customFieldDefs.map((cf) => {
-                const baseClass =
-                  'w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent'
-                const inputName = `cf_${cf.code}`
-                const value = cfValue(cf.code)
-                return (
-                  <div data-cf-row={cf.code}>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">
-                      {cf.name}
-                      {cf.isRequired && <span class="text-red-500 ml-0.5">*</span>}
-                    </label>
-                    {cf.fieldType === 'integer' && (
-                      <input
-                        type="number"
-                        step="1"
-                        name={inputName}
-                        value={value}
-                        required={cf.isRequired}
-                        class={baseClass}
-                      />
-                    )}
-                    {cf.fieldType === 'float' && (
-                      <input
-                        type="number"
-                        step="0.01"
-                        name={inputName}
-                        value={value}
-                        required={cf.isRequired}
-                        class={baseClass}
-                      />
-                    )}
-                    {cf.fieldType === 'date' && (
-                      <input
-                        type="date"
-                        name={inputName}
-                        value={value}
-                        required={cf.isRequired}
-                        class={baseClass}
-                      />
-                    )}
-                    {cf.fieldType === 'text' && (
-                      <input
-                        type="text"
-                        name={inputName}
-                        value={value}
-                        required={cf.isRequired}
-                        maxlength="255"
-                        class={baseClass}
-                      />
-                    )}
-                    <p class="mt-1 text-xs text-gray-400 font-mono">
-                      {cf.code}
-                      {cf.description && <span class="text-gray-500"> · {cf.description}</span>}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
+            <CustomFieldInputs defs={customFieldDefs} values={cfValues} />
           </div>
         </div>
       )}

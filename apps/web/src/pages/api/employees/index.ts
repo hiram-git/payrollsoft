@@ -38,6 +38,48 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
       ? paymentMethodRaw
       : undefined
 
+  // Campos adicionales (prefijo cf_<code>): se serializan según su tipo.
+  // Los valores por defecto vienen precargados en los inputs del formulario.
+  type CustomFieldDef = {
+    code: string
+    fieldType: 'text' | 'integer' | 'float' | 'date'
+    isActive: boolean
+  }
+  let customFields: Record<string, unknown> | undefined
+  try {
+    const defsRes = await fetch(`${API_URL}/custom-fields`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': TENANT },
+    })
+    if (defsRes.ok) {
+      const defs = ((await defsRes.json()) as { data: CustomFieldDef[] }).data ?? []
+      const collected: Record<string, unknown> = {}
+      let touched = false
+      for (const def of defs) {
+        if (!def.isActive) continue
+        const key = `cf_${def.code}`
+        if (!form.has(key)) continue
+        touched = true
+        const raw = (form.get(key) as string | null)?.trim() ?? ''
+        if (raw === '') {
+          collected[def.code] = null
+          continue
+        }
+        if (def.fieldType === 'integer') {
+          const n = Number.parseInt(raw, 10)
+          collected[def.code] = Number.isFinite(n) ? n : null
+        } else if (def.fieldType === 'float') {
+          const n = Number(raw)
+          collected[def.code] = Number.isFinite(n) ? n : null
+        } else {
+          collected[def.code] = raw
+        }
+      }
+      if (touched) customFields = collected
+    }
+  } catch {
+    /* best-effort: si el catálogo no responde, no enviamos custom_fields */
+  }
+
   const body = {
     code: g('code'),
     firstName: g('firstName'),
@@ -66,6 +108,7 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
     canWrite: has('canWrite'),
     photo: g('photo') || null,
     scannedId: g('scannedId') || null,
+    ...(customFields !== undefined ? { customFields } : {}),
   }
 
   // Basic required-field check
@@ -102,6 +145,12 @@ export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   const msg = (data.error ?? '').toLowerCase()
 
+  if (msg.includes('custom_field_required') || msg.includes('obligatorio')) {
+    return fail('custom_field_required', res.status)
+  }
+  if (msg.includes('custom_field_forbidden')) {
+    return fail('custom_field_forbidden', res.status)
+  }
   if (msg.includes('ocupada') || msg.includes('position_occupied')) {
     return fail('position_occupied', res.status)
   }
