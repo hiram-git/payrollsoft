@@ -145,6 +145,12 @@ if (filterOwnDisability) downloadParams.set('hasOwnDisability', 'true')
 if (filterFamilyDisability) downloadParams.set('hasFamilyDisability', 'true')
 if (filterIncludeDependents) downloadParams.set('dependents', 'true')
 const downloadUrl = `/api/reports/personnel/download?${downloadParams.toString()}`
+
+const MESES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+const currentMonth = new Date().getUTCMonth() + 1
 ---
 
 <AppLayout title="Reporte de Personal">
@@ -208,42 +214,83 @@ const downloadUrl = `/api/reports/personnel/download?${downloadParams.toString()
       </div>
     </div>
 
-    <!-- Filtros -->
-    <form method="GET" action="/reports/personal" class="bg-white border border-gray-200 rounded-lg p-4 my-5">
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end">
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1" for="typeId">Tipo de planilla</label>
-          <select id="typeId" name="typeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
-            <option value="">Todos</option>
-            {payrollTypes.map((t) => (
-              <option value={t.id} selected={t.id === filterTypeId}>{t.name}</option>
-            ))}
-          </select>
+    <!-- Filtros: separados por tipo (combobox / checkbox) en dos paneles -->
+    <form method="GET" action="/reports/personal" class="my-5">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <!-- Panel: comboboxes -->
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <h2 class="text-sm font-semibold text-gray-800 mb-3">Selección</h2>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1" for="typeId">Tipo de planilla</label>
+              <select id="typeId" name="typeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="">Todos</option>
+                {payrollTypes.map((t) => (
+                  <option value={t.id} selected={t.id === filterTypeId}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-500 mb-1" for="situacion">Situación</label>
+              <select id="situacion" name="situacion" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+                <option value="active" selected={situacion === 'active'}>Activos</option>
+                <option value="inactive" selected={situacion === 'inactive'}>De baja</option>
+                <option value="all" selected={situacion === 'all'}>Todas</option>
+              </select>
+            </div>
+          </div>
         </div>
-        <div>
-          <label class="block text-xs font-medium text-gray-500 mb-1" for="situacion">Situación</label>
-          <select id="situacion" name="situacion" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
-            <option value="active" selected={situacion === 'active'}>Activos</option>
-            <option value="inactive" selected={situacion === 'inactive'}>De baja</option>
-            <option value="all" selected={situacion === 'all'}>Todas</option>
-          </select>
+        <!-- Panel: checkboxes -->
+        <div class="bg-white border border-gray-200 rounded-lg p-4">
+          <h2 class="text-sm font-semibold text-gray-800 mb-3">Opciones</h2>
+          <div class="space-y-2.5">
+            <label class="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="ownDisability" value="true" checked={filterOwnDisability} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Con discapacidad propia
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="familyDisability" value="true" checked={filterFamilyDisability} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Con familiares discapacitados
+            </label>
+            <label class="flex items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" name="dependents" value="true" checked={filterIncludeDependents} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Incluir familiares dependientes
+            </label>
+          </div>
         </div>
-        <label class="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
-          <input type="checkbox" name="ownDisability" value="true" checked={filterOwnDisability} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-          Con discapacidad propia
-        </label>
-        <label class="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
-          <input type="checkbox" name="familyDisability" value="true" checked={filterFamilyDisability} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-          Con familiares discapacitados
-        </label>
-        <label class="inline-flex items-center gap-2 text-sm text-gray-700 pb-2">
-          <input type="checkbox" name="dependents" value="true" checked={filterIncludeDependents} class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-          Incluir familiares dependientes
-        </label>
       </div>
       <div class="flex items-center gap-2 mt-4">
         <button type="submit" class="px-3.5 py-2 text-sm rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">Aplicar filtros</button>
         <a href="/reports/personal" class="px-3.5 py-2 text-sm rounded-md border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors">Limpiar</a>
+      </div>
+    </form>
+
+    <!-- Cumpleañeros del mes -->
+    <form method="GET" action="/api/reports/personnel/birthdays" class="bg-white border border-gray-200 rounded-lg p-4 mb-5">
+      <div class="flex flex-wrap items-end gap-4 justify-between">
+        <div>
+          <h2 class="text-sm font-semibold text-gray-800">Cumpleañeros del mes 🎂</h2>
+          <p class="text-xs text-gray-500 mt-0.5 max-w-xl">
+            Genera el listado en Excel de los empleados que cumplen años en el mes elegido,
+            según el tipo de planilla y la situación seleccionados arriba.
+          </p>
+        </div>
+        <div class="flex items-end gap-3">
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1" for="bmonth">Mes</label>
+            <select id="bmonth" name="month" class="px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+              {MESES.map((m, i) => (
+                <option value={i + 1} selected={i + 1 === currentMonth}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <input type="hidden" id="bTypeId" name="payrollTypeId" value={filterTypeId} />
+          <input type="hidden" id="bSituacion" name="situacion" value={situacion} />
+          <button type="submit" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Generar cumpleañeros
+          </button>
+        </div>
       </div>
     </form>
 
@@ -375,4 +422,13 @@ const downloadUrl = `/api/reports/personnel/download?${downloadParams.toString()
 
   for (const c of picks) c.addEventListener('change', syncLink)
   syncLink()
+
+  // Reflejar el tipo/situación elegidos en el formulario de cumpleañeros,
+  // aunque aún no se haya aplicado el filtro principal.
+  const typeSel = document.getElementById('typeId') as HTMLSelectElement | null
+  const sitSel = document.getElementById('situacion') as HTMLSelectElement | null
+  const bType = document.getElementById('bTypeId') as HTMLInputElement | null
+  const bSit = document.getElementById('bSituacion') as HTMLInputElement | null
+  if (typeSel && bType) typeSel.addEventListener('change', () => { bType.value = typeSel.value })
+  if (sitSel && bSit) sitSel.addEventListener('change', () => { bSit.value = sitSel.value })
 </script>
