@@ -1,6 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
 import PositionSelect from '../../components/PositionSelect.astro'
+import CustomFieldInputs from '../../components/CustomFieldInputs.astro'
+import { customFieldValueToString } from '../../lib/custom-fields'
 import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
@@ -26,25 +28,42 @@ type Position = {
 type CompanyConfig = { tipoInstitucion?: string | null }
 type PayrollType = { id: string; code: string; name: string; sortOrder: number }
 
+type CustomFieldDefinition = {
+  code: string
+  name: string
+  description: string | null
+  fieldType: 'text' | 'integer' | 'float' | 'date'
+  isRequired: boolean
+  isActive: boolean
+  defaultValue: unknown
+  sortOrder: number
+}
+
 let cargos: CatalogItem[] = []
 let funciones: CatalogItem[] = []
 let departamentos: Departamento[] = []
 let positions: Position[] = []
 let payrollTypes: PayrollType[] = []
+let customFieldDefs: CustomFieldDefinition[] = []
 let tipoInstitucion = 'privada'
 
 try {
   const headers = { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug }
-  const [cRes, fRes, dRes, compRes, cfgRes] = await Promise.all([
+  const [cRes, fRes, dRes, compRes, cfgRes, cfRes] = await Promise.all([
     fetch(`${API_URL}/job-titles`, { headers }),
     fetch(`${API_URL}/job-functions`, { headers }),
     fetch(`${API_URL}/departments`, { headers }),
     fetch(`${API_URL}/company`, { headers }),
     fetch(`${API_URL}/concepts/config`, { headers }),
+    fetch(`${API_URL}/custom-fields`, { headers }),
   ])
   if (cRes.ok) cargos = ((await cRes.json()) as { data: CatalogItem[] }).data ?? []
   if (fRes.ok) funciones = ((await fRes.json()) as { data: CatalogItem[] }).data ?? []
   if (dRes.ok) departamentos = ((await dRes.json()) as { data: Departamento[] }).data ?? []
+  if (cfRes.ok) {
+    const cfJson = (await cfRes.json()) as { data: CustomFieldDefinition[] }
+    customFieldDefs = (cfJson.data ?? []).filter((d) => d.isActive)
+  }
   if (compRes.ok) {
     const cfg = ((await compRes.json()) as { data: CompanyConfig }).data
     tipoInstitucion = cfg?.institutionType ?? 'privada'
@@ -79,12 +98,20 @@ const positionSelectOptions = positions.map((p) => ({
   representationAmount: p.representationAmount ?? '0',
 }))
 
+// Al crear, los campos adicionales arrancan con su valor por defecto.
+const cfValues: Record<string, string> = {}
+for (const cf of customFieldDefs) {
+  cfValues[cf.code] = customFieldValueToString(cf.defaultValue, cf.fieldType)
+}
+
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
   salary_max: 'El salario base no puede superar el salario de la posición.',
   position_occupied: 'La posición seleccionada ya está ocupada por otro empleado.',
+  custom_field_required: 'Faltan campos adicionales obligatorios.',
+  custom_field_forbidden: 'No tienes permiso para escribir uno de los campos adicionales.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -121,6 +148,11 @@ const errorMessages: Record<string, string> = {
         {payrollTypes.length > 0 && (
           <button type="button" class="tab-btn" data-tab="nomina" onclick="switchTab('nomina', this)">
             Tipos de Planilla
+          </button>
+        )}
+        {customFieldDefs.length > 0 && (
+          <button type="button" class="tab-btn" data-tab="adicionales" onclick="switchTab('adicionales', this)">
+            Campos adicionales
           </button>
         )}
       </div>
@@ -402,6 +434,20 @@ const errorMessages: Record<string, string> = {
         </div>
       )}
 
+      <!-- TAB: Campos adicionales -->
+      {customFieldDefs.length > 0 && (
+        <div id="tab-adicionales" style="display:none">
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+            <h3 class="font-semibold text-gray-800 mb-1">Campos adicionales</h3>
+            <p class="text-xs text-gray-500 mb-4">
+              Definidos en <a href="/config/custom-fields" class="text-blue-600 hover:underline">Configuración → Campos
+              adicionales</a>. Si tienen valor por defecto, se cargan automáticamente.
+            </p>
+            <CustomFieldInputs defs={customFieldDefs} values={cfValues} />
+          </div>
+        </div>
+      )}
+
       <!-- Actions -->
       <div class="flex justify-end gap-3 mt-2">
         <a href="/employees" class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
@@ -514,6 +560,8 @@ const errorMessages: Record<string, string> = {
       salary_max: 'El salario base no puede superar el salario de la posición.',
       position_occupied: 'La posición seleccionada ya está ocupada por otro empleado.',
       no_payroll_type: 'El empleado debe pertenecer a al menos un tipo de planilla.',
+      custom_field_required: 'Faltan campos adicionales obligatorios.',
+      custom_field_forbidden: 'No tienes permiso para escribir uno de los campos adicionales.',
       'missing-fields': 'Completa todos los campos requeridos.',
       'server-error': 'Error del servidor. Intenta de nuevo.',
     }
