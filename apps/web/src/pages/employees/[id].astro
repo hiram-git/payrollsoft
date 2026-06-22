@@ -1,5 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import PositionSelect from '../../components/PositionSelect.astro'
 import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
@@ -353,6 +354,19 @@ const positionOptions = isPublica ? positions.filter((p) => p.isActive) : []
 const currentPosition = isPublica ? (positions.find((p) => p.id === emp.positionId) ?? null) : null
 const jobTitleNameById = new Map(cargos.map((c) => [c.id, c.name]))
 
+const positionSelectOptions = positionOptions.map((p) => ({
+  id: p.id,
+  name: p.name,
+  code: p.code,
+  salary: p.salary,
+  status: p.status,
+  jobTitleId: p.jobTitleId,
+  cargoName: p.jobTitleId ? (jobTitleNameById.get(p.jobTitleId) ?? '') : '',
+  departmentId: p.departmentId,
+  overtimeAmount: p.overtimeAmount ?? '0',
+  representationAmount: p.representationAmount ?? '0',
+}))
+
 const error = Astro.url.searchParams.get('error') ?? ''
 const success = Astro.url.searchParams.get('success') === '1'
 const errorMessages: Record<string, string> = {
@@ -644,27 +658,13 @@ const freqLabel: Record<string, string> = {
             </div>
 
             {isPublica ? (
-              <!-- Empresa pública: selector de posición -->
-              <div class="col-span-1">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Posición</label>
-                <select name="positionId" id="positionSelect" class="input">
-                  <option value="">— Sin posición —</option>
-                  {positionOptions.map((p) => (
-                    <option
-                      value={p.id}
-                      selected={emp!.positionId === p.id}
-                      data-cargo={p.jobTitleId ?? ''}
-                      data-cargo-name={p.jobTitleId ? (jobTitleNameById.get(p.jobTitleId) ?? '') : ''}
-                      data-depto={p.departmentId ?? ''}
-                      data-salary={p.salary}
-                      data-overtime={p.overtimeAmount ?? '0'}
-                      data-representation={p.representationAmount ?? '0'}
-                    >
-                      {p.name} ({p.code}) — ${p.salary} · {p.status === 'en_uso' ? 'Ocupada' : 'Vacante'}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <!-- Empresa pública: selector de posición con badge de estado -->
+              <PositionSelect
+                options={positionSelectOptions}
+                selectedId={emp.positionId}
+                allowEmpty
+                label="Posición"
+              />
               <!-- Cargo + departamento se derivan de la posición -->
               <input type="hidden" name="jobTitleId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
               <input type="hidden" name="departmentId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
@@ -1861,27 +1861,27 @@ const freqLabel: Record<string, string> = {
   // Auto-fill cargo/depto/salary from selected position (empresa pública).
   // Salary is editable but capped at the position salary; selecting a
   // position seeds it with the maximum and refreshes the info block.
-  const posSelect = document.getElementById('positionSelect')
+  const posInput = document.getElementById('positionId')
   const salaryInput = document.getElementById('baseSalaryInput')
-  if (posSelect && salaryInput) {
-    posSelect.addEventListener('change', function () {
-      const opt = this.options[this.selectedIndex]
-      const max = opt.dataset.salary || ''
+  if (posInput && salaryInput) {
+    posInput.addEventListener('change', function () {
+      const ds = posInput.dataset
+      const max = ds.salary || ''
       const hCargo = document.getElementById('hiddenCargoId')
       const hDepto = document.getElementById('hiddenDepartamentoId')
-      if (hCargo) hCargo.value = opt.dataset.cargo || ''
-      if (hDepto) hDepto.value = opt.dataset.depto || ''
+      if (hCargo) hCargo.value = ds.cargo || ''
+      if (hDepto) hDepto.value = ds.depto || ''
       salaryInput.value = max
       salaryInput.dataset.positionMax = max
       const hint = document.getElementById('salaryMaxHint')
       if (hint) hint.textContent = max ? '(máximo de la posición: $' + max + ')' : ''
       const card = document.getElementById('positionInfoCard')
-      if (card) card.style.display = opt.value ? '' : 'none'
+      if (card) card.style.display = posInput.value ? '' : 'none'
       const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
-      set('posInfoCargo', opt.dataset.cargoName || '—')
+      set('posInfoCargo', ds.cargoName || '—')
       set('posInfoSalary', max ? '$' + max : '—')
-      set('posInfoOvertime', '$' + (opt.dataset.overtime || '0'))
-      set('posInfoRepresentation', '$' + (opt.dataset.representation || '0'))
+      set('posInfoOvertime', '$' + (ds.overtime || '0'))
+      set('posInfoRepresentation', '$' + (ds.representation || '0'))
     })
   }
 

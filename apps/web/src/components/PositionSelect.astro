@@ -1,0 +1,198 @@
+---
+// Combobox de posiciones con badge de estado (verde = vacante,
+// rojo con letras blancas = ocupada). Maneja un <input hidden
+// name="positionId"> como fuente de datos del formulario y emite
+// un evento `change` con los data-* de la posición elegida, de modo
+// que la lógica de autocompletado (cargo/depto/salario) siga igual.
+interface PositionOption {
+  id: string
+  name: string
+  code: string
+  salary: string | number
+  status: string
+  jobTitleId?: string | null
+  cargoName?: string
+  departmentId?: string | null
+  overtimeAmount?: string | number
+  representationAmount?: string | number
+}
+interface Props {
+  options: PositionOption[]
+  selectedId?: string | null
+  required?: boolean
+  allowEmpty?: boolean
+  emptyLabel?: string
+  label?: string
+}
+const {
+  options,
+  selectedId = null,
+  required = false,
+  allowEmpty = false,
+  emptyLabel = '— Sin posición —',
+  label = 'Posición',
+} = Astro.props
+
+const selected = selectedId ? (options.find((o) => o.id === selectedId) ?? null) : null
+const isOccupied = (s: string) => s === 'en_uso'
+const badgeClass = (s: string) =>
+  isOccupied(s) ? 'bg-red-600 text-white' : 'bg-emerald-100 text-emerald-700'
+const badgeText = (s: string) => (isOccupied(s) ? 'Ocupada' : 'Vacante')
+---
+
+<div class="col-span-1" data-position-field>
+  <label class="block text-sm font-medium text-gray-700 mb-1">{label}{required ? ' *' : ''}</label>
+  <input
+    type="hidden"
+    name="positionId"
+    id="positionId"
+    value={selected?.id ?? ''}
+    required={required}
+  />
+  <div class="relative" data-pos-combo>
+    <button
+      type="button"
+      data-pos-trigger
+      aria-haspopup="listbox"
+      aria-expanded="false"
+      class="w-full rounded-lg border border-gray-300 px-4 py-2.5 text-sm bg-white flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+    >
+      <span data-pos-label class={`truncate ${selected ? 'text-gray-900' : 'text-gray-400'}`}>
+        {selected ? `${selected.name} (${selected.code}) — $${selected.salary}` : '— Seleccionar posición —'}
+      </span>
+      <span class="flex items-center gap-2 shrink-0">
+        <span data-pos-badge>
+          {selected && (
+            <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${badgeClass(selected.status)}`}>
+              {badgeText(selected.status)}
+            </span>
+          )}
+        </span>
+        <svg class="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </span>
+    </button>
+
+    <div data-pos-panel class="hidden absolute z-30 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg" role="listbox">
+      <div class="p-2 border-b border-gray-100">
+        <input
+          type="search"
+          data-pos-search
+          placeholder="Buscar posición…"
+          class="w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <ul class="py-1 max-h-64 overflow-auto text-sm">
+        {allowEmpty && (
+          <li>
+            <button
+              type="button"
+              data-pos-option
+              data-value=""
+              data-text={emptyLabel}
+              data-status=""
+              class="w-full text-left px-3 py-2 text-gray-500 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <span class="truncate">{emptyLabel}</span>
+            </button>
+          </li>
+        )}
+        {options.map((o) => (
+          <li>
+            <button
+              type="button"
+              data-pos-option
+              data-value={o.id}
+              data-text={`${o.name} (${o.code}) — $${o.salary}`}
+              data-status={o.status}
+              data-cargo={o.jobTitleId ?? ''}
+              data-cargo-name={o.cargoName ?? ''}
+              data-depto={o.departmentId ?? ''}
+              data-salary={String(o.salary)}
+              data-overtime={String(o.overtimeAmount ?? '0')}
+              data-representation={String(o.representationAmount ?? '0')}
+              class="w-full text-left px-3 py-2 text-gray-700 hover:bg-blue-50 flex items-center justify-between gap-3"
+            >
+              <span class="truncate">{o.name} ({o.code}) — ${o.salary}</span>
+              <span class={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${badgeClass(o.status)}`}>
+                {badgeText(o.status)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+  <p data-pos-warn class="hidden mt-1.5 text-xs text-red-600">
+    Esta posición está ocupada por otro colaborador; no podrás guardar mientras la mantengas seleccionada.
+  </p>
+</div>
+
+<script>
+  for (const combo of document.querySelectorAll<HTMLElement>('[data-pos-combo]')) {
+    const field = combo.closest<HTMLElement>('[data-position-field]')
+    const input = field?.querySelector<HTMLInputElement>('input[name="positionId"]')
+    const trigger = combo.querySelector<HTMLButtonElement>('[data-pos-trigger]')
+    const panel = combo.querySelector<HTMLElement>('[data-pos-panel]')
+    const search = combo.querySelector<HTMLInputElement>('[data-pos-search]')
+    const labelEl = combo.querySelector<HTMLElement>('[data-pos-label]')
+    const badgeEl = combo.querySelector<HTMLElement>('[data-pos-badge]')
+    const warn = field?.querySelector<HTMLElement>('[data-pos-warn]')
+    if (!input || !trigger || !panel || !labelEl || !badgeEl) continue
+
+    const badgeHtml = (status: string) => {
+      if (!status) return ''
+      const occ = status === 'en_uso'
+      const cls = occ ? 'bg-red-600 text-white' : 'bg-emerald-100 text-emerald-700'
+      return `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${cls}">${occ ? 'Ocupada' : 'Vacante'}</span>`
+    }
+
+    const filter = (q: string) => {
+      const t = q.trim().toLowerCase()
+      for (const opt of panel.querySelectorAll<HTMLElement>('[data-pos-option]')) {
+        const txt = (opt.getAttribute('data-text') || '').toLowerCase()
+        const li = opt.parentElement
+        if (li) li.style.display = !t || txt.includes(t) ? '' : 'none'
+      }
+    }
+    const open = () => {
+      panel.classList.remove('hidden')
+      trigger.setAttribute('aria-expanded', 'true')
+      if (search) { search.value = ''; filter(''); search.focus() }
+    }
+    const close = () => {
+      panel.classList.add('hidden')
+      trigger.setAttribute('aria-expanded', 'false')
+    }
+
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation()
+      panel.classList.contains('hidden') ? open() : close()
+    })
+    if (search) search.addEventListener('input', () => filter(search.value))
+    document.addEventListener('click', (e) => {
+      if (!combo.contains(e.target as Node)) close()
+    })
+    combo.addEventListener('keydown', (e) => { if ((e as KeyboardEvent).key === 'Escape') close() })
+
+    for (const opt of panel.querySelectorAll<HTMLButtonElement>('[data-pos-option]')) {
+      opt.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const ds = opt.dataset
+        input.value = ds.value || ''
+        input.dataset.status = ds.status || ''
+        input.dataset.cargo = ds.cargo || ''
+        input.dataset.cargoName = ds.cargoName || ''
+        input.dataset.depto = ds.depto || ''
+        input.dataset.salary = ds.salary || ''
+        input.dataset.overtime = ds.overtime || ''
+        input.dataset.representation = ds.representation || ''
+        labelEl.textContent = ds.text || '— Seleccionar posición —'
+        labelEl.className = `truncate ${ds.value ? 'text-gray-900' : 'text-gray-400'}`
+        badgeEl.innerHTML = badgeHtml(ds.status || '')
+        if (warn) warn.classList.toggle('hidden', ds.status !== 'en_uso')
+        close()
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+  }
+</script>
