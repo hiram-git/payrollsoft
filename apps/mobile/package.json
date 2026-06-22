@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "cap:sync": "cap sync",
     "cap:add:ios": "cap add ios",
-    "cap:add:android": "cap add android"
+    "cap:add:android": "cap add android",
+    "brand:assets": "bun run scripts/gen-brand-assets.mjs",
+    "icons": "capacitor-assets generate"
   },
   "dependencies": {
     "@capacitor/android": "^8.3.4",
@@ -32,6 +34,7 @@
     "react-router-dom": "^5.3.4"
   },
   "devDependencies": {
+    "@capacitor/assets": "3.0.5",
     "@capacitor/cli": "^8.3.4",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

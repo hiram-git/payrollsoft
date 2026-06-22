@@ -105,6 +105,27 @@ Las carpetas `android/` e `ios/` están en `.gitignore`: se regeneran con
 `cap add`. Cada vez que cambies el código web, repite `bun run build &&
 bun run cap:sync` para que el nativo tome la versión nueva.
 
+### Íconos y splash (RCG SOFTRIX)
+
+El ícono de la app y el splash se generan desde el isotipo oficial
+(`public/brand/rcg-mark.png`). Los **assets fuente** viven versionados en
+`apps/mobile/assets/` (icon, icon-foreground/background para íconos
+adaptativos de Android, splash claro y oscuro). Los PNG multiresolución
+finales se generan dentro de `android/` (gitignored), así que hay que
+generarlos tras `cap add`:
+
+```bash
+bun run brand:assets   # (opcional) regenera assets/ desde el isotipo
+bun run cap:add:android
+bun run icons          # capacitor-assets → mipmaps + adaptive + splash
+bun run cap:sync
+```
+
+`bun run icons` produce todos los tamaños (ldpi…xxxhdpi), el ícono
+redondo y el adaptativo (foreground con el isotipo en zona segura +
+plato blanco de fondo). Solo hace falta re-correrlo si cambia el isotipo
+o recreas `android/`.
+
 > Los cambios de backend (Bearer auth, token en el body del login, CORS y
 > CSRF para orígenes Capacitor) ya están implementados en `apps/api`. Si
 > pruebas el dev server del móvil en el navegador, añade su origin a
