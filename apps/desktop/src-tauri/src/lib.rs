@@ -19,11 +19,11 @@ const BAKED_ENABLED: Option<&str> = option_env!("PAYROLL_DESKTOP_ENABLED");
 const BAKED_MODE: Option<&str> = option_env!("PAYROLL_DESKTOP_MODE");
 
 /// Per-user override file for distributed installs: lets IT repoint a build
-/// without recompiling. Windows-only for v1 (`%APPDATA%\PayrollSoft\.env`).
+/// without recompiling. Windows-only for v1 (`%APPDATA%\RCG SOFTRIX\.env`).
 fn config_override_path() -> Option<PathBuf> {
     std::env::var("APPDATA")
         .ok()
-        .map(|appdata| PathBuf::from(appdata).join("PayrollSoft").join(".env"))
+        .map(|appdata| PathBuf::from(appdata).join("RCG SOFTRIX").join(".env"))
 }
 
 fn load_env() {
@@ -103,7 +103,7 @@ fn resolve_target_url() -> Result<Url, String> {
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let about = AboutMetadata {
-        name: Some("PayrollSoft".into()),
+        name: Some("RCG SOFTRIX".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         ..Default::default()
     };
@@ -152,7 +152,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         &[&PredefinedMenuItem::about(
             app,
-            Some("Acerca de PayrollSoft"),
+            Some("Acerca de RCG SOFTRIX"),
             Some(about),
         )?],
     )?;
@@ -206,7 +206,7 @@ pub fn run() {
 
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("PayrollSoft")
+                    .title("RCG SOFTRIX")
                     .inner_size(1280.0, 800.0)
                     .min_inner_size(1024.0, 640.0)
                     .resizable(true)
