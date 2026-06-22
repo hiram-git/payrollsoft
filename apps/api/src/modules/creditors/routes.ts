@@ -8,16 +8,28 @@ import {
   updateCreditorService,
 } from './service'
 
+const PaymentFields = {
+  bankId: t.Optional(t.Nullable(t.String())),
+  accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
+  accountType: t.Optional(t.Nullable(t.Union([t.Literal('savings'), t.Literal('checking')]))),
+  paymentMethod: t.Optional(
+    t.Union([t.Literal('ach'), t.Literal('check'), t.Literal('cash')])
+  ),
+  beneficiaryName: t.Optional(t.Nullable(t.String({ maxLength: 255 }))),
+}
+
 const CreateBody = t.Object({
   code: t.String({ minLength: 1, maxLength: 20 }),
   name: t.String({ minLength: 1, maxLength: 255 }),
   description: t.Optional(t.Nullable(t.String())),
+  ...PaymentFields,
 })
 
 const UpdateBody = t.Object({
   name: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
   description: t.Optional(t.Nullable(t.String())),
   isActive: t.Optional(t.Boolean()),
+  ...PaymentFields,
 })
 
 export const creditorRoutes = new Elysia({ prefix: '/creditors' })

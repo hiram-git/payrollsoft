@@ -22,6 +22,10 @@ export const banks = pgTable('banks', {
   name: varchar('name', { length: 120 }).notNull(),
   routing: varchar('routing', { length: 15 }),
   swift: varchar('swift', { length: 15 }),
+  /** Formato de archivo ACH que produce este banco (ver core/treasury). */
+  achFormat: varchar('ach_format', { length: 30 }),
+  /** Código de entidad de 9 dígitos que viaja en el detalle del formato C/D/T. */
+  achEntityCode: varchar('ach_entity_code', { length: 9 }),
   country: varchar('country', { length: 2 }).notNull().default('PA'),
   isActive: integer('is_active').notNull().default(1),
   sortOrder: integer('sort_order').notNull().default(0),
@@ -166,6 +170,9 @@ export const treasuryAchLines = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     batchId: uuid('batch_id').notNull(),
     employeeId: uuid('employee_id'),
+    creditorId: uuid('creditor_id'),
+    /** 'employee' | 'creditor' */
+    beneficiaryType: varchar('beneficiary_type', { length: 20 }).notNull().default('employee'),
     beneficiaryName: varchar('beneficiary_name', { length: 255 }).notNull(),
     identification: varchar('identification', { length: 30 }),
     bankRouting: varchar('bank_routing', { length: 15 }),

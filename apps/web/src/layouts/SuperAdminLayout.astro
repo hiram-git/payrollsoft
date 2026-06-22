@@ -28,7 +28,8 @@ const userEmail = identity?.email ?? ''
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title} — Payroll Panamá Superadmin</title>
+  <title>{title} — RCG SOFTRIX Superadmin</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -39,7 +40,10 @@ const userEmail = identity?.email ?? ''
     :root, [data-theme="dark"] {
       --ink:#07101F; --ink-2:#0A1628; --ink-3:#101E33; --ink-4:#16263F;
       --navy:#003087; --navy-hi:#1E4BA8; --navy-soft:rgba(0,48,135,0.18);
-      --rule:#1A2740; --rule-hi:#243555;
+      --rule:#1A2740; --rule-hi:#243555; --btn-edge:rgba(255,255,255,0.14);
+      --btn-bg:#1d4ed8; --btn-bg-hover:#3b6fe0;
+      --btn-danger-bg:#b91c1c; --btn-danger-bg-hover:#ef4444;
+      --btn-success-bg:#047857; --btn-success-bg-hover:#10b981;
       --fore:#EDEEF2; --fore-dim:#C9CEDB; --mute-2:#8B97AE; --mute:#6A7690;
       --warn:#E3B25A; --err:#E06B5C; --ok:#6FB58C;
       --f-display:'Fraunces','Times New Roman',serif;
@@ -48,7 +52,8 @@ const userEmail = identity?.email ?? ''
     }
     [data-theme="light"] {
       --ink:#F4F5F7; --ink-2:#FFFFFF; --ink-3:#FFFFFF; --ink-4:#EFF1F5;
-      --rule:#E4E7EE; --rule-hi:#D2D7E0;
+      --rule:#E4E7EE; --rule-hi:#D2D7E0; --btn-edge:rgba(12,20,36,0.10);
+      --btn-bg-hover:#1538a0; --btn-danger-bg-hover:#7f1212; --btn-success-bg-hover:#035f45;
       --fore:#0C1424; --fore-dim:#2A3346; --mute-2:#5B6478; --mute:#7A8499;
     }
     *, *::before, *::after { box-sizing: border-box; }
@@ -68,10 +73,11 @@ const userEmail = identity?.email ?? ''
     }
     .sa-brand { display:flex; align-items:center; gap:12px; padding:4px 10px 20px; }
     .sa-brand-mark {
-      width:32px; height:32px; border-radius:4px; background:var(--navy);
-      display:grid; place-items:center; color:#fff;
-      font-family: var(--f-display); font-size:18px;
+      width:32px; height:32px; border-radius:4px; background:#fff; padding:3px;
+      box-shadow:0 0 0 1px rgba(0,0,0,0.06);
+      display:grid; place-items:center;
     }
+    .sa-brand-mark img { width:100%; height:100%; object-fit:contain; }
     .sa-brand-name { font-weight:500; font-size:14px; color:var(--fore); }
     .sa-brand-sub { font-family:var(--f-mono); font-size:9.5px; color:var(--mute); letter-spacing:.14em; text-transform:uppercase; margin-top:2px; }
     .sa-section { font-family:var(--f-mono); font-size:10px; color:var(--mute); letter-spacing:.16em; text-transform:uppercase; padding:14px 12px 8px; }
@@ -121,15 +127,94 @@ const userEmail = identity?.email ?? ''
     [data-theme="dark"] .sa-content textarea:focus {
       border-color: var(--navy-hi); box-shadow:0 0 0 2px var(--navy-soft);
     }
+
+    /* ── Soft borders on every form control + button (both themes) ──
+       Scoped to .sa-content so the super-admin chrome is untouched. */
+    .sa-content input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+    .sa-content select,
+    .sa-content textarea {
+      border: 1px solid var(--rule);
+    }
+    .sa-content button,
+    .sa-content [type="submit"],
+    .sa-content [type="button"],
+    .sa-content [type="reset"],
+    .sa-content .btn,
+    .sa-content .btn-primary,
+    .sa-content .btn-secondary,
+    .sa-content .btn-ghost,
+    .sa-content a.btn-primary {
+      border: 1px solid var(--rule);
+    }
+    /* Action buttons: hover look becomes the default, :hover intensifies. */
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600,
+    .sa-content :is(button, a).btn-primary {
+      background-color: var(--btn-bg);
+      border: 1px solid var(--btn-edge);
+      color: #fff;
+      transition: background-color 160ms ease;
+    }
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500:hover,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600:hover,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700:hover,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600:hover,
+    .sa-content :is(button, a).btn-primary:hover {
+      background-color: var(--btn-bg-hover);
+    }
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
+    .sa-content :is(button, a).btn-danger {
+      background-color: var(--btn-danger-bg);
+      border: 1px solid var(--btn-edge);
+      color: #fff;
+      transition: background-color 160ms ease;
+    }
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-red-600:hover,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-red-700:hover,
+    .sa-content :is(button, a).btn-danger:hover {
+      background-color: var(--btn-danger-bg-hover);
+    }
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
+    .sa-content :is(button, a).btn-ok {
+      background-color: var(--btn-success-bg);
+      border: 1px solid var(--btn-edge);
+      color: #fff;
+      transition: background-color 160ms ease;
+    }
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600:hover,
+    .sa-content :is(button, a, [type="submit"], [type="button"]).bg-green-600:hover,
+    .sa-content :is(button, a).btn-ok:hover {
+      background-color: var(--btn-success-bg-hover);
+    }
+    /* Dropdown menu items must never be bordered (they are rows, not
+       buttons); !important wins over the neutral and coloured button rules. */
+    .sa-content [role="menu"] button,
+    .sa-content [role="menu"] a,
+    .sa-content [role="menu"] [type="button"],
+    .sa-content [role="menu"] [type="submit"],
+    .sa-content [role="menuitem"],
+    .sa-content [role="listbox"] button,
+    .sa-content [role="option"] {
+      border: none !important;
+    }
+    .sa-content dialog,
+    .sa-content .shadow-xl,
+    .sa-content .shadow-2xl {
+      border: 1px solid var(--rule);
+    }
   </style>
 </head>
 <body>
   <div class="sa-shell">
     <aside class="sa-side">
       <div class="sa-brand">
-        <div class="sa-brand-mark">P</div>
+        <div class="sa-brand-mark"><img src="/brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
         <div>
-          <div class="sa-brand-name">PayrollSoft</div>
+          <div class="sa-brand-name">RCG SOFTRIX</div>
           <div class="sa-brand-sub">Superadmin</div>
         </div>
       </div>

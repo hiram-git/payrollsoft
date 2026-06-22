@@ -119,14 +119,23 @@ if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
 
           var lastLogin = r.last_login_at ? new Date(r.last_login_at).toLocaleDateString('es-PA') : '—';
           var actions = '';
+          var iconStyle = 'border:0;background:none;padding:0;cursor:pointer';
+          var svgOpen = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+          var icCreate = svgOpen + '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>';
+          var icReset = svgOpen + '<polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>';
+          var icUnlock = svgOpen + '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>';
+          var icCheck = svgOpen + '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>';
+          var icRemove = svgOpen + '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" y1="8" x2="22" y2="13"/><line x1="22" y1="8" x2="17" y2="13"/></svg>';
           if (!r.has_credentials) {
-            actions = '<button class="text-blue-600 hover:underline text-xs font-medium" onclick="window.__pcCreate(\'' + r.id + '\',\'' + esc(r.code) + ' — ' + esc(r.last_name) + ', ' + esc(r.first_name) + '\')">Crear acceso</button>';
+            actions = '<button title="Crear acceso" aria-label="Crear acceso" class="inline-flex items-center justify-center text-blue-600 hover:text-blue-800" style="' + iconStyle + '" onclick="window.__pcCreate(\'' + r.id + '\',\'' + esc(r.code) + ' — ' + esc(r.last_name) + ', ' + esc(r.first_name) + '\')">' + icCreate + '</button>';
           } else {
-            actions = '<button class="text-blue-600 hover:underline text-xs font-medium mr-3" onclick="window.__pcReset(\'' + r.id + '\',\'' + esc(r.code) + ' — ' + esc(r.last_name) + ', ' + esc(r.first_name) + '\')">Resetear</button>';
+            actions = '<button title="Resetear contraseña" aria-label="Resetear contraseña" class="inline-flex items-center justify-center text-blue-600 hover:text-blue-800 mr-3" style="' + iconStyle + '" onclick="window.__pcReset(\'' + r.id + '\',\'' + esc(r.code) + ' — ' + esc(r.last_name) + ', ' + esc(r.first_name) + '\')">' + icReset + '</button>';
             if (r.cred_locked) {
-              actions += '<button class="text-amber-600 hover:underline text-xs font-medium mr-3" onclick="window.__pcUnlock(\'' + r.id + '\')">Desbloquear</button>';
+              actions += '<button title="Desbloquear" aria-label="Desbloquear" class="inline-flex items-center justify-center text-amber-600 hover:text-amber-800 mr-3" style="' + iconStyle + '" onclick="window.__pcUnlock(\'' + r.id + '\')">' + icUnlock + '</button>';
             }
-            actions += '<button class="text-xs font-medium mr-3 ' + (r.is_approver ? 'text-red-500 hover:underline' : 'text-green-600 hover:underline') + '" onclick="window.__pcToggleApprover(\'' + r.id + '\',' + !r.is_approver + ')">' + (r.is_approver ? 'Quitar aprobador' : 'Hacer aprobador') + '</button>';
+            var apprTitle = r.is_approver ? 'Quitar aprobador' : 'Hacer aprobador';
+            var apprColor = r.is_approver ? 'text-red-500 hover:text-red-700' : 'text-green-600 hover:text-green-800';
+            actions += '<button title="' + apprTitle + '" aria-label="' + apprTitle + '" class="inline-flex items-center justify-center mr-3 ' + apprColor + '" style="' + iconStyle + '" onclick="window.__pcToggleApprover(\'' + r.id + '\',' + !r.is_approver + ')">' + (r.is_approver ? icRemove : icCheck) + '</button>';
           }
 
           html += '<tr class="border-b border-gray-100 hover:bg-gray-50">' +
@@ -195,6 +204,16 @@ if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
         modalPw.focus();
       }
       modalCancel.addEventListener('click', function() { modal.style.display = 'none'; });
+      function saError(title, message) {
+        if (window.saModal) return window.saModal.error({ title: title, message: message });
+        alert(message);
+        return Promise.resolve();
+      }
+      function saConfirm(opts) {
+        if (window.saModal) return window.saModal.confirm(opts);
+        return Promise.resolve(confirm(opts.message));
+      }
+
       modalSave.addEventListener('click', function() {
         if (!pendingAction) return;
         var pw = modalPw.value.trim();
@@ -204,33 +223,78 @@ if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
           .then(function(res) {
             modal.style.display = 'none';
             modalSave.disabled = false;
-            if (res.success) reload();
-            else alert(res.error || 'Error');
+            if (res.success) {
+              if (window.toast) window.toast.success('Acción aplicada correctamente.');
+              reload();
+            } else {
+              if (window.toast) window.toast.error(res.error || 'Error');
+              saError('No se pudo completar la acción', res.error || 'Error');
+            }
           })
-          .catch(function() { modalSave.disabled = false; alert('Error de conexión.'); });
+          .catch(function() {
+            modalSave.disabled = false;
+            if (window.toast) window.toast.error('Error de conexión.');
+            saError('Error de conexión', 'No se pudo conectar con el servidor.');
+          });
       });
 
       window.__pcCreate = function(id, label) { openModal('Crear acceso al portal', label, 'create', id); };
       window.__pcReset = function(id, label) { openModal('Resetear contraseña', label, 'reset', id); };
-      window.__pcUnlock = function(id) {
-        if (!confirm('¿Desbloquear esta cuenta?')) return;
+      window.__pcUnlock = async function(id) {
+        var ok = await saConfirm({
+          title: 'Desbloquear cuenta',
+          message: '¿Desbloquear esta cuenta?',
+          tone: 'primary',
+          confirmLabel: 'Desbloquear',
+        });
+        if (!ok) return;
+        if (window.saModal) window.saModal.close();
         postAction({ action: 'unlock', employeeId: id }).then(function(res) {
-          if (res.success) reload(); else alert(res.error || 'Error');
+          if (res.success) {
+            if (window.toast) window.toast.success('Cuenta desbloqueada.');
+            reload();
+          } else {
+            if (window.toast) window.toast.error(res.error || 'Error');
+            saError('No se pudo desbloquear', res.error || 'Error');
+          }
         });
       };
-      window.__pcToggleApprover = function(id, val) {
-        var msg = val ? '¿Designar como aprobador?' : '¿Quitar rol de aprobador?';
-        if (!confirm(msg)) return;
+      window.__pcToggleApprover = async function(id, val) {
+        var ok = await saConfirm({
+          title: val ? 'Designar como aprobador' : 'Quitar rol de aprobador',
+          message: val ? '¿Designar como aprobador?' : '¿Quitar rol de aprobador?',
+          tone: val ? 'primary' : 'danger',
+          confirmLabel: val ? 'Designar' : 'Quitar',
+        });
+        if (!ok) return;
+        if (window.saModal) window.saModal.close();
         postAction({ action: 'toggle-approver', employeeId: id, isApprover: val }).then(function(res) {
-          if (res.success) reload(); else alert(res.error || 'Error');
+          if (res.success) {
+            if (window.toast) window.toast.success(val ? 'Designado como aprobador.' : 'Rol de aprobador removido.');
+            reload();
+          } else {
+            if (window.toast) window.toast.error(res.error || 'Error');
+            saError('No se pudo actualizar', res.error || 'Error');
+          }
         });
       };
 
       var activateAllBtn = document.getElementById('pc-activate-all');
-      activateAllBtn.addEventListener('click', function() {
+      activateAllBtn.addEventListener('click', async function() {
         var without = allRows.filter(function(r) { return !r.has_credentials; }).length;
-        if (without === 0) { alert('Todos los empleados activos ya tienen credenciales.'); return; }
-        if (!confirm('Se crearán credenciales para ' + without + ' empleado' + (without !== 1 ? 's' : '') + ' sin acceso.\n\nContraseña por defecto: 172839\n(Deberán cambiarla en su primer inicio de sesión)\n\n¿Continuar?')) return;
+        if (without === 0) {
+          if (window.toast) window.toast.info('Todos los empleados activos ya tienen credenciales.');
+          if (window.saModal) window.saModal.warning({ title: 'Sin pendientes', message: 'Todos los empleados activos ya tienen credenciales.' });
+          return;
+        }
+        var ok = await saConfirm({
+          title: 'Activar accesos masivamente',
+          message: 'Se crearán credenciales para ' + without + ' empleado' + (without !== 1 ? 's' : '') + ' sin acceso. La contraseña por defecto será 172839 (deberán cambiarla en su primer inicio de sesión). ¿Continuar?',
+          tone: 'primary',
+          confirmLabel: 'Activar todos',
+        });
+        if (!ok) return;
+        if (window.saModal) window.saModal.close();
         activateAllBtn.disabled = true;
         activateAllBtn.textContent = 'Activando...';
         postAction({ action: 'activate-all' }).then(function(res) {
@@ -238,13 +302,19 @@ if (!can(identity, 'users:write')) return Astro.redirect('/dashboard')
           activateAllBtn.textContent = 'Activar todos';
           if (res.success) {
             var d = res.data || {};
-            alert('Credenciales creadas: ' + (d.created || 0) + ' de ' + (d.total || 0) + ' empleados.');
+            var msg = 'Credenciales creadas: ' + (d.created || 0) + ' de ' + (d.total || 0) + ' empleados.';
+            if (window.toast) window.toast.success(msg);
+            if (window.saModal) window.saModal.success({ title: 'Activación completa', message: msg });
             reload();
-          } else { alert(res.error || 'Error'); }
+          } else {
+            if (window.toast) window.toast.error(res.error || 'Error');
+            saError('No se pudo activar', res.error || 'Error');
+          }
         }).catch(function() {
           activateAllBtn.disabled = false;
           activateAllBtn.textContent = 'Activar todos';
-          alert('Error de conexión.');
+          if (window.toast) window.toast.error('Error de conexión.');
+          saError('Error de conexión', 'No se pudo conectar con el servidor.');
         });
       });
 

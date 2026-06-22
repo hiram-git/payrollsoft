@@ -106,6 +106,30 @@ const reportTypes = [
 ]
 
 const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'local_storage'
+
+// ── Reportes mensuales (SIPE / SIACAP): selector mes/año/tipo ──────────────
+let monthlyTypes: { id: string; name: string; sortOrder: number }[] = []
+try {
+  const res = await fetch(`${API_URL}/concepts/config`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.ok) {
+    const json = (await res.json()) as {
+      data?: { payrollTypes?: { id: string; name: string; sortOrder: number }[] }
+    }
+    monthlyTypes = (json.data?.payrollTypes ?? []).sort((a, b) => a.sortOrder - b.sortOrder)
+  }
+} catch {
+  /* ignore */
+}
+const nowD = new Date()
+const curYear = nowD.getUTCFullYear()
+const curMonth = nowD.getUTCMonth() + 1
+const monthlyYears = [curYear, curYear - 1, curYear - 2]
+const MESES_MONTHLY = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
 ---
 
 <AppLayout title="Reportes de Gobierno">
@@ -145,7 +169,16 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
       </div>
     </div>
 
-    <div class="flex items-center justify-between gap-4 mb-4 mt-6">
+    {/* ── Quincenal: reportes por planilla ──────────────────────────── */}
+    <div class="flex items-center gap-2 mt-8 mb-1">
+      <h2 class="text-base font-semibold text-gray-900">Quincenal</h2>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">Por planilla</span>
+    </div>
+    <p class="text-xs text-gray-500 mb-4">
+      Transferencias, Recapitulación y SIACAP de cada planilla generada o cerrada.
+    </p>
+
+    <div class="flex items-center justify-between gap-4 mb-4">
       <form method="GET" action="" class="flex items-center gap-2">
         <input
           type="search"
@@ -278,6 +311,49 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
         </div>
       </div>
     )}
+
+    {/* ── Mensual: SIPE / SIACAP ─────────────────────────────────────── */}
+    <div class="flex items-center gap-2 mt-10 mb-1">
+      <h2 class="text-base font-semibold text-gray-900">Mensual</h2>
+      <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">Consolidado del mes</span>
+    </div>
+    <p class="text-xs text-gray-500 mb-4">
+      Genera el Excel del mes agregando todas las planillas cerradas del período (y tipo).
+    </p>
+
+    <section class="bg-white border border-gray-200 rounded-xl p-5">
+      <h3 class="text-sm font-semibold text-gray-800">Reportes mensuales (SIPE / SIACAP)</h3>
+      <p class="text-xs text-gray-500 mt-0.5 mb-3">
+        SIPE y SIACAP del período seleccionado.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-mes">Mes</label>
+          <select id="m-mes" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {MESES_MONTHLY.map((m, i) => (
+              <option value={i + 1} selected={i + 1 === curMonth}>{m}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-anio">Año</label>
+          <select id="m-anio" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {monthlyYears.map((y) => <option value={y}>{y}</option>)}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="m-tipo">Tipo de planilla</label>
+          <select id="m-tipo" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            <option value="">Todos los tipos</option>
+            {monthlyTypes.map((t) => <option value={t.id}>{t.name}</option>)}
+          </select>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" data-monthly="sipe" class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">SIPE</button>
+          <button type="button" data-monthly="siacap" class="px-3 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">SIACAP</button>
+        </div>
+      </div>
+    </section>
   </div>
 </AppLayout>
 
@@ -291,6 +367,33 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
     siacap: 'SIACAP',
   }
 
+  // Module-level "busy" flag — guards the whole report surface during
+  // an in-flight request. Synchronous so click-spam can't race us:
+  // every additional click checks this *before* the modal helpers
+  // even start their async work.
+  let busy = false
+
+  function setBusy(state: boolean) {
+    busy = state
+    document.body.classList.toggle('cursor-wait', state)
+    for (const t of document.querySelectorAll<HTMLButtonElement>('[data-gov-trigger]')) {
+      t.disabled = state
+      t.classList.toggle('opacity-60', state)
+      t.classList.toggle('cursor-not-allowed', state)
+    }
+    for (const b of document.querySelectorAll<HTMLButtonElement>('[data-gov-report]')) {
+      b.disabled = state
+      b.setAttribute('aria-busy', state ? 'true' : 'false')
+    }
+    if (state) {
+      // Close every dropdown panel so the user can't even see the
+      // options while the request is in flight.
+      for (const p of document.querySelectorAll<HTMLElement>('[data-gov-panel]')) {
+        p.classList.add('hidden')
+      }
+    }
+  }
+
   // Per-row dropdown toggle
   for (const dd of document.querySelectorAll<HTMLElement>('[data-gov-dropdown]')) {
     const trigger = dd.querySelector<HTMLButtonElement>('[data-gov-trigger]')
@@ -299,7 +402,7 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
 
     trigger.addEventListener('click', (e) => {
       e.stopPropagation()
-      // Close other open dropdowns first
+      if (busy) return
       for (const other of document.querySelectorAll<HTMLElement>('[data-gov-panel]')) {
         if (other !== panel) other.classList.add('hidden')
       }
@@ -307,6 +410,7 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
     })
   }
   document.addEventListener('click', () => {
+    if (busy) return
     for (const p of document.querySelectorAll<HTMLElement>('[data-gov-panel]')) {
       p.classList.add('hidden')
     }
@@ -314,29 +418,51 @@ const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'l
 
   // Report buttons
   for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-gov-report]')) {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation()
+      if (busy) return
       const report = btn.dataset.govReport ?? ''
       const payrollId = btn.dataset.payrollId ?? ''
       const mode = btn.dataset.mode ?? 'download'
       if (!report || !payrollId) return
 
-      // Close dropdown
-      btn.closest('[data-gov-dropdown]')?.querySelector<HTMLElement>('[data-gov-panel]')?.classList.add('hidden')
-
+      setBusy(true)
       const url = `/api/reports/government/${report}?payrollId=${encodeURIComponent(payrollId)}`
       const title = titles[report] ?? 'Reporte'
       const filename = `${report}-${payrollId.slice(0, 8)}.pdf`
 
-      if (mode === 'preview') {
-        void previewPdfInModal(url, { title, filenameHint: filename })
-      } else {
-        void downloadPdfWithModal(url, {
-          title: `Generando ${title}`,
-          successTitle: `${title} descargada`,
-          filenameHint: filename,
-        })
+      try {
+        if (mode === 'preview') {
+          await previewPdfInModal(url, { title, filenameHint: filename })
+        } else {
+          await downloadPdfWithModal(url, {
+            title: `Generando ${title}`,
+            successTitle: `${title} descargada`,
+            filenameHint: filename,
+          })
+        }
+      } finally {
+        setBusy(false)
       }
     })
+  }
+
+  // ── Reportes mensuales SIPE / SIACAP ──────────────────────────────
+  {
+    const mes = document.getElementById('m-mes') as HTMLSelectElement | null
+    const anio = document.getElementById('m-anio') as HTMLSelectElement | null
+    const tipo = document.getElementById('m-tipo') as HTMLSelectElement | null
+    for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-monthly]')) {
+      btn.addEventListener('click', () => {
+        const kind = btn.getAttribute('data-monthly') ?? 'sipe'
+        const qs = new URLSearchParams({
+          kind,
+          month: mes?.value ?? '',
+          year: anio?.value ?? '',
+        })
+        if (tipo?.value) qs.set('payrollTypeId', tipo.value)
+        window.location.href = `/api/reports/government/monthly?${qs.toString()}`
+      })
+    }
   }
 </script>

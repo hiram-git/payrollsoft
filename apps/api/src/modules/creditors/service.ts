@@ -12,17 +12,25 @@ import {
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
 
+export type CreditorPaymentInput = {
+  bankId?: string | null
+  accountNumber?: string | null
+  accountType?: 'savings' | 'checking' | null
+  paymentMethod?: 'ach' | 'check' | 'cash'
+  beneficiaryName?: string | null
+}
+
 export type CreateCreditorInput = {
   code: string
   name: string
   description?: string | null
-}
+} & CreditorPaymentInput
 
 export type UpdateCreditorInput = {
   name?: string
   description?: string | null
   isActive?: boolean
-}
+} & CreditorPaymentInput
 
 export function listCreditorsService(db: AnyDb, includeInactive = false) {
   return listCreditors(db, includeInactive)
@@ -80,6 +88,11 @@ export async function createCreditorService(db: AnyDb, input: CreateCreditorInpu
     name: input.name.trim(),
     description: input.description ?? null,
     conceptId,
+    bankId: input.bankId ?? null,
+    accountNumber: input.accountNumber ?? null,
+    accountType: input.accountType ?? null,
+    paymentMethod: input.paymentMethod ?? 'check',
+    beneficiaryName: input.beneficiaryName ?? null,
     isActive: true,
   })
 
@@ -96,6 +109,13 @@ export async function updateCreditorService(db: AnyDb, id: string, input: Update
     name: input.name?.trim() ?? existing.name,
     description: input.description !== undefined ? input.description : existing.description,
     isActive: input.isActive !== undefined ? input.isActive : existing.isActive,
+    bankId: input.bankId !== undefined ? input.bankId : existing.bankId,
+    accountNumber:
+      input.accountNumber !== undefined ? input.accountNumber : existing.accountNumber,
+    accountType: input.accountType !== undefined ? input.accountType : existing.accountType,
+    paymentMethod: input.paymentMethod ?? existing.paymentMethod,
+    beneficiaryName:
+      input.beneficiaryName !== undefined ? input.beneficiaryName : existing.beneficiaryName,
   })
 
   // Keep the auto-generated concept name in sync

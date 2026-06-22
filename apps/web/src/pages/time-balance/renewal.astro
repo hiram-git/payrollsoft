@@ -1,0 +1,299 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'time_balance:write')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+type RenewalState = {
+  id?: string
+  status: string
+  intervalMinutes: number
+  runMonth: number
+  runDay: number
+  lastRenewedYear: number | null
+  lastRunAt: string | null
+  lastSuccessAt: string | null
+  lastError: string | null
+  yearsRenewed: number
+  autoStart: boolean
+}
+
+let state: RenewalState | null = null
+let error = ''
+
+try {
+  const res = await fetch(`${API_URL}/time-balance/renewal/status`, { headers })
+  if (res.status === 401) return Astro.redirect('/login')
+  if (res.ok) state = ((await res.json()) as { data: RenewalState }).data ?? null
+} catch {
+  error = 'No se pudo conectar con el servidor.'
+}
+
+const running = state?.status === 'running'
+const MONTHS = [
+  'enero',
+  'febrero',
+  'marzo',
+  'abril',
+  'mayo',
+  'junio',
+  'julio',
+  'agosto',
+  'septiembre',
+  'octubre',
+  'noviembre',
+  'diciembre',
+]
+
+function fmtDate(s: string | null): string {
+  if (!s) return '—'
+  return new Date(s).toLocaleString('es-PA')
+}
+---
+<AppLayout title="Renovación anual de saldos">
+  <div class="mx-auto w-full max-w-7xl p-8 lg:w-3/4">
+    <div class="mb-6">
+      <h1 class="text-xl font-semibold tracking-tight tb-title">Renovación anual de saldos de tiempo</h1>
+      <p class="text-sm mt-0.5 tb-subtitle">
+        Cada 1 de enero el worker abre los saldos del nuevo año (144 horas) para todos los
+        colaboradores activos. No acumula lo del año anterior ni toca años pasados.
+      </p>
+    </div>
+
+    {error && (
+      <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+    <div id="flash-msg" class="mb-4 rounded-md px-4 py-3 text-sm hidden"></div>
+
+    <section class="tb-card border rounded-lg overflow-hidden mb-8">
+      <div class="px-5 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-3">
+          <span class={`tb-dot ${running ? 'tb-dot-on' : 'tb-dot-off'}`}></span>
+          <div>
+            <div class="font-medium tb-title text-sm">Worker de renovación</div>
+            <div class="text-xs tb-subtitle mt-0.5">
+              {state
+                ? `Revisa cada ${state.intervalMinutes} min · Renueva el ${state.runDay} de ${MONTHS[(state.runMonth ?? 1) - 1]}`
+                : 'No configurado'}
+              {state?.autoStart && <span class="ml-1 tb-badge-auto">auto</span>}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-shrink-0">
+          {running ? (
+            <button type="button" class="tb-btn tb-btn-stop px-3 py-1.5 rounded-md text-xs font-medium"
+              data-action="stop">Detener</button>
+          ) : (
+            <button type="button" class="tb-btn tb-btn-start px-3 py-1.5 rounded-md text-xs font-medium"
+              data-action="start">Iniciar</button>
+          )}
+          <button type="button" class="tb-btn tb-btn-trigger px-3 py-1.5 rounded-md text-xs font-medium"
+            data-action="trigger">Renovar ahora</button>
+          <button type="button" class="tb-btn-config px-2 py-1.5 rounded-md text-xs"
+            data-toggle-config title="Configuración">&#9881;</button>
+        </div>
+      </div>
+
+      {state?.id && (
+        <div class="px-5 pb-2 flex flex-wrap gap-x-6 gap-y-1 text-xs">
+          <div><span class="tb-label">Último año renovado:</span><span class="tb-mute ml-1">{state.lastRenewedYear ?? '—'}</span></div>
+          <div><span class="tb-label">Última ejecución:</span><span class="tb-mute ml-1">{fmtDate(state.lastRunAt)}</span></div>
+          <div><span class="tb-label">Años renovados:</span><span class="tb-mute ml-1">{(state.yearsRenewed ?? 0).toLocaleString()}</span></div>
+          {state.lastError && (
+            <div class="basis-full"><span class="tb-label text-red-400">Error:</span><span class="text-red-400 ml-1">{state.lastError}</span></div>
+          )}
+        </div>
+      )}
+
+      <div class="tb-config-panel hidden border-t px-5 py-3" id="config-panel">
+        <div class="flex flex-wrap gap-4 items-end">
+          <div>
+            <label class="block text-xs font-medium tb-label mb-1">Revisar cada (min)</label>
+            <input type="number" min="1" max="10080" value={state?.intervalMinutes ?? 1440}
+              class="w-24 px-2 py-1.5 text-sm border rounded-md tb-input" id="interval-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium tb-label mb-1">Mes</label>
+            <input type="number" min="1" max="12" value={state?.runMonth ?? 1}
+              class="w-20 px-2 py-1.5 text-sm border rounded-md tb-input" id="month-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-medium tb-label mb-1">Día</label>
+            <input type="number" min="1" max="31" value={state?.runDay ?? 1}
+              class="w-20 px-2 py-1.5 text-sm border rounded-md tb-input" id="day-input" />
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="auto-input" checked={state?.autoStart ?? false} />
+            <label for="auto-input" class="text-xs tb-label">Auto-inicio</label>
+          </div>
+          <button type="button" class="tb-btn tb-btn-start px-3 py-1.5 rounded-md text-xs font-medium"
+            data-action="start">Aplicar</button>
+        </div>
+      </div>
+
+      <div class="border-t tb-rule">
+        <button type="button" class="w-full px-5 py-2 text-xs tb-mute hover:underline text-left"
+          data-toggle-log>Ver historial &#9662;</button>
+        <div class="hidden px-5 pb-3" id="log-panel">
+          <table class="tb-log-table w-full text-xs">
+            <thead><tr>
+              <th class="text-left py-1.5 px-2">Fecha</th>
+              <th class="text-left py-1.5 px-2">Estado</th>
+              <th class="text-right py-1.5 px-2">Año</th>
+              <th class="text-right py-1.5 px-2">Empleados</th>
+              <th class="text-right py-1.5 px-2">Compensatorio</th>
+              <th class="text-right py-1.5 px-2">Familiar</th>
+              <th class="text-left py-1.5 px-2">Error</th>
+            </tr></thead>
+            <tbody id="log-body">
+              <tr><td colspan="7" class="py-4 text-center tb-mute">Cargando...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script is:inline>
+    ;(function () {
+      var flash = document.getElementById('flash-msg')
+      function showFlash(msg, ok) {
+        if (!flash) return
+        flash.textContent = msg
+        flash.className = 'mb-4 rounded-md px-4 py-3 text-sm ' +
+          (ok ? 'bg-green-50 border border-green-200 text-green-700' : 'bg-red-50 border border-red-200 text-red-700')
+      }
+
+      function action(op, body) {
+        return fetch('/api/time-balance/renewal?op=' + op, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body || {}),
+        }).then(function (r) { return r.json().catch(function () { return {} }) })
+      }
+
+      document.querySelectorAll('[data-action]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var op = btn.getAttribute('data-action')
+          var body = {}
+          if (op === 'start') {
+            var intEl = document.getElementById('interval-input')
+            var monEl = document.getElementById('month-input')
+            var dayEl = document.getElementById('day-input')
+            var autoEl = document.getElementById('auto-input')
+            if (intEl) body.intervalMinutes = parseInt(intEl.value, 10) || 1440
+            if (monEl) body.runMonth = parseInt(monEl.value, 10) || 1
+            if (dayEl) body.runDay = parseInt(dayEl.value, 10) || 1
+            if (autoEl) body.autoStart = autoEl.checked
+          }
+          action(op, body).then(function (json) {
+            if (json.ok) {
+              var labels = { start: 'Iniciado', stop: 'Detenido', trigger: 'Renovación ejecutada' }
+              var d = json.data || {}
+              var extra = (op === 'trigger' && d.ran)
+                ? ' — ' + (d.compensatoryCreated || 0) + ' saldos creados (año ' + d.year + ')'
+                : (op === 'trigger' && !d.ran ? ' — ya estaba renovado este año' : '')
+              showFlash((labels[op] || 'OK') + extra, true)
+              setTimeout(function () { window.location.reload() }, 1400)
+            } else {
+              showFlash(json.error || 'Error', false)
+            }
+          }).catch(function (err) { showFlash('Error de red: ' + err, false) })
+        })
+      })
+
+      var cfgBtn = document.querySelector('[data-toggle-config]')
+      if (cfgBtn) cfgBtn.addEventListener('click', function () {
+        var p = document.getElementById('config-panel')
+        if (p) p.classList.toggle('hidden')
+      })
+
+      var logBtn = document.querySelector('[data-toggle-log]')
+      if (logBtn) logBtn.addEventListener('click', async function () {
+        var container = document.getElementById('log-panel')
+        if (!container) return
+        if (!container.classList.contains('hidden')) { container.classList.add('hidden'); return }
+        container.classList.remove('hidden')
+        var tbody = document.getElementById('log-body')
+        if (!tbody) return
+        try {
+          var res = await fetch('/api/time-balance/renewal?view=log')
+          var json = await res.json().catch(function () { return {} })
+          var logs = json.data || []
+          if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center tb-mute">Sin registros.</td></tr>'
+            return
+          }
+          tbody.innerHTML = logs.map(function (l) {
+            var cls = l.status === 'success' ? 'tb-log-ok' : 'tb-log-err'
+            var dt = l.startedAt ? new Date(l.startedAt).toLocaleString('es-PA') : '—'
+            return '<tr class="border-t tb-rule">' +
+              '<td class="py-1.5 px-2 tb-mute whitespace-nowrap">' + dt + '</td>' +
+              '<td class="py-1.5 px-2"><span class="tb-log-badge ' + cls + '">' + l.status + '</span></td>' +
+              '<td class="py-1.5 px-2 text-right">' + (l.year || '—') + '</td>' +
+              '<td class="py-1.5 px-2 text-right">' + (l.employeesProcessed || 0) + '</td>' +
+              '<td class="py-1.5 px-2 text-right">' + (l.compensatoryCreated || 0) + '</td>' +
+              '<td class="py-1.5 px-2 text-right">' + (l.familyDisabilityCreated || 0) + '</td>' +
+              '<td class="py-1.5 px-2 tb-mute truncate max-w-[200px]">' + (l.errorMessage || '—') + '</td></tr>'
+          }).join('')
+        } catch (err) {
+          tbody.innerHTML = '<tr><td colspan="7" class="py-4 text-center text-red-400">Error al cargar.</td></tr>'
+        }
+      })
+    })()
+  </script>
+
+  <style is:global>
+    .tb-title    { color: var(--fore); }
+    .tb-subtitle { color: var(--fore-dim); }
+    .tb-label    { color: var(--fore-dim); font-weight: 500; }
+    .tb-mute     { color: var(--mute); }
+    .tb-card     { background: var(--ink-2); border-color: var(--rule); }
+    .tb-rule     { border-color: var(--rule); }
+    .tb-config-panel { background: var(--ink-3); border-color: var(--rule); }
+    .tb-input    { background: var(--ink-1); border-color: var(--rule); color: var(--fore); }
+    .tb-dot      { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .tb-dot-on   { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,0.5); }
+    .tb-dot-off  { background: var(--mute); }
+    .tb-btn      { transition: background 0.15s; }
+    .tb-btn-start       { background: rgba(16,185,129,0.18); color: #34d399; }
+    .tb-btn-start:hover { background: rgba(16,185,129,0.3); }
+    .tb-btn-stop        { background: rgba(239,68,68,0.18); color: #f87171; }
+    .tb-btn-stop:hover  { background: rgba(239,68,68,0.3); }
+    .tb-btn-trigger       { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .tb-btn-trigger:hover { background: rgba(96,165,250,0.3); }
+    .tb-btn-config       { color: var(--mute); background: transparent; }
+    .tb-btn-config:hover { color: var(--fore); background: var(--ink-3); }
+    .tb-badge-auto {
+      display: inline-block; padding: 0 0.375rem; border-radius: 9999px;
+      font-size: 0.625rem; font-weight: 600; text-transform: uppercase;
+      background: rgba(96,165,250,0.18); color: #60a5fa;
+    }
+    .tb-log-table thead tr { color: var(--mute-2); }
+    .tb-log-badge {
+      display: inline-block; padding: 0.0625rem 0.375rem; border-radius: 0.25rem;
+      font-size: 0.625rem; font-weight: 600; text-transform: uppercase;
+    }
+    .tb-log-ok  { background: rgba(16,185,129,0.18); color: #34d399; }
+    .tb-log-err { background: rgba(239,68,68,0.18); color: #f87171; }
+    [data-theme='light'] .tb-card { background: #fff; }
+    [data-theme='light'] .tb-config-panel { background: #f9fafb; }
+    [data-theme='light'] .tb-input { background: #fff; }
+    [data-theme='light'] .tb-btn-start { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .tb-btn-start:hover { background: #a7f3d0; }
+    [data-theme='light'] .tb-btn-stop { background: #fee2e2; color: #991b1b; }
+    [data-theme='light'] .tb-btn-stop:hover { background: #fecaca; }
+    [data-theme='light'] .tb-btn-trigger { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .tb-btn-trigger:hover { background: #bfdbfe; }
+    [data-theme='light'] .tb-badge-auto { background: #dbeafe; color: #1d4ed8; }
+    [data-theme='light'] .tb-log-ok  { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .tb-log-err { background: #fee2e2; color: #991b1b; }
+  </style>
+</AppLayout>

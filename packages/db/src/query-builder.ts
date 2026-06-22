@@ -16,6 +16,7 @@ import {
   concepts,
   creditors,
   departments,
+  dependents,
   employeePayrollTypes,
   employees,
   jobFunctions,
@@ -81,6 +82,10 @@ export type EmployeeFilter = {
   isActive?: boolean
   payFrequency?: string
   payrollTypeId?: string
+  /** El propio colaborador tiene discapacidad (employees.has_own_disability). */
+  hasOwnDisability?: boolean
+  /** Tiene al menos un dependiente activo con discapacidad. */
+  hasFamilyDisability?: boolean
 }
 
 /**
@@ -126,6 +131,19 @@ export async function listEmployees(
       .select({ eid: employeePayrollTypes.employeeId })
       .from(employeePayrollTypes)
       .where(eq(employeePayrollTypes.payrollTypeId, filter.payrollTypeId))
+    conditions.push(inArray(employees.id, sub))
+  }
+
+  if (filter.hasOwnDisability !== undefined) {
+    conditions.push(eq(employees.hasOwnDisability, filter.hasOwnDisability))
+  }
+
+  if (filter.hasFamilyDisability) {
+    // Semi-join: solo empleados con un dependiente activo con discapacidad.
+    const sub = db
+      .select({ eid: dependents.employeeId })
+      .from(dependents)
+      .where(and(eq(dependents.isActive, true), eq(dependents.hasDisability, true)))
     conditions.push(inArray(employees.id, sub))
   }
 
@@ -369,6 +387,8 @@ export async function getPayrollLines(db: Db, payrollId: string) {
         email: employees.email,
         department: employees.department,
         position: employees.position,
+        positionId: employees.positionId,
+        socialSecurityNumber: employees.socialSecurityNumber,
       },
     })
     .from(payrollLines)
@@ -416,6 +436,8 @@ export async function getPayrollLinesPaged(
           email: employees.email,
           department: employees.department,
           position: employees.position,
+          positionId: employees.positionId,
+          socialSecurityNumber: employees.socialSecurityNumber,
         },
       })
       .from(payrollLines)
@@ -1915,6 +1937,11 @@ export async function listCreditors(db: Db, includeInactive = false) {
       name: creditors.name,
       description: creditors.description,
       conceptId: creditors.conceptId,
+      bankId: creditors.bankId,
+      accountNumber: creditors.accountNumber,
+      accountType: creditors.accountType,
+      paymentMethod: creditors.paymentMethod,
+      beneficiaryName: creditors.beneficiaryName,
       isActive: creditors.isActive,
       createdAt: creditors.createdAt,
       conceptCode: concepts.code,
@@ -1934,6 +1961,11 @@ export async function getCreditorById(db: Db, id: string) {
       name: creditors.name,
       description: creditors.description,
       conceptId: creditors.conceptId,
+      bankId: creditors.bankId,
+      accountNumber: creditors.accountNumber,
+      accountType: creditors.accountType,
+      paymentMethod: creditors.paymentMethod,
+      beneficiaryName: creditors.beneficiaryName,
       isActive: creditors.isActive,
       createdAt: creditors.createdAt,
       updatedAt: creditors.updatedAt,
@@ -2440,10 +2472,14 @@ export type CreatePositionData = {
   code: string
   name: string
   salary: string
+  overtimeAmount?: string
+  representationAmount?: string
   jobTitleId?: string | null
   departmentId?: string | null
-  jobFunctionId?: string | null
   budgetItemId?: string | null
+  overtimeBudgetItemId?: string | null
+  representationBudgetItemId?: string | null
+  thirteenthMonthBudgetItemId?: string | null
   status?: 'en_uso' | 'vacante'
 }
 

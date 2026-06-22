@@ -9,11 +9,44 @@ use url::Url;
 const DEFAULT_URL: &str = "http://localhost:4321";
 const KIOSK_PATH: &str = "/kiosk";
 
+// Build-time baked configuration. When producing a distributable .msi the
+// builder sets these (via scripts/build-dist.mjs); option_env! captures them
+// at compile time so installed clients work with no .env present on the
+// machine. Runtime env / .env still takes priority, so dev and IT overrides
+// keep working. build.rs emits rerun-if-env-changed for all three.
+const BAKED_URL: Option<&str> = option_env!("PAYROLL_DESKTOP_URL");
+const BAKED_ENABLED: Option<&str> = option_env!("PAYROLL_DESKTOP_ENABLED");
+const BAKED_MODE: Option<&str> = option_env!("PAYROLL_DESKTOP_MODE");
+
+/// Per-user override file for distributed installs: lets IT repoint a build
+/// without recompiling. Windows-only for v1 (`%APPDATA%\RCG SOFTRIX\.env`).
+fn config_override_path() -> Option<PathBuf> {
+    std::env::var("APPDATA")
+        .ok()
+        .map(|appdata| PathBuf::from(appdata).join("RCG SOFTRIX").join(".env"))
+}
+
 fn load_env() {
-    // Walk up from the binary's CWD looking for the first .env. The desktop
-    // shell is usually launched from the monorepo root (where the shared .env
-    // lives) but `tauri dev` runs it from apps/desktop/src-tauri, so we walk
-    // upwards and load the first match.
+    // dotenvy::from_path never overrides vars already in the process env, so we
+    // load from most- to least-specific and the first wins. These locations are
+    // mutually exclusive in practice: distributed installs use the override
+    // file / exe dir, the dev monorepo uses the CWD walk.
+
+    // 1. Per-user override (distributed installs).
+    if let Some(path) = config_override_path() {
+        let _ = dotenvy::from_path(&path);
+    }
+
+    // 2. Next to the executable (distributed installs).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            let _ = dotenvy::from_path(dir.join(".env"));
+        }
+    }
+
+    // 3. Walk up from the CWD looking for the first .env (dev monorepo). The
+    // shell is usually launched from the repo root, but `tauri dev` runs it
+    // from apps/desktop/src-tauri, so we walk upwards.
     let mut cursor: PathBuf = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     loop {
         let candidate = cursor.join(".env");
@@ -34,35 +67,43 @@ fn is_truthy(raw: &str) -> bool {
     )
 }
 
+/// Runtime env var (incl. values loaded from a .env) wins; otherwise fall back
+/// to the value baked at build time.
+fn runtime_or_baked(var: &str, baked: Option<&str>) -> Option<String> {
+    std::env::var(var)
+        .ok()
+        .or_else(|| baked.map(|s| s.to_string()))
+}
+
+fn resolve_mode() -> String {
+    runtime_or_baked("DESKTOP_MODE", BAKED_MODE).unwrap_or_default()
+}
+
+fn is_kiosk_mode() -> bool {
+    resolve_mode().trim().eq_ignore_ascii_case("kiosk")
+}
+
 fn resolve_target_url() -> Result<Url, String> {
-    let raw = std::env::var("DESKTOP_URL").unwrap_or_else(|_| DEFAULT_URL.to_string());
+    let raw = runtime_or_baked("DESKTOP_URL", BAKED_URL).unwrap_or_else(|| DEFAULT_URL.to_string());
     let raw = raw.trim();
     if raw.is_empty() {
         return Err("DESKTOP_URL is set but empty".into());
     }
-    let mut url = Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))?;
+    let mut url =
+        Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))?;
 
-    // When DESKTOP_MODE=kiosk the shell points the WebView at the
-    // facial-recognition kiosk page so the device boots straight into the
-    // marcacion UI. Operators can still navigate elsewhere via the URL
-    // unless they pin the windows to fullscreen + lock down keys.
-    let mode = std::env::var("DESKTOP_MODE").unwrap_or_default();
-    if mode.trim().eq_ignore_ascii_case("kiosk") {
+    // In kiosk mode the shell points the WebView straight at the
+    // facial-recognition kiosk page so the device boots into the marcacion UI.
+    if is_kiosk_mode() {
         url.set_path(KIOSK_PATH);
     }
 
     Ok(url)
 }
 
-fn is_kiosk_mode() -> bool {
-    std::env::var("DESKTOP_MODE")
-        .map(|v| v.trim().eq_ignore_ascii_case("kiosk"))
-        .unwrap_or(false)
-}
-
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let about = AboutMetadata {
-        name: Some("PayrollSoft".into()),
+        name: Some("RCG SOFTRIX".into()),
         version: Some(env!("CARGO_PKG_VERSION").into()),
         ..Default::default()
     };
@@ -111,7 +152,7 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         &[&PredefinedMenuItem::about(
             app,
-            Some("Acerca de PayrollSoft"),
+            Some("Acerca de RCG SOFTRIX"),
             Some(about),
         )?],
     )?;
@@ -122,14 +163,16 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 pub fn run() {
     load_env();
 
-    let enabled = std::env::var("DESKTOP_ENABLED")
+    let enabled = runtime_or_baked("DESKTOP_ENABLED", BAKED_ENABLED)
         .map(|v| is_truthy(&v))
         .unwrap_or(false);
 
     if !enabled {
         eprintln!(
             "[payroll-desktop] DESKTOP_ENABLED is not truthy — refusing to launch.\n\
-             Set DESKTOP_ENABLED=true in your .env to run the desktop shell."
+             For dev: set DESKTOP_ENABLED=true in your .env.\n\
+             For a distributable build: bake it with `bun --filter @payroll/desktop \
+             build:dist -- --url=https://your-cloud-host`."
         );
         std::process::exit(0);
     }
@@ -146,7 +189,6 @@ pub fn run() {
 
     let target_str = target.to_string();
     let target_for_menu = target_str.clone();
-
     let kiosk = is_kiosk_mode();
 
     tauri::Builder::default()
@@ -164,10 +206,11 @@ pub fn run() {
 
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("PayrollSoft")
+                    .title("RCG SOFTRIX")
                     .inner_size(1280.0, 800.0)
                     .min_inner_size(1024.0, 640.0)
                     .resizable(true)
+                    .fullscreen(kiosk)
                     .visible(false)
                     .initialization_script(&init_script)
                     .build()?;

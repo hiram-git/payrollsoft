@@ -18,9 +18,21 @@ type Bank = {
   name: string
   routing: string | null
   swift: string | null
+  achFormat: string | null
+  achEntityCode: string | null
   country: string
   isActive: number
   sortOrder: number
+}
+
+const ACH_FORMATS = [
+  { value: '', label: '— Ninguno —' },
+  { value: 'banco_nacional', label: 'Banco Nacional (líneas L)' },
+  { value: 'banco_general', label: 'Banco General (C/D/T)' },
+  { value: 'mupa_v1', label: 'MUPA v1 (legado)' },
+]
+function achFormatLabel(v: string | null): string {
+  return ACH_FORMATS.find((f) => f.value === (v ?? ''))?.label ?? (v ?? '—')
 }
 
 let banks: Bank[] = []
@@ -81,6 +93,16 @@ const error =
               <label class="label">SWIFT</label>
               <input type="text" name="swift" class="inp w-ruta" maxlength="15" />
             </div>
+            <div class="field">
+              <label class="label">Formato ACH</label>
+              <select name="achFormat" class="inp w-32">
+                {ACH_FORMATS.map((f) => <option value={f.value}>{f.label}</option>)}
+              </select>
+            </div>
+            <div class="field">
+              <label class="label">Cód. entidad</label>
+              <input type="text" name="achEntityCode" class="inp w-ruta" maxlength="9" placeholder="000000071" />
+            </div>
             <div class="form-actions">
               <button type="submit" class="btn-ok">Guardar</button>
               <button type="button" id="btnCancelNew" class="btn-ghost">Cancelar</button>
@@ -99,13 +121,14 @@ const error =
               <th class="th">Nombre</th>
               <th class="th w-24">Ruta</th>
               <th class="th w-24">SWIFT</th>
+              <th class="th w-32">Formato ACH</th>
               <th class="th w-20 text-center">Estado</th>
               {canWrite && <th class="th w-24"></th>}
             </tr>
           </thead>
           <tbody>
             {banks.map((b) => (
-              <tr class="tr" id={`row-${b.id}`} data-edit-target={b.id} data-name={b.name} data-routing={b.routing ?? ''} data-swift={b.swift ?? ''}>
+              <tr class="tr" id={`row-${b.id}`} data-edit-target={b.id} data-name={b.name} data-routing={b.routing ?? ''} data-swift={b.swift ?? ''} data-achformat={b.achFormat ?? ''} data-achentitycode={b.achEntityCode ?? ''}>
                 <td class="td td-code w-24">{b.code}</td>
                 <td class="td">
                   <span class="view-mode">{b.name}</span>
@@ -123,6 +146,18 @@ const error =
                 <td class="td w-24">
                   <span class="view-mode td-code">{b.swift ?? '—'}</span>
                   {canWrite && <input type="text" form={`edit-form-${b.id}`} name="swift" value={b.swift ?? ''} data-edit-input="swift" class="inp edit-mode hidden" maxlength="15" />}
+                </td>
+                <td class="td w-32">
+                  <span class="view-mode">
+                    {achFormatLabel(b.achFormat)}
+                    {b.achEntityCode && <span class="td-code"> · {b.achEntityCode}</span>}
+                  </span>
+                  {canWrite && (
+                    <select form={`edit-form-${b.id}`} name="achFormat" data-edit-input="achformat" class="inp edit-mode hidden">
+                      {ACH_FORMATS.map((f) => <option value={f.value} selected={(b.achFormat ?? '') === f.value}>{f.label}</option>)}
+                    </select>
+                  )}
+                  {canWrite && <input type="text" form={`edit-form-${b.id}`} name="achEntityCode" value={b.achEntityCode ?? ''} data-edit-input="achentitycode" class="inp edit-mode hidden" maxlength="9" placeholder="Cód. entidad" />}
                 </td>
                 <td class="td w-20 text-center">
                   <span class={`status-badge ${b.isActive === 1 ? 'status-ok' : 'status-off'}`}>
@@ -193,16 +228,18 @@ const error =
     .status-ok  { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
     .status-off { background:var(--ink-4); color:var(--mute); }
     .row-actions { display:flex; align-items:center; justify-content:flex-end; gap:.25rem; }
-    .action-btn  { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:none; background:transparent; color:var(--mute); cursor:pointer; transition:background .15s, color .15s; }
-    .action-btn:hover { background:var(--navy-soft); color:var(--navy-hi); }
-    .action-ok:hover     { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
+    .action-btn  { display:flex; align-items:center; justify-content:center; width:28px; height:28px; border-radius:6px; border:1px solid var(--rule); background:var(--icon-edit-bg); color:var(--icon-edit-fg); cursor:pointer; transition:background .15s, color .15s; }
+    .action-btn:hover    { background:var(--icon-edit-bg-hover); color:var(--icon-edit-fg-hover); }
+    .action-ok           { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
+    .action-ok:hover     { background:color-mix(in srgb, var(--ok) 26%, transparent); color:var(--ok); }
+    .action-cancel       { background:transparent; color:var(--mute); }
     .action-cancel:hover { background:var(--ink-4); color:var(--fore-dim); }
     .tooltip-wrap { position:relative; display:inline-flex; }
     .tooltip { position:absolute; bottom:calc(100% + 6px); left:50%; transform:translateX(-50%); background:var(--ink-2); color:var(--fore-dim); border:1px solid var(--rule-hi); padding:3px 8px; border-radius:4px; font-size:11px; font-weight:500; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity .12s; z-index:20; box-shadow:0 2px 6px rgba(0,0,0,.18); }
     .tooltip-wrap:hover > .tooltip { opacity:1; }
-    .btn-primary { background:var(--navy); color:#fff; border:none; padding:.5rem 1rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; transition:background .15s; }
+    .btn-primary { background:var(--navy); color:#fff; border:1px solid var(--btn-edge); padding:.5rem 1rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; transition:background .15s; }
     .btn-primary:hover { background:var(--navy-hi); }
-    .btn-ok      { background:var(--ok); color:#fff; border:none; padding:.5rem .875rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; white-space:nowrap; }
+    .btn-ok      { background:var(--ok); color:#fff; border:1px solid var(--btn-edge); padding:.5rem .875rem; border-radius:6px; font-size:.8125rem; font-weight:600; cursor:pointer; white-space:nowrap; }
     .btn-ok:hover { opacity:.88; }
     .btn-ghost   { background:transparent; color:var(--mute-2); border:1px solid var(--rule); padding:.5rem .875rem; border-radius:6px; font-size:.8125rem; cursor:pointer; white-space:nowrap; }
     .btn-ghost:hover { background:var(--ink-4); }

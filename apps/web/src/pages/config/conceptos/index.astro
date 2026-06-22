@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
@@ -50,8 +51,8 @@ const inactiveCount = conceptos.length - activeCount
       <a href="/config/conceptos/new" class="btn-new">+ Nuevo concepto</a>
     </div>
 
-    {success    && <div class="alert alert-ok">Concepto guardado correctamente.</div>}
-    {loadError  && <div class="alert alert-err">{loadError}</div>}
+    {success    && <div class="alert alert-ok" data-server-toast="success">Concepto guardado correctamente.</div>}
+    {loadError  && <div class="alert alert-err" data-server-toast="error">{loadError}</div>}
 
     <!-- Filters (only when there are rows to filter) -->
     {conceptos.length > 0 && (
@@ -150,7 +151,7 @@ const inactiveCount = conceptos.length - activeCount
                           <form
                             method="POST"
                             action={`/api/config/conceptos/${c.id}`}
-                            onsubmit="return confirm('¿Dar de baja este concepto?')"
+                            data-confirm-submit="¿Dar de baja este concepto?" data-confirm-title="Dar de baja concepto" data-confirm-tone="danger" data-confirm-label="Dar de baja"
                           >
                             <input type="hidden" name="_method" value="DELETE" />
                             <button type="submit" title="Dar de baja" class="act-btn act-del">
@@ -176,6 +177,7 @@ const inactiveCount = conceptos.length - activeCount
     </div>
 
   </div>
+  <ServerToastBridge />
 </AppLayout>
 
 <style>
@@ -247,9 +249,10 @@ const inactiveCount = conceptos.length - activeCount
 
   /* Row actions */
   .row-acts  { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
-  .act-btn   { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--mute); cursor: pointer; text-decoration: none; transition: background .15s, color .15s; }
-  .act-btn:hover { background: var(--navy-soft); color: var(--navy-hi); }
-  .act-del:hover { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+  .act-btn   { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: var(--icon-edit-bg); color: var(--icon-edit-fg); cursor: pointer; text-decoration: none; transition: background .15s, color .15s; }
+  .act-btn:hover { background: var(--icon-edit-bg-hover); color: var(--icon-edit-fg-hover); }
+  .act-del       { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+  .act-del:hover { background: color-mix(in srgb, var(--err) 24%, transparent); color: var(--err); }
 
   /* Empty / footer */
   .empty     { padding: 3rem; text-align: center; color: var(--mute); font-size: .875rem; }

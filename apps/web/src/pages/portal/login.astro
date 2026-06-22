@@ -10,7 +10,8 @@ if (identity) return Astro.redirect('/portal')
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Portal del Colaborador — Payroll Panamá</title>
+  <title>Portal del Colaborador — RCG SOFTRIX</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -28,6 +29,9 @@ if (identity) return Astro.redirect('/portal')
       --navy-lo:  #00205A;
       --rule:     #1A2740;
       --rule-hi:  #243555;
+      --btn-edge: rgba(255,255,255,0.14);
+      --btn-bg:       #1d4ed8;
+      --btn-bg-hover: #3b6fe0;
       --mute:     #6A7690;
       --mute-2:   #8B97AE;
       --fore:     #EDEEF2;
@@ -49,6 +53,8 @@ if (identity) return Astro.redirect('/portal')
       --navy-lo:  #00205A;
       --rule:     #E4E7EE;
       --rule-hi:  #D2D7E0;
+      --btn-edge: rgba(12,20,36,0.10);
+      --btn-bg-hover: #1538a0;
       --mute:     #7A8499;
       --mute-2:   #5B6478;
       --fore:     #0C1424;
@@ -113,16 +119,14 @@ if (identity) return Astro.redirect('/portal')
     .mark-box {
       width: 36px; height: 36px;
       border-radius: 4px;
-      background: var(--navy);
+      background: #fff;
+      padding: 4px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
       display: grid;
       place-items: center;
-      font-family: var(--f-display);
-      font-weight: 400;
-      font-size: 20px;
-      color: #fff;
-      letter-spacing: -0.02em;
       flex-shrink: 0;
     }
+    .mark-box img { width: 100%; height: 100%; object-fit: contain; }
     .wordmark {
       font-family: var(--f-sans);
       font-weight: 500;
@@ -318,9 +322,9 @@ if (identity) return Astro.redirect('/portal')
     .submit-btn {
       width: 100%;
       height: 52px;
-      background: var(--navy);
+      background: var(--btn-bg);
       color: #fff;
-      border: none;
+      border: 1px solid var(--btn-edge);
       border-radius: 3px;
       font-family: var(--f-sans);
       font-weight: 500;
@@ -334,7 +338,7 @@ if (identity) return Astro.redirect('/portal')
       transition: background 160ms ease;
       margin-bottom: 28px;
     }
-    .submit-btn:hover { background: var(--navy-hi); }
+    .submit-btn:hover { background: var(--btn-bg-hover); }
     .submit-btn:active { background: var(--navy-lo); }
     .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
     .admin-link-row {
@@ -452,9 +456,9 @@ if (identity) return Astro.redirect('/portal')
     </svg>
 
     <div class="left-top">
-      <div class="mark-box">P</div>
+      <div class="mark-box"><img src="/brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
       <div>
-        <div class="wordmark">PayrollSoft</div>
+        <div class="wordmark">RCG SOFTRIX</div>
         <div class="wordmark-sub">Portal del Colaborador</div>
       </div>
     </div>
@@ -562,7 +566,7 @@ if (identity) return Astro.redirect('/portal')
     </div>
 
     <div class="right-bottom">
-      <span>Payroll Panamá © {new Date().getFullYear()}</span>
+      <span>RCG SOFTRIX © {new Date().getFullYear()}</span>
       <span>Seguro · Confiable</span>
     </div>
   </div>

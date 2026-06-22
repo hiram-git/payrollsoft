@@ -18,6 +18,8 @@ const EmployeeBody = t.Object({
   lastName: t.String({ minLength: 1, maxLength: 100 }),
   idNumber: t.String({ minLength: 1, maxLength: 20 }),
   socialSecurityNumber: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
+  sex: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
+  nationality: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
   email: t.Optional(t.Nullable(t.String({ format: 'email' }))),
   phone: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   jobTitleId: t.Optional(t.Nullable(t.String())),
@@ -29,8 +31,16 @@ const EmployeeBody = t.Object({
   payFrequency: t.Optional(
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
+  contractType: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
+  // Personal flags + media (Phase 2.D)
+  hasOwnDisability: t.Optional(t.Boolean()),
+  requiresAttendanceMarking: t.Optional(t.Boolean()),
+  canRead: t.Optional(t.Boolean()),
+  canWrite: t.Optional(t.Boolean()),
+  photo: t.Optional(t.Nullable(t.String())),
+  scannedId: t.Optional(t.Nullable(t.String())),
   // Datos bancarios (tesorería)
   bankId: t.Optional(t.Nullable(t.String())),
   accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
@@ -92,6 +102,13 @@ const EmployeeUpdateBody = t.Object({
   siacapPct: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
+  // Personal flags + media (Phase 2.D)
+  hasOwnDisability: t.Optional(t.Boolean()),
+  requiresAttendanceMarking: t.Optional(t.Boolean()),
+  canRead: t.Optional(t.Boolean()),
+  canWrite: t.Optional(t.Boolean()),
+  photo: t.Optional(t.Nullable(t.String())),
+  scannedId: t.Optional(t.Nullable(t.String())),
   bankId: t.Optional(t.Nullable(t.String())),
   accountNumber: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
   accountType: t.Optional(t.Nullable(t.Union([t.Literal('savings'), t.Literal('checking')]))),
@@ -104,6 +121,8 @@ const ListQuery = t.Object({
   isActive: t.Optional(t.String()), // 'true' | 'false'
   payFrequency: t.Optional(t.String()),
   payrollTypeId: t.Optional(t.String()),
+  hasOwnDisability: t.Optional(t.String()), // 'true' | 'false'
+  hasFamilyDisability: t.Optional(t.String()), // 'true'
   page: t.Optional(t.Numeric()),
   limit: t.Optional(t.Numeric()),
   sortOrder: t.Optional(t.Union([t.Literal('asc'), t.Literal('desc')])),
@@ -133,6 +152,12 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
 
       const isActive =
         query.isActive === 'true' ? true : query.isActive === 'false' ? false : undefined
+      const hasOwnDisability =
+        query.hasOwnDisability === 'true'
+          ? true
+          : query.hasOwnDisability === 'false'
+            ? false
+            : undefined
 
       const result = await listEmployeesService(
         db,
@@ -142,6 +167,8 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           isActive,
           payFrequency: query.payFrequency,
           payrollTypeId: query.payrollTypeId,
+          hasOwnDisability,
+          hasFamilyDisability: query.hasFamilyDisability === 'true' ? true : undefined,
         },
         { page: query.page, limit: query.limit, sortOrder: query.sortOrder }
       )
@@ -190,7 +217,9 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           set.status =
             result.error === 'code_taken'
               ? 409
-              : result.error === 'custom_field_required'
+              : result.error === 'custom_field_required' ||
+                  result.error === 'salary_exceeds_position' ||
+                  result.error === 'invalid_image'
                 ? 422
                 : result.error === 'custom_field_forbidden'
                   ? 403
@@ -230,7 +259,9 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
           set.status =
             result.error === 'not_found'
               ? 404
-              : result.error === 'custom_field_required'
+              : result.error === 'custom_field_required' ||
+                  result.error === 'salary_exceeds_position' ||
+                  result.error === 'invalid_image'
                 ? 422
                 : result.error === 'custom_field_forbidden'
                   ? 403

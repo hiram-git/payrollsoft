@@ -46,7 +46,7 @@ export function mailerConfigFromCompany(company: CompanyMailFields | null): Mail
   const fromAddress = company.mailFromAddress ?? company.mailUsername
   if (!fromAddress) return null
 
-  const fromName = company.mailFromName ?? company.companyName ?? 'PayrollSoft'
+  const fromName = company.mailFromName ?? company.companyName ?? 'RCG SOFTRIX'
   const encryption = (company.mailEncryption ?? '').toLowerCase()
   // SSL on 465; STARTTLS upgrades a plain 587 connection. Anything else
   // is treated as STARTTLS — secure: false.

@@ -142,10 +142,19 @@ export type DownloadPdfOptions = {
  * Errors surface as a native alert so the user knows the click had an
  * outcome — silent failures would leave them staring at nothing.
  */
+/**
+ * Module-level lock — once a download is in flight, subsequent calls
+ * are dropped silently. Prevents click-spam from spawning parallel
+ * fetches before the blocking modal paints.
+ */
+let downloadInFlight = false
+
 export async function downloadPdfWithModal(
   url: string,
   options: DownloadPdfOptions = {}
 ): Promise<void> {
+  if (downloadInFlight) return
+  downloadInFlight = true
   const title = options.title ?? DEFAULT_LOADING_TITLE
   const successTitle =
     options.successTitle === null ? null : (options.successTitle ?? 'Descarga lista')
@@ -180,7 +189,18 @@ export async function downloadPdfWithModal(
     closeLoadingModal()
     console.error('PDF download error:', err)
     const message = err instanceof Error ? err.message : String(err)
-    alert(`Error al generar el PDF: ${message}`)
+    const sa = (
+      window as typeof window & {
+        saModal?: { error: (opts: { title: string; message: string }) => Promise<void> }
+      }
+    ).saModal
+    if (sa) {
+      await sa.error({ title: 'Error al generar el PDF', message })
+    } else {
+      alert(`Error al generar el PDF: ${message}`)
+    }
+  } finally {
+    downloadInFlight = false
   }
 }
 

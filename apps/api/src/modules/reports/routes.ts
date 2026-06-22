@@ -449,3 +449,148 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
       }),
     }
   )
+
+  // ── GET /reports/employee-files/rows ───────────────────────────────────────
+  //
+  // Movimientos de expedientes fila por fila, con los mismos filtros que
+  // el reporte agregado de arriba. Pensado para el PDF de
+  // /reports/movements: cada fila es un expediente con sus nombres ya
+  // resueltos (empleado, tipo, subtipo, creador) para evitar N+1 en el
+  // frontend. Devuelve también `years` (lista de años con expedientes)
+  // para poblar el filtro de año en la UI.
+  .get(
+    '/employee-files/rows',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+
+      // `year` es azúcar: cuando se pasa y no hay from/to explícitos,
+      // acota el rango al año completo.
+      const year = query.year ? Number.parseInt(query.year, 10) : null
+      let from = (query.from ?? '').trim() || null
+      let to = (query.to ?? '').trim() || null
+      if (year && Number.isFinite(year)) {
+        if (!from) from = `${year}-01-01`
+        if (!to) to = `${year}-12-31`
+      }
+
+      const filters = {
+        typeId: query.typeId ? Number.parseInt(query.typeId, 10) : null,
+        subtypeId: query.subtypeId ? Number.parseInt(query.subtypeId, 10) : null,
+        employeeId: query.employeeId?.trim() || null,
+        departmentId: query.departmentId?.trim() || null,
+        jobFunctionId: query.jobFunctionId?.trim() || null,
+        jobTitleId: query.jobTitleId?.trim() || null,
+        createdBy: query.createdBy?.trim() || null,
+      }
+
+      const limit = Math.min(Math.max(Number.parseInt(query.limit ?? '50', 10) || 50, 1), 10000)
+      const page = Math.max(Number.parseInt(query.page ?? '1', 10) || 1, 1)
+      const offset = (page - 1) * limit
+
+      const conds = [sql.raw('1=1')]
+      if (from) conds.push(sql`ef.document_date >= ${from}::date`)
+      if (to) conds.push(sql`ef.document_date <= ${to}::date`)
+      if (filters.typeId) conds.push(sql`ef.type_id = ${filters.typeId}`)
+      if (filters.subtypeId) conds.push(sql`ef.subtype_id = ${filters.subtypeId}`)
+      if (filters.employeeId) conds.push(sql`ef.employee_id = ${filters.employeeId}::uuid`)
+      if (filters.createdBy) conds.push(sql`ef.created_by = ${filters.createdBy}::uuid`)
+      if (filters.departmentId) conds.push(sql`e.department_id = ${filters.departmentId}::uuid`)
+      if (filters.jobFunctionId) conds.push(sql`e.job_function_id = ${filters.jobFunctionId}::uuid`)
+      if (filters.jobTitleId) conds.push(sql`e.job_title_id = ${filters.jobTitleId}::uuid`)
+      const whereSql = sql.join(conds, sql` AND `)
+
+      const [rows, totalRows, yearRows] = await Promise.all([
+        db.execute(sql`
+          SELECT ef.id, ef.document_number, ef.document_date,
+                 ef.approval_status, ef.created_by,
+                 e.code AS employee_code, e.first_name, e.last_name,
+                 t.name AS type_name, s.name AS subtype_name
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          JOIN employee_file_types t ON t.id = ef.type_id
+          JOIN employee_file_subtypes s ON s.id = ef.subtype_id
+          WHERE ${whereSql}
+          ORDER BY ef.document_date DESC, ef.document_number DESC
+          LIMIT ${limit} OFFSET ${offset}
+        `),
+        db.execute(sql`
+          SELECT COUNT(*)::int AS total
+          FROM employee_files ef
+          JOIN employees e ON e.id = ef.employee_id
+          WHERE ${whereSql}
+        `),
+        db.execute(sql`
+          SELECT DISTINCT document_year AS year
+          FROM employee_files
+          ORDER BY document_year DESC
+        `),
+      ])
+
+      // Resolver nombres de los usuarios creadores en un solo lote.
+      const raw = rows as unknown as Array<Record<string, unknown>>
+      const userIds = Array.from(new Set(raw.map((r) => r.created_by).filter(Boolean))) as string[]
+      let userNameMap = new Map<string, string>()
+      if (userIds.length > 0) {
+        try {
+          const userRows = (await db.execute(sql`
+            SELECT id, COALESCE(name, email, '—') AS display
+            FROM payroll_auth.users
+            WHERE id = ANY(${userIds}::uuid[])
+          `)) as unknown as Array<{ id: string; display: string }>
+          userNameMap = new Map(userRows.map((r) => [String(r.id), String(r.display)]))
+        } catch {
+          /* degradar a uuid corto */
+        }
+      }
+
+      const total = Number((totalRows as Array<{ total: number }>)[0]?.total ?? 0)
+
+      return {
+        success: true,
+        data: {
+          range: { from, to },
+          filters: { ...filters, year },
+          total,
+          page,
+          limit,
+          totalPages: Math.max(1, Math.ceil(total / limit)),
+          years: (yearRows as unknown as Array<{ year: number }>).map((r) => Number(r.year)),
+          rows: raw.map((r) => ({
+            id: String(r.id),
+            documentNumber: String(r.document_number),
+            documentDate: String(r.document_date).slice(0, 10),
+            approvalStatus: String(r.approval_status),
+            createdBy: r.created_by ? String(r.created_by) : null,
+            createdByName: r.created_by
+              ? (userNameMap.get(String(r.created_by)) ?? String(r.created_by).slice(0, 8))
+              : '— Sistema',
+            employeeCode: String(r.employee_code),
+            firstName: String(r.first_name),
+            lastName: String(r.last_name),
+            typeName: String(r.type_name),
+            subtypeName: String(r.subtype_name),
+          })),
+        },
+      }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('employee_files:read')],
+      query: t.Object({
+        year: t.Optional(t.String()),
+        from: t.Optional(t.String()),
+        to: t.Optional(t.String()),
+        typeId: t.Optional(t.String()),
+        subtypeId: t.Optional(t.String()),
+        employeeId: t.Optional(t.String()),
+        departmentId: t.Optional(t.String()),
+        jobFunctionId: t.Optional(t.String()),
+        jobTitleId: t.Optional(t.String()),
+        createdBy: t.Optional(t.String()),
+        page: t.Optional(t.String()),
+        limit: t.Optional(t.String()),
+      }),
+    }
+  )

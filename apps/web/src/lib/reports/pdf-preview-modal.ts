@@ -6,8 +6,17 @@
  *
  * Lazy-injected on first use (same pattern as pdf-download-modal).
  */
+import { alertDialog } from '../ui/dialog'
+import { closeLoadingModal, openLoadingModal } from './pdf-download-modal'
 
 const PREVIEW_ID = 'pdf-preview-modal'
+
+/**
+ * Module-level lock: once a preview is in flight, additional calls
+ * short-circuit. Prevents click-spam from spawning parallel fetches
+ * before the blocking modal has had time to paint.
+ */
+let previewInFlight = false
 
 function ensurePreviewModal(): HTMLElement {
   const existing = document.getElementById(PREVIEW_ID)
@@ -72,8 +81,11 @@ export async function previewPdfInModal(
   url: string,
   options: PreviewPdfOptions = {}
 ): Promise<void> {
-  // Re-use the loading modal from the download helper for the fetch phase.
-  const { closeLoadingModal, openLoadingModal } = await import('./pdf-download-modal')
+  if (previewInFlight) return
+  previewInFlight = true
+  // Open the loading modal SYNCHRONOUSLY before any await so the
+  // backdrop paints immediately and eats any further clicks while
+  // the fetch is in progress.
   openLoadingModal(options.title ?? 'Cargando reporte')
 
   try {
@@ -105,11 +117,12 @@ export async function previewPdfInModal(
   } catch (err) {
     closeLoadingModal()
     const message = err instanceof Error ? err.message : String(err)
-    const { alertDialog } = await import('../ui/dialog')
     await alertDialog({
       title: 'Error al cargar el reporte',
       message,
       kind: 'danger',
     })
+  } finally {
+    previewInFlight = false
   }
 }

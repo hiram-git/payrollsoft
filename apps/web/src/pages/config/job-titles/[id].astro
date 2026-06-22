@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
@@ -60,12 +61,12 @@ const errorMessages: Record<string, string> = {
     </div>
 
     {success && (
-      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+      <div data-server-toast="success" class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
         Cargo actualizado correctamente.
       </div>
     )}
     {error && (
-      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div data-server-toast="error" class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
       </div>
     )}
@@ -93,7 +94,7 @@ const errorMessages: Record<string, string> = {
       <div class="flex justify-between mt-4">
         {cargo.isActive && (
           <form method="POST" action={`/api/config/job-titles/${id}`}
-            onsubmit="return confirm('¿Dar de baja este cargo?')"
+            data-confirm-submit="¿Dar de baja este cargo?" data-confirm-title="Dar de baja cargo" data-confirm-tone="danger" data-confirm-label="Dar de baja"
           >
             <input type="hidden" name="_method" value="DELETE" />
             <button type="submit" class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
@@ -112,6 +113,7 @@ const errorMessages: Record<string, string> = {
       </div>
     </form>
   </div>
+  <ServerToastBridge />
 </AppLayout>
 
 <style>

@@ -1,5 +1,6 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro'
+import PositionSelect from '../../components/PositionSelect.astro'
 import { resolveTenantSlugFromCookie } from '../../lib/tenant-slug'
 
 const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
@@ -64,6 +65,12 @@ type Employee = {
   terminationResolutionDate: string | null
   terminationReason: string | null
   siacapPct: string | null
+  hasOwnDisability?: boolean
+  requiresAttendanceMarking?: boolean
+  canRead?: boolean
+  canWrite?: boolean
+  photo?: string | null
+  scannedId?: string | null
   isActive: boolean
   payrollTypeIds?: string[]
   bankId?: string | null
@@ -81,10 +88,13 @@ type Position = {
   code: string
   name: string
   salary: string
+  overtimeAmount: string | null
+  representationAmount: string | null
   jobTitleId: string | null
   departmentId: string | null
   jobFunctionId: string | null
   isActive: boolean
+  status: 'en_uso' | 'vacante' | string
 }
 type CompanyConfig = { tipoInstitucion?: string | null }
 type Loan = {
@@ -339,6 +349,23 @@ const funcionOptions = buildOptions(funciones, emp.jobFunctionId)
 const deptOptions = buildOptions(departamentos, emp.departmentId)
 
 const positionOptions = isPublica ? positions.filter((p) => p.isActive) : []
+// Currently assigned position drives the salary ceiling and the read-only
+// info block shown for institutions with positions.
+const currentPosition = isPublica ? (positions.find((p) => p.id === emp.positionId) ?? null) : null
+const jobTitleNameById = new Map(cargos.map((c) => [c.id, c.name]))
+
+const positionSelectOptions = positionOptions.map((p) => ({
+  id: p.id,
+  name: p.name,
+  code: p.code,
+  salary: p.salary,
+  status: p.status,
+  jobTitleId: p.jobTitleId,
+  cargoName: p.jobTitleId ? (jobTitleNameById.get(p.jobTitleId) ?? '') : '',
+  departmentId: p.departmentId,
+  overtimeAmount: p.overtimeAmount ?? '0',
+  representationAmount: p.representationAmount ?? '0',
+}))
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const success = Astro.url.searchParams.get('success') === '1'
@@ -346,6 +373,8 @@ const errorMessages: Record<string, string> = {
   code_taken: 'El código de empleado ya está en uso.',
   id_taken: 'La cédula ya está registrada.',
   no_payroll_type: 'El empleado debe pertenecer a al menos un tipo de planilla.',
+  salary_max: 'El salario base no puede superar el salario de la posición.',
+  position_occupied: 'La posición seleccionada ya está ocupada por otro empleado.',
   'server-error': 'Error del servidor. Intenta de nuevo.',
   'missing-fields': 'Completa todos los campos requeridos.',
 }
@@ -376,18 +405,19 @@ const freqLabel: Record<string, string> = {
     </div>
 
     {success && (
-      <div class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
+      <div id="serverSuccess" class="mb-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">
         Empleado actualizado correctamente.
       </div>
     )}
     {error && (
-      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div id="serverError" class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
       </div>
     )}
 
-    <form method="POST" action={`/api/employees/${id}`} id="empForm">
+    <form method="POST" action={`/api/employees/${id}`} id="empForm" novalidate>
       <input type="hidden" name="_method" value="PUT" />
+      <div id="reqError" class="hidden mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700"></div>
 
       <!-- Tabs -->
       <div class="flex gap-0 border-b-2 border-gray-200 mb-6">
@@ -483,8 +513,8 @@ const freqLabel: Record<string, string> = {
               <input type="text" name="socialSecurityNumber" class="input" value={emp.socialSecurityNumber ?? ''} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo</label>
-              <select name="sex" class="input">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Sexo *</label>
+              <select name="sex" class="input" required>
                 <option value="">—</option>
                 <option value="M" selected={emp.sex === 'M'}>Masculino</option>
                 <option value="F" selected={emp.sex === 'F'}>Femenino</option>
@@ -502,8 +532,8 @@ const freqLabel: Record<string, string> = {
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad</label>
-              <select name="nationality" class="input">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Nacionalidad *</label>
+              <select name="nationality" class="input" required>
                 <option value="">—</option>
                 <option value="panamanian" selected={emp.nationality === 'panamanian'}>Panameño(a)</option>
                 <option value="foreign" selected={emp.nationality === 'foreign'}>Extranjero(a)</option>
@@ -560,6 +590,61 @@ const freqLabel: Record<string, string> = {
             </div>
           </div>
         </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Condición y registro</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Marque las casillas que apliquen a este colaborador. La discapacidad propia
+            habilita su saldo de incapacidad.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="hasOwnDisability" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.hasOwnDisability ?? false} />
+              <span class="text-sm text-gray-700">Tiene discapacidad propia</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="requiresAttendanceMarking" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.requiresAttendanceMarking ?? true} />
+              <span class="text-sm text-gray-700">Marca reloj (registra asistencia)</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canRead" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.canRead ?? false} />
+              <span class="text-sm text-gray-700">Sabe leer</span>
+            </label>
+            <label class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
+              <input type="checkbox" name="canWrite" class="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" checked={emp.canWrite ?? false} />
+              <span class="text-sm text-gray-700">Sabe escribir</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
+          <h3 class="font-semibold text-gray-800 mb-1">Foto y cédula</h3>
+          <p class="text-xs text-gray-500 mb-4">
+            Imágenes en formato PNG, JPEG o WEBP, hasta 500 KB cada una. La foto se
+            guarda como referencia visual y puede usarse para enrolar el rostro.
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Foto del colaborador</label>
+              <img id="photoPreview" src={emp.photo ?? ''} alt="" class={`w-28 h-28 rounded-lg object-cover border border-gray-200 mb-2 ${emp.photo ? '' : 'hidden'}`} />
+              <input type="hidden" name="photo" id="photoInput" value={emp.photo ?? ''} />
+              <input type="file" id="photoFile" accept="image/png,image/jpeg,image/webp" class="block w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              <div class="flex items-center gap-3 mt-2">
+                <button type="button" id="photoClear" class={`text-xs text-red-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Quitar foto</button>
+                <button type="button" id="enrollFaceBtn" class={`text-xs font-medium text-blue-600 hover:underline ${emp.photo ? '' : 'hidden'}`}>Enrolar rostro desde la foto</button>
+              </div>
+              <p id="enrollStatus" class="hidden mt-2 text-xs"></p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Cédula escaneada</label>
+              <img id="scannedIdPreview" src={emp.scannedId ?? ''} alt="" class={`w-full max-w-xs rounded-lg object-cover border border-gray-200 mb-2 ${emp.scannedId ? '' : 'hidden'}`} />
+              <input type="hidden" name="scannedId" id="scannedIdInput" value={emp.scannedId ?? ''} />
+              <input type="file" id="scannedIdFile" accept="image/png,image/jpeg,image/webp" class="block w-full text-sm file:mr-4 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              <button type="button" id="scannedIdClear" class={`mt-2 text-xs text-red-600 hover:underline ${emp.scannedId ? '' : 'hidden'}`}>Quitar imagen</button>
+            </div>
+          </div>
+          <p id="imageError" class="hidden mt-3 text-xs text-red-600"></p>
+        </div>
       </div>
 
       <!-- TAB: Datos Laborales -->
@@ -573,35 +658,34 @@ const freqLabel: Record<string, string> = {
             </div>
 
             {isPublica ? (
-              <!-- Empresa pública: selector de posición -->
-              <div class="col-span-1">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Posición</label>
-                <select name="positionId" id="positionSelect" class="input">
-                  <option value="">— Sin posición —</option>
-                  {positionOptions.map((p) => (
-                    <option
-                      value={p.id}
-                      selected={emp!.positionId === p.id}
-                      data-cargo={p.jobTitleId ?? ''}
-                      data-depto={p.departmentId ?? ''}
-                      data-funcion={p.jobFunctionId ?? ''}
-                      data-salary={p.salary}
-                    >
-                      {p.name} ({p.code}) — ${p.salary}
+              <!-- Empresa pública: selector de posición con badge de estado -->
+              <PositionSelect
+                options={positionSelectOptions}
+                selectedId={emp.positionId}
+                allowEmpty
+                label="Posición"
+              />
+              <!-- Cargo + departamento se derivan de la posición -->
+              <input type="hidden" name="jobTitleId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
+              <input type="hidden" name="departmentId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
+              <!-- La función es atributo del empleado, editable también con posición -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
+                <select name="jobFunctionId" class="input">
+                  <option value="">— Sin función —</option>
+                  {funcionOptions.map((f) => (
+                    <option value={f.id} selected={emp!.jobFunctionId === f.id}>
+                      {f.name} ({f.code})
                     </option>
                   ))}
                 </select>
               </div>
-              <!-- Hidden inputs auto-filled by JS, seeded with current employee values -->
-              <input type="hidden" name="cargoId" id="hiddenCargoId" value={emp.jobTitleId ?? ''} />
-              <input type="hidden" name="departamentoId" id="hiddenDepartamentoId" value={emp.departmentId ?? ''} />
-              <input type="hidden" name="funcionId" id="hiddenFuncionId" value={emp.jobFunctionId ?? ''} />
             ) : (
               <!-- Empresa privada: selección directa -->
               <>
                 <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">Departamento</label>
-                  <select name="departamentoId" class="input">
+                  <label class="block text-sm font-medium text-gray-700 mb-1">Departamento *</label>
+                  <select name="departmentId" class="input" required>
                     <option value="">— Sin departamento —</option>
                     {deptOptions.map((d) => (
                       <option value={d.id} selected={emp!.departmentId === d.id}>
@@ -612,7 +696,7 @@ const freqLabel: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Cargo</label>
-                  <select name="cargoId" class="input">
+                  <select name="jobTitleId" class="input">
                     <option value="">— Sin cargo —</option>
                     {cargoOptions.map((c) => (
                       <option value={c.id} selected={emp!.jobTitleId === c.id}>
@@ -623,7 +707,7 @@ const freqLabel: Record<string, string> = {
                 </div>
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-1">Función</label>
-                  <select name="funcionId" class="input">
+                  <select name="jobFunctionId" class="input">
                     <option value="">— Sin función —</option>
                     {funcionOptions.map((f) => (
                       <option value={f.id} selected={emp!.jobFunctionId === f.id}>
@@ -636,6 +720,32 @@ const freqLabel: Record<string, string> = {
             )}
           </div>
         </div>
+
+        {isPublica && (
+          <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4" id="positionInfoCard" style={currentPosition ? '' : 'display:none'}>
+            <h3 class="font-semibold text-gray-800 mb-4">Información de la posición</h3>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Cargo</div>
+                <div class="text-gray-800" id="posInfoCargo">
+                  {currentPosition?.jobTitleId ? (jobTitleNameById.get(currentPosition.jobTitleId) ?? '—') : '—'}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Salario de la posición</div>
+                <div class="text-gray-800" id="posInfoSalary">{currentPosition ? `$${currentPosition.salary}` : '—'}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Sobresueldo</div>
+                <div class="text-gray-800" id="posInfoOvertime">{currentPosition ? `$${currentPosition.overtimeAmount ?? '0'}` : '—'}</div>
+              </div>
+              <div>
+                <div class="text-xs text-gray-500 mb-0.5">Gastos de representación</div>
+                <div class="text-gray-800" id="posInfoRepresentation">{currentPosition ? `$${currentPosition.representationAmount ?? '0'}` : '—'}</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4">
           <h3 class="font-semibold text-gray-800 mb-4">Salario y Contrato</h3>
@@ -655,17 +765,26 @@ const freqLabel: Record<string, string> = {
             <div class="col-span-2">
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 Salario base (USD) *
-                {isPublica && <span class="ml-1 text-xs text-gray-400">(se establece desde la posición)</span>}
+                {isPublica && (
+                  <span class="ml-1 text-xs text-gray-400" id="salaryMaxHint">
+                    {currentPosition ? `(máximo de la posición: $${currentPosition.salary})` : ''}
+                  </span>
+                )}
               </label>
               <input
                 type="text"
                 name="baseSalary"
                 id="baseSalaryInput"
-                class={`input ${isPublica ? 'bg-gray-50 text-gray-500' : ''}`}
+                class="input"
                 required
                 value={emp.baseSalary}
-                readonly={isPublica}
+                data-position-max={currentPosition?.salary ?? ''}
               />
+              {isPublica && (
+                <p class="mt-1 text-xs text-gray-500">
+                  Puede ajustar el salario hacia abajo; no puede superar el salario de la posición.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -698,8 +817,8 @@ const freqLabel: Record<string, string> = {
               <input type="text" name="externalUserRef" class="input" value={emp.externalUserRef ?? ''} />
             </div>
             <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato</label>
-              <select name="contractType" class="input">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato *</label>
+              <select name="contractType" class="input" required>
                 <option value="">—</option>
                 <option value="permanent" selected={emp.contractType === 'permanent'}>Permanente</option>
                 <option value="transitory" selected={emp.contractType === 'transitory'}>Contrato transitorio</option>
@@ -764,7 +883,7 @@ const freqLabel: Record<string, string> = {
           </p>
 
           <div>
-            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago</label>
+            <label class="block text-sm text-gray-700 font-medium mb-1.5">Método de pago *</label>
             <div class="bank-radio-group">
               <label class="bank-radio-label">
                 <input type="radio" name="paymentMethod" value="check" checked={(emp.paymentMethod ?? 'check') === 'check'} class="bank-radio-input" />
@@ -862,7 +981,7 @@ const freqLabel: Record<string, string> = {
                         </a>
                         {loan.isActive && (
                           <form method="POST" action={`/api/employees/${id}/loans/${loan.id}`}
-                            onsubmit="return confirm('¿Cerrar este préstamo?')"
+                            data-confirm-submit="¿Cerrar este préstamo?" data-confirm-title="Cerrar préstamo" data-confirm-tone="danger" data-confirm-label="Cerrar"
                           >
                             <input type="hidden" name="_method" value="DELETE" />
                             <button type="submit" title="Cerrar préstamo" class="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
@@ -1240,13 +1359,21 @@ const freqLabel: Record<string, string> = {
         </div>
 
         <div class="bg-white rounded-xl border border-gray-200 p-6 mb-4 mt-4">
-          <h3 class="font-semibold text-gray-800 mb-1">Tiempos compensatorios</h3>
-          <p class="text-xs text-gray-500 mb-4">Saldo de horas compensatorias acumuladas y utilizadas por pool.</p>
+          <div class="flex items-end justify-between mb-4 flex-wrap gap-3">
+            <div>
+              <h3 class="font-semibold text-gray-800 mb-1">Saldos de tiempo</h3>
+              <p class="text-xs text-gray-500">Tiempo compensatorio, incapacidad y familiar con discapacidad. Se reinician cada 1 de enero.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <label class="text-xs text-gray-500">Año</label>
+              <select id="ct-year" class="px-2 py-1.5 text-sm border border-gray-300 rounded-md"></select>
+            </div>
+          </div>
           <div id="comp-time-cards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div class="text-center py-6 text-sm text-gray-400">Cargando...</div>
+            <div class="text-center py-6 text-sm text-gray-400 col-span-3">Cargando...</div>
           </div>
           <div id="comp-time-movements">
-            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movimientos recientes</h4>
+            <h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Movimientos del año</h4>
             <div id="comp-time-mov-body" class="text-center py-4 text-sm text-gray-400">Cargando...</div>
           </div>
         </div>
@@ -1731,17 +1858,162 @@ const freqLabel: Record<string, string> = {
     })
   })()
 
-  // Auto-fill cargo/depto/funcion/salary from selected position (empresa pública)
-  const posSelect = document.getElementById('positionSelect')
-  if (posSelect) {
-    posSelect.addEventListener('change', function () {
-      const opt = this.options[this.selectedIndex]
-      document.getElementById('hiddenCargoId').value = opt.dataset.cargo || ''
-      document.getElementById('hiddenDepartamentoId').value = opt.dataset.depto || ''
-      document.getElementById('hiddenFuncionId').value = opt.dataset.funcion || ''
-      document.getElementById('baseSalaryInput').value = opt.dataset.salary || ''
+  // Auto-fill cargo/depto/salary from selected position (empresa pública).
+  // Salary is editable but capped at the position salary; selecting a
+  // position seeds it with the maximum and refreshes the info block.
+  const posInput = document.getElementById('positionId')
+  const salaryInput = document.getElementById('baseSalaryInput')
+  if (posInput && salaryInput) {
+    posInput.addEventListener('change', function () {
+      const ds = posInput.dataset
+      const max = ds.salary || ''
+      const hCargo = document.getElementById('hiddenCargoId')
+      const hDepto = document.getElementById('hiddenDepartamentoId')
+      if (hCargo) hCargo.value = ds.cargo || ''
+      if (hDepto) hDepto.value = ds.depto || ''
+      salaryInput.value = max
+      salaryInput.dataset.positionMax = max
+      const hint = document.getElementById('salaryMaxHint')
+      if (hint) hint.textContent = max ? '(máximo de la posición: $' + max + ')' : ''
+      const card = document.getElementById('positionInfoCard')
+      if (card) card.style.display = posInput.value ? '' : 'none'
+      const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val }
+      set('posInfoCargo', ds.cargoName || '—')
+      set('posInfoSalary', max ? '$' + max : '—')
+      set('posInfoOvertime', '$' + (ds.overtime || '0'))
+      set('posInfoRepresentation', '$' + (ds.representation || '0'))
     })
   }
+
+
+  // Foto / cédula: leer el archivo a base64, validar MIME + tamaño, y dejarlo
+  // en el input hidden que viaja en el form. Vista previa inmediata.
+  const MAX_IMG_BYTES = 500 * 1024
+  const ALLOWED_IMG = ['image/png', 'image/jpeg', 'image/webp']
+  const imgError = document.getElementById('imageError')
+  const enrollBtn = document.getElementById('enrollFaceBtn')
+  function wireImageField(fileId, inputId, previewId, clearId, extraBtn) {
+    const fileEl = document.getElementById(fileId)
+    const hidden = document.getElementById(inputId)
+    const preview = document.getElementById(previewId)
+    const clearBtn = document.getElementById(clearId)
+    if (!fileEl || !hidden) return
+    fileEl.addEventListener('change', function () {
+      const file = this.files && this.files[0]
+      if (!file) return
+      if (imgError) imgError.classList.add('hidden')
+      if (!ALLOWED_IMG.includes(file.type)) {
+        if (imgError) { imgError.textContent = 'Tipo no permitido. Use PNG, JPEG o WEBP.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      if (file.size > MAX_IMG_BYTES) {
+        if (imgError) { imgError.textContent = 'La imagen excede 500 KB.'; imgError.classList.remove('hidden') }
+        this.value = ''
+        return
+      }
+      const reader = new FileReader()
+      reader.onload = function () {
+        hidden.value = reader.result
+        if (preview) { preview.src = reader.result; preview.classList.remove('hidden') }
+        if (clearBtn) clearBtn.classList.remove('hidden')
+        if (extraBtn) extraBtn.classList.remove('hidden')
+      }
+      reader.readAsDataURL(file)
+    })
+    clearBtn?.addEventListener('click', function () {
+      hidden.value = ''
+      if (preview) { preview.src = ''; preview.classList.add('hidden') }
+      if (fileEl) fileEl.value = ''
+      clearBtn.classList.add('hidden')
+      if (extraBtn) extraBtn.classList.add('hidden')
+    })
+  }
+  wireImageField('photoFile', 'photoInput', 'photoPreview', 'photoClear', enrollBtn)
+  wireImageField('scannedIdFile', 'scannedIdInput', 'scannedIdPreview', 'scannedIdClear')
+</script>
+
+<script is:inline define:vars={{ empId: emp?.id ?? '' }}>
+  // Enrolamiento facial desde la foto del colaborador. Reusa face-api y los
+  // mismos modelos que el kiosko (/face-models): detecta el rostro en la foto
+  // (un <img>), calcula el descriptor 128-d en el navegador y lo envía al
+  // proxy /api/facial/enrollments. No requiere IA en el servidor.
+  ;(function () {
+    const btn = document.getElementById('enrollFaceBtn')
+    const status = document.getElementById('enrollStatus')
+    const photoInput = document.getElementById('photoInput')
+    if (!btn || !photoInput) return
+    let faceapi = null
+
+    function show(msg, tone) {
+      if (!status) return
+      status.textContent = msg
+      status.className = 'mt-2 text-xs ' + (tone === 'err' ? 'text-red-600' : tone === 'ok' ? 'text-emerald-600' : 'text-gray-500')
+      status.classList.remove('hidden')
+    }
+
+    async function loadModels() {
+      if (faceapi) return faceapi
+      show('Cargando modelos…')
+      faceapi = await import('/face-models/face-api.esm.js')
+      const MODELS = '/face-models'
+      await faceapi.nets.tinyFaceDetector.loadFromUri(MODELS)
+      await faceapi.nets.faceLandmark68Net.loadFromUri(MODELS)
+      await faceapi.nets.faceRecognitionNet.loadFromUri(MODELS)
+      return faceapi
+    }
+
+    function loadImage(dataUrl) {
+      return new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = reject
+        img.src = dataUrl
+      })
+    }
+
+    btn.addEventListener('click', async () => {
+      const photo = photoInput.value
+      if (!photo) { show('Primero cargue una foto.', 'err'); return }
+      btn.disabled = true
+      try {
+        const fa = await loadModels()
+        show('Analizando rostro…')
+        const img = await loadImage(photo)
+        const detection = await fa
+          .detectSingleFace(img, new fa.TinyFaceDetectorOptions({ inputSize: 320 }))
+          .withFaceLandmarks()
+          .withFaceDescriptor()
+        if (!detection) {
+          show('No se detectó un rostro en la foto. Use una imagen frontal y nítida.', 'err')
+          btn.disabled = false
+          return
+        }
+        show('Guardando enrolamiento…')
+        const res = await fetch('/api/facial/enrollments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            employeeId: empId,
+            embedding: Array.from(detection.descriptor),
+            qualityScore: detection.detection.score,
+            isPrimary: true,
+            notes: 'Enrolado desde la foto del colaborador',
+          }),
+        })
+        if (res.ok) {
+          show('Rostro enrolado correctamente (calidad ' + (detection.detection.score * 100).toFixed(0) + '%).', 'ok')
+        } else {
+          const j = await res.json().catch(() => ({}))
+          show('Error: ' + (j.error ?? 'no se pudo enrolar'), 'err')
+        }
+      } catch (err) {
+        show('Error: ' + (err && err.message ? err.message : String(err)), 'err')
+      } finally {
+        btn.disabled = false
+      }
+    })
+  })()
 </script>
 
 <script is:inline>
@@ -1951,8 +2223,17 @@ function syncToggleUI(id, val) {
     .catch(function() { saveBtn.disabled = false; });
   });
 
-  window.__depDel = function(depId) {
-    if (!confirm('¿Eliminar este dependiente?')) return;
+  window.__depDel = async function(depId) {
+    var ok = window.saModal
+      ? await window.saModal.confirm({
+          title: 'Eliminar dependiente',
+          message: '¿Eliminar este dependiente?',
+          tone: 'danger',
+          confirmLabel: 'Eliminar',
+        })
+      : confirm('¿Eliminar este dependiente?');
+    if (!ok) return;
+    if (window.saModal) window.saModal.close();
     fetch('/api/employees/' + empId + '/dependents', {
       method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dependentId: depId }),
     }).then(function() { loadDeps(); });
@@ -1967,64 +2248,247 @@ function syncToggleUI(id, val) {
   if (!empId) return;
   var cardsEl = document.getElementById('comp-time-cards');
   var movEl = document.getElementById('comp-time-mov-body');
-  var POOL_LABELS = { compensatory: 'Tiempo Compensatorio', disability: 'Incapacidad', family_disability: 'Familiar con Discapacidad' };
+  var yearSel = document.getElementById('ct-year');
+  var TYPE_LABELS = { compensatory: 'Tiempo Compensatorio', disability: 'Incapacidad', family_disability: 'Familiar con Discapacidad' };
+  var MOV_LABELS = { initialization: 'Inicialización', credit: 'Crédito', debit: 'Débito', adjustment: 'Ajuste' };
+  function h(min) { return (Number(min) / 60).toFixed(1); }
 
-  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('balance/' + empId))
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-      var balances = (res && res.data) || [];
-      if (balances.length === 0) {
-        cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Sin saldos de tiempo compensatorio para este año.</div>';
-        return;
-      }
-      var html = '';
-      for (var i = 0; i < balances.length; i++) {
-        var b = balances[i];
-        var label = POOL_LABELS[b.pool] || b.pool;
-        html += '<div class="border border-gray-200 rounded-lg p-4">' +
-          '<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">' + label + '</h4>' +
-          '<div class="text-2xl font-light text-gray-900 mb-2">' + b.available.toFixed(1) + ' <span class="text-sm text-gray-500">hrs</span></div>' +
-          '<div class="flex gap-4 text-xs text-gray-500">' +
-            '<span>Ganadas: <b class="text-gray-700">' + b.earned.toFixed(1) + '</b></span>' +
-            '<span>Usadas: <b class="text-gray-700">' + b.used.toFixed(1) + '</b></span>' +
-            '<span>Reservadas: <b class="text-gray-700">' + b.reserved.toFixed(1) + '</b></span>' +
-          '</div></div>';
-      }
-      cardsEl.innerHTML = html;
-    })
-    .catch(function() {
-      cardsEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar saldos.</div>';
-    });
+  // Year selector: current year + 4 previous (historical archive).
+  var nowYear = new Date().getFullYear();
+  for (var y = nowYear; y >= nowYear - 4; y--) {
+    var opt = document.createElement('option');
+    opt.value = String(y);
+    opt.textContent = String(y) + (y === nowYear ? ' (actual)' : '');
+    yearSel.appendChild(opt);
+  }
 
-  fetch('/api/compensatory-time/proxy?path=' + encodeURIComponent('movements/' + empId + '?limit=10'))
-    .then(function(r) { return r.json(); })
-    .then(function(res) {
-      var movs = (res && res.data) || [];
-      if (movs.length === 0) {
-        movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Sin movimientos registrados.</div>';
-        return;
-      }
-      var MOV_LABELS = { initialization: 'Inicialización', overtime: 'Horas extra', absence: 'Ausencia', lateness: 'Tardanza', permission: 'Permiso', birthday: 'Cumpleaños', adjustment: 'Ajuste', ausencias: 'Ausencia', tardanzas: 'Tardanza', permisos: 'Permiso', horas_extra: 'Horas extra' };
-      var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">' +
-        '<th class="text-left py-2 px-2">Fecha</th><th class="text-left py-2 px-2">Pool</th><th class="text-left py-2 px-2">Tipo</th><th class="text-right py-2 px-2">Horas</th><th class="text-left py-2 px-2">Notas</th></tr></thead><tbody>';
-      for (var j = 0; j < movs.length; j++) {
-        var m = movs[j];
-        var hrs = Number(m.hours);
-        var color = hrs >= 0 ? 'text-green-600' : 'text-red-600';
-        var poolLabel = (POOL_LABELS[m.pool] || m.pool).substring(0, 15);
-        var typeLabel = MOV_LABELS[m.movementType] || m.movementType;
-        html += '<tr class="border-b border-gray-100">' +
-          '<td class="py-2 px-2 text-gray-600">' + (m.createdAt ? m.createdAt.substring(0, 10) : '—') + '</td>' +
-          '<td class="py-2 px-2 text-gray-500 text-xs">' + poolLabel + '</td>' +
-          '<td class="py-2 px-2">' + typeLabel + '</td>' +
-          '<td class="py-2 px-2 text-right font-medium ' + color + '">' + (hrs >= 0 ? '+' : '') + hrs.toFixed(1) + '</td>' +
-          '<td class="py-2 px-2 text-gray-400 text-xs truncate max-w-[200px]">' + (m.notes || '—') + '</td></tr>';
-      }
-      html += '</tbody></table>';
-      movEl.innerHTML = html;
-    })
-    .catch(function() {
-      movEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar movimientos.</div>';
-    });
+  function loadBalances(year) {
+    cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Cargando...</div>';
+    fetch('/api/time-balance/proxy?path=' + encodeURIComponent('balances/' + empId + '?year=' + year))
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        var balances = (res && res.data) || [];
+        if (balances.length === 0) {
+          cardsEl.innerHTML = '<div class="text-center py-6 text-sm text-gray-400 col-span-3">Sin saldos de tiempo para ' + year + '.</div>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < balances.length; i++) {
+          var b = balances[i];
+          var label = TYPE_LABELS[b.balanceType] || b.balanceType;
+          var negative = Number(b.availableMinutes) < 0;
+          html += '<div class="border border-gray-200 rounded-lg p-4">' +
+            '<h4 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">' + label + '</h4>' +
+            '<div class="text-2xl font-light mb-2 ' + (negative ? 'text-red-600' : 'text-gray-900') + '">' + h(b.availableMinutes) + ' <span class="text-sm text-gray-500">hrs disponibles</span></div>' +
+            '<div class="flex gap-4 text-xs text-gray-500">' +
+              '<span>Acreditadas: <b class="text-gray-700">' + h(b.creditedMinutes) + '</b></span>' +
+              '<span>Debitadas: <b class="text-gray-700">' + h(b.debitedMinutes) + '</b></span>' +
+            '</div></div>';
+        }
+        cardsEl.innerHTML = html;
+      })
+      .catch(function() {
+        cardsEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400 col-span-3">Error al cargar saldos.</div>';
+      });
+  }
+
+  function loadMovements(year) {
+    movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Cargando...</div>';
+    fetch('/api/time-balance/proxy?path=' + encodeURIComponent('movements/' + empId + '?year=' + year + '&limit=100'))
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        var movs = (res && res.data) || [];
+        if (movs.length === 0) {
+          movEl.innerHTML = '<div class="text-center py-4 text-sm text-gray-400">Sin movimientos en ' + year + '.</div>';
+          return;
+        }
+        var html = '<table class="w-full text-sm"><thead><tr class="border-b border-gray-200 text-xs text-gray-500 uppercase tracking-wide">' +
+          '<th class="text-left py-2 px-2">Fecha</th><th class="text-left py-2 px-2">Cuenta</th><th class="text-left py-2 px-2">Tipo</th><th class="text-right py-2 px-2">Horas</th><th class="text-left py-2 px-2">Descripción</th></tr></thead><tbody>';
+        for (var j = 0; j < movs.length; j++) {
+          var m = movs[j];
+          var mins = Number(m.amountMinutes);
+          var color = mins >= 0 ? 'text-green-600' : 'text-red-600';
+          var typeLabel = TYPE_LABELS[m.balanceType] || m.balanceType;
+          var movLabel = MOV_LABELS[m.movementType] || m.movementType;
+          html += '<tr class="border-b border-gray-100">' +
+            '<td class="py-2 px-2 text-gray-600">' + (m.effectiveDate ? String(m.effectiveDate).substring(0, 10) : '—') + '</td>' +
+            '<td class="py-2 px-2 text-gray-500 text-xs">' + typeLabel + '</td>' +
+            '<td class="py-2 px-2">' + movLabel + '</td>' +
+            '<td class="py-2 px-2 text-right font-medium ' + color + '">' + (mins >= 0 ? '+' : '') + h(mins) + '</td>' +
+            '<td class="py-2 px-2 text-gray-400 text-xs truncate max-w-[200px]">' + (m.description || '—') + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        movEl.innerHTML = html;
+      })
+      .catch(function() {
+        movEl.innerHTML = '<div class="text-center py-4 text-sm text-red-400">Error al cargar movimientos.</div>';
+      });
+  }
+
+  function load(year) { loadBalances(year); loadMovements(year); }
+  yearSel.addEventListener('change', function() { load(yearSel.value); });
+  load(String(nowYear));
 })();
+</script>
+
+<script is:inline id="empForm-required-validation">
+  ;(function () {
+    var form = document.getElementById('empForm')
+    if (!form) return
+    var banner = document.getElementById('reqError')
+
+    function tabInfo(el) {
+      var panel = el && el.closest ? el.closest('[id^="tab-"]') : null
+      if (!panel) return null
+      var key = panel.id.replace('tab-', '')
+      var btn = document.querySelector('[data-tab="' + key + '"]')
+      return { key: key, label: btn ? btn.textContent.trim() : key }
+    }
+
+    function fieldLabel(el) {
+      var wrap = el.closest('div')
+      var lbl = wrap ? wrap.querySelector('label') : null
+      return lbl ? lbl.textContent.replace('*', '').trim() : el.name
+    }
+
+    function collectMissing() {
+      var missing = []
+      var seenRadios = {}
+      var required = form.querySelectorAll('[required]')
+      for (var i = 0; i < required.length; i++) {
+        var el = required[i]
+        if (el.type === 'radio') {
+          if (seenRadios[el.name]) continue
+          seenRadios[el.name] = true
+          var group = form.querySelectorAll('input[name="' + el.name + '"]')
+          var any = false
+          for (var j = 0; j < group.length; j++) if (group[j].checked) { any = true; break }
+          if (!any) missing.push({ el: group[0], label: fieldLabel(el) })
+          continue
+        }
+        if (!String(el.value || '').trim()) missing.push({ el: el, label: fieldLabel(el) })
+      }
+      var ptypes = form.querySelectorAll('input[name="payrollTypeIds[]"]')
+      if (ptypes.length) {
+        var anyChecked = false
+        for (var k = 0; k < ptypes.length; k++) if (ptypes[k].checked) { anyChecked = true; break }
+        if (!anyChecked) missing.push({ el: ptypes[0], label: 'Tipo de planilla' })
+      }
+      return missing
+    }
+
+    // Mensajes para los códigos de error que devuelve el proxy vía JSON.
+    var SERVER_ERRORS = {
+      code_taken: 'El código de empleado ya está en uso.',
+      id_taken: 'La cédula ya está registrada.',
+      salary_max: 'El salario base no puede superar el salario de la posición.',
+      position_occupied: 'La posición seleccionada ya está ocupada por otro empleado.',
+      no_payroll_type: 'El empleado debe pertenecer a al menos un tipo de planilla.',
+      'missing-fields': 'Completa todos los campos requeridos.',
+      'server-error': 'Error del servidor. Intenta de nuevo.',
+    }
+
+    function showError(html, toastMsg) {
+      if (banner) {
+        banner.innerHTML = html
+        banner.classList.remove('hidden')
+        banner.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+      if (window.toast) window.toast.error(toastMsg || (banner ? banner.textContent.trim() : html))
+    }
+
+    var submitting = false
+
+    form.addEventListener('submit', function (e) {
+      // Siempre interceptamos: validación cliente y, si pasa, envío por fetch
+      // para que un rechazo del servidor no recargue ni borre el formulario.
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      if (submitting) return
+      if (banner) banner.classList.add('hidden')
+
+      var missing = collectMissing()
+
+      var salaryError = null
+      var salary = document.getElementById('baseSalaryInput')
+      if (salary) {
+        var max = parseFloat(salary.dataset.positionMax || '')
+        var val = parseFloat(salary.value || '')
+        if (!isNaN(max) && !isNaN(val) && val > max) {
+          salaryError = 'El salario base no puede superar el salario de la posición ($' + max + ').'
+        }
+      }
+
+      if (missing.length || salaryError) {
+        var lines = []
+        if (missing.length) {
+          lines.push('<strong>Faltan campos obligatorios:</strong>')
+          for (var i = 0; i < missing.length; i++) {
+            var t = tabInfo(missing[i].el)
+            lines.push('• ' + (t ? 'Pestaña «' + t.label + '» → ' : '') + missing[i].label)
+          }
+        }
+        if (salaryError) lines.push((missing.length ? '<br>' : '') + salaryError)
+
+        var summary = salaryError && !missing.length
+          ? salaryError
+          : missing.length === 1
+            ? 'Falta el campo «' + missing[0].label + '».'
+            : 'Faltan ' + missing.length + ' campos obligatorios.'
+        showError(lines.join('<br>'), summary)
+
+        var focusEl = missing.length ? missing[0].el : salary
+        if (focusEl) {
+          var ti = tabInfo(focusEl)
+          if (ti) switchTab(ti.key, document.querySelector('[data-tab="' + ti.key + '"]'))
+          try { focusEl.focus() } catch (_) {}
+        }
+        return
+      }
+
+      // Validación local OK → envío AJAX. El _method=PUT viaja en el FormData.
+      submitting = true
+      var submitBtn = form.querySelector('button[type="submit"]')
+      if (submitBtn) submitBtn.disabled = true
+
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'X-Form-Submit': '1' },
+        body: new FormData(form),
+      })
+        .then(function (res) {
+          return res.json().catch(function () { return {} }).then(function (data) {
+            if (res.ok && data.ok) {
+              window.location.href = data.redirect || (window.location.pathname + '?success=1')
+              return
+            }
+            var code = data.error || 'server-error'
+            var msg = SERVER_ERRORS[code] || 'Ocurrió un error inesperado.'
+            showError(msg, msg)
+            submitting = false
+            if (submitBtn) submitBtn.disabled = false
+          })
+        })
+        .catch(function () {
+          showError(SERVER_ERRORS['server-error'], SERVER_ERRORS['server-error'])
+          submitting = false
+          if (submitBtn) submitBtn.disabled = false
+        })
+    })
+
+    // Si el server retornó error/éxito (banners SSR visibles al cargar),
+    // dispara también el toast para que sea visible tras scroll/recarga.
+    if (window.toast) {
+      var serverErr = document.getElementById('serverError')
+      if (serverErr) {
+        var et = serverErr.textContent && serverErr.textContent.trim()
+        if (et) window.toast.error(et)
+      }
+      var serverOk = document.getElementById('serverSuccess')
+      if (serverOk) {
+        var ot = serverOk.textContent && serverOk.textContent.trim()
+        if (ot) window.toast.success(ot)
+      }
+    }
+  })()
 </script>

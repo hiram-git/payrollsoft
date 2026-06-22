@@ -499,7 +499,7 @@ export function PayrollPdf({
   }
 
   return (
-    <Document title={reportTitle} author="PayrollSoft" subject={payroll.name}>
+    <Document title={reportTitle} author="RCG SOFTRIX" subject={payroll.name}>
       <Page size="A4" style={s.page} orientation="landscape" wrap>
         {/* ── Header (repeats on every page) ── */}
         <View style={s.header} fixed>

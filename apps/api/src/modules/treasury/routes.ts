@@ -26,6 +26,15 @@ import { Elysia, t } from 'elysia'
 import { authPlugin, guardAuth, guardPermission } from '../../middleware/auth'
 import { guardTenantMatchesToken, tenantPlugin } from '../../middleware/tenant'
 import {
+  type AchScope,
+  buildBloqueoMensualReport,
+  buildBloqueoPlanillaReport,
+  generateBancoGeneralFile,
+  generateBancoNacionalFile,
+  generateBloqueoMensualFile,
+  generateBloqueoQuincenalFile,
+} from './file-service'
+import {
   closePaymentRun,
   createBank,
   createCheckbook,
@@ -33,8 +42,13 @@ import {
   generateAchBatch,
   getAchBatch,
   getCheckWithChequera,
+  getClosedPayrollIdsForMonth,
+  getCreditorPayables,
   getEmployeePayables,
   issueCheck,
+  issueChecksBulk,
+  listAllAchBatches,
+  listAllChecks,
   listBanks,
   listCheckbooks,
   listChecksByRun,
@@ -47,6 +61,57 @@ import {
 export const treasuryRoutes = new Elysia()
   .use(authPlugin)
   .use(tenantPlugin)
+
+  // ── Contraloría: bloqueos presupuestarios (mes + año) ────────────────────
+  .get(
+    '/contraloria/bloqueo-planilla',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const report = await buildBloqueoPlanillaReport(db, {
+        month: Number(query.month),
+        year: Number(query.year),
+        payrollTypeId: query.payrollTypeId || null,
+      })
+      if (!report.ok) {
+        set.status = 422
+        return { success: false, error: report.error }
+      }
+      return { success: true, data: { fileName: report.fileName, content: report.content } }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({
+        month: t.String(),
+        year: t.String(),
+        payrollTypeId: t.Optional(t.String()),
+      }),
+    }
+  )
+  .get(
+    '/contraloria/bloqueo-mensual',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const report = await buildBloqueoMensualReport(db, {
+        month: Number(query.month),
+        year: Number(query.year),
+      })
+      if (!report.ok) {
+        set.status = 422
+        return { success: false, error: report.error }
+      }
+      return { success: true, data: { fileName: report.fileName, content: report.content } }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({ month: t.String(), year: t.String() }),
+    }
+  )
 
   // ── Bancos ──────────────────────────────────────────────────────────────
   .get(
@@ -80,6 +145,8 @@ export const treasuryRoutes = new Elysia()
         name: t.String({ minLength: 1, maxLength: 120 }),
         routing: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
         swift: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
+        achFormat: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
+        achEntityCode: t.Optional(t.Nullable(t.String({ maxLength: 9 }))),
       }),
     }
   )
@@ -105,6 +172,8 @@ export const treasuryRoutes = new Elysia()
         name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
         routing: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
         swift: t.Optional(t.Nullable(t.String({ maxLength: 15 }))),
+        achFormat: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
+        achEntityCode: t.Optional(t.Nullable(t.String({ maxLength: 9 }))),
         isActive: t.Optional(t.Integer({ minimum: 0, maximum: 1 })),
         sortOrder: t.Optional(t.Integer()),
       }),
@@ -231,7 +300,50 @@ export const treasuryRoutes = new Elysia()
     }
   )
 
+  // ── Pagables de acreedores (suma de ACR_* por proveedor) ────────────────
+  .get(
+    '/treasury/creditor-payables',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      let payrollIds: string[] = []
+      if (query.payrollId?.trim()) {
+        payrollIds = [query.payrollId.trim()]
+      } else if (query.month && query.year) {
+        payrollIds = await getClosedPayrollIdsForMonth(db, Number(query.month), Number(query.year))
+      } else {
+        set.status = 400
+        return { success: false, error: 'Indica payrollId o month+year' }
+      }
+      const data = await getCreditorPayables(db, payrollIds)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({
+        payrollId: t.Optional(t.String()),
+        month: t.Optional(t.String()),
+        year: t.Optional(t.String()),
+      }),
+    }
+  )
+
   // ── Cheques ─────────────────────────────────────────────────────────────
+  .get(
+    '/treasury/checks',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listAllChecks(db)
+      return { success: true, data }
+    },
+    { beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')] }
+  )
+
   .get(
     '/treasury/checks/:id',
     async ({ db, params, set }) => {
@@ -302,6 +414,63 @@ export const treasuryRoutes = new Elysia()
         amount: t.Union([t.Number(), t.String()]),
         concept: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
         issueDate: t.String({ minLength: 10, maxLength: 10 }),
+      }),
+    }
+  )
+
+  // Emisión masiva: un cheque por cada beneficiario con método cheque
+  .post(
+    '/treasury/runs/:id/checks/bulk',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const scope =
+        body.beneficiary === 'creditors'
+          ? body.month && body.year
+            ? ({ beneficiary: 'creditors', month: body.month, year: body.year } as const)
+            : null
+          : ({ beneficiary: 'employees', payrollId: body.payrollId ?? '' } as const)
+      if (!scope || (scope.beneficiary === 'employees' && !scope.payrollId)) {
+        set.status = 422
+        return {
+          success: false,
+          error:
+            body.beneficiary === 'creditors'
+              ? 'month y year son obligatorios para acreedores.'
+              : 'payrollId es obligatorio para empleados.',
+        }
+      }
+      const result = await issueChecksBulk(
+        db,
+        {
+          paymentRunId: params.id,
+          checkbookId: body.checkbookId,
+          issueDate: body.issueDate,
+          scope,
+          concept: body.concept ?? null,
+        },
+        { createdBy: user?.userId ?? null }
+      )
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      set.status = 201
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:write')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        checkbookId: t.String(),
+        issueDate: t.String({ minLength: 10, maxLength: 10 }),
+        beneficiary: t.Union([t.Literal('employees'), t.Literal('creditors')]),
+        payrollId: t.Optional(t.String()),
+        month: t.Optional(t.Integer({ minimum: 1, maximum: 12 })),
+        year: t.Optional(t.Integer({ minimum: 2000, maximum: 2100 })),
+        concept: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
       }),
     }
   )
@@ -378,6 +547,22 @@ export const treasuryRoutes = new Elysia()
   )
 
   .get(
+    '/treasury/ach',
+    async ({ db, query, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const data = await listAllAchBatches(db, query.paymentRunId?.trim() || undefined)
+      return { success: true, data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
+      query: t.Object({ paymentRunId: t.Optional(t.String()) }),
+    }
+  )
+
+  .get(
     '/treasury/ach/:batchId',
     async ({ db, params, set }) => {
       if (!db) {
@@ -412,13 +597,118 @@ export const treasuryRoutes = new Elysia()
         set.status = 404
         return 'Batch no encontrado'
       }
-      const b = batch as { fileName: string; fileContent: string }
+      const b = batch as { fileName: string; fileContent: string; format?: string }
+      const disposition = `attachment; filename="${b.fileName}"`
+      // El formato de Banco Nacional (líneas L) viaja en Latin-1 (la Ñ es 0xD1);
+      // el resto es ASCII/LF.
+      if (b.format === 'banco_nacional') {
+        return new Response(Buffer.from(b.fileContent, 'latin1'), {
+          headers: { 'Content-Type': 'text/plain; charset=iso-8859-1', 'Content-Disposition': disposition },
+        })
+      }
       set.headers['Content-Type'] = 'text/plain; charset=ascii'
-      set.headers['Content-Disposition'] = `attachment; filename="${b.fileName}"`
+      set.headers['Content-Disposition'] = disposition
       return b.fileContent
     },
     {
       beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:read')],
       params: t.Object({ batchId: t.String() }),
+    }
+  )
+
+  // ── Archivos de banco / contraloría (multi-formato) ─────────────────────
+  .post(
+    '/treasury/runs/:id/files',
+    async ({ db, params, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const generatedBy = user?.userId ?? null
+      const beneficiary = body.beneficiary ?? 'employees'
+      let result: Awaited<ReturnType<typeof generateBancoNacionalFile>>
+
+      if (body.format === 'banco_nacional' || body.format === 'banco_general') {
+        if (!body.sourceBankId) {
+          set.status = 422
+          return { success: false, error: 'sourceBankId es obligatorio para este formato.' }
+        }
+        let scope: AchScope
+        if (beneficiary === 'creditors') {
+          if (!body.month || !body.year) {
+            set.status = 422
+            return { success: false, error: 'month y year son obligatorios para acreedores.' }
+          }
+          scope = { beneficiary: 'creditors', month: body.month, year: body.year }
+        } else {
+          scope = { beneficiary: 'employees', payrollId: body.payrollId }
+        }
+        const fn =
+          body.format === 'banco_nacional' ? generateBancoNacionalFile : generateBancoGeneralFile
+        result = await fn(
+          db,
+          {
+            paymentRunId: params.id,
+            scope,
+            sourceBankId: body.sourceBankId,
+            description: body.description ?? undefined,
+          },
+          { generatedBy }
+        )
+      } else {
+        result = await generateBloqueoQuincenalFile(
+          db,
+          { paymentRunId: params.id, payrollId: body.payrollId },
+          { generatedBy }
+        )
+      }
+
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      set.status = 201
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:write')],
+      params: t.Object({ id: t.String() }),
+      body: t.Object({
+        format: t.Union([
+          t.Literal('banco_nacional'),
+          t.Literal('banco_general'),
+          t.Literal('bloqueo_quincenal'),
+        ]),
+        payrollId: t.String(),
+        beneficiary: t.Optional(t.Union([t.Literal('employees'), t.Literal('creditors')])),
+        month: t.Optional(t.Integer({ minimum: 1, maximum: 12 })),
+        year: t.Optional(t.Integer({ minimum: 2000, maximum: 2100 })),
+        sourceBankId: t.Optional(t.Nullable(t.String())),
+        description: t.Optional(t.Nullable(t.String({ maxLength: 200 }))),
+      }),
+    }
+  )
+
+  .post(
+    '/treasury/bloqueo-mensual',
+    async ({ db, body, user, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const result = await generateBloqueoMensualFile(db, body, { generatedBy: user?.userId ?? null })
+      if (!result.success) {
+        set.status = 422
+        return { success: false, error: result.error }
+      }
+      set.status = 201
+      return { success: true, data: result.data }
+    },
+    {
+      beforeHandle: [guardAuth, guardTenantMatchesToken, guardPermission('treasury:write')],
+      body: t.Object({
+        month: t.Integer({ minimum: 1, maximum: 12 }),
+        year: t.Integer({ minimum: 2000, maximum: 2100 }),
+      }),
     }
   )

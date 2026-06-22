@@ -124,6 +124,16 @@ const navAll: NavEntry[] = [
       },
       { href: '/personal/baja', label: 'De Baja', require: 'employees:read' },
       { href: '/personal/documentos', label: 'Documentos', require: 'employees:read' },
+      {
+        href: '/time-balance/renewal',
+        label: 'Renovación de saldos',
+        require: 'time_balance:write',
+      },
+      {
+        href: '/config/delegations',
+        label: 'Delegaciones',
+        require: 'approvals:delegate',
+      },
     ],
   },
   {
@@ -181,14 +191,18 @@ const navAll: NavEntry[] = [
       { href: '/reports/payroll', label: 'Planilla' },
       { href: '/reports/movements', label: 'Movimientos' },
       { href: '/reports/government', label: 'Gobierno' },
+      { href: '/reports/contraloria', label: 'Contraloría', require: 'treasury:read' },
     ],
   },
   {
-    kind: 'item',
-    href: '/treasury',
+    kind: 'group',
     label: 'Tesorería',
     icon: 'payroll',
-    require: 'treasury:read',
+    children: [
+      { href: '/treasury', label: 'Generación de pagos', require: 'treasury:read' },
+      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
+      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
+    ],
   },
   {
     kind: 'item',
@@ -212,8 +226,6 @@ const navAll: NavEntry[] = [
         require: 'employee_files:approve',
       },
       { href: '/config/portal-credentials', label: 'Portal empleados', require: 'users:write' },
-      { href: '/config/banks', label: 'Bancos', require: 'banks:read' },
-      { href: '/config/checkbooks', label: 'Chequeras', require: 'treasury:read' },
       { href: '/audit', label: 'Auditoría', require: 'audit:read' },
     ],
   },
@@ -277,7 +289,8 @@ const icons: Record<IconKey, string> = {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{title} — Payroll Panamá</title>
+    <title>{title} — RCG SOFTRIX</title>
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400&family=Inter+Tight:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -297,6 +310,7 @@ const icons: Record<IconKey, string> = {
         --navy-hi:   #1E4BA8;
         --navy-lo:   #00205A;
         --navy-soft: rgba(0,48,135,0.18);
+        --brand-green: #1FA85C;
 
         /* ── Hairlines ──────────────────────────────────────── */
         --rule:      #1A2740;
@@ -370,6 +384,28 @@ const icons: Record<IconKey, string> = {
         /* ── Borders ────────────────────────────────────────── */
         --bw:        1px;
         --bw-strong: 1.5px;
+        /* Soft edge for solid/coloured controls so every button keeps a
+           hairline definition over its own fill, in both themes. */
+        --btn-edge:  rgba(255,255,255,0.14);
+
+        /* ── Action buttons ─────────────────────────────────────
+           Normal state = the colour these buttons used to show only on
+           hover; the new :hover then pushes one step further (brighter
+           in dark, deeper in light) so the interaction reads clearly. */
+        --btn-bg:               #1d4ed8;
+        --btn-bg-hover:         #3b6fe0;
+        --btn-danger-bg:        #b91c1c;
+        --btn-danger-bg-hover:  #ef4444;
+        --btn-success-bg:       #047857;
+        --btn-success-bg-hover: #10b981;
+
+        /* Row-action icon buttons — one shared tone per intent so the
+           "edit" icon looks identical whether it comes from a scoped
+           token style or a Tailwind utility. */
+        --icon-edit-fg:       #2563eb;
+        --icon-edit-fg-hover: #1d4ed8;
+        --icon-edit-bg:       color-mix(in srgb, #2563eb 12%, transparent);
+        --icon-edit-bg-hover: color-mix(in srgb, #2563eb 24%, transparent);
 
         /* ── Motion ─────────────────────────────────────────── */
         --ease-std: cubic-bezier(.2,.7,.2,1);
@@ -388,6 +424,7 @@ const icons: Record<IconKey, string> = {
         --navy-hi:   #1E4BA8;
         --navy-lo:   #00205A;
         --navy-soft: rgba(0,48,135,0.08);
+        --brand-green: #15803D;
         --rule:      #E4E7EE;
         --rule-hi:   #D2D7E0;
         --fore:      #0C1424;
@@ -401,6 +438,11 @@ const icons: Record<IconKey, string> = {
         --neg:       #B53A2B;
         --shadow:    0 1px 2px rgba(12,20,36,0.04), 0 1px 1px rgba(12,20,36,0.03);
         --scrim:     rgba(12,20,36,0.18);
+        --btn-edge:  rgba(12,20,36,0.10);
+        /* Light theme intensifies the hover by going deeper, not brighter. */
+        --btn-bg-hover:         #1538a0;
+        --btn-danger-bg-hover:  #7f1212;
+        --btn-success-bg-hover: #035f45;
       }
 
       *, *::before, *::after { box-sizing: border-box; }
@@ -459,19 +501,17 @@ const icons: Record<IconKey, string> = {
       .brand-mark {
         width: 32px; height: 32px;
         border-radius: 4px;
-        background: var(--navy);
+        background: #fff;
+        padding: 3px;
+        box-shadow: 0 0 0 1px rgba(0,0,0,0.06);
         display: grid;
         place-items: center;
-        color: #fff;
-        font-family: var(--f-display);
-        font-size: 18px;
-        font-weight: 400;
-        letter-spacing: -0.02em;
         flex-shrink: 0;
       }
+      .brand-mark img { width: 100%; height: 100%; object-fit: contain; }
       .brand-col { display: flex; flex-direction: column; line-height: 1.2; }
       .brand-name { font-family: var(--f-sans); font-weight: 500; font-size: 14px; color: var(--fore); }
-      .brand-sub  { font-family: var(--f-mono); font-size: 9.5px; color: var(--mute); letter-spacing: 0.14em; text-transform: uppercase; margin-top: 2px; }
+      .brand-sub  { font-family: var(--f-mono); font-size: 9px; color: var(--mute); letter-spacing: 0.02em; text-transform: uppercase; margin-top: 2px; }
       .nav-section {
         font-family: var(--f-mono);
         font-size: 10px;
@@ -922,6 +962,24 @@ const icons: Record<IconKey, string> = {
       .user-dropdown-danger:hover { background: rgba(224,107,92,0.08); color: var(--err); }
 
       /* ── Page content ───────────────────────────────────── */
+      .app-footer {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 8px 20px;
+        border-top: 1px solid var(--rule);
+        background: var(--ink-2);
+        font-family: var(--f-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        color: var(--mute);
+      }
+      .app-footer-name { color: var(--fore-dim); font-weight: 500; }
+      @media (max-width: 640px) {
+        .app-footer-sub { display: none; }
+      }
       .page-content {
         flex: 1;
         /* Same trap as in `.main-col`: in a flex column the child needs
@@ -970,6 +1028,190 @@ const icons: Record<IconKey, string> = {
       [data-theme="dark"] .page-content textarea:focus {
         border-color: var(--navy-hi);
         box-shadow: 0 0 0 2px var(--navy-soft);
+      }
+
+      /* ── Soft borders on every form control (both themes) ─────
+         Dark mode already overrides the colour above; this guarantees
+         a hairline in light mode too without relying on inline
+         border-gray-* utilities. */
+      .page-content input:not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+      .page-content select,
+      .page-content textarea {
+        border: var(--bw) solid var(--rule);
+      }
+
+      /* ── Soft borders on every content button ────────────────
+         Scoped to .page-content so sidebar/topbar/theme-switch chrome
+         is untouched. Neutral buttons use the hairline rule colour;
+         solid/coloured buttons get a translucent edge so the border
+         stays soft over their own fill. Applies in light + dark. */
+      .page-content button,
+      .page-content [type="submit"],
+      .page-content [type="button"],
+      .page-content [type="reset"],
+      .page-content .btn,
+      .page-content .btn-primary,
+      .page-content .btn-secondary,
+      .page-content .btn-ghost,
+      .page-content .btn-danger,
+      .page-content a.btn-primary,
+      .page-content a.btn-secondary,
+      .page-content a.btn-ghost {
+        border: var(--bw) solid var(--rule);
+      }
+      /* ── Action buttons: the hover look becomes the default ───
+         Normal state adopts the colour these buttons used to show only
+         on hover; :hover then pushes one step further (brighter in dark,
+         deeper in light — see --btn-*-hover tokens). Selectors are
+         specific enough to beat both Tailwind utilities and page-scoped
+         .btn-* rules, so the change is fully global — no per-file edits. */
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600,
+      .page-content :is(button, a).btn-primary {
+        background-color: var(--btn-bg);
+        border: var(--bw) solid var(--btn-edge);
+        color: #fff;
+        transition: background-color var(--d-std) var(--ease-std);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-500:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-blue-700:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-indigo-600:hover,
+      .page-content :is(button, a).btn-primary:hover {
+        background-color: var(--btn-bg-hover);
+      }
+
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-700,
+      .page-content :is(button, a).btn-danger {
+        background-color: var(--btn-danger-bg);
+        border: var(--bw) solid var(--btn-edge);
+        color: #fff;
+        transition: background-color var(--d-std) var(--ease-std);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-red-700:hover,
+      .page-content :is(button, a).btn-danger:hover {
+        background-color: var(--btn-danger-bg-hover);
+      }
+
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-500,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-700,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-600,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-700,
+      .page-content :is(button, a).btn-ok {
+        background-color: var(--btn-success-bg);
+        border: var(--bw) solid var(--btn-edge);
+        color: #fff;
+        transition: background-color var(--d-std) var(--ease-std);
+      }
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-500:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-emerald-700:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-600:hover,
+      .page-content :is(button, a, [type="submit"], [type="button"]).bg-green-700:hover,
+      .page-content :is(button, a).btn-ok:hover {
+        background-color: var(--btn-success-bg-hover);
+      }
+
+      /* ── Dropdown menu items: never bordered ─────────────────
+         Items inside a dropdown panel are full-width rows, not stand-
+         alone buttons, so none of the button-border rules above may
+         reach them. We match by ARIA role AND by dropdown-panel class,
+         and use !important so this wins over both the neutral and the
+         coloured button rules regardless of their specificity. The
+         dropdown trigger lives outside the panel and keeps its border. */
+      .page-content [role="menu"] button,
+      .page-content [role="menu"] a,
+      .page-content [role="menu"] [type="button"],
+      .page-content [role="menu"] [type="submit"],
+      .page-content [role="menuitem"],
+      .page-content [role="listbox"] button,
+      .page-content [role="option"],
+      .page-content [data-gov-panel] button,
+      .page-content .acciones-menu button,
+      .page-content .acciones-menu-item,
+      .page-content .ef-dropdown button,
+      .page-content .ef-dropdown-item,
+      .page-content .user-dropdown button,
+      .page-content .user-dropdown-item {
+        border: none !important;
+      }
+
+      /* ── Icon action buttons (Tailwind): semantic colour by default ──
+         The row-action icons (edit/delete/save) used to be grey and only
+         revealed their colour on hover. Promote that colour to the normal
+         state and intensify on hover, matching the rest of the action
+         buttons. Keyed on text-gray-400 + the hover bg utility so only the
+         icon buttons match — dropdown rows (text-gray-700) are untouched. */
+      .page-content :is(button, a).text-gray-400.hover\:bg-blue-50 {
+        background-color: var(--icon-edit-bg);
+        color: var(--icon-edit-fg);
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-blue-50:hover {
+        background-color: var(--icon-edit-bg-hover);
+        color: var(--icon-edit-fg-hover);
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-red-50 {
+        background-color: color-mix(in srgb, #dc2626 12%, transparent);
+        color: #dc2626;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-red-50:hover {
+        background-color: color-mix(in srgb, #dc2626 24%, transparent);
+        color: #b91c1c;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-emerald-50 {
+        background-color: color-mix(in srgb, #059669 14%, transparent);
+        color: #059669;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-emerald-50:hover {
+        background-color: color-mix(in srgb, #059669 26%, transparent);
+        color: #047857;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-green-50 {
+        background-color: color-mix(in srgb, #16a34a 14%, transparent);
+        color: #16a34a;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-green-50:hover {
+        background-color: color-mix(in srgb, #16a34a 26%, transparent);
+        color: #15803d;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-amber-50 {
+        background-color: color-mix(in srgb, #d97706 13%, transparent);
+        color: #d97706;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-amber-50:hover {
+        background-color: color-mix(in srgb, #d97706 26%, transparent);
+        color: #b45309;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-orange-50 {
+        background-color: color-mix(in srgb, #ea580c 13%, transparent);
+        color: #ea580c;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-orange-50:hover {
+        background-color: color-mix(in srgb, #ea580c 26%, transparent);
+        color: #c2410c;
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-gray-100 {
+        background-color: var(--ink-4);
+        color: var(--fore-dim);
+      }
+      .page-content :is(button, a).text-gray-400.hover\:bg-gray-100:hover {
+        background-color: color-mix(in srgb, var(--fore) 16%, var(--ink-4));
+        color: var(--fore);
+      }
+
+      /* ── Soft borders on modal / dialog / elevated cards ──────
+         Ad-hoc overlays built with Tailwind (`bg-white shadow-2xl`)
+         and native <dialog> get a hairline so the surface reads as a
+         distinct panel in both themes, not just a shadow. */
+      .page-content dialog,
+      .page-content .shadow-xl,
+      .page-content .shadow-2xl {
+        border: var(--bw) solid var(--rule);
       }
 
       /* ── Design-system semantic elements & utilities ──────── */
@@ -1082,6 +1324,33 @@ const icons: Record<IconKey, string> = {
         font-family: var(--f-sans);
       }
       .impersonation-banner button:hover { background: rgba(255,255,255,0.28); }
+
+      /* ── File input button ──────────────────────────────────
+         Estilo unificado para el botón "Seleccionar archivo" de
+         cualquier <input type="file"> bajo AppLayout. Referencia:
+         "Adjuntos adicionales" en /employee-files/new. */
+      input[type="file"]::file-selector-button {
+        margin-right: 1rem;
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.375rem;
+        border: 0;
+        font-size: 0.875rem;
+        font-weight: 500;
+        background-color: #eff6ff; /* blue-50 */
+        color: #1d4ed8;            /* blue-700 */
+        cursor: pointer;
+        transition: background-color 140ms;
+      }
+      input[type="file"]::file-selector-button:hover {
+        background-color: #dbeafe; /* blue-100 */
+      }
+      [data-theme="dark"] input[type="file"]::file-selector-button {
+        background-color: rgba(96,165,250,0.18);
+        color: #93c5fd;
+      }
+      [data-theme="dark"] input[type="file"]::file-selector-button:hover {
+        background-color: rgba(96,165,250,0.28);
+      }
     </style>
   </head>
   <body>
@@ -1109,10 +1378,10 @@ const icons: Record<IconKey, string> = {
       <!-- Sidebar -->
       <aside class="sidebar">
         <div class="sidebar-brand">
-          <div class="brand-mark">P</div>
+          <div class="brand-mark"><img src="/brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
           <div class="brand-col">
-            <span class="brand-name">PayrollSoft</span>
-            <span class="brand-sub">Payroll Panamá</span>
+            <span class="brand-name">RCG SOFTRIX</span>
+            <span class="brand-sub">Recursos Humanos, Planilla y Asistencia</span>
           </div>
         </div>
 
@@ -1152,7 +1421,7 @@ const icons: Record<IconKey, string> = {
       <div class="main-col">
         <header class="topbar">
           <div class="topbar-crumbs">
-            <span>Payroll Panamá</span>
+            <span>RCG SOFTRIX</span>
             <span class="crumb-sep">
               <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="square">
                 <path d="M4 2.5 6.5 5 4 7.5"/>
@@ -1290,6 +1559,11 @@ const icons: Record<IconKey, string> = {
         <main class="page-content">
           <slot />
         </main>
+
+        <footer class="app-footer">
+          <span class="app-footer-name">RCG SOFTRIX</span>
+          <span class="app-footer-sub">Recursos Humanos, Planilla y Asistencia · © {new Date().getFullYear()}</span>
+        </footer>
       </div>
 
     </div>

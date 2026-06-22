@@ -1,0 +1,357 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro'
+import { can, getIdentity } from '../../lib/auth'
+
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const identity = getIdentity(Astro.cookies)
+if (!identity) return Astro.redirect('/login')
+if (!can(identity, 'employee_files:read')) return Astro.redirect('/dashboard')
+
+const tenantSlug = identity.tenantSlug ?? 'demo'
+const headers = { Cookie: `auth=${identity.raw}`, 'X-Tenant': tenantSlug }
+
+const sp = Astro.url.searchParams
+const currentYear = new Date().getUTCFullYear()
+const filterYear = sp.get('year') ?? String(currentYear)
+const filterFrom = sp.get('from') ?? ''
+const filterTo = sp.get('to') ?? ''
+const filterTypeId = sp.get('typeId') ?? ''
+const filterSubtypeId = sp.get('subtypeId') ?? ''
+
+const PAGE_SIZE = 50
+const page = Math.max(1, Number(sp.get('page') ?? '1'))
+
+type TypeRow = { id: number; name: string }
+type SubtypeRow = { id: number; typeId: number; name: string }
+type MovementRow = {
+  id: string
+  documentNumber: string
+  documentDate: string
+  approvalStatus: string
+  createdByName: string
+  employeeCode: string
+  firstName: string
+  lastName: string
+  typeName: string
+  subtypeName: string
+}
+type RowsResponse = {
+  total: number
+  page: number
+  limit: number
+  totalPages: number
+  years: number[]
+  rows: MovementRow[]
+}
+
+// Build the rows query for the preview (paginated) — the PDF endpoint
+// re-runs the same filters with a high limit on its own.
+const previewParams = new URLSearchParams()
+if (filterYear) previewParams.set('year', filterYear)
+if (filterFrom) previewParams.set('from', filterFrom)
+if (filterTo) previewParams.set('to', filterTo)
+if (filterTypeId) previewParams.set('typeId', filterTypeId)
+if (filterSubtypeId) previewParams.set('subtypeId', filterSubtypeId)
+previewParams.set('page', String(page))
+previewParams.set('limit', String(PAGE_SIZE))
+
+let report: RowsResponse | null = null
+let types: TypeRow[] = []
+let subtypes: SubtypeRow[] = []
+let payrollReportMode: 'on_demand' | 'file_storage' | 'local_storage' = 'on_demand'
+let error = ''
+
+try {
+  const [rowsRes, tRes, cRes] = await Promise.all([
+    fetch(`${API_URL}/reports/employee-files/rows?${previewParams}`, { headers }),
+    fetch(`${API_URL}/employee-files/types`, { headers }),
+    fetch(`${API_URL}/company`, { headers }),
+  ])
+  if (rowsRes.status === 401) return Astro.redirect('/login')
+  if (rowsRes.ok) report = ((await rowsRes.json()) as { data: RowsResponse }).data
+  else error = `Error al cargar los movimientos (HTTP ${rowsRes.status})`
+  if (tRes.ok) types = ((await tRes.json()) as { data: TypeRow[] }).data ?? []
+  if (cRes.ok) {
+    const json = (await cRes.json()) as { data: { payrollReportMode?: string | null } | null }
+    const mode = json.data?.payrollReportMode
+    if (mode === 'file_storage') payrollReportMode = 'file_storage'
+    else if (mode === 'local_storage') payrollReportMode = 'local_storage'
+  }
+  if (filterTypeId) {
+    const sRes = await fetch(`${API_URL}/employee-files/types/${filterTypeId}/subtypes`, {
+      headers,
+    })
+    if (sRes.ok) subtypes = ((await sRes.json()) as { data: SubtypeRow[] }).data ?? []
+  }
+} catch (err) {
+  error = err instanceof Error ? err.message : 'No se pudo conectar con el servidor.'
+}
+
+// Year dropdown options: union of years that have files + the current
+// year (so an empty tenant still shows something sensible).
+const yearOptions = Array.from(new Set([currentYear, ...(report?.years ?? [])])).sort(
+  (a, b) => b - a
+)
+
+const rows = report?.rows ?? []
+const total = report?.total ?? 0
+const totalPages = report?.totalPages ?? 1
+const showingFrom = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+const showingTo = Math.min(page * PAGE_SIZE, total)
+
+function pageUrl(p: number) {
+  const u = new URL(Astro.url)
+  u.searchParams.set('page', String(p))
+  return u.pathname + u.search
+}
+
+function formatDateISO(iso: string): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  if (!y || !m || !d) return iso
+  return `${d}-${m}-${y}`
+}
+
+const statusLabel: Record<string, string> = {
+  approved: 'Aprobado',
+  pending: 'Pendiente',
+  rejected: 'Rechazado',
+}
+const statusStyle: Record<string, string> = {
+  approved: 'bg-emerald-50 text-emerald-700',
+  pending: 'bg-amber-50 text-amber-700',
+  rejected: 'bg-red-50 text-red-700',
+}
+
+// Resolve the human names for the PDF filter chip.
+const typeName = types.find((t) => String(t.id) === filterTypeId)?.name ?? null
+const subtypeName = subtypes.find((s) => String(s.id) === filterSubtypeId)?.name ?? null
+
+// Build the download URL — the endpoint resolves tenant from the cookie.
+const dlParams = new URLSearchParams()
+if (filterYear) dlParams.set('year', filterYear)
+if (filterFrom) dlParams.set('from', filterFrom)
+if (filterTo) dlParams.set('to', filterTo)
+if (filterTypeId) dlParams.set('typeId', filterTypeId)
+if (filterSubtypeId) dlParams.set('subtypeId', filterSubtypeId)
+if (typeName) dlParams.set('typeName', typeName)
+if (subtypeName) dlParams.set('subtypeName', subtypeName)
+const downloadUrl = `/api/reports/movements/download?${dlParams.toString()}`
+
+const usePreview = payrollReportMode === 'on_demand' || payrollReportMode === 'local_storage'
+---
+
+<AppLayout title="Reportes de Movimientos">
+  <div class="p-8">
+
+    <div class="flex items-start justify-between mb-2 gap-4 flex-wrap">
+      <div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <h1 class="text-2xl font-bold text-gray-900">Movimientos de Expedientes</h1>
+          <span
+            class={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${
+              payrollReportMode === 'on_demand'
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : payrollReportMode === 'local_storage'
+                  ? 'bg-violet-50 text-violet-700 border-violet-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+            }`}
+            title="Modo de generación PDF — configurable en Configuración → Empresa"
+          >
+            {payrollReportMode === 'on_demand' && 'Bajo demanda'}
+            {payrollReportMode === 'local_storage' && 'Disco local'}
+            {payrollReportMode === 'file_storage' && 'Nube (S3/R2)'}
+          </span>
+        </div>
+        <p class="text-sm text-gray-500 mt-0.5">
+          Movimientos de expedientes filtrados por año, rango de fechas, tipo y subtipo.
+        </p>
+      </div>
+      <button
+        type="button"
+        data-movements-pdf
+        data-url={downloadUrl}
+        data-mode={usePreview ? 'preview' : 'download'}
+        class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+        title="Generar el reporte PDF de movimientos"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="7 15 12 20 17 15"/><line x1="12" y1="20" x2="12" y2="12"/></svg>
+        Reporte PDF
+      </button>
+    </div>
+
+    {error && (
+      <div class="my-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+    )}
+
+    <!-- Filtros -->
+    <form method="GET" action="/reports/movements" class="bg-white border border-gray-200 rounded-lg p-4 my-5" data-movements-filters>
+      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="year">Año</label>
+          <select id="year" name="year" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white">
+            {yearOptions.map((y) => (
+              <option value={y} selected={String(y) === filterYear}>{y}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="from">Desde</label>
+          <input id="from" type="date" name="from" value={filterFrom} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="to">Hasta</label>
+          <input id="to" type="date" name="to" value={filterTo} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="typeId">Tipo</label>
+          <select id="typeId" name="typeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white" data-type-select>
+            <option value="">Todos</option>
+            {types.map((t) => (
+              <option value={t.id} selected={String(t.id) === filterTypeId}>{t.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-500 mb-1" for="subtypeId">Subtipo</label>
+          <select id="subtypeId" name="subtypeId" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white" disabled={subtypes.length === 0}>
+            <option value="">Todos</option>
+            {subtypes.map((s) => (
+              <option value={s.id} selected={String(s.id) === filterSubtypeId}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center gap-2 mt-4">
+        <button type="submit" class="px-3.5 py-2 text-sm rounded-md bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors">Buscar</button>
+        <a href="/reports/movements" class="px-3.5 py-2 text-sm rounded-md border border-gray-300 bg-white text-gray-700 font-medium hover:bg-gray-50 transition-colors">Limpiar</a>
+        <span class="text-sm text-gray-500 ml-auto">{total} {total === 1 ? 'movimiento' : 'movimientos'}</span>
+      </div>
+    </form>
+
+    <!-- Vista previa -->
+    <div class="bg-white rounded-xl border border-gray-200 overflow-visible">
+      <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-gray-800">Vista previa</h2>
+        <span class="text-xs text-gray-400">
+          {total === 0 ? '0' : `${showingFrom}–${showingTo}`} de {total}
+        </span>
+      </div>
+      {rows.length === 0 ? (
+        <div class="py-14 text-center">
+          <p class="text-sm text-gray-400">No hay movimientos para los filtros seleccionados.</p>
+        </div>
+      ) : (
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-2.5 font-medium text-gray-600">Nº Documento</th>
+              <th class="text-left px-4 py-2.5 font-medium text-gray-600">Fecha</th>
+              <th class="text-left px-4 py-2.5 font-medium text-gray-600">Empleado</th>
+              <th class="text-left px-4 py-2.5 font-medium text-gray-600">Tipo</th>
+              <th class="text-left px-4 py-2.5 font-medium text-gray-600">Subtipo</th>
+              <th class="text-left px-4 py-2.5 font-medium text-gray-600">Estado</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            {rows.map((r) => (
+              <tr class="hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-2.5 font-mono text-xs text-gray-500">{r.documentNumber}</td>
+                <td class="px-4 py-2.5 text-gray-500 font-mono text-xs">{formatDateISO(r.documentDate)}</td>
+                <td class="px-4 py-2.5 text-gray-900">
+                  <span class="font-mono text-xs text-gray-400">{r.employeeCode}</span> {r.firstName} {r.lastName}
+                </td>
+                <td class="px-4 py-2.5 text-gray-600">{r.typeName}</td>
+                <td class="px-4 py-2.5 text-gray-600">{r.subtypeName}</td>
+                <td class="px-4 py-2.5">
+                  <span class={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusStyle[r.approvalStatus] ?? 'bg-gray-100 text-gray-500'}`}>
+                    {statusLabel[r.approvalStatus] ?? r.approvalStatus}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+
+    {total > rows.length && (
+      <p class="text-xs text-gray-500 mt-3">El PDF incluye los {total} movimientos completos, no solo la vista previa.</p>
+    )}
+
+    {totalPages > 1 && (
+      <div class="mt-4 flex items-center justify-between text-sm text-gray-500">
+        <span>Mostrando {showingFrom}–{showingTo} de {total}</span>
+        <div class="flex items-center gap-1">
+          {page > 1 ? (
+            <a href={pageUrl(page - 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">← Anterior</a>
+          ) : (
+            <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">← Anterior</span>
+          )}
+          <span class="px-3 py-1.5 text-xs text-gray-600">Pág. {page} / {totalPages}</span>
+          {page < totalPages ? (
+            <a href={pageUrl(page + 1)} class="px-3 py-1.5 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors text-xs font-medium">Siguiente →</a>
+          ) : (
+            <span class="px-3 py-1.5 rounded-md border border-gray-200 bg-gray-50 text-gray-300 text-xs font-medium cursor-not-allowed">Siguiente →</span>
+          )}
+        </div>
+      </div>
+    )}
+  </div>
+</AppLayout>
+
+<script>
+  import { downloadPdfWithModal } from '../../lib/reports/pdf-download-modal'
+  import { previewPdfInModal } from '../../lib/reports/pdf-preview-modal'
+
+  // Changing the "Tipo" select reloads the page with the typeId applied
+  // so subtypes repopulate server-side (mirrors the stats report).
+  const typeSelect = document.querySelector<HTMLSelectElement>('[data-type-select]')
+  const filtersForm = document.querySelector<HTMLFormElement>('[data-movements-filters]')
+  typeSelect?.addEventListener('change', () => {
+    const subtype = filtersForm?.querySelector<HTMLSelectElement>('#subtypeId')
+    if (subtype) subtype.value = ''
+    filtersForm?.submit()
+  })
+
+  const pdfBtn = document.querySelector<HTMLButtonElement>('[data-movements-pdf]')
+  if (pdfBtn) {
+    let busy = false
+    pdfBtn.addEventListener('click', async () => {
+      if (busy) return
+      const url = pdfBtn.dataset.url
+      const mode = pdfBtn.dataset.mode ?? 'download'
+      if (!url) return
+
+      busy = true
+      pdfBtn.disabled = true
+      // Lock the filter form too so the report can't change mid-flight.
+      for (const el of filtersForm?.querySelectorAll<HTMLElement>('input, select, button, a') ?? []) {
+        ;(el as HTMLInputElement).setAttribute('aria-disabled', 'true')
+        el.classList.add('pointer-events-none', 'opacity-60')
+      }
+      try {
+        if (mode === 'preview') {
+          await previewPdfInModal(url, {
+            title: 'Movimientos de Expedientes',
+            filenameHint: 'movimientos.pdf',
+          })
+        } else {
+          await downloadPdfWithModal(url, {
+            title: 'Generando reporte de movimientos',
+            successTitle: 'Reporte descargado',
+            filenameHint: 'movimientos.pdf',
+          })
+        }
+      } finally {
+        busy = false
+        pdfBtn.disabled = false
+        for (const el of filtersForm?.querySelectorAll<HTMLElement>('input, select, button, a') ?? []) {
+          el.removeAttribute('aria-disabled')
+          el.classList.remove('pointer-events-none', 'opacity-60')
+        }
+      }
+    })
+  }
+</script>

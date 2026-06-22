@@ -32,11 +32,11 @@ export function buildPasswordResetEmail(params: PasswordResetEmailParams): Passw
   const { resetUrl, userName, companyName, expiresInMinutes } = params
   const safeUrl = escapeHtml(resetUrl)
   const safeName = userName ? escapeHtml(userName) : null
-  const safeCompany = escapeHtml(companyName ?? 'PayrollSoft')
+  const safeCompany = escapeHtml(companyName ?? 'RCG SOFTRIX')
   const year = new Date().getFullYear()
   const greeting = safeName ? `Hola ${safeName},` : 'Hola,'
 
-  const subject = 'Restablece tu contraseña — PayrollSoft'
+  const subject = 'Restablece tu contraseña — RCG SOFTRIX'
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -58,7 +58,7 @@ export function buildPasswordResetEmail(params: PasswordResetEmailParams): Passw
                   <td width="40" height="40" align="center" valign="middle" style="background:#003087;border-radius:6px;color:#ffffff;font-family:Georgia,'Times New Roman',serif;font-size:22px;line-height:40px;">P</td>
                   <td style="padding-left:14px;">
                     <div style="font-weight:600;color:#0c1424;font-size:14px;letter-spacing:0.01em;">${safeCompany}</div>
-                    <div style="font-size:11px;color:#7a8499;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">PayrollSoft · Recuperación</div>
+                    <div style="font-size:11px;color:#7a8499;letter-spacing:0.12em;text-transform:uppercase;margin-top:2px;">RCG SOFTRIX · Recuperación</div>
                   </td>
                 </tr>
               </table>
@@ -125,7 +125,7 @@ export function buildPasswordResetEmail(params: PasswordResetEmailParams): Passw
     '',
     'Si no solicitaste este cambio, ignora este correo. Tu contraseña actual seguirá funcionando.',
     '',
-    `© ${year} ${companyName ?? 'PayrollSoft'}`,
+    `© ${year} ${companyName ?? 'RCG SOFTRIX'}`,
   ].join('\n')
 
   return { subject, html, text }

@@ -40,6 +40,7 @@ type Check = {
   id: string
   checkNumber: number
   beneficiaryName: string
+  beneficiaryType: string
   amount: string
   amountInWords: string
   concept: string | null
@@ -68,13 +69,35 @@ type Checkbook = {
   isActive: number
   purpose: string
 }
+type Bank = {
+  id: string
+  code: string
+  name: string
+  achFormat: string | null
+  achEntityCode: string | null
+  isActive: number
+}
+type AchBatch = {
+  id: string
+  format: string
+  fileName: string
+  totalAmount: string
+  recordCount: number
+  generatedAt: string
+}
 
 // Buscar la corrida en el listado (no hay GET /:id todavía — ahorra round-trip)
 let run: Run | null = null
 let checks: Check[] = []
 let payables: Payable[] = []
+let creditorPayables: Payable[] = []
 let checkbooks: Checkbook[] = []
+let banks: Bank[] = []
+let runBatches: AchBatch[] = []
 let error = ''
+const now = new Date()
+let creditorMonth = now.getMonth() + 1
+let creditorYear = now.getFullYear()
 
 try {
   const runsRes = await fetch(`${API_URL}/treasury/runs`, { headers })
@@ -85,16 +108,40 @@ try {
   }
   if (!run) return Astro.redirect('/treasury')
 
-  const [cRes, cbRes, pRes] = await Promise.all([
+  const [cRes, cbRes, pRes, bRes, plRes] = await Promise.all([
     fetch(`${API_URL}/treasury/runs/${runId}/checks`, { headers }),
     fetch(`${API_URL}/treasury/checkbooks`, { headers }),
     run.payrollId
       ? fetch(`${API_URL}/treasury/payables?payrollId=${run.payrollId}`, { headers })
       : Promise.resolve(null),
+    fetch(`${API_URL}/banks`, { headers }),
+    run.payrollId
+      ? fetch(`${API_URL}/payroll/${run.payrollId}?linesPage=1&linesLimit=1`, { headers })
+      : Promise.resolve(null),
   ])
   if (cRes.ok) checks = ((await cRes.json()) as { data: Check[] }).data ?? []
   if (cbRes.ok) checkbooks = ((await cbRes.json()) as { data: Checkbook[] }).data ?? []
   if (pRes?.ok) payables = ((await pRes.json()) as { data: Payable[] }).data ?? []
+  if (bRes.ok) banks = ((await bRes.json()) as { data: Bank[] }).data ?? []
+
+  // Mes/año de la planilla → base para acreedores (pago por mes).
+  if (plRes?.ok) {
+    const pj = (await plRes.json()) as { data?: { payroll?: { paymentDate?: string | null; periodEnd?: string } } }
+    const d = pj.data?.payroll?.paymentDate ?? pj.data?.payroll?.periodEnd ?? ''
+    if (/^\d{4}-\d{2}-\d{2}/.test(d)) {
+      creditorYear = Number(d.slice(0, 4))
+      creditorMonth = Number(d.slice(5, 7))
+    }
+  }
+
+  const [cpRes, abRes] = await Promise.all([
+    run.payrollId
+      ? fetch(`${API_URL}/treasury/creditor-payables?month=${creditorMonth}&year=${creditorYear}`, { headers })
+      : Promise.resolve(null),
+    fetch(`${API_URL}/treasury/ach?paymentRunId=${runId}`, { headers }),
+  ])
+  if (cpRes?.ok) creditorPayables = ((await cpRes.json()) as { data: Payable[] }).data ?? []
+  if (abRes.ok) runBatches = ((await abRes.json()) as { data: AchBatch[] }).data ?? []
 } catch {
   error = 'No se pudo conectar.'
 }
@@ -105,6 +152,51 @@ const flash = Astro.url.searchParams.get('flash') ?? ''
 const flashMsg = Astro.url.searchParams.get('msg') ?? ''
 
 const activeCheckbooks = checkbooks.filter((c) => c.isActive === 1 && c.nextNumber <= c.endNumber)
+
+// Beneficiarios sugeridos para emisión manual: empleados de la planilla +
+// acreedores (con su monto retenido). Al elegir uno se autocompletan los campos.
+const beneficiaryOptions = [
+  ...payables.map((p) => ({
+    type: 'employee' as const,
+    ref: p.beneficiaryId,
+    name: p.beneficiaryName,
+    amount: p.amount,
+  })),
+  ...creditorPayables.map((p) => ({
+    type: 'creditor' as const,
+    ref: p.beneficiaryId,
+    name: p.beneficiaryName,
+    amount: p.amount,
+  })),
+]
+
+// ─── Resumen y vista de acreedores ──────────────────────────────────────────
+const MESES_ES = [
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+]
+const mesLabel = MESES_ES[creditorMonth - 1] ?? ''
+const checksLive = checks.filter((c) => c.status !== 'voided')
+const checksTotal = checksLive.reduce((a, c) => a + (Number(c.amount) || 0), 0)
+const batchesTotal = runBatches.reduce((a, b) => a + (Number(b.totalAmount) || 0), 0)
+const creditorTotal = creditorPayables.reduce((a, p) => a + p.amount, 0)
+const creditorChecks = checksLive.filter((c) => c.beneficiaryType === 'creditor')
+function creditorStatus(p: Payable): { label: string; cls: string } {
+  if (p.paymentMethod === 'ach') {
+    return p.accountNumber && p.bankRouting
+      ? { label: 'ACH listo', cls: 'tr-status-closed' }
+      : { label: 'ACH sin cuenta', cls: 'tr-status-cancelled' }
+  }
+  if (p.paymentMethod === 'check') return { label: 'Cheque', cls: 'tr-status-open' }
+  return { label: 'Efectivo', cls: 'tr-status-draft' }
+}
+const FORMAT_LABELS: Record<string, string> = {
+  banco_nacional: 'Banco Nacional (L)',
+  banco_general: 'Banco General (C/D/T)',
+  bloqueo_quincenal: 'Bloqueo quincenal',
+  bloqueo_mensual: 'Bloqueo mensual',
+  mupa_v1: 'ACH legacy',
+}
 
 const achEligible = payables.filter(
   (p) => p.paymentMethod === 'ach' && p.accountNumber && p.bankRouting && p.accountType
@@ -147,22 +239,22 @@ const today = new Date().toISOString().slice(0, 10)
         <div>
           <h1 class="text-xl font-semibold tracking-tight tr-title">{run.name}</h1>
           <p class="text-sm mt-0.5 tr-subtitle">
-            Total <strong>{fmtMoney(run.totalAmount)}</strong>
-            {' · '} ACH <strong>{fmtMoney(run.achTotal)}</strong>
-            {' · '} Cheques <strong>{fmtMoney(run.checkTotal)}</strong>
+            Total <strong>{fmtMoney(checksTotal + batchesTotal)}</strong>
+            {' · '} ACH <strong>{fmtMoney(batchesTotal)}</strong>
+            {' · '} Cheques <strong>{fmtMoney(checksTotal)}</strong>
           </p>
         </div>
         <div class="flex items-center gap-2">
           {run.status === 'open' && canWrite && (
             <form method="POST" action={`/api/treasury/action?op=run-close&id=${runId}`}
               data-saconfirm
-              data-sa-title="Cerrar lote de pago"
-              data-sa-message="Un lote cerrado ya no acepta nuevos cheques o ACH. ¿Continuar?"
-              data-sa-confirm-label="Cerrar lote"
+              data-sa-title="Cerrar generación de pagos"
+              data-sa-message="Una generación cerrada ya no acepta nuevos cheques o ACH. ¿Continuar?"
+              data-sa-confirm-label="Cerrar generación"
               data-sa-tone="primary"
               style="display:inline">
               <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
-              <button type="submit" class="tr-btn-secondary px-3 py-1.5 text-xs rounded-md">Cerrar lote</button>
+              <button type="submit" class="tr-btn-secondary px-3 py-1.5 text-xs rounded-md">Cerrar generación</button>
             </form>
           )}
         </div>
@@ -170,7 +262,7 @@ const today = new Date().toISOString().slice(0, 10)
     </div>
 
     {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Operación completada.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">{flashMsg || 'Operación completada.'}</div>
     )}
     {flash === 'updated' && (
       <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Cambios guardados.</div>
@@ -182,14 +274,30 @@ const today = new Date().toISOString().slice(0, 10)
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
     )}
 
+    {/* ─── Resumen de generación ───────────────────────────── */}
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      <div class="tr-card border rounded-lg p-4">
+        <p class="text-xs tr-mute">Cheques emitidos</p>
+        <p class="text-lg font-semibold tr-title">{checksLive.length}</p>
+        <p class="text-xs tr-cell">{fmtMoney(checksTotal)}</p>
+      </div>
+      <div class="tr-card border rounded-lg p-4">
+        <p class="text-xs tr-mute">Archivos ACH generados</p>
+        <p class="text-lg font-semibold tr-title">{runBatches.length}</p>
+        <p class="text-xs tr-cell">{fmtMoney(batchesTotal)}</p>
+      </div>
+      <div class="tr-card border rounded-lg p-4">
+        <p class="text-xs tr-mute">Acreedores por pagar{mesLabel ? ` · ${mesLabel} ${creditorYear}` : ''}</p>
+        <p class="text-lg font-semibold tr-title">{creditorPayables.length}</p>
+        <p class="text-xs tr-cell">{fmtMoney(creditorTotal)}</p>
+      </div>
+    </div>
+
     <div class="flex gap-1 mb-4 border-b tr-rule">
       <button type="button" class="tr-tab tr-tab-active" data-target="tab-checks">
         Cheques ({checks.length})
       </button>
       <button type="button" class="tr-tab" data-target="tab-ach">ACH</button>
-      {run.payrollId && (
-        <button type="button" class="tr-tab" data-target="tab-payables">Pagables ({payables.length})</button>
-      )}
     </div>
 
     {/* ─── Tab Cheques ────────────────────────────────────── */}
@@ -201,13 +309,19 @@ const today = new Date().toISOString().slice(0, 10)
             <div class="flex items-center gap-2">
               {checks.filter((c) => c.status !== 'voided').length > 0 && (
                 <>
-                  <a href={`/api/treasury/runs/${runId}/checks-pdf`} class="text-xs tr-link">Descargar PDF (todos)</a>
-                  <span class="tr-mute text-xs">·</span>
-                  <a href={`/api/treasury/runs/${runId}/checks-xlsx`} class="text-xs tr-link">Excel (todos)</a>
-                  <span class="tr-mute text-xs">·</span>
+                  <button type="button" class="tr-icon-btn tr-icon-pdf" title="PDF (todos los cheques)" aria-label="Descargar PDF de todos los cheques" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf'`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                  </button>
+                  <button type="button" class="tr-icon-btn tr-icon-xls" title="Excel (todos los cheques)" aria-label="Descargar Excel de todos los cheques" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-xlsx'`}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                  </button>
                 </>
               )}
-              <button type="button" id="btn-issue-check" class="text-xs tr-link">+ Emitir cheque</button>
+              {creditorChecks.length > 0 && (
+                <button type="button" class="tr-btn-action" title="Descargar cheques de acreedores (PDF)" onclick={`window.location.href='/api/treasury/runs/${runId}/checks-pdf?beneficiary=creditor'`}>Acreedores PDF</button>
+              )}
+              <button type="button" id="btn-issue-bulk" class="tr-btn-action">+ Generar en lote</button>
+              <button type="button" id="btn-issue-check" class="tr-btn-action tr-btn-action-primary">+ Emitir cheque</button>
             </div>
           )}
         </header>
@@ -215,7 +329,30 @@ const today = new Date().toISOString().slice(0, 10)
         {run.status === 'open' && canWrite && (
           <form id="form-issue-check" method="POST" action={`/api/treasury/action?op=check-issue&runId=${runId}`} class="hidden px-5 py-4 border-b tr-rule">
             <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="beneficiaryRefId" id="benef-ref" value="" />
             <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+              {beneficiaryOptions.length > 0 && (
+                <div class="md:col-span-12">
+                  <label class="block text-xs font-medium tr-subtitle mb-1.5">Seleccionar beneficiario (autocompleta nombre y monto)</label>
+                  <select id="benef-select" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                    <option value="">— Entrada manual —</option>
+                    <optgroup label="Empleados">
+                      {beneficiaryOptions.filter((o) => o.type === 'employee').map((o, i) => (
+                        <option value={`employee:${i}`} data-name={o.name} data-amount={o.amount} data-type="employee" data-ref={o.ref}>
+                          {o.name} · B/. {o.amount.toFixed(2)}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Acreedores">
+                      {beneficiaryOptions.filter((o) => o.type === 'creditor').map((o, i) => (
+                        <option value={`creditor:${i}`} data-name={o.name} data-amount={o.amount} data-type="creditor" data-ref={o.ref}>
+                          {o.name} · B/. {o.amount.toFixed(2)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+              )}
               <div class="md:col-span-4">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Chequera *</label>
                 <select name="checkbookId" required class="tr-input w-full px-3 py-2 text-sm rounded-md">
@@ -232,11 +369,11 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div class="md:col-span-5">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Beneficiario *</label>
-                <input type="text" name="beneficiaryName" required maxlength="255" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="text" id="benef-name" name="beneficiaryName" required maxlength="255" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div class="md:col-span-3">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Monto *</label>
-                <input type="number" step="0.01" name="amount" required min="0.01" class="tr-input w-full px-3 py-2 text-sm rounded-md font-mono" />
+                <input type="number" step="0.01" id="benef-amount" name="amount" required min="0.01" class="tr-input w-full px-3 py-2 text-sm rounded-md font-mono" />
               </div>
               <div class="md:col-span-3">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha *</label>
@@ -244,7 +381,7 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div class="md:col-span-3">
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Tipo de beneficiario</label>
-                <select name="beneficiaryType" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                <select id="benef-type" name="beneficiaryType" class="tr-input w-full px-3 py-2 text-sm rounded-md">
                   <option value="employee">Empleado</option>
                   <option value="creditor">Acreedor</option>
                   <option value="other">Otro</option>
@@ -262,11 +399,63 @@ const today = new Date().toISOString().slice(0, 10)
           </form>
         )}
 
+        {run.status === 'open' && canWrite && (
+          <form id="form-issue-bulk" method="POST" action={`/api/treasury/action?op=checks-bulk&runId=${runId}`} class="hidden px-5 py-4 border-b tr-rule">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="payrollId" value={run.payrollId} />
+            <p class="text-xs tr-mute mb-3">
+              Emite un cheque por cada beneficiario con método <strong>cheque</strong>. Omite los que
+              ya tienen cheque vigente en esta generación.
+            </p>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-3">
+              <div class="md:col-span-4">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Chequera *</label>
+                <select name="checkbookId" required class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  {activeCheckbooks.map((c) => (
+                    <option value={c.id}>{c.name} · próx. {String(c.nextNumber).padStart(7, '0')}</option>
+                  ))}
+                </select>
+              </div>
+              <div class="md:col-span-4">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Beneficiarios</label>
+                <select id="bulk-benef" name="beneficiary" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  <option value="employees">Empleados (esta planilla)</option>
+                  <option value="creditors">Acreedores (del mes)</option>
+                </select>
+              </div>
+              <div class="md:col-span-4">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha *</label>
+                <input type="date" name="issueDate" required value={today} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="md:col-span-3 bulk-period hidden">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="md:col-span-3 bulk-period hidden">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="md:col-span-6">
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Concepto</label>
+                <input type="text" name="concept" maxlength="500" placeholder="ej. Pago acreedores junio 2026" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-3">
+              <button type="button" id="btn-bulk-cancel" class="tr-mute px-3 py-2 text-sm">Cancelar</button>
+              <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">Generar cheques</button>
+            </div>
+          </form>
+        )}
+
         {checks.length === 0 ? (
           <div class="py-10 text-center">
-            <p class="text-sm tr-mute">Sin cheques emitidos en este lote.</p>
+            <p class="text-sm tr-mute">Sin cheques emitidos en esta generación de pagos.</p>
           </div>
         ) : (
+          <div data-tr-list data-tr-page-size="10">
+          <div class="px-5 py-2.5 border-b tr-rule">
+            <input type="search" data-tr-search placeholder="Buscar número, beneficiario, concepto…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+          </div>
           <table class="tr-table w-full text-sm">
             <thead>
               <tr>
@@ -278,7 +467,7 @@ const today = new Date().toISOString().slice(0, 10)
                 <th class="px-5 py-2"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody data-tr-rows>
               {checks.map((c) => {
                 const sb = checkStatusBadge(c.status)
                 return (
@@ -295,15 +484,19 @@ const today = new Date().toISOString().slice(0, 10)
                     </td>
                     <td class="px-5 py-3 text-right whitespace-nowrap">
                       {c.status !== 'voided' && (
-                        <>
-                          <a href={`/api/treasury/checks/${c.id}/pdf`} class="text-xs tr-link mr-2">PDF</a>
-                          <a href={`/api/treasury/checks/${c.id}/xlsx`} class="text-xs tr-link mr-2">Excel</a>
+                        <div class="inline-flex items-center gap-1.5">
+                          <button type="button" class="tr-icon-btn tr-icon-pdf" title="Imprimir cheque (PDF)" aria-label="Imprimir cheque en PDF" onclick={`window.location.href='/api/treasury/checks/${c.id}/pdf'`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                          </button>
+                          <button type="button" class="tr-icon-btn tr-icon-xls" title="Imprimir cheque (Excel)" aria-label="Imprimir cheque en Excel" onclick={`window.location.href='/api/treasury/checks/${c.id}/xlsx'`}>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                          </button>
                           {canVoid && c.status !== 'cleared' && (
-                            <button type="button" class="text-xs text-red-500 hover:underline" data-void-id={c.id} data-num={c.checkNumber}>
-                              Anular
+                            <button type="button" class="tr-icon-btn tr-icon-del" title="Anular cheque" aria-label="Anular cheque" data-void-id={c.id} data-num={c.checkNumber}>
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
                             </button>
                           )}
-                        </>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -311,6 +504,8 @@ const today = new Date().toISOString().slice(0, 10)
               })}
             </tbody>
           </table>
+          <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-t tr-rule text-xs tr-mute"></div>
+          </div>
         )}
       </div>
     </section>
@@ -325,6 +520,39 @@ const today = new Date().toISOString().slice(0, 10)
             El archivo se persiste y queda descargable después.
           </p>
         </header>
+
+        {runBatches.length > 0 && (
+          <div data-tr-list data-tr-page-size="10">
+          <div class="px-5 py-2.5 border-b tr-rule">
+            <input type="search" data-tr-search placeholder="Buscar archivo o formato…" class="tr-input w-full max-w-xs px-3 py-1.5 text-sm rounded-md" />
+          </div>
+          <table class="tr-table w-full text-sm border-b tr-rule">
+            <thead>
+              <tr>
+                <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Archivo</th>
+                <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Formato</th>
+                <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Registros</th>
+                <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Total</th>
+                <th class="px-5 py-2"></th>
+              </tr>
+            </thead>
+            <tbody data-tr-rows>
+              {runBatches.map((b) => (
+                <tr class="border-b last:border-0 tr-rule">
+                  <td class="px-5 py-2.5 font-mono text-xs tr-cell">{b.fileName}</td>
+                  <td class="px-5 py-2.5 text-xs tr-cell">{FORMAT_LABELS[b.format] ?? b.format}</td>
+                  <td class="px-5 py-2.5 text-right font-mono text-xs tr-cell">{b.recordCount}</td>
+                  <td class="px-5 py-2.5 text-right font-mono text-xs tr-cell">{fmtMoney(b.totalAmount)}</td>
+                  <td class="px-5 py-2.5 text-right">
+                    <a href={`/api/treasury/ach/${b.id}/download`} class="text-xs tr-link">Descargar</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div data-tr-pager class="flex items-center justify-between gap-3 px-5 py-2.5 border-b tr-rule text-xs tr-mute"></div>
+          </div>
+        )}
 
         {run.payrollId && run.status === 'open' && canWrite && (
           <form method="POST" action={`/api/treasury/action?op=ach-generate&runId=${runId}`} class="px-5 py-4 border-b tr-rule">
@@ -347,11 +575,11 @@ const today = new Date().toISOString().slice(0, 10)
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
-                <input type="number" name="month" min="1" max="12" value={new Date().getMonth() + 1} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
-                <input type="number" name="year" min="2000" max="2100" value={new Date().getFullYear()} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
               </div>
               <div>
                 <label class="block text-xs font-medium tr-subtitle mb-1.5">Fecha de pago *</label>
@@ -369,7 +597,7 @@ const today = new Date().toISOString().slice(0, 10)
         {!run.payrollId && (
           <div class="px-5 py-10 text-center">
             <p class="text-sm tr-mute">
-              Este lote no está enlazado a una planilla. El ACH se genera desde un lote con planilla asociada.
+              Esta generación de pagos no está enlazada a una planilla. El ACH se genera desde una generación con planilla asociada.
             </p>
           </div>
         )}
@@ -382,57 +610,135 @@ const today = new Date().toISOString().slice(0, 10)
           </div>
         )}
       </div>
-    </section>
 
-    {/* ─── Tab Pagables (preview de empleados) ─────────────── */}
-    {run.payrollId && (
-      <section id="tab-payables" class="hidden">
-        <div class="tr-card border rounded-lg overflow-hidden">
+      {run.payrollId && canWrite && (
+        <div class="tr-card border rounded-lg overflow-hidden mt-4">
           <header class="px-5 py-3 border-b tr-rule">
-            <h2 class="text-sm font-semibold tr-title">Pagables de la planilla</h2>
+            <h2 class="text-sm font-semibold tr-title">Archivos de banco y contraloría</h2>
             <p class="text-xs tr-mute mt-0.5">
-              Empleados de la planilla con su método de pago configurado. Los que están en
-              <strong> ACH</strong> entran al batch automático; los de <strong>cheque</strong>
-              hay que emitirles cheque uno por uno.
+              Genera y descarga el archivo en el formato del banco originador, o los bloqueos
+              presupuestarios. La planilla debe estar cerrada.
             </p>
           </header>
-          {payables.length === 0 ? (
-            <div class="py-10 text-center">
-              <p class="text-sm tr-mute">No hay líneas pagables para esta planilla.</p>
+
+          {/* ACH por banco — el formato lo determina el banco seleccionado */}
+          <form method="POST" action="/api/treasury/files/generate" class="px-5 py-4 border-b tr-rule" id="bank-file-form">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="runId" value={runId} />
+            <input type="hidden" name="payrollId" value={run.payrollId} />
+            <input type="hidden" name="format" id="bank-file-format" value="" />
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Beneficiarios</label>
+                <select id="bank-file-benef" name="beneficiary" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  <option value="employees">Empleados (esta planilla)</option>
+                  <option value="creditors">Acreedores (del mes)</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Banco originador (formato ACH)</label>
+                <select id="bank-file-select" name="sourceBankId" class="tr-input w-full px-3 py-2 text-sm rounded-md">
+                  {banks
+                    .filter((b) => b.isActive === 1 && b.achFormat)
+                    .map((b) => (
+                      <option value={b.id} data-format={b.achFormat}>{b.name} · {b.achFormat}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Descripción (opcional)</label>
+                <input type="text" name="description" maxlength="200" placeholder="Auto" class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="flex justify-end">
+                <button type="submit" disabled={banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0} class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                  Generar y descargar
+                </button>
+              </div>
             </div>
-          ) : (
-            <table class="tr-table w-full text-sm">
-              <thead>
-                <tr>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Beneficiario</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Método</th>
-                  <th class="text-left px-5 py-2 text-xs font-medium uppercase tracking-wide">Cuenta</th>
-                  <th class="text-right px-5 py-2 text-xs font-medium uppercase tracking-wide">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payables.map((p) => (
-                  <tr class="border-b last:border-0 tr-rule">
-                    <td class="px-5 py-3 tr-cell">
-                      {p.beneficiaryName}
-                      {p.identification && <span class="ml-2 text-xs tr-mute font-mono">{p.identification}</span>}
-                    </td>
-                    <td class="px-5 py-3">
-                      <span class={`tr-method-${p.paymentMethod}`}>{p.paymentMethod.toUpperCase()}</span>
-                    </td>
-                    <td class="px-5 py-3 text-xs tr-mute font-mono">
-                      {p.accountNumber ? `${p.accountNumber} · ${p.accountType ?? '?'}` : '—'}
-                    </td>
-                    <td class="px-5 py-3 text-right font-mono text-xs tr-cell">{fmtMoney(p.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+            <div id="bank-file-period" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3 hidden">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes (acreedores)</label>
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+            </div>
+            {banks.filter((b) => b.isActive === 1 && b.achFormat).length === 0 && (
+              <p class="text-xs tr-mute mt-2">
+                Ningún banco tiene formato ACH configurado. Asígnalo en el catálogo de bancos.
+              </p>
+            )}
+          </form>
+
+          {/* Bloqueo presupuestario quincenal */}
+          <form method="POST" action="/api/treasury/files/generate" class="px-5 py-4 border-b tr-rule">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="runId" value={runId} />
+            <input type="hidden" name="payrollId" value={run.payrollId} />
+            <input type="hidden" name="format" value="bloqueo_quincenal" />
+            <div class="flex items-center justify-between gap-4">
+              <p class="text-sm tr-cell">
+                Bloqueo presupuestario <strong>quincenal</strong> — totales por partida de lo pagado.
+              </p>
+              <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 whitespace-nowrap">
+                Generar y descargar
+              </button>
+            </div>
+          </form>
+
+          {/* Bloqueo presupuestario mensual (desde el presupuesto de posiciones) */}
+          <form method="POST" action="/api/treasury/files/generate" class="px-5 py-4">
+            <input type="hidden" name="_redirect" value={`/treasury/${runId}`} />
+            <input type="hidden" name="format" value="bloqueo_mensual" />
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Mes</label>
+                <input type="number" name="month" min="1" max="12" value={creditorMonth} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div>
+                <label class="block text-xs font-medium tr-subtitle mb-1.5">Año</label>
+                <input type="number" name="year" min="2000" max="2100" value={creditorYear} class="tr-input w-full px-3 py-2 text-sm rounded-md" />
+              </div>
+              <div class="flex justify-end">
+                <button type="submit" class="px-4 py-2 rounded-md bg-blue-600 text-white text-sm font-medium hover:bg-blue-700">
+                  Generar y descargar
+                </button>
+              </div>
+            </div>
+            <p class="text-xs tr-mute mt-2">
+              El bloqueo mensual se calcula desde el presupuesto de las posiciones (no de esta planilla).
+            </p>
+          </form>
         </div>
-      </section>
-    )}
+      )}
+    </section>
   </div>
+
+  <dialog id="void-modal" class="void-modal">
+    <div class="void-modal-card">
+      <div class="void-modal-icon" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <h3 class="void-modal-title">Anular cheque</h3>
+      <p class="void-modal-sub">
+        Cheque N.º <strong data-void-num></strong>. Esta acción no se puede deshacer.
+      </p>
+      <label class="void-modal-label" for="void-reason">Razón de la anulación</label>
+      <textarea
+        id="void-reason"
+        class="void-modal-textarea"
+        rows="3"
+        placeholder="Describe el motivo (mínimo 3 caracteres)…"
+      ></textarea>
+      <p class="void-modal-error" data-void-error hidden></p>
+      <div class="void-modal-actions">
+        <button type="button" class="void-modal-btn void-modal-btn-ghost" data-void-cancel>Cancelar</button>
+        <button type="button" class="void-modal-btn void-modal-btn-danger" data-void-confirm>Anular cheque</button>
+      </div>
+    </div>
+  </dialog>
 
   <script is:inline>
     ;(function () {
@@ -442,12 +748,35 @@ const today = new Date().toISOString().slice(0, 10)
           document.querySelectorAll('.tr-tab').forEach((b) => b.classList.remove('tr-tab-active'))
           btn.classList.add('tr-tab-active')
           const target = btn.getAttribute('data-target')
-          for (const id of ['tab-checks', 'tab-ach', 'tab-payables']) {
+          for (const id of ['tab-checks', 'tab-ach', 'tab-payables', 'tab-creditors']) {
             const el = document.getElementById(id)
             if (el) el.classList.toggle('hidden', id !== target)
           }
         })
       })
+
+      // Archivo ACH por banco: el formato lo dicta el banco seleccionado
+      const bankForm = document.getElementById('bank-file-form')
+      const bankSel = document.getElementById('bank-file-select')
+      const bankFmt = document.getElementById('bank-file-format')
+      if (bankForm && bankSel && bankFmt) {
+        const syncFmt = () => {
+          const opt = bankSel.options[bankSel.selectedIndex]
+          bankFmt.value = opt ? opt.getAttribute('data-format') || '' : ''
+        }
+        bankSel.addEventListener('change', syncFmt)
+        bankForm.addEventListener('submit', syncFmt)
+        syncFmt()
+      }
+
+      // Mostrar mes/año cuando el beneficiario son acreedores (pago por mes)
+      const benefSel = document.getElementById('bank-file-benef')
+      const periodBox = document.getElementById('bank-file-period')
+      if (benefSel && periodBox) {
+        const syncBenef = () => periodBox.classList.toggle('hidden', benefSel.value !== 'creditors')
+        benefSel.addEventListener('change', syncBenef)
+        syncBenef()
+      }
 
       // Toggle form emitir cheque
       const issueBtn = document.getElementById('btn-issue-check')
@@ -456,33 +785,157 @@ const today = new Date().toISOString().slice(0, 10)
       issueBtn?.addEventListener('click', () => issueForm?.classList.toggle('hidden'))
       issueCancel?.addEventListener('click', () => issueForm?.classList.add('hidden'))
 
-      // Anular cheque vía saModal
-      document.querySelectorAll('[data-void-id]').forEach((btn) => {
-        btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-void-id')
-          const num = btn.getAttribute('data-num')
-          const sa = window.saModal
-          if (!sa) return
-          const reason = window.prompt(`Razón para anular el cheque ${num}:`, '')
-          if (reason == null) return
-          if (reason.trim().length < 3) {
-            await sa.error({ title: 'Razón requerida', message: 'Escribe al menos 3 caracteres.' })
-            return
-          }
-          sa.loading({ title: 'Anulando', message: 'Procesando…' })
-          const res = await fetch(`/api/treasury/action?op=check-void&id=${id}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
-            body: JSON.stringify({ reason: reason.trim() }),
+      // Cheques en lote
+      const bulkBtn = document.getElementById('btn-issue-bulk')
+      const bulkForm = document.getElementById('form-issue-bulk')
+      const bulkCancel = document.getElementById('btn-bulk-cancel')
+      bulkBtn?.addEventListener('click', () => bulkForm?.classList.toggle('hidden'))
+      bulkCancel?.addEventListener('click', () => bulkForm?.classList.add('hidden'))
+      const bulkBenef = document.getElementById('bulk-benef')
+      if (bulkBenef) {
+        const syncBulk = () => {
+          document.querySelectorAll('.bulk-period').forEach((el) => {
+            el.classList.toggle('hidden', bulkBenef.value !== 'creditors')
           })
-          const json = await res.json().catch(() => ({}))
-          if (!json.ok) {
-            await sa.error({ title: 'No se pudo anular', message: json.error })
-          } else {
-            await sa.success({ title: 'Cheque anulado', redirect: window.location.pathname })
-          }
+        }
+        bulkBenef.addEventListener('change', syncBulk)
+        syncBulk()
+      }
+
+      // Autocompletar el cheque al elegir un beneficiario de la planilla
+      const benefSelect = document.getElementById('benef-select')
+      if (benefSelect) {
+        benefSelect.addEventListener('change', () => {
+          const opt = benefSelect.options[benefSelect.selectedIndex]
+          if (!opt || !opt.value) return
+          const name = document.getElementById('benef-name')
+          const amount = document.getElementById('benef-amount')
+          const type = document.getElementById('benef-type')
+          const ref = document.getElementById('benef-ref')
+          if (name) name.value = opt.getAttribute('data-name') || ''
+          if (amount) amount.value = opt.getAttribute('data-amount') || ''
+          if (type) type.value = opt.getAttribute('data-type') || 'employee'
+          if (ref) ref.value = opt.getAttribute('data-ref') || ''
+        })
+      }
+
+      // Anular cheque — modal con campo para la razón
+      const voidModal = document.getElementById('void-modal')
+      const voidReason = document.getElementById('void-reason')
+      const voidError = voidModal && voidModal.querySelector('[data-void-error]')
+      const voidNumEl = voidModal && voidModal.querySelector('[data-void-num]')
+      let voidCheckId = null
+
+      function showVoidError(msg) {
+        if (!voidError) return
+        voidError.textContent = msg
+        voidError.hidden = false
+      }
+      function closeVoidModal() {
+        if (voidModal && typeof voidModal.close === 'function') voidModal.close()
+      }
+      function openVoidModal(id, num) {
+        voidCheckId = id
+        if (voidNumEl) voidNumEl.textContent = num || ''
+        if (voidReason) voidReason.value = ''
+        if (voidError) voidError.hidden = true
+        if (voidModal && typeof voidModal.showModal === 'function') {
+          voidModal.showModal()
+          if (voidReason) voidReason.focus()
+        }
+      }
+
+      document.querySelectorAll('[data-void-id]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          openVoidModal(btn.getAttribute('data-void-id'), btn.getAttribute('data-num'))
         })
       })
+
+      if (voidModal) {
+        const cancelBtn = voidModal.querySelector('[data-void-cancel]')
+        const confirmBtn = voidModal.querySelector('[data-void-confirm]')
+        if (cancelBtn) cancelBtn.addEventListener('click', closeVoidModal)
+        // Cerrar al hacer clic fuera de la tarjeta (sobre el backdrop)
+        voidModal.addEventListener('click', (e) => {
+          if (e.target === voidModal) closeVoidModal()
+        })
+        if (voidReason) voidReason.addEventListener('input', () => { if (voidError) voidError.hidden = true })
+        if (confirmBtn)
+          confirmBtn.addEventListener('click', async () => {
+            const sa = window.saModal
+            const reason = ((voidReason && voidReason.value) || '').trim()
+            if (reason.length < 3) {
+              showVoidError('Escribe al menos 3 caracteres.')
+              if (voidReason) voidReason.focus()
+              return
+            }
+            closeVoidModal()
+            if (sa) sa.loading({ title: 'Anulando', message: 'Procesando…' })
+            const res = await fetch(`/api/treasury/action?op=check-void&id=${voidCheckId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-SA-Modal': '1' },
+              body: JSON.stringify({ reason }),
+            })
+            const json = await res.json().catch(() => ({}))
+            if (!json.ok) {
+              if (sa) await sa.error({ title: 'No se pudo anular', message: json.error })
+            } else if (sa) {
+              await sa.success({ title: 'Cheque anulado', redirect: window.location.pathname })
+            } else {
+              window.location.reload()
+            }
+          })
+      }
+
+      // ── Buscador + paginador para las tablas de cada tab ──────
+      function setupTrList(root) {
+        const tbody = root.querySelector('[data-tr-rows]')
+        if (!tbody) return
+        const search = root.querySelector('[data-tr-search]')
+        const pager = root.querySelector('[data-tr-pager]')
+        const pageSize = Number(root.getAttribute('data-tr-page-size')) || 10
+        const rows = Array.prototype.slice
+          .call(tbody.children)
+          .filter((r) => r.tagName === 'TR' && !r.hasAttribute('data-tr-keep'))
+        let page = 1
+        function apply() {
+          const q = ((search && search.value) || '').trim().toLowerCase()
+          const filtered = q
+            ? rows.filter((r) => r.textContent.toLowerCase().indexOf(q) !== -1)
+            : rows
+          const total = filtered.length
+          const pages = Math.max(1, Math.ceil(total / pageSize))
+          if (page > pages) page = pages
+          if (page < 1) page = 1
+          rows.forEach((r) => { r.style.display = 'none' })
+          const start = (page - 1) * pageSize
+          filtered.slice(start, start + pageSize).forEach((r) => { r.style.display = '' })
+          if (!pager) return
+          if (total <= pageSize && !q) { pager.innerHTML = ''; pager.style.display = 'none'; return }
+          pager.style.display = ''
+          const from = total === 0 ? 0 : start + 1
+          const to = Math.min(start + pageSize, total)
+          pager.innerHTML =
+            '<span>' + from + '–' + to + ' de ' + total + '</span>' +
+            '<span class="flex items-center gap-2">' +
+            '<button type="button" data-tr-first class="tr-btn-xs"' + (page <= 1 ? ' disabled' : '') + '>« Inicio</button>' +
+            '<button type="button" data-tr-prev class="tr-btn-xs"' + (page <= 1 ? ' disabled' : '') + '>‹ Anterior</button>' +
+            '<button type="button" data-tr-next class="tr-btn-xs"' + (page >= pages ? ' disabled' : '') + '>Siguiente ›</button>' +
+            '<button type="button" data-tr-last class="tr-btn-xs"' + (page >= pages ? ' disabled' : '') + '>Fin »</button>' +
+            '</span>'
+          const first = pager.querySelector('[data-tr-first]')
+          const prev = pager.querySelector('[data-tr-prev]')
+          const next = pager.querySelector('[data-tr-next]')
+          const last = pager.querySelector('[data-tr-last]')
+          if (first) first.addEventListener('click', () => { if (page > 1) { page = 1; apply() } })
+          if (prev) prev.addEventListener('click', () => { if (page > 1) { page--; apply() } })
+          if (next) next.addEventListener('click', () => { if (page < pages) { page++; apply() } })
+          if (last) last.addEventListener('click', () => { if (page < pages) { page = pages; apply() } })
+        }
+        if (search) search.addEventListener('input', () => { page = 1; apply() })
+        apply()
+      }
+      document.querySelectorAll('[data-tr-list]').forEach(setupTrList)
     })()
   </script>
 
@@ -495,6 +948,32 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-rule { border-color: var(--rule); }
     .tr-link { color: #60a5fa; }
     .tr-link:hover { text-decoration: underline; }
+    .tr-btn-xs { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 0.375rem; font-size: 0.6875rem; font-weight: 500; border: 1px solid rgba(148,163,184,0.35); color: #60a5fa; background: transparent; cursor: pointer; }
+    .tr-btn-xs:hover { background: rgba(148,163,184,0.12); }
+    .tr-btn-xs-danger { color: #f87171; border-color: rgba(248,113,113,0.4); }
+    .tr-btn-xs-danger:hover { background: rgba(248,113,113,0.12); }
+    .tr-btn-xs:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Action buttons (replace link-style) */
+    .tr-btn-action { display: inline-flex; align-items: center; gap: 4px; padding: 5px 11px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: 1px solid var(--rule); background: var(--ink-3); color: var(--fore-dim); transition: background .15s, color .15s, border-color .15s; }
+    .tr-btn-action:hover { background: var(--ink-4); color: var(--fore); }
+    .tr-btn-action-primary { background: var(--btn-bg); border-color: var(--btn-edge); color: #fff; }
+    .tr-btn-action-primary:hover { background: var(--btn-bg-hover); }
+
+    /* Icon action buttons (PDF/Excel/TXT/Anular/Ver) — colour per intent */
+    .tr-icon-btn { display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+    .tr-icon-btn svg { width: 15px; height: 15px; }
+    .tr-icon-pdf  { color: #dc2626; background: color-mix(in srgb, #dc2626 10%, transparent); border-color: color-mix(in srgb, #dc2626 28%, transparent); }
+    .tr-icon-pdf:hover  { background: color-mix(in srgb, #dc2626 20%, transparent); }
+    .tr-icon-xls  { color: #059669; background: color-mix(in srgb, #059669 12%, transparent); border-color: color-mix(in srgb, #059669 28%, transparent); }
+    .tr-icon-xls:hover  { background: color-mix(in srgb, #059669 22%, transparent); }
+    .tr-icon-txt  { color: #2563eb; background: color-mix(in srgb, #2563eb 10%, transparent); border-color: color-mix(in srgb, #2563eb 28%, transparent); }
+    .tr-icon-txt:hover  { background: color-mix(in srgb, #2563eb 20%, transparent); }
+    .tr-icon-del  { color: #dc2626; background: color-mix(in srgb, #dc2626 10%, transparent); border-color: color-mix(in srgb, #dc2626 28%, transparent); }
+    .tr-icon-del:hover  { background: color-mix(in srgb, #dc2626 22%, transparent); }
+    .tr-icon-view { color: var(--icon-edit-fg); background: var(--icon-edit-bg); border-color: color-mix(in srgb, #2563eb 28%, transparent); }
+    .tr-icon-view:hover { background: var(--icon-edit-bg-hover); color: var(--icon-edit-fg-hover); }
+
     .tr-input {
       background: var(--ink-2); border: 1px solid var(--rule); color: var(--fore);
     }
@@ -527,6 +1006,11 @@ const today = new Date().toISOString().slice(0, 10)
     .tr-method-ach   { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; background: rgba(16,185,129,0.18); color: #34d399; }
     .tr-method-check { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; background: rgba(96,165,250,0.18); color: #60a5fa; }
     .tr-method-cash  { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 0.25rem; font-size: 0.6875rem; font-weight: 500; background: rgba(156,163,175,0.18); color: var(--mute); }
+    .tr-status-badge { display: inline-block; padding: 0.125rem 0.5rem; border-radius: 9999px; font-size: 0.6875rem; font-weight: 500; }
+    .tr-status-draft     { background: rgba(156,163,175,0.18); color: var(--mute); }
+    .tr-status-open      { background: rgba(96,165,250,0.18); color: #60a5fa; }
+    .tr-status-closed    { background: rgba(16,185,129,0.18); color: #34d399; }
+    .tr-status-cancelled { background: rgba(248,113,113,0.18); color: #f87171; }
 
     [data-theme='light'] .tr-card { background: #ffffff; }
     [data-theme='light'] .tr-table thead tr { background: #f9fafb; }
@@ -542,5 +1026,26 @@ const today = new Date().toISOString().slice(0, 10)
     [data-theme='light'] .tr-method-ach   { background: #d1fae5; color: #065f46; }
     [data-theme='light'] .tr-method-check { background: #dbeafe; color: #1d4ed8; }
     [data-theme='light'] .tr-method-cash  { background: #f3f4f6; color: #6b7280; }
+
+    /* ── Modal: anular cheque (razón) ───────────────────────── */
+    .void-modal { border: none; background: transparent; padding: 0; max-width: 440px; width: calc(100% - 32px); color: var(--fore); }
+    .void-modal::backdrop { background: rgba(7,16,31,0.62); backdrop-filter: blur(2px); }
+    [data-theme='light'] .void-modal::backdrop { background: rgba(12,20,36,0.45); }
+    .void-modal-card { background: var(--ink-2); border: 1px solid var(--rule); border-radius: 12px; padding: 22px; box-shadow: 0 24px 60px rgba(0,0,0,0.45); font-family: var(--f-sans); }
+    .void-modal-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; background: rgba(224,107,92,0.18); color: var(--err); margin-bottom: 12px; }
+    .void-modal-title { margin: 0 0 6px; font-family: var(--f-display); font-size: 18px; font-weight: 400; letter-spacing: -0.01em; color: var(--fore); }
+    .void-modal-sub { margin: 0 0 16px; font-size: 13px; line-height: 1.5; color: var(--fore-dim); }
+    .void-modal-sub strong { color: var(--fore); font-weight: 600; }
+    .void-modal-label { display: block; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--mute-2); margin-bottom: 6px; }
+    .void-modal-textarea { width: 100%; box-sizing: border-box; background: var(--ink-3); border: 1px solid var(--rule); border-radius: 8px; color: var(--fore); font-family: var(--f-sans); font-size: 14px; line-height: 1.5; padding: 10px 12px; resize: vertical; min-height: 76px; }
+    .void-modal-textarea::placeholder { color: var(--mute); }
+    .void-modal-textarea:focus { outline: none; border-color: var(--navy-hi); box-shadow: 0 0 0 2px var(--navy-soft); }
+    .void-modal-error { margin: 8px 0 0; font-size: 12px; color: var(--err); }
+    .void-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .void-modal-btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: var(--f-sans); transition: background 140ms ease, color 140ms ease; }
+    .void-modal-btn-ghost { background: transparent; border: 1px solid var(--rule); color: var(--fore-dim); }
+    .void-modal-btn-ghost:hover { background: var(--ink-4); color: var(--fore); }
+    .void-modal-btn-danger { background: var(--btn-danger-bg); border: 1px solid var(--btn-edge); color: #fff; }
+    .void-modal-btn-danger:hover { background: var(--btn-danger-bg-hover); }
   </style>
 </AppLayout>

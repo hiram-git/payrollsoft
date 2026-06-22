@@ -39,7 +39,7 @@ let error = ''
 try {
   const [rRes, pRes] = await Promise.all([
     fetch(`${API_URL}/treasury/runs`, { headers }),
-    fetch(`${API_URL}/payrolls?status=closed`, { headers }).catch(() => null),
+    fetch(`${API_URL}/payroll?status=closed`, { headers }).catch(() => null),
   ])
   if (rRes.status === 401) return Astro.redirect('/login')
   if (rRes.ok) runs = ((await rRes.json()) as { data: PaymentRun[] }).data ?? []
@@ -84,10 +84,7 @@ function fmtMoney(s: string): string {
     <div class="mb-6 flex items-end justify-between gap-2">
       <div>
         <h1 class="text-xl font-semibold tracking-tight tr-title">Tesorería</h1>
-        <p class="text-sm mt-0.5 tr-subtitle">
-          {runs.length} {runs.length === 1 ? 'lote' : 'lotes'} de pago — gestiona el pago efectivo
-          después del cierre de una planilla.
-        </p>
+        <p class="text-sm mt-0.5 tr-subtitle">Generación de Cheques y ACH por planilla cerrada</p>
       </div>
       {canWrite && (
         <button type="button" id="btn-new-run" class="tr-btn-primary px-3.5 py-2 rounded-md text-sm font-medium">
@@ -97,7 +94,7 @@ function fmtMoney(s: string): string {
     </div>
 
     {flash === 'created' && (
-      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Lote de pago creado.</div>
+      <div class="mb-4 rounded-md bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700">Generación de pagos creada.</div>
     )}
     {flash === 'error' && (
       <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{flashMsg || 'Error.'}</div>
@@ -143,7 +140,7 @@ function fmtMoney(s: string): string {
     <section class="tr-card border rounded-lg overflow-hidden">
       {runs.length === 0 ? (
         <div class="py-16 text-center">
-          <p class="text-sm tr-subtitle">No hay corridas registradas.</p>
+          <p class="text-sm tr-subtitle">No hay generaciones de pagos registradas.</p>
         </div>
       ) : (
         <table class="tr-table w-full text-sm">
@@ -170,7 +167,9 @@ function fmtMoney(s: string): string {
                 <td class="px-5 py-3 align-top text-right font-mono text-xs tr-cell">{fmtMoney(r.checkTotal)}</td>
                 <td class="px-5 py-3 align-top text-xs tr-mute whitespace-nowrap">{fmtDate(r.createdAt)}</td>
                 <td class="px-5 py-3 align-top text-right">
-                  <a href={`/treasury/${r.id}`} class="tr-btn-ghost">Ver detalle</a>
+                  <a href={`/treasury/${r.id}`} class="tr-icon-btn tr-icon-view" title="Ver detalle" aria-label="Ver detalle de la generación">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+                  </a>
                 </td>
               </tr>
             ))}
@@ -221,17 +220,24 @@ function fmtMoney(s: string): string {
       text-transform: uppercase; letter-spacing: 0.04em;
     }
     .tr-status-draft     { background: rgba(156,163,175,0.18); color: var(--mute); }
-    .tr-status-open      { background: rgba(245,158,11,0.18); color: #fbbf24; }
-    .tr-status-closed    { background: rgba(16,185,129,0.18); color: #34d399; }
+    .tr-status-open      { background: var(--navy); color: #fff; }
+    .tr-status-closed    { background: #dc2626; color: #fff; }
     .tr-status-cancelled { background: rgba(248,113,113,0.18); color: #f87171; }
+
+    /* Icon action button (Ver detalle) */
+    .tr-icon-btn { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; border: 1px solid var(--rule); background: transparent; cursor: pointer; text-decoration: none; transition: background .15s, color .15s, border-color .15s; }
+    .tr-icon-btn svg { width: 16px; height: 16px; }
+    .tr-icon-view { color: #2563eb; background: color-mix(in srgb, #2563eb 10%, transparent); border-color: color-mix(in srgb, #2563eb 28%, transparent); }
+    .tr-icon-view:hover { background: color-mix(in srgb, #2563eb 22%, transparent); color: #1d4ed8; }
+
     [data-theme='light'] .tr-card { background: #ffffff; }
     [data-theme='light'] .tr-table thead tr { background: #f9fafb; }
     [data-theme='light'] .tr-table tbody tr { background: #ffffff; }
     [data-theme='light'] .tr-table tbody tr:hover { background: #f9fafb; }
     [data-theme='light'] .tr-link { color: #2563eb; }
     [data-theme='light'] .tr-status-draft     { background: #f3f4f6; color: #6b7280; }
-    [data-theme='light'] .tr-status-open      { background: #fef3c7; color: #92400e; }
-    [data-theme='light'] .tr-status-closed    { background: #d1fae5; color: #065f46; }
+    [data-theme='light'] .tr-status-open      { background: var(--navy); color: #fff; }
+    [data-theme='light'] .tr-status-closed    { background: #dc2626; color: #fff; }
     [data-theme='light'] .tr-status-cancelled { background: #fee2e2; color: #991b1b; }
   </style>
 </AppLayout>

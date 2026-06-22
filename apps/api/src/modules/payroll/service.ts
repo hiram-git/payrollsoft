@@ -383,7 +383,9 @@ async function runGeneration(db: AnyDb, id: string, phase: 'generate' | 'regener
           positionCache.set(emp.positionId, await getPosition(db, emp.positionId))
         }
         const pos = positionCache.get(emp.positionId)
-        if (pos) effectiveBaseSalary = Number(pos.salary)
+        // Position salary is the ceiling; the employee's editable baseSalary
+        // is what gets paid, capped so it can never exceed the position.
+        if (pos) effectiveBaseSalary = Math.min(Number(emp.baseSalary), Number(pos.salary))
       }
 
       // Attendance from pre-loaded map (O(1))
@@ -688,7 +690,8 @@ export async function regenerateEmployeeService(db: AnyDb, payrollId: string, li
   let effectiveBaseSalaryForRegen = Number(emp.baseSalary)
   if (companyConfigSingle?.institutionType === 'publica' && emp.positionId) {
     const pos = await getPosition(db, emp.positionId)
-    if (pos) effectiveBaseSalaryForRegen = Number(pos.salary)
+    // Cap the editable baseSalary at the position's salary (see generate()).
+    if (pos) effectiveBaseSalaryForRegen = Math.min(Number(emp.baseSalary), Number(pos.salary))
   }
 
   const creditorIdsWithConceptsSingle = new Set(

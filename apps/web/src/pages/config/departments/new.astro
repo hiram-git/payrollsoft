@@ -1,4 +1,5 @@
 ---
+import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
 import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
@@ -44,7 +45,7 @@ const errorMessages: Record<string, string> = {
     </div>
 
     {error && (
-      <div class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+      <div data-server-toast="error" class="mb-6 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
         {errorMessages[error] ?? 'Ocurrió un error inesperado.'}
       </div>
     )}
@@ -82,6 +83,7 @@ const errorMessages: Record<string, string> = {
       </div>
     </form>
   </div>
+  <ServerToastBridge />
 </AppLayout>
 
 <style>

@@ -1,4 +1,5 @@
 import {
+  budgetItems,
   createPosition,
   deactivatePosition,
   getCargoById,
@@ -9,6 +10,7 @@ import {
   listPositions,
   updatePosition,
 } from '@payroll/db'
+import { and, eq, inArray } from 'drizzle-orm'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -27,14 +29,50 @@ export type PositionInput = {
   code: string
   name: string
   salary: string
-  cargoId?: string | null
-  departamentoId?: string | null
-  funcionId?: string | null
-  partidaId?: string | null
+  overtimeAmount?: string
+  representationAmount?: string
+  jobTitleId?: string | null
+  departmentId?: string | null
+  budgetItemId?: string | null
+  overtimeBudgetItemId?: string | null
+  representationBudgetItemId?: string | null
+  thirteenthMonthBudgetItemId?: string | null
   status?: 'en_uso' | 'vacante'
 }
 
 const VALID_STATUS = new Set(['en_uso', 'vacante'])
+
+/**
+ * Every budget item (partida) referenced by a position must exist and be
+ * active. Returns an error result when any referenced id is unknown or
+ * inactive, otherwise null.
+ */
+async function validateBudgetItems(
+  db: AnyDb,
+  input: Partial<PositionInput>
+): Promise<{ error: 'invalid_budget_item'; message: string } | null> {
+  const referenced = [
+    input.budgetItemId,
+    input.overtimeBudgetItemId,
+    input.representationBudgetItemId,
+    input.thirteenthMonthBudgetItemId,
+  ].filter((id): id is string => Boolean(id))
+  if (referenced.length === 0) return null
+  const rows = await db
+    .select({ id: budgetItems.id })
+    .from(budgetItems)
+    .where(and(inArray(budgetItems.id, referenced), eq(budgetItems.isActive, true)))
+  const activeIds = new Set(rows.map((b: { id: string }) => b.id))
+  for (const id of referenced) {
+    if (!activeIds.has(id)) {
+      return {
+        error: 'invalid_budget_item',
+        message: 'Una de las partidas presupuestarias seleccionadas no existe o está inactiva',
+      }
+    }
+  }
+  return null
+}
 
 /**
  * Returns whether `code` is free for use. Used by the create/edit forms
@@ -61,6 +99,8 @@ function normalisePositionInput<T extends Partial<PositionInput>>(input: T): T {
 }
 
 export async function createPositionService(db: AnyDb, input: PositionInput) {
+  const budgetError = await validateBudgetItems(db, input)
+  if (budgetError) return { success: false, ...budgetError }
   try {
     const data = await createPosition(db, normalisePositionInput(input))
     return { success: true, data }
@@ -76,6 +116,8 @@ export async function createPositionService(db: AnyDb, input: PositionInput) {
 export async function updatePositionService(db: AnyDb, id: string, input: Partial<PositionInput>) {
   const existing = await getPosition(db, id)
   if (!existing) return { success: false, error: 'not_found', message: 'Posición no encontrada' }
+  const budgetError = await validateBudgetItems(db, input)
+  if (budgetError) return { success: false, ...budgetError }
   try {
     const data = await updatePosition(db, id, normalisePositionInput(input))
     return { success: true, data }

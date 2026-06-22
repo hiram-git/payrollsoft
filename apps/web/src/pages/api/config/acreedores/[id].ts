@@ -18,6 +18,16 @@ export const POST: APIRoute = async ({ request, params, cookies, redirect }) => 
       return redirect(`/config/acreedores/${id}?error=missing-fields`)
     }
 
+    const str = (k: string): string | null => {
+      const v = form.get(k)?.toString().trim()
+      return v ? v : null
+    }
+    const paymentMethod = (form.get('paymentMethod')?.toString() || 'check') as
+      | 'ach'
+      | 'check'
+      | 'cash'
+    const isAch = paymentMethod === 'ach'
+
     let res: Response
     try {
       res = await fetch(`${API_URL}/creditors/${id}`, {
@@ -27,7 +37,14 @@ export const POST: APIRoute = async ({ request, params, cookies, redirect }) => 
           Cookie: `auth=${authCookie}`,
           'X-Tenant': TENANT,
         },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          paymentMethod,
+          bankId: isAch ? str('bankId') : null,
+          accountNumber: isAch ? str('accountNumber') : null,
+          accountType: isAch ? str('accountType') : null,
+          beneficiaryName: str('beneficiaryName'),
+        }),
       })
     } catch {
       return redirect(`/config/acreedores/${id}?error=server-error`)

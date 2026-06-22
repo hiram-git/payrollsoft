@@ -183,7 +183,7 @@ const isCuentasTab = activeTab === 'cuentas'
                         <form
                           method="POST"
                           action={`/api/config/chart-of-accounts/${item.id}`}
-                          onsubmit="return confirm('¿Dar de baja esta cuenta contable?')"
+                          data-confirm-submit="¿Dar de baja esta cuenta contable?" data-confirm-title="Dar de baja cuenta" data-confirm-tone="danger" data-confirm-label="Dar de baja"
                           class="tooltip-wrap"
                         >
                           <input type="hidden" name="_method" value="DELETE" />
@@ -342,7 +342,7 @@ const isCuentasTab = activeTab === 'cuentas'
                         <form
                           method="POST"
                           action={`/api/config/catalogo-conceptos/${currentTab.kind}/${item.id}`}
-                          onsubmit="return confirm('¿Eliminar este registro?')"
+                          data-confirm-submit="¿Eliminar este registro?" data-confirm-title="Eliminar registro" data-confirm-tone="danger" data-confirm-label="Eliminar"
                           class="tooltip-wrap"
                         >
                           <input type="hidden" name="_method" value="DELETE" />
@@ -448,11 +448,14 @@ const isCuentasTab = activeTab === 'cuentas'
   /* Row actions — shared layout for both view-mode and edit-mode icon
      buttons so the column width (w-24) is identical in both states. */
   .row-actions { display: flex; align-items: center; justify-content: flex-end; gap: .25rem; }
-  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: none; background: transparent; color: var(--mute); cursor: pointer; transition: background .15s, color .15s; }
-  .action-btn:hover { background: var(--navy-soft); color: var(--navy-hi); }
-  .action-ok:hover     { background: color-mix(in srgb, var(--ok) 14%, transparent);  color: var(--ok); }
+  .action-btn  { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 6px; border: 1px solid var(--rule); background: var(--icon-edit-bg); color: var(--icon-edit-fg); cursor: pointer; transition: background .15s, color .15s; }
+  .action-btn:hover    { background: var(--icon-edit-bg-hover); color: var(--icon-edit-fg-hover); }
+  .action-ok           { background: color-mix(in srgb, var(--ok) 14%, transparent);  color: var(--ok); }
+  .action-ok:hover     { background: color-mix(in srgb, var(--ok) 26%, transparent);  color: var(--ok); }
+  .action-del          { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+  .action-del:hover    { background: color-mix(in srgb, var(--err) 24%, transparent); color: var(--err); }
+  .action-cancel       { background: transparent; color: var(--mute); }
   .action-cancel:hover { background: var(--ink-4); color: var(--fore-dim); }
-  .action-del:hover    { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
 
   /* Custom tooltip — matches the status-pill / card tokens from the
      design system so it reads as "part of" the surface, not a browser
@@ -482,9 +485,9 @@ const isCuentasTab = activeTab === 'cuentas'
   .tooltip-wrap:focus-within > .tooltip { opacity: 1; }
 
   /* Buttons */
-  .btn-primary { background: var(--navy); color: #fff; border: none; padding: .5rem 1rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: background .15s; }
+  .btn-primary { background: var(--navy); color: #fff; border: 1px solid var(--btn-edge); padding: .5rem 1rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: background .15s; }
   .btn-primary:hover { background: var(--navy-hi); }
-  .btn-ok      { background: var(--ok); color: #fff; border: none; padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
+  .btn-ok      { background: var(--ok); color: #fff; border: 1px solid var(--btn-edge); padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; font-weight: 600; cursor: pointer; transition: opacity .15s; white-space: nowrap; }
   .btn-ok:hover { opacity: .88; }
   .btn-ghost   { background: transparent; color: var(--mute-2); border: 1px solid var(--rule); padding: .5rem .875rem; border-radius: 6px; font-size: .8125rem; cursor: pointer; transition: background .15s; white-space: nowrap; }
   .btn-ghost:hover { background: var(--ink-4); }
