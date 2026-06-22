@@ -1,6 +1,6 @@
 # @payroll/desktop
 
-Shell de escritorio (Tauri 2) para PayrollSoft. Es un wrapper delgado: abre
+Shell de escritorio (Tauri 2) para RCG SOFTRIX. Es un wrapper delgado: abre
 una ventana nativa que carga la URL del web app (`apps/web`). La app web sigue
 disponible desde el navegador; el escritorio es un canal adicional, no un
 reemplazo.
@@ -88,7 +88,7 @@ El instalador queda en `apps/desktop/src-tauri/target/release/bundle/msi/`.
 
 Esto da el **override sin recompilar** para installs distribuidos: si IT
 necesita repuntar un `.msi` ya instalado a otro servidor, coloca un `.env` en
-`%APPDATA%\PayrollSoft\.env` (o junto al `.exe`) con `DESKTOP_URL=...` y manda.
+`%APPDATA%\RCG SOFTRIX\.env` (o junto al `.exe`) con `DESKTOP_URL=...` y manda.
 
 ### Build normal (sin hornear, p. ej. para dev/QA en Windows)
 
