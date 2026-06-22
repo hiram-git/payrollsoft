@@ -13,8 +13,11 @@ import type { CapacitorConfig } from '@capacitor/cli'
 //
 // cleartext: permite tráfico http:// a nivel de red Android (API en LAN).
 const config: CapacitorConfig = {
+  // appId estable (identidad interna del paquete) — no se cambia con el
+  // rebrand para no romper la app instalada ni el proyecto nativo. El
+  // nombre visible sí refleja la marca RCG SOFTRIX.
   appId: 'com.payrollsoft.marcaciones',
-  appName: 'PayrollSoft Marcaciones',
+  appName: 'RCG SOFTRIX Marcaciones',
   webDir: 'dist',
   server: {
     androidScheme: 'http',

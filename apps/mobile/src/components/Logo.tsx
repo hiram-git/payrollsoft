@@ -1,53 +1,54 @@
 /**
- * Logotipo de PayrollSoft, portado del sistema web (AuthLayout/AppLayout):
- * un cuadro navy (#003087, radio 4px) con la inicial "P" en serif blanco,
- * acompañado del wordmark "PayrollSoft" y un subtítulo opcional.
+ * Logotipo de RCG SOFTRIX, portado del sistema web (AppLayout/AuthLayout):
+ * el isotipo oficial (degradado verde→negro) sobre un plato blanco con
+ * padding y un hairline sutil — la misma presentación que usa el web para
+ * que el degradado sea legible sobre cualquier fondo — acompañado del
+ * wordmark "RCG SOFTRIX" y un subtítulo opcional.
  *
- * Autocontenido: no depende de fuentes de red (la app debe verse bien
- * sin conexión), así que la "P" usa la pila serif del sistema —
- * equivalente al fallback del web (`'Fraunces','Times New Roman',serif`).
+ * El isotipo es un asset real (`/brand/rcg-mark.png`) empaquetado en el
+ * APK, así que se ve igual sin conexión.
  */
 
 type Props = {
-  /** Tamaño del cuadro de la marca en px. Default 40. */
+  /** Tamaño del plato de la marca en px. Default 40. */
   size?: number
-  /** Muestra el wordmark "PayrollSoft" junto a la marca. Default true. */
+  /** Muestra el wordmark "RCG SOFTRIX" junto a la marca. Default true. */
   withWordmark?: boolean
   /** Subtítulo bajo el wordmark. Pásalo vacío para ocultarlo. */
   subtitle?: string
 }
 
-const NAVY = '#003087'
-
 export default function Logo({
   size = 40,
   withWordmark = true,
-  subtitle = 'Sistema de planillas',
+  subtitle = 'Recursos Humanos, Planilla y Asistencia',
 }: Props) {
+  const pad = Math.max(3, Math.round(size * 0.1))
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <div
-        aria-hidden="true"
         style={{
           width: size,
           height: size,
-          borderRadius: 4,
-          background: NAVY,
+          borderRadius: 6,
+          background: '#fff',
+          padding: pad,
+          boxShadow: '0 0 0 1px rgba(0,0,0,0.06)',
           display: 'grid',
           placeItems: 'center',
-          color: '#fff',
-          fontFamily: "'Fraunces','Times New Roman',serif",
-          fontWeight: 400,
-          fontSize: Math.round(size * 0.55),
-          letterSpacing: '-0.02em',
           flexShrink: 0,
+          boxSizing: 'border-box',
         }}
       >
-        P
+        <img
+          src="/brand/rcg-mark.png"
+          alt="RCG SOFTRIX"
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        />
       </div>
       {withWordmark && (
         <div style={{ lineHeight: 1.2 }}>
-          <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: '0.02em' }}>PayrollSoft</div>
+          <div style={{ fontWeight: 600, fontSize: 16, letterSpacing: '0.02em' }}>RCG SOFTRIX</div>
           {subtitle && (
             <div style={{ fontSize: 12, color: 'var(--ion-color-medium, #7a8499)' }}>
               {subtitle}

@@ -53,7 +53,7 @@ export default function ModeSelect() {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>PayrollSoft Marcaciones</IonTitle>
+          <IonTitle>RCG SOFTRIX Marcaciones</IonTitle>
         </IonToolbar>
       </IonHeader>
       <IonContent className="ion-padding">
