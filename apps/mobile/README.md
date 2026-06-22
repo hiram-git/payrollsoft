@@ -1,4 +1,4 @@
-# @payroll/mobile — App de marcaciones (Ionic React + Capacitor)
+# @payroll/mobile — RCG SOFTRIX · App de marcaciones (Ionic React + Capacitor)
 
 Cliente móvil para capturar marcaciones de asistencia (_punches_). Habla
 **directo con la API Elysia** (`apps/api`), sin pasar por el BFF de Astro
