@@ -32,6 +32,7 @@ const EmployeeBody = t.Object({
     t.Union([t.Literal('biweekly'), t.Literal('monthly'), t.Literal('weekly')])
   ),
   contractType: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
+  contractEndDate: t.Optional(t.Nullable(t.String())),
   payrollTypeIds: t.Optional(t.Array(t.String())),
   customFields: t.Optional(t.Record(t.String(), t.Unknown())),
   // Personal flags + media (Phase 2.D)
@@ -90,6 +91,7 @@ const EmployeeUpdateBody = t.Object({
   collaboratorNumber: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   externalUserRef: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
   contractType: t.Optional(t.Nullable(t.String({ maxLength: 40 }))),
+  contractEndDate: t.Optional(t.Nullable(t.String())),
   irKey: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
   shiftId: t.Optional(t.Nullable(t.String())),
   weeklyBaseHours: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),

@@ -53,6 +53,7 @@ export const employees = pgTable('employees', {
   collaboratorNumber: varchar('collaborator_number', { length: 20 }),
   externalUserRef: varchar('external_user_ref', { length: 100 }),
   contractType: varchar('contract_type', { length: 40 }),
+  contractEndDate: date('contract_end_date'),
   irKey: varchar('ir_key', { length: 20 }),
   shiftId: uuid('shift_id'),
   weeklyBaseHours: varchar('weekly_base_hours', { length: 10 }),

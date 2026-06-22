@@ -361,7 +361,7 @@ const errorMessages: Record<string, string> = {
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Tipo de contrato *</label>
-              <select name="contractType" class="input" required>
+              <select name="contractType" id="contractTypeSelect" class="input" required>
                 <option value="">—</option>
                 <option value="permanent">Permanente</option>
                 <option value="transitory">Contrato transitorio</option>
@@ -370,6 +370,11 @@ const errorMessages: Record<string, string> = {
                 <option value="deputy">Contrato diputado</option>
                 <option value="interim">Contrato interino</option>
               </select>
+            </div>
+            <div id="contractEndWrap" style="display:none">
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fin de contrato</label>
+              <input type="date" name="contractEndDate" id="contractEndInput" class="input" />
+              <p class="mt-1 text-xs text-gray-500">Fecha de término del contrato (para alertas de vencimiento).</p>
             </div>
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Método de pago *</label>
@@ -484,6 +489,22 @@ const errorMessages: Record<string, string> = {
 </style>
 
 <script is:inline>
+  // "Fin de contrato" solo aplica a contratos a término (cualquier tipo
+  // excepto Permanente). Se muestra/oculta según el tipo seleccionado.
+  ;(function () {
+    const sel = document.getElementById('contractTypeSelect')
+    const wrap = document.getElementById('contractEndWrap')
+    const input = document.getElementById('contractEndInput')
+    if (!sel || !wrap) return
+    function sync() {
+      const show = sel.value !== '' && sel.value !== 'permanent'
+      wrap.style.display = show ? '' : 'none'
+      if (!show && input) input.value = ''
+    }
+    sel.addEventListener('change', sync)
+    sync()
+  })()
+
   function switchTab(tab, btn) {
     document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none')
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))

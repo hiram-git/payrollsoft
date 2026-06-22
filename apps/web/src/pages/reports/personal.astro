@@ -31,6 +31,7 @@ type ApiEmployee = {
   payFrequency: string | null
   hireDate: string | null
   contractType: string | null
+  contractEndDate: string | null
   birthDate: string | null
   isActive: boolean
 }
@@ -165,8 +166,7 @@ const CONTRACT_LABELS: Record<string, string> = {
 }
 
 // ── Contratos por vencer ────────────────────────────────────────────────────
-// Vencimiento = fecha de ingreso + 1 año. Se listan los que vencen en ≤30 días
-// (a partir de hoy), excluyendo contratos permanentes y transitorios.
+// Se listan los empleados con "Fin de contrato" dentro de los próximos 30 días.
 type ContractRow = {
   code: string
   name: string
@@ -177,7 +177,6 @@ type ContractRow = {
   expires: string
   daysLeft: number
 }
-const EXCLUDED_CONTRACTS = new Set(['permanent', 'transitory'])
 const todayUtc = new Date()
 const today0 = Date.UTC(todayUtc.getUTCFullYear(), todayUtc.getUTCMonth(), todayUtc.getUTCDate())
 const DAY_MS = 86_400_000
@@ -207,24 +206,20 @@ try {
     if (batch.length < PAGE_SIZE) break
   }
   for (const e of active) {
-    const hd = e.hireDate ? String(e.hireDate).slice(0, 10) : ''
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(hd)) continue
-    if (e.contractType && EXCLUDED_CONTRACTS.has(e.contractType)) continue
-    const y = Number(hd.slice(0, 4))
-    const m = Number(hd.slice(5, 7))
-    const d = Number(hd.slice(8, 10))
-    const expiresMs = Date.UTC(y + 1, m - 1, d)
+    const ced = e.contractEndDate ? String(e.contractEndDate).slice(0, 10) : ''
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ced)) continue
+    const expiresMs = Date.parse(`${ced}T00:00:00Z`)
+    if (Number.isNaN(expiresMs)) continue
     const daysLeft = Math.round((expiresMs - today0) / DAY_MS)
     if (daysLeft < 0 || daysLeft > 30) continue
-    const exp = new Date(expiresMs)
     contractsExpiring.push({
       code: e.code,
       name: `${e.firstName} ${e.lastName}`,
       department: e.department,
       position: e.position,
       contractType: e.contractType,
-      hireDate: hd,
-      expires: exp.toISOString().slice(0, 10),
+      hireDate: e.hireDate ? String(e.hireDate).slice(0, 10) : '—',
+      expires: ced,
       daysLeft,
     })
   }
@@ -576,7 +571,7 @@ const REQ_TYPE_LABELS: Record<string, string> = {
         )}
       </div>
       <p class="text-xs text-gray-500 mt-3">
-        Vencimiento = fecha de ingreso + 1 año. Excluye contratos permanentes y transitorios.
+        Basado en el campo «Fin de contrato» del empleado. Se listan los que vencen en los próximos 30 días.
       </p>
     </div>
 
