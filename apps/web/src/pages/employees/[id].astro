@@ -840,8 +840,8 @@ const freqLabel: Record<string, string> = {
               </select>
             </div>
             <div id="contractEndWrap" style={emp.contractType && emp.contractType !== 'permanent' ? '' : 'display:none'}>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Fin de contrato</label>
-              <input type="date" name="contractEndDate" id="contractEndInput" class="input" value={emp.contractEndDate ? String(emp.contractEndDate).slice(0, 10) : ''} />
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fin de contrato *</label>
+              <input type="date" name="contractEndDate" id="contractEndInput" class="input" required={!!(emp.contractType && emp.contractType !== 'permanent')} value={emp.contractEndDate ? String(emp.contractEndDate).slice(0, 10) : ''} />
               <p class="mt-1 text-xs text-gray-500">Fecha de término del contrato (para alertas de vencimiento).</p>
             </div>
             <div>
@@ -1823,11 +1823,16 @@ const freqLabel: Record<string, string> = {
     const wrap = document.getElementById('contractEndWrap')
     const input = document.getElementById('contractEndInput')
     if (!sel || !wrap) return
-    sel.addEventListener('change', function () {
+    function sync() {
       const show = sel.value !== '' && sel.value !== 'permanent'
       wrap.style.display = show ? '' : 'none'
-      if (!show && input) input.value = ''
-    })
+      if (input) {
+        input.required = show
+        if (!show) input.value = ''
+      }
+    }
+    sel.addEventListener('change', sync)
+    sync()
   })()
 
   // Auto-fill cargo/depto/salary from selected position (empresa pública).

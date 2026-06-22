@@ -372,7 +372,7 @@ const errorMessages: Record<string, string> = {
               </select>
             </div>
             <div id="contractEndWrap" style="display:none">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Fin de contrato</label>
+              <label class="block text-sm font-medium text-gray-700 mb-1">Fin de contrato *</label>
               <input type="date" name="contractEndDate" id="contractEndInput" class="input" />
               <p class="mt-1 text-xs text-gray-500">Fecha de término del contrato (para alertas de vencimiento).</p>
             </div>
@@ -499,7 +499,10 @@ const errorMessages: Record<string, string> = {
     function sync() {
       const show = sel.value !== '' && sel.value !== 'permanent'
       wrap.style.display = show ? '' : 'none'
-      if (!show && input) input.value = ''
+      if (input) {
+        input.required = show
+        if (!show) input.value = ''
+      }
     }
     sel.addEventListener('change', sync)
     sync()
