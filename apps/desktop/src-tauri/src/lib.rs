@@ -6,7 +6,6 @@ use tauri::{
 };
 use url::Url;
 
-const DEFAULT_URL: &str = "http://localhost:4321";
 const KIOSK_PATH: &str = "/kiosk";
 
 // Build-time baked configuration. When producing a distributable .msi the
@@ -18,8 +17,9 @@ const BAKED_URL: Option<&str> = option_env!("PAYROLL_DESKTOP_URL");
 const BAKED_ENABLED: Option<&str> = option_env!("PAYROLL_DESKTOP_ENABLED");
 const BAKED_MODE: Option<&str> = option_env!("PAYROLL_DESKTOP_MODE");
 
-/// Per-user override file for distributed installs: lets IT repoint a build
-/// without recompiling. Windows-only for v1 (`%APPDATA%\RCG SOFTRIX\.env`).
+/// Per-user override file for distributed installs: lets IT — or the in-app
+/// "Cambiar servidor" dialog — repoint a build without recompiling.
+/// Windows-only for v1 (`%APPDATA%\RCG SOFTRIX\.env`).
 fn config_override_path() -> Option<PathBuf> {
     std::env::var("APPDATA")
         .ok()
@@ -32,21 +32,16 @@ fn load_env() {
     // mutually exclusive in practice: distributed installs use the override
     // file / exe dir, the dev monorepo uses the CWD walk.
 
-    // 1. Per-user override (distributed installs).
     if let Some(path) = config_override_path() {
         let _ = dotenvy::from_path(&path);
     }
 
-    // 2. Next to the executable (distributed installs).
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             let _ = dotenvy::from_path(dir.join(".env"));
         }
     }
 
-    // 3. Walk up from the CWD looking for the first .env (dev monorepo). The
-    // shell is usually launched from the repo root, but `tauri dev` runs it
-    // from apps/desktop/src-tauri, so we walk upwards.
     let mut cursor: PathBuf = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     loop {
         let candidate = cursor.join(".env");
@@ -83,23 +78,95 @@ fn is_kiosk_mode() -> bool {
     resolve_mode().trim().eq_ignore_ascii_case("kiosk")
 }
 
-fn resolve_target_url() -> Result<Url, String> {
-    let raw = runtime_or_baked("DESKTOP_URL", BAKED_URL).unwrap_or_else(|| DEFAULT_URL.to_string());
+/// Resolved target URL or None when nothing is configured yet. None lets the
+/// boot screen show its first-run config form instead of refusing to launch.
+fn resolve_target_url() -> Option<Url> {
+    let raw = runtime_or_baked("DESKTOP_URL", BAKED_URL)?;
     let raw = raw.trim();
     if raw.is_empty() {
-        return Err("DESKTOP_URL is set but empty".into());
+        return None;
     }
-    let mut url =
-        Url::parse(raw).map_err(|e| format!("DESKTOP_URL is not a valid URL ({raw}): {e}"))?;
-
-    // In kiosk mode the shell points the WebView straight at the
-    // facial-recognition kiosk page so the device boots into the marcacion UI.
+    let mut url = Url::parse(raw).ok()?;
     if is_kiosk_mode() {
         url.set_path(KIOSK_PATH);
     }
-
-    Ok(url)
+    Some(url)
 }
+
+// ─── Tauri commands ────────────────────────────────────────────────────────
+// Invoked from src/index.html via window.__TAURI_INTERNALS__.invoke.
+
+#[tauri::command]
+fn current_url() -> String {
+    resolve_target_url()
+        .map(|u| u.to_string())
+        .unwrap_or_default()
+}
+
+#[tauri::command]
+fn save_desktop_url(url: String) -> Result<(), String> {
+    let trimmed = url.trim();
+    let parsed = Url::parse(trimmed).map_err(|e| format!("URL inválida: {e}"))?;
+
+    let dir = config_override_path()
+        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+        .ok_or_else(|| "No se pudo resolver %APPDATA% (¿estás en Windows?)".to_string())?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("No se pudo crear el directorio de configuración: {e}"))?;
+    let path = dir.join(".env");
+
+    // Preserve any other keys the operator may have placed in the override
+    // .env (DESKTOP_MODE, DESKTOP_ENABLED, etc.) — only DESKTOP_URL is rewritten.
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+    let mut lines: Vec<String> = Vec::new();
+    let mut updated = false;
+    for line in existing.lines() {
+        if line.trim_start().starts_with("DESKTOP_URL=") {
+            lines.push(format!("DESKTOP_URL={}", parsed.as_str()));
+            updated = true;
+        } else {
+            lines.push(line.to_string());
+        }
+    }
+    if !updated {
+        lines.push(format!("DESKTOP_URL={}", parsed.as_str()));
+    }
+    let body = format!("{}\n", lines.join("\n"));
+    std::fs::write(&path, body).map_err(|e| format!("No se pudo escribir el archivo .env: {e}"))?;
+
+    // Reflect in the process env so current_url() and the menu's "Ir al inicio"
+    // pick up the new value without restarting the app.
+    std::env::set_var("DESKTOP_URL", parsed.as_str());
+    Ok(())
+}
+
+#[tauri::command]
+fn apply_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let parsed: Url = url
+        .trim()
+        .parse()
+        .map_err(|e: url::ParseError| format!("URL inválida: {e}"))?;
+    let main = app
+        .get_webview_window("main")
+        .ok_or_else(|| "Ventana principal no disponible".to_string())?;
+    main.navigate(parsed)
+        .map_err(|e| format!("Error al navegar: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
+fn close_config_window(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("config") {
+        let _ = w.close();
+    }
+}
+
+// ─── Menu ──────────────────────────────────────────────────────────────────
 
 fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let about = AboutMetadata {
@@ -113,6 +180,14 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         "Archivo",
         true,
         &[
+            &MenuItem::with_id(
+                app,
+                "config",
+                "Cambiar servidor…",
+                true,
+                Some("CmdOrCtrl+,"),
+            )?,
+            &PredefinedMenuItem::separator(app)?,
             &MenuItem::with_id(app, "reload", "Recargar", true, Some("CmdOrCtrl+R"))?,
             &MenuItem::with_id(app, "home", "Ir al inicio", true, Some("CmdOrCtrl+H"))?,
             &PredefinedMenuItem::separator(app)?,
@@ -177,32 +252,24 @@ pub fn run() {
         std::process::exit(0);
     }
 
-    let target = match resolve_target_url() {
-        Ok(u) => u,
-        Err(e) => {
-            eprintln!("[payroll-desktop] {e}");
-            std::process::exit(1);
-        }
-    };
+    match resolve_target_url() {
+        Some(u) => eprintln!("[payroll-desktop] target: {u}"),
+        None => eprintln!("[payroll-desktop] target not configured — boot screen will prompt"),
+    }
 
-    eprintln!("[payroll-desktop] target: {target}");
-
-    let target_str = target.to_string();
-    let target_for_menu = target_str.clone();
     let kiosk = is_kiosk_mode();
 
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            current_url,
+            save_desktop_url,
+            apply_url,
+            quit_app,
+            close_config_window,
+        ])
         .setup(move |app| {
             let menu = build_menu(app.handle())?;
             app.set_menu(menu)?;
-
-            // Inject the target URL into the boot page so it can probe the
-            // server reachability before navigating away. Runs on every page
-            // load; only the boot page reads window.__PAYROLL_TARGET__.
-            let init_script = format!(
-                "window.__PAYROLL_TARGET__ = {};",
-                serde_json::to_string(&target_str).unwrap_or_else(|_| "\"\"".into())
-            );
 
             let window =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
@@ -212,7 +279,6 @@ pub fn run() {
                     .resizable(true)
                     .fullscreen(kiosk)
                     .visible(false)
-                    .initialization_script(&init_script)
                     .build()?;
 
             window.show()?;
@@ -225,12 +291,26 @@ pub fn run() {
                 }
             }
             "home" => {
-                if let Some(win) = app.get_webview_window("main") {
-                    let js = format!(
-                        "location.replace({})",
-                        serde_json::to_string(&target_for_menu).unwrap_or_else(|_| "''".into())
-                    );
-                    let _ = win.eval(&js);
+                if let Some(url) = resolve_target_url() {
+                    if let Some(win) = app.get_webview_window("main") {
+                        let _ = win.navigate(url);
+                    }
+                }
+            }
+            "config" => {
+                if let Some(existing) = app.get_webview_window("config") {
+                    let _ = existing.set_focus();
+                } else {
+                    let _ = WebviewWindowBuilder::new(
+                        app,
+                        "config",
+                        WebviewUrl::App("index.html?config=1".into()),
+                    )
+                    .title("Cambiar servidor — RCG SOFTRIX")
+                    .inner_size(480.0, 380.0)
+                    .min_inner_size(420.0, 340.0)
+                    .resizable(false)
+                    .build();
                 }
             }
             "toggle_devtools" => {
