@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ request, cookies, params, redirect }) => 
   }
 
   if (res.status === 401) return redirect('/login')
-  if (res.ok) return redirect(`/config/estructura/${id}?success=1`)
+  if (res.ok) return redirect('/config/estructura?success=1')
 
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   if (res.status === 409 || data.error === 'code_taken') {

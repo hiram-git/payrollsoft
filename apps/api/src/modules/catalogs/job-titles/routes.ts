@@ -1,4 +1,5 @@
 import { Elysia, t } from 'elysia'
+import { nextCorrelativeCode } from '../../../lib/correlative'
 import { authPlugin, guardAuth, guardPermission } from '../../../middleware/auth'
 import { tenantPlugin } from '../../../middleware/tenant'
 import {
@@ -39,6 +40,19 @@ export const jobTitlesRoutes = new Elysia({ prefix: '/job-titles' })
       beforeHandle: [guardAuth, guardPermission('catalogs:read')],
       query: t.Object({ search: t.Optional(t.String()) }),
     }
+  )
+
+  .get(
+    '/next-code',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const code = await nextCorrelativeCode(db, 'job_titles', 'CAR')
+      return { success: true, data: { code } }
+    },
+    { beforeHandle: [guardAuth, guardPermission('catalogs:read')] }
   )
 
   .get(

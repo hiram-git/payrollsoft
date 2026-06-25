@@ -19,7 +19,8 @@ import {
   updateEmployee,
 } from '@payroll/db'
 import type { PaginationOptions } from '@payroll/db'
-import { and, desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
+import { nextCorrelativeCode } from '../../lib/correlative'
 
 // biome-ignore lint/suspicious/noExplicitAny: intentional generic DB type
 type AnyDb = any
@@ -212,24 +213,9 @@ async function checkSalaryWithinPosition(
 
 // ─── List ─────────────────────────────────────────────────────────────────────
 
-/**
- * Próximo código correlativo del sistema para un empleado nuevo: toma el
- * mayor valor numérico presente en los códigos existentes (ignorando
- * cualquier prefijo de letras) y suma 1, con ceros a la izquierda. El ancho
- * se conserva respecto al código numérico más largo (mínimo 4 dígitos).
- */
-export async function nextEmployeeCode(db: AnyDb): Promise<string> {
-  // biome-ignore lint/suspicious/noExplicitAny: rows
-  const rows: any[] = await db.execute(sql`
-    SELECT
-      COALESCE(MAX(CAST(NULLIF(regexp_replace(code, '\\D', '', 'g'), '') AS integer)), 0) AS maxnum,
-      COALESCE(MAX(length(NULLIF(regexp_replace(code, '\\D', '', 'g'), ''))), 0) AS maxlen
-    FROM employees
-  `)
-  const maxnum = Number(rows?.[0]?.maxnum ?? 0)
-  const maxlen = Number(rows?.[0]?.maxlen ?? 0)
-  const width = Math.max(4, maxlen)
-  return String(maxnum + 1).padStart(width, '0')
+/** Próximo código correlativo del empleado (EMP0001, EMP0002, …). */
+export function nextEmployeeCode(db: AnyDb): Promise<string> {
+  return nextCorrelativeCode(db, 'employees', 'EMP')
 }
 
 export function listEmployeesService(
