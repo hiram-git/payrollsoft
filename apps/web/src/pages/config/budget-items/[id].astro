@@ -15,7 +15,7 @@ type Partida = { id: string; code: string; name: string; isActive: boolean }
 let partida: Partida | null = null
 
 try {
-  const res = await fetch(`${API_URL}/partidas/${id}`, {
+  const res = await fetch(`${API_URL}/budget-items/${id}`, {
     headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
   })
   if (res.status === 401) return Astro.redirect('/login')
@@ -62,7 +62,7 @@ const errorMessages: Record<string, string> = {
       </div>
     )}
 
-    <form method="POST" action={`/api/config/budget-items/${id}`}>
+    <form id="budgetEditForm" method="POST" action={`/api/config/budget-items/${id}`}>
       <input type="hidden" name="_method" value="PUT" />
 
       <div class="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
@@ -88,39 +88,45 @@ const errorMessages: Record<string, string> = {
           />
         </div>
       </div>
-
-      <div class="flex justify-between mt-4">
-        {partida.isActive && (
-          <form
-            method="POST"
-            action={`/api/config/budget-items/${id}`}
-            data-confirm-submit="¿Dar de baja esta partida?" data-confirm-title="Dar de baja partida" data-confirm-tone="danger" data-confirm-label="Dar de baja"
-          >
-            <input type="hidden" name="_method" value="DELETE" />
-            <button
-              type="submit"
-              class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
-            >
-              Dar de baja
-            </button>
-          </form>
-        )}
-        <div class="flex gap-3 ml-auto">
-          <a
-            href="/config/budget-items"
-            class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Cancelar
-          </a>
-          <button
-            type="submit"
-            class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
-          >
-            Guardar cambios
-          </button>
-        </div>
-      </div>
     </form>
+
+    {partida.isActive && (
+      <form
+        id="budgetDeleteForm"
+        method="POST"
+        action={`/api/config/budget-items/${id}`}
+        data-confirm-submit="¿Dar de baja esta partida?" data-confirm-title="Dar de baja partida" data-confirm-tone="danger" data-confirm-label="Dar de baja"
+      >
+        <input type="hidden" name="_method" value="DELETE" />
+      </form>
+    )}
+
+    <div class="flex justify-between mt-4">
+      {partida.isActive && (
+        <button
+          type="submit"
+          form="budgetDeleteForm"
+          class="px-4 py-2 text-sm text-red-600 bg-white border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+        >
+          Dar de baja
+        </button>
+      )}
+      <div class="flex gap-3 ml-auto">
+        <a
+          href="/config/budget-items"
+          class="px-4 py-2 text-sm text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Cancelar
+        </a>
+        <button
+          type="submit"
+          form="budgetEditForm"
+          class="px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors"
+        >
+          Guardar cambios
+        </button>
+      </div>
+    </div>
   </div>
   <ServerToastBridge />
 </AppLayout>

@@ -75,6 +75,22 @@ if (authCookie) {
   } catch (_) {}
 }
 
+// La empresa "con posiciones" (institutionType = 'publica') usa el módulo
+// de Estructura (posiciones/partidas). En "sin posiciones" se oculta.
+let institutionType = 'privada'
+if (authCookie) {
+  try {
+    const res = await fetch(`${API_URL}/company`, {
+      headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': identity?.tenantSlug ?? 'demo' },
+    })
+    if (res.ok) {
+      const json = (await res.json()) as { data?: { institutionType?: string | null } | null }
+      institutionType = json.data?.institutionType ?? 'privada'
+    }
+  } catch (_) {}
+}
+const usesPositions = institutionType === 'publica'
+
 // Resolve the active id: prefer the cookie if it still points at a real
 // type, otherwise fall back to the first one in business order. We do
 // NOT persist the fallback back into the cookie here — Astro can begin
@@ -240,6 +256,8 @@ const nav: NavEntry[] = navAll
       if (entry.require && !can(identity, entry.require)) return null
       return entry
     }
+    // "Estructura" (posiciones/partidas) solo aplica a empresas con posiciones.
+    if (entry.label === 'Estructura' && !usesPositions) return null
     const visibleChildren = entry.children.filter((c) => !c.require || can(identity, c.require))
     if (visibleChildren.length === 0) return null
     return { ...entry, children: visibleChildren }

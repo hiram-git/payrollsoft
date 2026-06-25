@@ -7,6 +7,7 @@ import {
   getEmployeeService,
   listCustomFieldHistoryService,
   listEmployeesService,
+  nextEmployeeCode,
   updateEmployeeService,
 } from './service'
 
@@ -177,6 +178,20 @@ export const employeeRoutes = new Elysia({ prefix: '/employees' })
       return { success: true, ...result }
     },
     { beforeHandle: [guardAuth, guardPermission('employees:read')], query: ListQuery }
+  )
+
+  // ── GET /employees/next-code — correlativo sugerido ───────────────────────────
+  .get(
+    '/next-code',
+    async ({ db, set }) => {
+      if (!db) {
+        set.status = 400
+        return { success: false, error: 'Tenant required' }
+      }
+      const code = await nextEmployeeCode(db)
+      return { success: true, data: { code } }
+    },
+    { beforeHandle: [guardAuth, guardPermission('employees:create')] }
   )
 
   // ── GET /employees/:id ───────────────────────────────────────────────────────
