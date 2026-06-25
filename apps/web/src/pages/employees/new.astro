@@ -80,6 +80,20 @@ try {
   /* ignore — dropdowns show empty on error */
 }
 
+// Correlativo del sistema para el código de empleado nuevo.
+let nextCode = ''
+try {
+  const res = await fetch(`${API_URL}/employees/next-code`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.ok) {
+    const j = (await res.json()) as { data?: { code?: string } }
+    nextCode = j.data?.code ?? ''
+  }
+} catch {
+  /* si falla, el campo queda editable */
+}
+
 const isPublica = tipoInstitucion === 'publica'
 const activeCargos = cargos.filter((c) => c.isActive)
 const activeFunciones = funciones.filter((f) => f.isActive)
@@ -266,7 +280,8 @@ const errorMessages: Record<string, string> = {
           <div class="grid grid-cols-2 gap-4">
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-1">Código de empleado *</label>
-              <input type="text" name="code" class="input" required placeholder="E001" />
+              <input type="text" name="code" class="input" required placeholder="E001" value={nextCode} readonly={!!nextCode} />
+              {nextCode && <p class="mt-1 text-xs text-gray-500">Asignado automáticamente por el sistema.</p>}
             </div>
 
             {isPublica ? (
