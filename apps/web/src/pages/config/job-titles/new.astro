@@ -1,9 +1,22 @@
 ---
 import ServerToastBridge from '../../../components/ServerToastBridge.astro'
 import AppLayout from '../../../layouts/AppLayout.astro'
+import { resolveTenantSlugFromCookie } from '../../../lib/tenant-slug'
 
+const API_URL = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000'
 const authCookie = Astro.cookies.get('auth')?.value
 if (!authCookie) return Astro.redirect('/login')
+const tenantSlug = resolveTenantSlugFromCookie(authCookie)
+
+let nextCode = ''
+try {
+  const res = await fetch(`${API_URL}/job-titles/next-code`, {
+    headers: { Cookie: `auth=${authCookie}`, 'X-Tenant': tenantSlug },
+  })
+  if (res.ok) nextCode = ((await res.json()) as { data?: { code?: string } }).data?.code ?? ''
+} catch {
+  /* si falla, el campo queda editable */
+}
 
 const error = Astro.url.searchParams.get('error') ?? ''
 const errorMessages: Record<string, string> = {
@@ -31,7 +44,8 @@ const errorMessages: Record<string, string> = {
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Código *</label>
-            <input type="text" name="code" class="input" required placeholder="GER" maxlength="20" />
+            <input type="text" name="code" class="input" required placeholder="CAR0001" maxlength="20" value={nextCode} readonly={!!nextCode} />
+            {nextCode && <p class="mt-1 text-xs text-gray-500">Asignado automáticamente.</p>}
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
