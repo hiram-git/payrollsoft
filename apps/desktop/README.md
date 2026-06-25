@@ -90,6 +90,24 @@ Esto da el **override sin recompilar** para installs distribuidos: si IT
 necesita repuntar un `.msi` ya instalado a otro servidor, coloca un `.env` en
 `%APPDATA%\RCG SOFTRIX\.env` (o junto al `.exe`) con `DESKTOP_URL=...` y manda.
 
+### Configurar el servidor desde la propia app
+
+Para no obligar a editar archivos, el shell expone dos UX:
+
+- **Primera ejecución sin URL configurada** (no hay `.env` y el `.msi` no
+  trae nada horneado): el boot screen muestra un formulario "Configurar
+  servidor" en lugar del spinner. El usuario pega la URL, *Guardar y
+  conectar*, y la app la persiste en `%APPDATA%\RCG SOFTRIX\.env` y navega.
+- **Menú "Archivo → Cambiar servidor…" (Ctrl+,)**: abre una ventana
+  auxiliar con el formulario pre-cargado con la URL actual. Al guardar:
+  persiste la nueva URL, re-apunta la ventana principal y cierra la
+  auxiliar. Útil para soporte (cambio de host, prueba contra staging).
+
+Internamente usan los comandos `current_url`, `save_desktop_url` y
+`apply_url` registrados en `src/lib.rs`. El archivo escrito **preserva
+otras claves** que pueda haber colocado IT (`DESKTOP_MODE`, etc.); solo
+sobrescribe `DESKTOP_URL`.
+
 ### Build normal (sin hornear, p. ej. para dev/QA en Windows)
 
 ```bash

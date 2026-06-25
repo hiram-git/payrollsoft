@@ -2,7 +2,7 @@
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; connect-src *;" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline'; connect-src *; img-src 'self' data:;" />
     <title>RCG SOFTRIX</title>
     <style>
       :root {
@@ -11,20 +11,16 @@
         --mute: rgba(230, 233, 239, 0.7);
         --rule: rgba(230, 233, 239, 0.18);
         --err: #f59ba0;
+        --ok: #fff;
       }
       * { box-sizing: border-box; }
       html, body { height: 100%; margin: 0; font-family: 'Inter Tight', system-ui, -apple-system, Segoe UI, sans-serif; background: var(--ink); color: var(--fore); }
       main { height: 100%; display: grid; place-items: center; padding: 2rem; }
       .card { width: min(28rem, 100%); text-align: center; }
       .brand {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 72px;
-        height: 72px;
-        background: #fff;
-        border-radius: 10px;
-        padding: 7px;
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 72px; height: 72px;
+        background: #fff; border-radius: 10px; padding: 7px;
         box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
         margin-bottom: 1.25rem;
       }
@@ -42,75 +38,235 @@
       button.primary { background: var(--fore); color: var(--ink); border-color: var(--fore); }
       button.primary:hover { background: #fff; }
       .err { color: var(--err); }
+      [hidden] { display: none !important; }
+
+      /* Config form */
+      .config-form { margin-top: 1.1rem; text-align: left; }
+      .config-form label { display: block; font-size: 0.78rem; letter-spacing: 0.02em; color: var(--mute); text-transform: uppercase; margin-bottom: 0.35rem; }
+      .config-form input[type="url"] {
+        width: 100%;
+        font: inherit;
+        font-size: 0.95rem;
+        font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+        color: var(--fore);
+        background: rgba(0, 0, 0, 0.18);
+        border: 1px solid var(--rule);
+        border-radius: 8px;
+        padding: 0.6rem 0.75rem;
+        outline: none;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .config-form input[type="url"]:focus { border-color: var(--fore); background: rgba(0, 0, 0, 0.28); }
+      .config-form .form-error { color: var(--err); font-size: 0.85rem; margin-top: 0.5rem; }
+      .config-form .form-actions { margin-top: 1.1rem; display: flex; gap: 0.5rem; justify-content: flex-end; }
     </style>
   </head>
   <body>
     <main>
       <div class="card" role="status" aria-live="polite">
         <div class="brand"><img src="brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
-        <h1 id="title">RCG SOFTRIX</h1>
-        <p id="message"><span class="spinner"></span><span class="mute">Conectando con el servidor…</span></p>
-        <p class="target" id="target"></p>
-        <div class="actions" id="actions">
-          <button class="primary" id="retry">Reintentar</button>
-          <button id="quit">Salir</button>
+
+        <!-- Connecting view -->
+        <div id="connecting-view">
+          <h1 id="title">RCG SOFTRIX</h1>
+          <p id="message"><span class="spinner"></span><span class="mute">Conectando con el servidor…</span></p>
+          <p class="target" id="target"></p>
+          <div class="actions" id="actions">
+            <button class="primary" id="retry">Reintentar</button>
+            <button id="change">Cambiar servidor</button>
+            <button id="quit">Salir</button>
+          </div>
+        </div>
+
+        <!-- Config view -->
+        <div id="config-view" hidden>
+          <h1 id="config-title">Configurar servidor</h1>
+          <p class="mute" id="config-help">Indica la URL del servidor RCG SOFTRIX al que se conectará esta aplicación.</p>
+          <form class="config-form" id="config-form" autocomplete="off">
+            <label for="url-input">URL del servidor</label>
+            <input
+              type="url"
+              id="url-input"
+              placeholder="https://payroll.tu-empresa.com"
+              required
+              autofocus
+              spellcheck="false"
+            />
+            <p class="form-error" id="config-error" hidden></p>
+            <div class="form-actions">
+              <button type="button" id="config-cancel" hidden>Cancelar</button>
+              <button type="submit" class="primary" id="config-submit">Guardar y conectar</button>
+            </div>
+          </form>
         </div>
       </div>
     </main>
     <script>
-      const target = (window.__PAYROLL_TARGET__ || '').toString();
-      const titleEl = document.getElementById('title');
-      const messageEl = document.getElementById('message');
-      const targetEl = document.getElementById('target');
-      const actionsEl = document.getElementById('actions');
-      const retryBtn = document.getElementById('retry');
-      const quitBtn = document.getElementById('quit');
+      const invoke = window.__TAURI_INTERNALS__ && window.__TAURI_INTERNALS__.invoke
+        ? window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__)
+        : null
 
-      targetEl.textContent = target || '(DESKTOP_URL no configurada)';
+      const params = new URLSearchParams(location.search)
+      const isConfigWindow = params.get('config') === '1'
+
+      const connectingView = document.getElementById('connecting-view')
+      const configView = document.getElementById('config-view')
+      const titleEl = document.getElementById('title')
+      const messageEl = document.getElementById('message')
+      const targetEl = document.getElementById('target')
+      const actionsEl = document.getElementById('actions')
+      const retryBtn = document.getElementById('retry')
+      const changeBtn = document.getElementById('change')
+      const quitBtn = document.getElementById('quit')
+
+      const configHelp = document.getElementById('config-help')
+      const configTitle = document.getElementById('config-title')
+      const configForm = document.getElementById('config-form')
+      const configError = document.getElementById('config-error')
+      const configCancel = document.getElementById('config-cancel')
+      const configSubmit = document.getElementById('config-submit')
+      const urlInput = document.getElementById('url-input')
+
+      async function fetchCurrentUrl() {
+        if (!invoke) return ''
+        try {
+          return (await invoke('current_url')) || ''
+        } catch {
+          return ''
+        }
+      }
 
       function showConnecting() {
-        messageEl.innerHTML = '<span class="spinner"></span><span class="mute">Conectando con el servidor…</span>';
-        actionsEl.classList.remove('show');
+        connectingView.hidden = false
+        configView.hidden = true
+        titleEl.textContent = 'RCG SOFTRIX'
+        messageEl.innerHTML = '<span class="spinner"></span><span class="mute">Conectando con el servidor…</span>'
+        actionsEl.classList.remove('show')
       }
 
-      function showError(detail) {
-        titleEl.textContent = 'No se pudo conectar';
-        messageEl.innerHTML = '<span class="err">' + detail + '</span><br><span class="mute">Verifica que el servidor esté corriendo y que <code>DESKTOP_URL</code> apunte al host correcto.</span>';
-        actionsEl.classList.add('show');
+      function showConnectError(detail) {
+        titleEl.textContent = 'No se pudo conectar'
+        messageEl.innerHTML =
+          '<span class="err">' + detail + '</span><br>' +
+          '<span class="mute">Verifica que el servidor esté corriendo y que la URL sea correcta.</span>'
+        actionsEl.classList.add('show')
       }
 
-      async function attempt() {
-        if (!target) {
-          showError('DESKTOP_URL no está configurada en el .env.');
-          return;
+      function showConfig(currentUrl, opts) {
+        opts = opts || {}
+        connectingView.hidden = true
+        configView.hidden = false
+        configError.hidden = true
+        urlInput.value = currentUrl || ''
+        configCancel.hidden = !isConfigWindow
+        if (isConfigWindow) {
+          configTitle.textContent = 'Cambiar servidor'
+          configHelp.textContent = 'Cambia la URL del servidor al que se conecta esta aplicación.'
+        } else if (currentUrl) {
+          configTitle.textContent = 'Cambiar servidor'
+          configHelp.textContent = 'Cambia la URL del servidor al que se conecta esta aplicación.'
+        } else {
+          configTitle.textContent = 'Configurar servidor'
+          configHelp.textContent = 'Primera ejecución: indica la URL del servidor RCG SOFTRIX.'
         }
-        showConnecting();
+        urlInput.focus()
+        urlInput.select()
+      }
+
+      function showFormError(msg) {
+        configError.textContent = msg
+        configError.hidden = false
+      }
+
+      async function attempt(url) {
+        showConnecting()
+        targetEl.textContent = url
         try {
-          // no-cors mode just probes reachability — the response is opaque
-          // but a network failure (DNS, refused, offline) rejects the promise.
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), 6000);
-          await fetch(target, { mode: 'no-cors', cache: 'no-store', signal: controller.signal });
-          clearTimeout(timeout);
-          window.location.replace(target);
+          const controller = new AbortController()
+          const timeout = setTimeout(() => controller.abort(), 6000)
+          await fetch(url, { mode: 'no-cors', cache: 'no-store', signal: controller.signal })
+          clearTimeout(timeout)
+          window.location.replace(url)
         } catch (e) {
           const detail = e && e.name === 'AbortError'
             ? 'El servidor no respondió en 6 segundos.'
-            : 'No se pudo establecer conexión con el servidor.';
-          showError(detail);
+            : 'No se pudo establecer conexión con el servidor.'
+          showConnectError(detail)
         }
       }
 
-      retryBtn.addEventListener('click', attempt);
-      quitBtn.addEventListener('click', () => {
-        if (window.__TAURI_INTERNALS__) {
-          window.__TAURI_INTERNALS__.invoke('plugin:process|exit', { code: 0 }).catch(() => window.close());
-        } else {
-          window.close();
-        }
-      });
+      async function init() {
+        const currentUrl = await fetchCurrentUrl()
 
-      attempt();
+        if (isConfigWindow) {
+          showConfig(currentUrl)
+          return
+        }
+
+        if (!currentUrl) {
+          showConfig('')
+          return
+        }
+
+        attempt(currentUrl)
+      }
+
+      retryBtn.addEventListener('click', async () => {
+        const url = await fetchCurrentUrl()
+        if (url) attempt(url)
+      })
+
+      changeBtn.addEventListener('click', async () => {
+        const url = await fetchCurrentUrl()
+        showConfig(url)
+      })
+
+      quitBtn.addEventListener('click', () => {
+        if (invoke) invoke('quit_app').catch(() => window.close())
+        else window.close()
+      })
+
+      configCancel.addEventListener('click', () => {
+        if (invoke) invoke('close_config_window').catch(() => window.close())
+        else window.close()
+      })
+
+      configForm.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        configError.hidden = true
+        const url = urlInput.value.trim()
+        if (!url) {
+          showFormError('Ingresa una URL.')
+          return
+        }
+        if (!invoke) {
+          showFormError('Tauri no disponible.')
+          return
+        }
+        configSubmit.disabled = true
+        try {
+          await invoke('save_desktop_url', { url })
+        } catch (err) {
+          configSubmit.disabled = false
+          showFormError(String(err))
+          return
+        }
+        if (isConfigWindow) {
+          try {
+            await invoke('apply_url', { url })
+          } catch (err) {
+            configSubmit.disabled = false
+            showFormError(String(err))
+            return
+          }
+          invoke('close_config_window').catch(() => window.close())
+        } else {
+          // First-run / main-window flow: navigate ourselves to the saved URL.
+          window.location.replace(url)
+        }
+      })
+
+      init()
     </script>
   </body>
 </html>
