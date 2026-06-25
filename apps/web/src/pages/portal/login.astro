@@ -175,6 +175,52 @@ if (identity) return Astro.redirect('/portal')
       max-width: 420px;
       margin: 0;
     }
+    .brand-eyebrow {
+      position: relative;
+      z-index: 2;
+      font-family: var(--f-display);
+      font-weight: 300;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      color: var(--fore-dim);
+      margin: 0;
+    }
+    .hero-illus {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 460px;
+      height: auto;
+      display: block;
+      margin: 0 0 28px 0;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 18px;
+      padding: 28px 34px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+    }
+    .brand-tagline {
+      font-family: var(--f-sans);
+      font-weight: 400;
+      font-size: 17px;
+      letter-spacing: 0.01em;
+      color: var(--fore-dim);
+      margin: 0 0 26px 0;
+    }
+    .form-logo-chip {
+      display: flex;
+      align-items: center;
+      width: fit-content;
+      background: #fff;
+      border-radius: 8px;
+      padding: 7px 13px;
+      margin: 0 auto 22px;
+    }
+    .form-logo-chip img {
+      height: 26px;
+      width: auto;
+      display: block;
+    }
     .left-bottom {
       position: relative;
       z-index: 2;
@@ -456,18 +502,12 @@ if (identity) return Astro.redirect('/portal')
     </svg>
 
     <div class="left-top">
-      <div class="mark-box"><img src="/brand/rcg-mark.png" alt="RCG SOFTRIX" /></div>
-      <div>
-        <div class="wordmark">RCG SOFTRIX</div>
-        <div class="wordmark-sub">Portal del Colaborador</div>
-      </div>
+      <h1 class="brand-eyebrow">Tu información, a tu alcance.</h1>
     </div>
 
     <div class="left-center">
-      <h1 class="display-h">
-        Tu información,<br/>
-        <span class="display-em">a tu alcance.</span>
-      </h1>
+      <img class="hero-illus" src="/brand/hr-illustration.svg" alt="Recursos Humanos, Planillas y Asistencia" />
+      <div class="brand-tagline">Recursos Humanos, Planilla y Asistencia</div>
       <div class="display-rule"></div>
       <p class="display-p">
         Consulta tu información laboral, solicita vacaciones, permisos y gestiona tus documentos desde un solo lugar.
@@ -487,15 +527,11 @@ if (identity) return Astro.redirect('/portal')
   </aside>
 
   <div class="right-panel">
-    <div class="right-top">
-      <span>Portal de colaboradores</span>
-      <span>Acceso seguro</span>
-    </div>
+    <div class="right-top"></div>
 
     <div class="form-wrap">
-      <div class="eyebrow">
-        <span class="eyebrow-dot"></span>
-        Portal del Colaborador · Inicio de sesión
+      <div class="form-logo-chip">
+        <img src="/brand/rcg-softrix.png" alt="RCG SOFTRIX" />
       </div>
       <h1 class="form-h1">Bienvenido.</h1>
       <p class="form-sub">Ingresa con tu cédula y contraseña.</p>
