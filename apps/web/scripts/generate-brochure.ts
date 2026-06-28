@@ -12,7 +12,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import { BrochurePdf } from '../src/lib/pdf/brochure-pdf'
 
 const webRoot = resolve(import.meta.dir, '..')
-const logoPath = join(webRoot, 'public/brand/rcg-mark.png')
+const logoPath = join(webRoot, 'public/brand/rcg-mark-red.png')
 const outPath = process.argv[2]
   ? resolve(process.argv[2])
   : join(webRoot, 'public/brochure/rcg-softrix-brochure.pdf')

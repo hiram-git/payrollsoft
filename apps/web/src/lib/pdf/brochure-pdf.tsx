@@ -5,23 +5,29 @@ import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/
 
 Font.registerHyphenationCallback((word) => [word])
 
-// ─── Paleta (espejo de los tokens del sistema de diseño) ──────────────────────
+// ─── Paleta (derivada del logo RCG SOFTRIX — gradiente rojo → marrón) ─────────
 
 const C = {
-  navy: '#003087',
-  navyHi: '#1E4BA8',
-  ink: '#07101F',
-  ink2: '#0A1628',
+  red: '#B11410', // rojo primario de marca (encabezados, header de tabla, CTA)
+  redHi: '#D62118', // rojo vivo (eyebrows, viñetas, cifras de acento)
+  redDeep: '#7A120E', // rojo oscuro del gradiente
+  maroon: '#160504', // marrón casi negro (fondo de portada)
+  maroonTop: '#9E140E', // rojo profundo (banda superior de portada)
+  ink: '#1C1311', // negro cálido para texto de cuerpo
+  ink2: '#3A2724', // texto secundario
   white: '#ffffff',
-  fore: '#EDEEF2',
-  paper: '#F4F5F7',
-  rule: '#D7DBE4',
-  mute: '#6A7690',
-  mute2: '#8B97AE',
+  fore: '#F3E9E8', // texto claro sobre fondo oscuro
+  paper: '#FBF6F5', // gris cálido para filas alternas
+  rule: '#E7DAD8', // borde cálido
+  mute: '#8C7672', // apagado cálido
+  mute2: '#B98F89',
   ok: '#2E7A56',
-  okSoft: '#E4F0EA',
-  warn: '#B07A1E',
-  accentSoft: '#E8EDF7',
+  accentSoft: '#FBE9E7', // tinte rojo suave (íconos de módulo)
+  pillBg: '#260C0A',
+  pillBorder: '#4A211D',
+  onDarkSoft: '#F2C9C4', // rosa claro sobre fondo oscuro
+  onDarkLede: '#FBE4E1',
+  coverHr: '#3A1512',
 }
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
@@ -41,22 +47,28 @@ const s = StyleSheet.create({
   cover: {
     fontFamily: 'Helvetica',
     color: C.white,
-    backgroundColor: C.ink,
+    backgroundColor: C.maroon,
     padding: 0,
   },
   coverTop: {
-    backgroundColor: C.navy,
+    backgroundColor: C.maroonTop,
     paddingTop: 54,
     paddingBottom: 44,
     paddingHorizontal: 48,
   },
   coverBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 40 },
-  coverMark: { width: 46, height: 46, objectFit: 'contain' },
+  coverLogoChip: {
+    backgroundColor: C.white,
+    borderRadius: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+  },
+  coverMark: { width: 84, height: 22, objectFit: 'contain' },
   coverWordmark: { fontSize: 19, fontFamily: 'Helvetica-Bold', letterSpacing: 1.5, color: C.white },
-  coverWordmarkSub: { fontSize: 8.5, color: '#AFC0E4', letterSpacing: 0.5, marginTop: 1 },
+  coverWordmarkSub: { fontSize: 8.5, color: C.onDarkSoft, letterSpacing: 0.5, marginTop: 1 },
   coverEyebrow: {
     fontSize: 9,
-    color: '#AFC0E4',
+    color: C.onDarkSoft,
     letterSpacing: 2,
     textTransform: 'uppercase',
     marginBottom: 12,
@@ -68,7 +80,7 @@ const s = StyleSheet.create({
     lineHeight: 1.15,
     marginBottom: 14,
   },
-  coverLede: { fontSize: 11.5, color: '#D5DEF1', lineHeight: 1.55, maxWidth: 430 },
+  coverLede: { fontSize: 11.5, color: C.onDarkLede, lineHeight: 1.55, maxWidth: 430 },
   coverBottom: { paddingHorizontal: 48, paddingTop: 34, flex: 1 },
   pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 30 },
   pill: {
@@ -78,8 +90,8 @@ const s = StyleSheet.create({
     paddingHorizontal: 11,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#23344F',
-    backgroundColor: C.ink2,
+    borderColor: C.pillBorder,
+    backgroundColor: C.pillBg,
   },
   pillText: { fontSize: 8.5, color: C.fore, fontFamily: 'Helvetica-Bold', letterSpacing: 0.3 },
   coverStatsRow: { flexDirection: 'row', gap: 16, marginTop: 6 },
@@ -94,7 +106,7 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 0.5,
-    borderTopColor: '#23344F',
+    borderTopColor: C.coverHr,
     paddingTop: 10,
   },
   coverFooterText: { fontSize: 7.5, color: C.mute2 },
@@ -102,13 +114,13 @@ const s = StyleSheet.create({
   // Section heads
   eyebrow: {
     fontSize: 8,
-    color: C.navyHi,
+    color: C.redHi,
     letterSpacing: 1.6,
     textTransform: 'uppercase',
     fontFamily: 'Helvetica-Bold',
     marginBottom: 5,
   },
-  h1: { fontSize: 17, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 8 },
+  h1: { fontSize: 17, fontFamily: 'Helvetica-Bold', color: C.red, marginBottom: 8 },
   lede: { fontSize: 10, color: C.ink2, lineHeight: 1.6, marginBottom: 16, maxWidth: 470 },
   hr: { borderBottomWidth: 1, borderBottomColor: C.rule, marginVertical: 4 },
 
@@ -122,17 +134,17 @@ const s = StyleSheet.create({
     padding: 13,
     backgroundColor: C.white,
   },
-  cardAccent: { borderLeftWidth: 3, borderLeftColor: C.navy },
+  cardAccent: { borderLeftWidth: 3, borderLeftColor: C.red },
   cardTitle: {
     fontSize: 10.5,
     fontFamily: 'Helvetica-Bold',
-    color: C.navy,
+    color: C.red,
     marginBottom: 4,
   },
   cardBody: { fontSize: 8.5, color: C.ink2, lineHeight: 1.5 },
   kicker: {
     fontSize: 7.5,
-    color: C.navyHi,
+    color: C.redHi,
     fontFamily: 'Helvetica-Bold',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -149,7 +161,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  modIconText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.navy },
+  modIconText: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: C.red },
   modName: { fontSize: 10.5, fontFamily: 'Helvetica-Bold', color: C.ink, marginBottom: 1 },
   modDesc: { fontSize: 8.5, color: C.ink2, lineHeight: 1.45 },
 
@@ -169,7 +181,7 @@ const s = StyleSheet.create({
   stackTech: { width: '58%', fontSize: 8.5, color: C.ink },
 
   bullet: { flexDirection: 'row', gap: 6, marginBottom: 6 },
-  bulletDot: { fontSize: 9, color: C.navy, fontFamily: 'Helvetica-Bold' },
+  bulletDot: { fontSize: 9, color: C.red, fontFamily: 'Helvetica-Bold' },
   bulletText: { fontSize: 8.7, color: C.ink2, lineHeight: 1.45, flex: 1 },
   bulletStrong: { fontFamily: 'Helvetica-Bold', color: C.ink },
 
@@ -183,18 +195,18 @@ const s = StyleSheet.create({
     padding: 11,
     backgroundColor: C.white,
   },
-  chanTitle: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.navy, marginBottom: 3 },
+  chanTitle: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.red, marginBottom: 3 },
   chanBody: { fontSize: 8, color: C.ink2, lineHeight: 1.45 },
 
   // CTA
   cta: {
     marginTop: 20,
-    backgroundColor: C.navy,
+    backgroundColor: C.red,
     borderRadius: 8,
     padding: 20,
   },
   ctaTitle: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.white, marginBottom: 5 },
-  ctaBody: { fontSize: 9, color: '#D5DEF1', lineHeight: 1.5, maxWidth: 420 },
+  ctaBody: { fontSize: 9, color: C.onDarkLede, lineHeight: 1.5, maxWidth: 420 },
 
   // Page footer
   footer: {
@@ -238,8 +250,8 @@ const BENEFITS: { kicker: string; title: string; body: string }[] = [
 
 const MODULES: { tag: string; name: string; desc: string }[] = [
   {
-    tag: 'N',
-    name: 'Nómina y planillas',
+    tag: 'RH',
+    name: 'Planillas y Recursos Humanos',
     desc: 'Planillas regulares, especiales y décimo tercer mes. Frecuencia semanal, quincenal o mensual. Motor de fórmulas propio con acumulados históricos y desglose por concepto.',
   },
   {
@@ -315,9 +327,11 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
         <View style={s.coverTop}>
           <View style={s.coverBrandRow}>
             {logo ? (
-              <Image src={logo} style={s.coverMark} />
+              <View style={s.coverLogoChip}>
+                <Image src={logo} style={s.coverMark} />
+              </View>
             ) : (
-              <View style={[s.coverMark, { borderWidth: 1, borderColor: '#23344F' }]} />
+              <View style={[s.coverLogoChip, { width: 108, height: 40 }]} />
             )}
             <View>
               <Text style={s.coverWordmark}>RCG SOFTRIX</Text>
@@ -370,7 +384,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
             </View>
             <View style={s.coverStat}>
               <Text style={s.coverStatNum}>XIII</Text>
-              <Text style={s.coverStatLabel}>Décimo tercer mes panameño</Text>
+              <Text style={s.coverStatLabel}>Décimo tercer mes</Text>
             </View>
           </View>
         </View>
@@ -480,7 +494,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
             <View style={s.bullet}>
               <Text style={s.bulletDot}>›</Text>
               <Text style={s.bulletText}>
-                <Text style={s.bulletStrong}>Multi-tenant por esquema:</Text> cada empresa en su
+                <Text style={s.bulletStrong}>Multi-empresa por esquema:</Text> cada empresa en su
                 propio esquema de base de datos, sin mezcla de datos y con respaldos por cliente.
               </Text>
             </View>
