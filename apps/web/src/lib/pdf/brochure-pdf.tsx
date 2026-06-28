@@ -198,6 +198,24 @@ const s = StyleSheet.create({
   chanTitle: { fontSize: 9.5, fontFamily: 'Helvetica-Bold', color: C.red, marginBottom: 3 },
   chanBody: { fontSize: 8, color: C.ink2, lineHeight: 1.45 },
 
+  // Performance callout
+  perfBox: {
+    marginTop: 18,
+    borderWidth: 1,
+    borderColor: C.rule,
+    borderLeftWidth: 3,
+    borderLeftColor: C.red,
+    borderRadius: 6,
+    backgroundColor: C.paper,
+    padding: 14,
+  },
+  perfTitle: { fontSize: 10.5, fontFamily: 'Helvetica-Bold', color: C.red, marginBottom: 5 },
+  perfBody: { fontSize: 8.7, color: C.ink2, lineHeight: 1.55 },
+  perfMetricsRow: { flexDirection: 'row', gap: 16, marginTop: 10 },
+  perfMetric: { flexDirection: 'column' },
+  perfMetricNum: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: C.red },
+  perfMetricLabel: { fontSize: 7.5, color: C.mute, marginTop: 1, lineHeight: 1.3 },
+
   // CTA
   cta: {
     marginTop: 20,
@@ -478,7 +496,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
 
         <View style={s.twoCol}>
           <View style={s.colHalf}>
-            <Text style={s.kicker}>Stack técnico</Text>
+            <Text style={s.kicker}>Tecnologías</Text>
             <View style={s.stackTable}>
               {STACK.map(([layer, tech], i) => (
                 <View key={layer} style={[s.stackRow, i % 2 === 1 ? s.stackRowAlt : {}]}>
@@ -519,6 +537,33 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
                 <Text style={s.bulletStrong}>Auditoría:</Text> registro de cambios sobre las
                 operaciones sensibles de planilla y configuración.
               </Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={s.perfBox}>
+          <Text style={s.perfTitle}>Rendimiento que se nota bajo carga</Text>
+          <Text style={s.perfBody}>
+            A diferencia de un stack monolítico tradicional de PHP + MySQL —donde cada petición
+            levanta un proceso sincrónico y el cálculo de una planilla puede disparar miles de
+            consultas a la base de datos— RCG SOFTRIX corre sobre Bun con un modelo asíncrono y no
+            bloqueante. Las operaciones más pesadas (generar y cerrar planilla) se resolvieron con
+            consultas en lote que reemplazan los ciclos consulta-por-empleado, y la planilla
+            completa se obtiene en una sola petición. El resultado: más transacciones por segundo
+            y tiempos de respuesta más estables a medida que crecen los empleados y las empresas.
+          </Text>
+          <View style={s.perfMetricsRow}>
+            <View style={s.perfMetric}>
+              <Text style={s.perfMetricNum}>&lt;10</Text>
+              <Text style={s.perfMetricLabel}>Consultas por corrida de planilla{'\n'}(antes ~10 000)</Text>
+            </View>
+            <View style={s.perfMetric}>
+              <Text style={s.perfMetricNum}>1 petición</Text>
+              <Text style={s.perfMetricLabel}>Carga la planilla completa,{'\n'}sin paginación en cascada</Text>
+            </View>
+            <View style={s.perfMetric}>
+              <Text style={s.perfMetricNum}>No bloqueante</Text>
+              <Text style={s.perfMetricLabel}>I/O asíncrono sobre Bun,{'\n'}sin proceso por request</Text>
             </View>
           </View>
         </View>
