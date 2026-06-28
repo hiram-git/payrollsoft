@@ -339,7 +339,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
             </View>
           </View>
 
-          <Text style={s.coverEyebrow}>Software de nómina para Panamá</Text>
+          <Text style={s.coverEyebrow}>Software de planilla para Panamá</Text>
           <Text style={s.coverTitle}>
             Toda su planilla,{'\n'}bajo control
           </Text>
@@ -401,7 +401,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
         <Text style={s.h1}>Una solución pensada para el día a día de planilla</Text>
         <Text style={s.lede}>
           RCG SOFTRIX reúne en un solo lugar todo lo que su equipo de Recursos Humanos necesita
-          para correr la nómina sin sobresaltos: desde el expediente del empleado hasta el
+          para correr la planilla sin sobresaltos: desde el expediente del empleado hasta el
           comprobante de pago, pasando por préstamos, asistencia y los reportes que exige la ley.
         </Text>
 
@@ -446,7 +446,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
       {/* ── Página 3 · Módulos ────────────────────────────────── */}
       <Page size="A4" style={s.page}>
         <Text style={s.eyebrow}>Capacidades</Text>
-        <Text style={s.h1}>Todo el ciclo de nómina, módulo por módulo</Text>
+        <Text style={s.h1}>Todo el ciclo de planilla, módulo por módulo</Text>
         <Text style={s.lede}>
           Cada módulo funciona de forma independiente y, a la vez, conectado: lo que ocurre en
           asistencia o en préstamos se refleja automáticamente en la planilla del período.
@@ -469,7 +469,7 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
 
       {/* ── Página 4 · Técnico + cierre ───────────────────────── */}
       <Page size="A4" style={s.page}>
-        <Text style={s.eyebrow}>Bajo el capó</Text>
+        <Text style={s.eyebrow}>Stack Tecnológico</Text>
         <Text style={s.h1}>Arquitectura moderna, segura y multi-empresa</Text>
         <Text style={s.lede}>
           Para los equipos de TI, RCG SOFTRIX está construido sobre tecnología actual con
