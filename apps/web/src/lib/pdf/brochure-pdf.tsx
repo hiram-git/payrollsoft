@@ -554,8 +554,8 @@ export function BrochurePdf({ logo }: { logo?: string | null }) {
           </Text>
           <View style={s.perfMetricsRow}>
             <View style={s.perfMetric}>
-              <Text style={s.perfMetricNum}>&lt;10</Text>
-              <Text style={s.perfMetricLabel}>Consultas por corrida de planilla{'\n'}(antes ~10 000)</Text>
+              <Text style={s.perfMetricNum}>1000× menos</Text>
+              <Text style={s.perfMetricLabel}>Carga sobre la base de datos{'\n'}al procesar una planilla</Text>
             </View>
             <View style={s.perfMetric}>
               <Text style={s.perfMetricNum}>1 petición</Text>
