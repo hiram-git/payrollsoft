@@ -5,14 +5,14 @@ import { Document, Font, Image, Page, StyleSheet, Text, View } from '@react-pdf/
 
 Font.registerHyphenationCallback((word) => [word])
 
-// ─── Paleta (derivada del logo RCG SOFTRIX — gradiente rojo → marrón) ─────────
+// ─── Paleta (alineada al Catálogo de Software de RCG — marrón + brick red) ─────
 
 const C = {
-  red: '#B11410', // rojo primario de marca (encabezados, header de tabla, CTA)
-  redHi: '#D62118', // rojo vivo (eyebrows, viñetas, cifras de acento)
-  redDeep: '#7A120E', // rojo oscuro del gradiente
-  maroon: '#160504', // marrón casi negro (fondo de portada)
-  maroonTop: '#9E140E', // rojo profundo (banda superior de portada)
+  red: '#681808', // marrón distintivo del catálogo (encabezados, header de tabla, CTA, viñetas)
+  redHi: '#A02008', // brick red de acento del catálogo (eyebrows, cifras)
+  redDeep: '#4A1106', // marrón más oscuro
+  maroon: '#160504', // casi negro cálido (base de portada)
+  maroonTop: '#A02008', // brick red del catálogo (banda superior de portada)
   ink: '#1C1311', // negro cálido para texto de cuerpo
   ink2: '#3A2724', // texto secundario
   white: '#ffffff',
@@ -22,12 +22,12 @@ const C = {
   mute: '#8C7672', // apagado cálido
   mute2: '#B98F89',
   ok: '#2E7A56',
-  accentSoft: '#FBE9E7', // tinte rojo suave (íconos de módulo)
-  pillBg: '#260C0A',
-  pillBorder: '#4A211D',
-  onDarkSoft: '#F2C9C4', // rosa claro sobre fondo oscuro
-  onDarkLede: '#FBE4E1',
-  coverHr: '#3A1512',
+  accentSoft: '#F4E7E2', // tinte marrón suave (íconos de módulo)
+  pillBg: '#2A0E08',
+  pillBorder: '#4A2118',
+  onDarkSoft: '#E9C9BC', // rosa cálido sobre fondo oscuro
+  onDarkLede: '#F6E2DA',
+  coverHr: '#5A2418',
 }
 
 // ─── Estilos ──────────────────────────────────────────────────────────────────
